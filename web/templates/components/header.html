@@ -1,0 +1,23 @@
+<div class="d-flex justify-content-between align-items-center mb-4 container">
+  <div class="row w-100">
+    <div class="col-md-6">
+      <h1 class="display-5 mb-0">
+        {{ application.config.data.application.name }}
+      </h1>
+      <small class="text-secondary">
+        Version {{ application.config.data.application.version }}
+      </small>
+    </div>
+    
+    <div class="col-md-6 text-end">
+      <div class="fw-semibold">
+        <span id="audio-state">
+          ⚪ Kein Audiointerface
+        </span>
+      </div>
+      <small class="text-secondary" id="audio-info">
+        -
+      </small>
+    </div>
+  </div>
+</div>

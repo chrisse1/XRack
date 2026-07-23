@@ -2,12 +2,8 @@
 
 {% block content %}
 
-    <div class="container py-4">
-
-        <div class="mb-4 d-flex align-items-baseline gap-2">
-        <h1 class="display-5 mb-0">{{ application.config.data.application.name }}</h1>
-        <p class="text-secondary mb-0">version {{ application.config.data.application.version }}</p>
-    </div>
+<div class="container py-4">
+    {% include "components/header.html" %}
 
     <h3 class="mt-4 mb-3">Live-Betrieb</h3>
 
@@ -17,7 +13,9 @@
 
         <div class="col-lg-6">
 
-            {% set title = "⏺ Recorder" %}
+            {% set title %}
+            <i class="bi bi-record-circle-fill text-danger me-2"></i>Recorder
+            {% endset %}
 
             {% set body %}
             <div class="d-flex justify-content-between">
@@ -51,7 +49,9 @@
 
         <div class="col-lg-6">
 
-            {% set title = "🎵 Player" %}
+            {% set title %}
+            <i class="bi bi-music-note-list me-2"></i>Player
+            {% endset %}
 
             {% set body %}
             <div class="d-flex justify-content-between">
@@ -80,107 +80,12 @@
             {% include "components/status_card.html" %}
 
         </div>
-        <h3 class="mt-5 mb-3">Service</h3>
-        <!-- Audio ------------------------------------------------------->
-
-        <div class="accordion" id="serviceAccordion">
-
-    <div class="accordion-item">
-
-        <h2 class="accordion-header">
-
-            <button
-                class="accordion-button collapsed"
-                type="button"
-                data-bs-toggle="collapse"
-                data-bs-target="#audioCollapse"
-                aria-expanded="false"
-                aria-controls="audioCollapse">
-
-                🎛 Audio Interface
-
-            </button>
-
-        </h2>
-
-        <div
-            id="audioCollapse"
-            class="accordion-collapse collapse"
-            data-bs-parent="#serviceAccordion">
-
-            <div class="accordion-body">
-
-                {% set title = "🎛 Audio Interface" %}
-
-                {% set body %}
-                <div class="d-flex justify-content-between">
-                    <span>Status</span>
-                    <strong id="audio-status">Offline</strong>
-                </div>
-
-                <hr>
-
-                <div class="d-flex justify-content-between">
-                    <span>Gerät</span>
-                    <strong id="audio-device">-</strong>
-                </div>
-
-                <div class="d-flex justify-content-between">
-                    <span>Kanäle</span>
-                    <strong id="audio-channels">-</strong>
-                </div>
-
-                <div class="d-flex justify-content-between">
-                    <span>Samplerate</span>
-                    <strong id="audio-rate">-</strong>
-                </div>
-                {% endset %}
-
-                {% include "components/status_card.html" %}
-
-            </div>
-
-        </div>
 
     </div>
 
-</div>
+    <!-- System ------------------------------------------------------>
 
-        <!-- System ------------------------------------------------------>
-
-        <div class="col-lg-6">
-
-            {% set title = "💻 System" %}
-
-            {% set body %}
-            <div class="d-flex justify-content-between">
-                <span>Hostname</span>
-                <strong id="hostname">-</strong>
-            </div>
-
-            <hr>
-
-            <div class="d-flex justify-content-between">
-                <span>CPU</span>
-                <strong id="cpu">-</strong>
-            </div>
-
-            <div class="d-flex justify-content-between">
-                <span>RAM</span>
-                <strong id="ram">-</strong>
-            </div>
-
-            <div class="d-flex justify-content-between">
-                <span>Festplatte</span>
-                <strong id="disk">-</strong>
-            </div>
-            {% endset %}
-
-            {% include "components/status_card.html" %}
-
-        </div>
-
-    </div>
+    {% include "components/footer_status.html" %}
 
 </div>
 
