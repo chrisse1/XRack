@@ -35,9 +35,18 @@ class Application:
         if device is not None:
             self.status.audio_device = device.name
             self.status.audio_connected = True
+            self.status.audio_channels = device.channels
+            self.status.audio_sample_rate = device.sample_rate
+            self.status.audio_sample_bits = device.sample_bits
+            self.status.audio_formats = device.formats
         else:
             self.status.audio_device = "Kein Audio-Interface"
             self.status.audio_connected = False
+
+            self.status.audio_channels = 0
+            self.status.audio_sample_rate = 0
+            self.status.audio_sample_bits = 0
+            self.status.audio_formats = []
 
         self.status.hostname = platform.node()
 

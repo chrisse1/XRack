@@ -20,7 +20,15 @@
         </span>
       </div>
       <small class="text-secondary" id="audio-info">
-        Audio Interface
+      <small class="text-secondary" id="audio-info">
+        {% if status.audio_connected %}
+          {{ status.audio_channels }} Ch •
+          {{ (status.audio_sample_rate / 1000)|int }} kHz •
+          {{ status.audio_sample_bits }} Bit •
+          {{ status.audio_formats | join(", ") }}
+        {% else %}
+          Audio Interface
+        {% endif %}
       </small>
     </div>
   </div>

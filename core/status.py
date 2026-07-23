@@ -4,7 +4,7 @@ System status management for XRack.
 
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class RecorderState(str, Enum):
@@ -37,3 +37,7 @@ class SystemStatus(BaseModel):
     uptime: str = ""
     audio_device: str = "Kein Audio-Interface"
     audio_connected: bool = False
+    audio_channels: int = 0
+    audio_sample_rate: int = 0
+    audio_sample_bits: int = 0
+    audio_formats: list[str] = []
