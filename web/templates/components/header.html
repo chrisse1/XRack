@@ -12,11 +12,15 @@
     <div class="col-md-6 text-end">
       <div class="fw-semibold">
         <span id="audio-state">
-          ⚪ Kein Audiointerface
+          {% if status.audio_connected %}
+          🟢 {{ status.audio_device }}
+          {% else %}
+          🔴 {{ status.audio_device }}
+          {% endif %}
         </span>
       </div>
       <small class="text-secondary" id="audio-info">
-        -
+        Audio Interface
       </small>
     </div>
   </div>

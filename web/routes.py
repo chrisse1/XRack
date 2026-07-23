@@ -8,12 +8,15 @@ router = APIRouter()
 async def index(request: Request):
 
     application = request.app.state.application
-
+    
+    application.update_status()
+    
     return request.app.state.templates.TemplateResponse(
         request=request,
         name="index.html",
         context={
             "application": application,
+            "status": application.status,
         },
     )
 

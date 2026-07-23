@@ -35,3 +35,5 @@ class SystemStatus(BaseModel):
     disk: float = 0.0
     hostname: str = ""
     uptime: str = ""
+    audio_device: str = "Kein Audio-Interface"
+    audio_connected: bool = False

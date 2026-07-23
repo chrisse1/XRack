@@ -5,9 +5,11 @@ XRack application.
 from core.configuration import Configuration
 from core.log import create_logger
 from core.status import SystemStatus
+from audio.audio_manager import AudioManager
 import platform
 import psutil
 import time
+import re
 
 class Application:
     """Main XRack application."""
@@ -22,8 +24,20 @@ class Application:
 
         self.status = SystemStatus()
         
+        self.audio = AudioManager()
+        
     def update_status(self) -> None:
         """Aktualisiert den aktuellen Systemstatus."""
+        
+        self.audio.scan()
+        device = self.audio.get_default_device()
+
+        if device is not None:
+            self.status.audio_device = device.name
+            self.status.audio_connected = True
+        else:
+            self.status.audio_device = "Kein Audio-Interface"
+            self.status.audio_connected = False
 
         self.status.hostname = platform.node()
 
