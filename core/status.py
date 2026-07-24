@@ -41,3 +41,4 @@ class SystemStatus(BaseModel):
     audio_sample_rate: int = 0
     audio_sample_bits: int = 0
     audio_formats: list[str] = []
+    audio_core_open: bool = False

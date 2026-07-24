@@ -6,6 +6,7 @@ from core.configuration import Configuration
 from core.log import create_logger
 from core.status import SystemStatus
 from audio.audio_manager import AudioManager
+from audio.audio_core import AudioCore
 import platform
 import psutil
 import time
@@ -24,13 +25,22 @@ class Application:
 
         self.status = SystemStatus()
         
-        self.audio = AudioManager()
+        self.audio_manager = AudioManager()
+        
+        self.audio_core = AudioCore()
+        
+        self.audio_manager.scan()
+
+        device = self.audio_manager.get_default_device()
+
+        if device is not None:
+            self.audio_core.open(device)
         
     def update_status(self) -> None:
         """Aktualisiert den aktuellen Systemstatus."""
         
-        self.audio.scan()
-        device = self.audio.get_default_device()
+        self.audio_manager.scan()
+        device = self.audio_manager.get_default_device()
 
         if device is not None:
             self.status.audio_device = device.name
@@ -39,6 +49,7 @@ class Application:
             self.status.audio_sample_rate = device.sample_rate
             self.status.audio_sample_bits = device.sample_bits
             self.status.audio_formats = device.formats
+            self.status.audio_core_open = self.audio_core.opened
         else:
             self.status.audio_device = "Kein Audio-Interface"
             self.status.audio_connected = False
@@ -47,6 +58,7 @@ class Application:
             self.status.audio_sample_rate = 0
             self.status.audio_sample_bits = 0
             self.status.audio_formats = []
+            self.status.audio_core_open = self.audio_core.opened
 
         self.status.hostname = platform.node()
 

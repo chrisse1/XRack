@@ -22,6 +22,20 @@
                 <span>Status</span>
                 <strong id="recorder-status">Idle</strong>
             </div>
+            
+            <hr>
+
+            <div class="d-flex justify-content-between">
+                <span>Audio Core</span>
+
+                <strong id="engine-status">
+                    {% if status.audio_core_open %}
+                        🟢 Geöffnet
+                    {% else %}
+                        ⚪ Geschlossen
+                    {% endif %}
+                </strong>
+            </div>
 
             <hr>
 
