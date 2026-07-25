@@ -37,11 +37,11 @@ class Application:
 
         if devices:
             self.selected_audio_device = devices[0]
-
+            self.logger.info("Initiales Audiogerät wird geöffnet...")
             self.select_audio_device(
                 self.selected_audio_device.id
             )
-            
+            self.logger.info("Initiales Audiogerät geöffnet.")
             self.logger.info(
                 "Ausgewähltes Gerät: %s",
                 self.selected_audio_device.description,

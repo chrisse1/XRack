@@ -4,10 +4,7 @@ Audio Core
 Diese Klasse verwaltet später den exklusiven Zugriff auf das Audio-Interface.
 Im ersten Schritt ist sie nur ein Platzhalter.
 """
-
-from audio.models import AudioDevice
-from audio.models import AudioDevice, AudioState
-from audio.models import AudioDevice, AudioState, AudioHealth
+from audio.audio_backend import AudioBackend
 from audio.models import (
     AudioDevice,
     AudioState,
@@ -28,6 +25,8 @@ class AudioCore:
         self.health = AudioHealth.NOT_READY
 
         self.logger = logging.getLogger("XRack")
+        
+        self.backend = AudioBackend()
 
     @property
     def opened(self) -> bool:
@@ -41,13 +40,8 @@ class AudioCore:
         Liefert den ALSA-Gerätenamen.
         """
 
-        if self.device is None:
-            raise RuntimeError(
-                "Kein Audiogerät übernommen."
-            )
-
-        return f"hw:{self.device.card},{self.device.device}"
-        
+        return self.backend.alsa_name
+            
     @property
     def name(self) -> str:
         """Name des Audiogeräts."""
@@ -103,6 +97,9 @@ class AudioCore:
         """
         self.device = device
 
+        if not self.backend.open(device):
+            return False
+
         self.logger.info(
             "Audio Core geöffnet: %s | %s | %d Kanäle | %d Hz",
             self.name,
@@ -128,6 +125,7 @@ class AudioCore:
         """
         Schließt den Audio Core.
         """
+        self.backend.close()
 
         self.logger.info("Audio Core geschlossen.")
         
@@ -148,7 +146,7 @@ class AudioCore:
         Führt eine Diagnose des Audio Cores durch.
         """
 
-        diagnostics: list[DiagnosticItem] = []
+        diagnostics = []
 
         diagnostics.append(
             DiagnosticItem(
@@ -160,6 +158,10 @@ class AudioCore:
                     else "Kein Audiogerät vorhanden."
                 ),
             )
+        )
+
+        diagnostics.extend(
+            self.backend.diagnose()
         )
 
         return diagnostics

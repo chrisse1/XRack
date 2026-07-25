@@ -7,3 +7,4 @@ psutil
 pydantic
 black
 isort
+pyalsaaudio
