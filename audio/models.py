@@ -32,6 +32,26 @@ class AudioDevice:
     
     sample_bits: int = 0
     
+    @property
+    def id(self) -> str:
+        """
+        Eindeutige Geräte-ID.
+        """
+
+        return f"hw:{self.card},{self.device}"
+        
+    @property
+    def description(self) -> str:
+        """
+        Beschreibung für die Benutzeroberfläche.
+        """
+
+        return (
+            f"{self.name} "
+            f"({self.channels} Ch, "
+            f"{self.sample_rate} Hz)"
+        )
+    
 @dataclass
 class DiagnosticItem:
     """

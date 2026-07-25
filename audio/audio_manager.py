@@ -137,3 +137,15 @@ class AudioManager:
             return self.devices[0]
 
         return None
+        
+    def get_device(self, device_id: str) -> AudioDevice | None:
+        """
+        Liefert ein Audiogerät anhand seiner ID.
+        """
+
+        for device in self.devices:
+
+            if device.id == device_id:
+                return device
+
+        return None

@@ -31,16 +31,27 @@ class Application:
         
         self.audio_manager.scan()
 
-        device = self.audio_manager.get_default_device()
+        self.selected_audio_device = None
 
-        if device is not None:
-            self.audio_core.open(device)
+        devices = self.audio_manager.get_devices()
+
+        if devices:
+            self.selected_audio_device = devices[0]
+
+            self.select_audio_device(
+                self.selected_audio_device.id
+            )
+            
+            self.logger.info(
+                "Ausgewähltes Gerät: %s",
+                self.selected_audio_device.description,
+            )
         
     def update_status(self) -> None:
         """Aktualisiert den aktuellen Systemstatus."""
         
         self.audio_manager.scan()
-        device = self.audio_manager.get_default_device()
+        device = self.selected_audio_device
 
         if device is not None:
             self.status.audio_device = device.name
@@ -73,3 +84,39 @@ class Application:
         self.status.uptime = str(
             int((time.time() - psutil.boot_time()) // 60)
         ) + " min"
+        
+    def refresh(self) -> None:
+        """
+        Aktualisiert den Zustand der Anwendung.
+        """
+
+        self.audio_manager.scan()
+
+        self.update_status()
+        
+    def select_audio_device(self, device_id: str) -> bool:
+        """
+        Wählt ein Audiogerät aus.
+        """
+
+        device = self.audio_manager.get_device(device_id)
+
+        if device is None:
+            self.logger.warning(
+                "Audiogerät %s nicht gefunden.",
+                device_id,
+            )
+            return False
+
+        self.audio_core.close()
+
+        self.selected_audio_device = device
+
+        self.audio_core.open(device)
+
+        self.logger.info(
+            "Audiogerät gewechselt auf %s",
+            device.description,
+        )
+
+        return True
