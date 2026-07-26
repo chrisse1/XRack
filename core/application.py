@@ -7,6 +7,7 @@ from core.log import create_logger
 from core.status import SystemStatus
 from audio.audio_manager import AudioManager
 from audio.audio_core import AudioCore
+from recorder.recorder import Recorder
 import platform
 import psutil
 import time
@@ -32,6 +33,10 @@ class Application:
         self.audio_manager.scan()
 
         self.selected_audio_device = None
+        
+        self.recorder = Recorder(
+            self.audio_core.backend
+        )
 
         devices = self.audio_manager.get_devices()
 
@@ -46,7 +51,7 @@ class Application:
                 "Ausgewähltes Gerät: %s",
                 self.selected_audio_device.description,
             )
-        
+            
     def update_status(self) -> None:
         """Aktualisiert den aktuellen Systemstatus."""
         
