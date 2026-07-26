@@ -50,6 +50,29 @@ async def status(request: Request):
 
     return application.status.model_dump()
     
+@router.post("/api/recorder/start")
+async def recorder_start(request: Request):
+
+    application = request.app.state.application
+
+    success = application.recorder.start()
+
+    return {
+        "success": success
+    }
+
+
+@router.post("/api/recorder/stop")
+async def recorder_stop(request: Request):
+
+    application = request.app.state.application
+
+    application.recorder.stop()
+
+    return {
+        "success": True
+    }
+    
 @router.get("/api/audio/devices")
 async def audio_devices(request: Request):
 

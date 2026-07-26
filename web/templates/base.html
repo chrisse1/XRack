@@ -19,12 +19,15 @@
       href="/static/css/xrack.css">
 
 </head>
-<script src="{{ url_for('static', path='js/bootstrap.bundle.min.js') }}"></script>
-<script src="{{ url_for('static', path='js/xrack.js') }}"></script>
+</head>
+
 <body>
 
 {% block content %}
 {% endblock %}
+
+<script src="{{ url_for('static', path='js/bootstrap.bundle.min.js') }}"></script>
+<script src="{{ url_for('static', path='js/xrack.js') }}"></script>
 
 </body>
 

@@ -88,6 +88,38 @@ async function refreshDashboard() {
 
 }
 
+async function startRecorder() {
+
+    const response = await fetch(
+        "/api/recorder/start",
+        {
+            method: "POST"
+        }
+    );
+
+    const result = await response.json();
+
+    console.log(result);
+
+    await refreshDashboard();
+}
+
+
+async function stopRecorder() {
+
+    const response = await fetch(
+        "/api/recorder/stop",
+        {
+            method: "POST"
+        }
+    );
+
+    const result = await response.json();
+
+    console.log(result);
+
+    await refreshDashboard();
+}
 
 // Sofort aktualisieren
 refreshDashboard();

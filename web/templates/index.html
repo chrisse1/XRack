@@ -53,6 +53,29 @@
                 <span>Größe</span>
                 <strong id="recorder-size">0 MB</strong>
             </div>
+            <hr>
+
+            <div class="d-grid gap-2">
+
+                <button
+                    id="btn-recorder-start"
+                    class="btn btn-danger"
+                    onclick="startRecorder()"
+                >
+                    <i class="bi bi-record-circle me-2"></i>
+                    Aufnahme starten
+                </button>
+
+                <button
+                    id="btn-recorder-stop"
+                    class="btn btn-secondary"
+                    onclick="stopRecorder()"
+                >
+                    <i class="bi bi-stop-circle me-2"></i>
+                    Aufnahme stoppen
+                </button>
+
+            </div>
             {% endset %}
 
             {% include "components/status_card.html" %}
