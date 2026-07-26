@@ -7,6 +7,8 @@ import threading
 import time
 
 from audio.audio_backend import AudioBackend
+from writer.audio_writer import AudioWriter
+from writer.w64_writer import W64Writer
 
 
 class Recorder:
@@ -26,6 +28,8 @@ class Recorder:
         self._recording = False
         
         self._thread: threading.Thread | None = None
+        
+        self.writer: AudioWriter = W64Writer()
 
     @property
     def recording(self) -> bool:
@@ -44,6 +48,8 @@ class Recorder:
             return False
 
         self._recording = True
+        
+        self.writer.open()
 
         self.logger.info(
             "Recorder gestartet."
@@ -73,6 +79,8 @@ class Recorder:
             self._thread.join()
 
             self._thread = None
+            
+            self.writer.close()
 
             self.logger.info(
                 "Recorder gestoppt."
