@@ -34,12 +34,16 @@ class W64Writer(AudioWriter):
         )
 
     def write(self, data: bytes):
+    
+        self.logger.info(
+            "Writer: %d Byte",
+            len(data),
+        )
 
-        #
-        # Noch leer
-        #
+        if self.file is None:
+            return
 
-        pass
+        self.file.write(data)
 
     def close(self):
 

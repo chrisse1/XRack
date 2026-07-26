@@ -22,45 +22,102 @@ class AudioBackend:
 
         self._pcm = None
 
-        self._capture = True
+        self._rate = 0
+        self._channels = 0
+        self._period_size = 0
+        self._format = None
+
+    # ---------------------------------------------------------
+    # Properties
+    # ---------------------------------------------------------
 
     @property
     def opened(self) -> bool:
-        """
-        True, wenn ein PCM-Handle geöffnet ist.
-        """
-
+        """True, wenn ein PCM-Handle geöffnet ist."""
         return self._pcm is not None
 
     @property
+    def rate(self) -> int:
+        return self._rate
+
+    @property
+    def channels(self) -> int:
+        return self._channels
+
+    @property
+    def period_size(self) -> int:
+        return self._period_size
+
+    @property
+    def sample_format(self):
+        return self._format
+
+    @property
     def alsa_name(self) -> str:
-        """
-        Liefert den ALSA-Gerätenamen.
-        """
+        """Liefert den ALSA-Gerätenamen."""
 
         if self.device is None:
             return ""
 
         return f"hw:{self.device.card},{self.device.device}"
 
-    def open(self, device: AudioDevice) -> bool:
+    # ---------------------------------------------------------
+    # Öffnen / Schließen
+    # ---------------------------------------------------------
+
+    def open(
+        self,
+        device: AudioDevice,
+    ) -> bool:
         """
-        Öffnet das Audiogerät exklusiv.
+        Öffnet das Audiogerät.
         """
 
         self.device = device
 
+        self._rate = device.sample_rate
+        self._channels = device.channels
+        self._period_size = 1024
+
+        #
+        # Das XR18 liefert 24 Bit.
+        # Für Sprint 5a bleiben wir bewusst bei S24_LE.
+        #
+        self._format = alsaaudio.PCM_FORMAT_S24_LE
+
         try:
 
             self._pcm = alsaaudio.PCM(
+
                 type=alsaaudio.PCM_CAPTURE,
+
                 mode=alsaaudio.PCM_NORMAL,
+
                 device=device.id,
+
+            )
+
+            self._pcm.setrate(
+                self._rate
+            )
+
+            self._pcm.setchannels(
+                self._channels
+            )
+
+            self._pcm.setformat(
+                self._format
+            )
+
+            self._pcm.setperiodsize(
+                self._period_size
             )
 
             self.logger.info(
-                "ALSA-Gerät geöffnet: %s",
+                "ALSA geöffnet: %s | %d Ch | %d Hz",
                 device.id,
+                self._channels,
+                self._rate,
             )
 
             return True
@@ -84,6 +141,7 @@ class AudioBackend:
         if self._pcm is not None:
 
             self._pcm.close()
+
             self._pcm = None
 
         self.device = None
@@ -91,6 +149,29 @@ class AudioBackend:
         self.logger.info(
             "ALSA-Gerät geschlossen."
         )
+
+    # ---------------------------------------------------------
+    # Lesen
+    # ---------------------------------------------------------
+
+    def read(self) -> bytes | None:
+        """
+        Liest einen Audiobuffer.
+        """
+
+        if self._pcm is None:
+            return None
+
+        length, data = self._pcm.read()
+
+        if length <= 0:
+            return None
+
+        return data
+
+    # ---------------------------------------------------------
+    # Diagnose
+    # ---------------------------------------------------------
 
     def diagnose(self) -> list[DiagnosticItem]:
         """

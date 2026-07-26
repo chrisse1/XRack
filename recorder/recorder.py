@@ -97,11 +97,25 @@ class Recorder:
 
         while self.recording:
 
-            #
-            # Platzhalter
-            #
+            data = self.backend.read()
+            
+            if data is None:
 
-            time.sleep(0.05)
+                self.logger.info(
+                    "Recorder: kein Buffer"
+                )
+
+                continue
+
+            self.logger.info(
+                "Recorder: Buffer %d Byte",
+                len(data),
+            )
+
+            if data is None:
+                continue
+
+            self.writer.write(data)
 
         self.logger.info(
             "Recorder-Thread beendet."
