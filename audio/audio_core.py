@@ -91,13 +91,16 @@ class AudioCore:
 
         return self.device.formats
         
-    def open(self, device: AudioDevice) -> bool:
-        """
-        Öffnet den Audio Core.
-        """
-        self.device = device
+    def open(
+        self,
+        device: AudioDevice,
+        channels: int | None = None,
+    ) -> bool:
 
-        if not self.backend.open(device):
+        if not self.backend.open(
+            device,
+            channels,
+        ):
             return False
 
         self.logger.info(

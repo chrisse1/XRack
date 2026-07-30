@@ -15,6 +15,12 @@ class AudioWriter(ABC):
     def __init__(self):
 
         self.filename: str | None = None
+        
+        self.directory = Path("recordings")
+
+        self.channels = 0
+        self.sample_rate = 0
+        self.bits_per_sample = 0
 
     def create_filename(
         self,
@@ -24,9 +30,7 @@ class AudioWriter(ABC):
         Erstellt Dateiname und Verzeichnis.
         """
 
-        directory = Path("recordings")
-
-        directory.mkdir(
+        self.directory.mkdir(
             exist_ok=True
         )
 
@@ -35,20 +39,28 @@ class AudioWriter(ABC):
         )
 
         self.filename = str(
-            directory / f"{filename}.{extension}"
+            self.directory / f"{filename}.{extension}"
         )
 
         return self.filename
 
     @abstractmethod
-    def open(self):
+    def open(
+        self,
+        channels: int,
+        sample_rate: int,
+        bits_per_sample: int,
+    ):
         """
         Öffnet die Ausgabedatei.
         """
         pass
 
     @abstractmethod
-    def write(self, data: bytes):
+    def write(
+        self,
+        data: bytes,
+    ):
         """
         Schreibt Audiodaten.
         """

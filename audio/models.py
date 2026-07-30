@@ -1,5 +1,9 @@
 from dataclasses import dataclass, field
 from enum import Enum
+from pydantic import BaseModel
+
+class DeleteRecordingsRequest(BaseModel):
+    filenames: list[str]
 
 class AudioState(str, Enum):
     """Aktueller Zustand des Audio Cores."""
@@ -68,3 +72,14 @@ class DiagnosticItem:
     ok: bool
     message: str
     category: str = "general"
+    
+@dataclass
+class RecordingInfo:
+    """Informationen über eine Aufnahme."""
+
+    filename: str
+    channels: int
+    duration: float
+    size: int
+    sample_rate: int
+    bits_per_sample: int

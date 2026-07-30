@@ -10,9 +10,9 @@ from pydantic import BaseModel, Field
 class RecorderState(str, Enum):
     """Recorder states."""
 
-    IDLE = "idle"
-    RECORDING = "recording"
-    PLAYBACK = "playback"
+    IDLE = "bereit"
+    RECORDING = "nimmt auf"
+    PLAYBACK = "Wiedergabe"
 
 
 class PlayerState(str, Enum):
@@ -36,9 +36,21 @@ class SystemStatus(BaseModel):
     hostname: str = ""
     uptime: str = ""
     audio_device: str = "Kein Audio-Interface"
+    record_channels: int = 18
+    record_sample_rate: int = 0
+    record_bits_per_sample: int = 0
+
+    selected_audio_device: str = ""
     audio_connected: bool = False
     audio_channels: int = 0
     audio_sample_rate: int = 0
     audio_sample_bits: int = 0
     audio_formats: list[str] = []
     audio_core_open: bool = False
+    buffer_count: int = 0
+    bytes_written: int = 0
+    mb_written: float = 0.0
+    current_filename: str = ""
+    duration: float = 0.0
+    recordings: list[str] = []
+    recording: bool = False

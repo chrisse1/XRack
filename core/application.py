@@ -4,7 +4,7 @@ XRack application.
 
 from core.configuration import Configuration
 from core.log import create_logger
-from core.status import SystemStatus
+from core.status import SystemStatus, RecorderState
 from audio.audio_manager import AudioManager
 from audio.audio_core import AudioCore
 from recorder.recorder import Recorder
@@ -34,6 +34,8 @@ class Application:
 
         self.selected_audio_device = None
         
+        self.record_channels = 18
+        
         self.recorder = Recorder(
             self.audio_core.backend
         )
@@ -55,11 +57,11 @@ class Application:
     def update_status(self) -> None:
         """Aktualisiert den aktuellen Systemstatus."""
         
-        self.audio_manager.scan()
         device = self.selected_audio_device
 
         if device is not None:
             self.status.audio_device = device.name
+            self.status.selected_audio_device = device.id
             self.status.audio_connected = True
             self.status.audio_channels = device.channels
             self.status.audio_sample_rate = device.sample_rate
@@ -69,7 +71,7 @@ class Application:
         else:
             self.status.audio_device = "Kein Audio-Interface"
             self.status.audio_connected = False
-
+            self.status.selected_audio_device = ""
             self.status.audio_channels = 0
             self.status.audio_sample_rate = 0
             self.status.audio_sample_bits = 0
@@ -90,6 +92,58 @@ class Application:
             int((time.time() - psutil.boot_time()) // 60)
         ) + " min"
         
+        #
+        # Recorder
+        #
+
+        self.status.buffer_count = self.recorder.buffer_count
+
+        self.status.bytes_written = self.recorder.bytes_written
+
+        self.status.mb_written = round(
+            self.recorder.mb_written,
+            2,
+        )
+
+        self.status.current_filename = (
+            self.recorder.current_filename
+        )
+        
+        self.status.duration = round(
+            self.recorder.duration,
+            1,
+        )
+        
+        if self.recorder.recording:
+            self.status.recorder = RecorderState.RECORDING
+        else:
+            self.status.recorder = RecorderState.IDLE
+            
+        self.status.recording = (
+            self.recorder.recording
+        )
+            
+        self.status.audio = (
+            self.status.audio_connected
+            and self.status.audio_core_open
+        )
+        
+        self.status.recordings = (
+            self.recorder.recordings
+        )
+        
+        self.status.record_channels = (
+            self.record_channels
+        )
+        
+        self.status.record_sample_rate = (
+        self.recorder.writer.sample_rate
+        )
+
+        self.status.record_bits_per_sample = (
+            self.recorder.writer.bits_per_sample
+        )
+                    
     def refresh(self) -> None:
         """
         Aktualisiert den Zustand der Anwendung.
@@ -98,7 +152,29 @@ class Application:
         self.audio_manager.scan()
 
         self.update_status()
-        
+
+    def set_record_channels(
+        self,
+        channels: int,
+    ) -> bool:
+        """
+        Setzt die Anzahl der Aufnahmekanäle.
+        """
+
+        self.record_channels = channels
+
+        if self.selected_audio_device is None:
+            return False
+
+        self.audio_core.close()
+
+        self.audio_core.open(
+            self.selected_audio_device,
+            self.record_channels,
+        )
+
+        return True
+    
     def select_audio_device(self, device_id: str) -> bool:
         """
         Wählt ein Audiogerät aus.
@@ -116,12 +192,38 @@ class Application:
         self.audio_core.close()
 
         self.selected_audio_device = device
+        
+        self.logger.info(
+            "Selected Audio Device: %s (%s)",
+            self.selected_audio_device.name,
+            self.selected_audio_device.id,
+        )
 
-        self.audio_core.open(device)
+        #
+        # Kanalzahl auf das neue Gerät begrenzen
+        #
+
+        self.record_channels = min(
+            self.record_channels,
+            device.channels,
+        )
+
+        self.set_record_channels(
+            self.record_channels,
+        )
 
         self.logger.info(
             "Audiogerät gewechselt auf %s",
             device.description,
+        )
+        self.logger.info(
+            "AudioCore.max_channels = %d",
+            self.audio_core.max_channels,
+        )
+
+        self.logger.info(
+            "Application.record_channels = %d",
+            self.record_channels,
         )
 
         return True

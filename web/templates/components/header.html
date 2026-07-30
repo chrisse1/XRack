@@ -11,34 +11,45 @@
     
     <div class="col-md-6 d-flex flex-column align-items-end">
 
-    <div class="fw-semibold">
-        <span id="audio-state">
-            {% if status.audio_connected %}
-                🟢 {{ status.audio_device }}
-            {% else %}
-                🔴 {{ status.audio_device }}
-            {% endif %}
-        </span>
+      <div class="fw-semibold">
+          <span id="audio-state">
+              {% if status.audio_connected %}
+                  🟢 {{ status.audio_device }}
+              {% else %}
+                  🔴 {{ status.audio_device }}
+              {% endif %}
+          </span>
+      </div>
+
+      <div class="mt-2 d-flex gap-2" style="">
+
+          <select
+              id="audio-device-select"
+              class="form-select form-select-sm">
+          </select>
+
+          <button
+              id="audio-rescan"
+              class="btn btn-outline-secondary btn-sm"
+              title="Audiogeräte neu suchen">
+
+              <i class="bi bi-arrow-clockwise"></i>
+
+          </button>
+
+      </div>
+
+      <small class="text-secondary mt-2" id="audio-info">
+          {% if status.audio_connected %}
+              {{ status.audio_channels }} Ch •
+              {{ (status.audio_sample_rate / 1000)|int }} kHz •
+              {{ status.audio_sample_bits }} Bit •
+              {{ status.audio_formats | join(", ") }}
+          {% else %}
+              Audio Interface
+          {% endif %}
+      </small>
+
     </div>
-
-    <div class="mt-2" style="width: 320px;">
-        <select
-            id="audio-device-select"
-            class="form-select form-select-sm">
-        </select>
-    </div>
-
-    <small class="text-secondary mt-2" id="audio-info">
-        {% if status.audio_connected %}
-            {{ status.audio_channels }} Ch •
-            {{ (status.audio_sample_rate / 1000)|int }} kHz •
-            {{ status.audio_sample_bits }} Bit •
-            {{ status.audio_formats | join(", ") }}
-        {% else %}
-            Audio Interface
-        {% endif %}
-    </small>
-
-</div>
   </div>
 </div>

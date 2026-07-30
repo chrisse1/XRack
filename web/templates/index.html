@@ -5,8 +5,6 @@
 <div class="container py-4">
     {% include "components/header.html" %}
 
-    <h3 class="mt-4 mb-3">Live-Betrieb</h3>
-
     <div class="row g-4">
 
         <!-- Recorder ---------------------------------------------------->
@@ -14,66 +12,119 @@
         <div class="col-lg-6">
 
             {% set title %}
-            <i class="bi bi-record-circle-fill text-danger me-2"></i>Recorder
+            <i class="bi bi-record-circle-fill text-danger me-2"></i>Virtueller Soundcheck
+            
             {% endset %}
 
             {% set body %}
-            <div class="d-flex justify-content-between">
-                <span>Status</span>
-                <strong id="recorder-status">Idle</strong>
+            <div class="d-flex justify-content-between align-items-center">
+              <div class="row align-items-center">
+                  <div class="col-auto">
+                      <span>
+                          Aufnahmekanäle:
+                      </span>
+                  </div>
+
+                  <div class="col">
+                      <select
+                          id="record-channels"
+                          class="form-select form-select-sm">
+                      </select>
+                  </div>
+              </div>
+                <div>
+                    <span>Status</span>
+                    <strong id="recorder-status" class="ms-2">bereit</strong>
+                </div>
+                
+                <div>
+                    <span>Audio Core</span>
+                    <strong id="engine-status" class="ms-2">
+                        {% if status.audio_core_open %}
+                            🟢 Geöffnet
+                        {% else %}
+                            ⚪ Geschlossen
+                        {% endif %}
+                    </strong>
+                </div>
+            </div>
+            
+            <hr>
+            
+            <div class="d-flex gap-2">
+              <button
+                  id="btn-recorder-start"
+                  class="btn btn-danger flex-fill"
+                  onclick="startRecorder()"
+              >
+                  <i class="bi bi-record-circle me-2"></i>
+                  Aufnahme starten
+              </button>
+
+              <button
+                  id="btn-recorder-stop"
+                  class="btn btn-secondary flex-fill"
+                  onclick="stopRecorder()"
+              >
+                  <i class="bi bi-stop-circle me-2"></i>
+                  Aufnahme stoppen
+              </button>
+              
+              <button
+                  id="btn-recorder-play"
+                  class="btn btn-success flex-fill"
+              >
+                  <i class="bi bi-play-circle me-2"></i>
+                  Soundcheck
+              </button>
             </div>
             
             <hr>
 
-            <div class="d-flex justify-content-between">
-                <span>Audio Core</span>
-
-                <strong id="engine-status">
-                    {% if status.audio_core_open %}
-                        🟢 Geöffnet
-                    {% else %}
-                        ⚪ Geschlossen
-                    {% endif %}
-                </strong>
+            <div class="d-flex justify-content-between align-items-center" style="gap: 1rem;">
+                <div class="d-flex" style="gap: 0.5rem;">
+                    <span>Datei</span>
+                    <strong id="recorder-file">-</strong>
+                </div>
+                <div class="d-flex" style="gap: 0.5rem;">
+                    <span>Format</span>
+                    <strong id="recorder-format">Wave64</strong>
+                </div>
             </div>
 
+            <div class="d-flex justify-content-between align-items-center mt-1" style="gap: 1rem;">
+                <div class="d-flex" style="gap: 0.5rem;">
+                    <span>Dauer</span>
+                    <strong id="recorder-duration">00:00:00</strong>
+                </div>
+                <div class="d-flex" style="gap: 0.5rem;">
+                    <span>Größe</span>
+                    <strong id="recorder-size">0 MB</strong>
+                </div>
+            </div>
+            
             <hr>
 
-            <div class="d-flex justify-content-between">
-                <span>Datei</span>
-                <strong id="recorder-file">-</strong>
+            <h6 class="mb-3">
+                Zuletzt aufgenommen
+            </h6>
+
+            <div id="recording-list">
+
+                <div class="text-muted text-center py-3">
+                    Keine Aufnahmen vorhanden.
+                </div>
+
             </div>
+            <div class="d-grid mt-3">
 
-            <div class="d-flex justify-content-between">
-                <span>Dauer</span>
-                <strong id="recorder-duration">00:00:00</strong>
-            </div>
-
-            <div class="d-flex justify-content-between">
-                <span>Größe</span>
-                <strong id="recorder-size">0 MB</strong>
-            </div>
-            <hr>
-
-            <div class="d-grid gap-2">
-
-                <button
-                    id="btn-recorder-start"
-                    class="btn btn-danger"
-                    onclick="startRecorder()"
-                >
-                    <i class="bi bi-record-circle me-2"></i>
-                    Aufnahme starten
-                </button>
-
-                <button
-                    id="btn-recorder-stop"
-                    class="btn btn-secondary"
-                    onclick="stopRecorder()"
-                >
-                    <i class="bi bi-stop-circle me-2"></i>
-                    Aufnahme stoppen
-                </button>
+              <button
+                  class="btn btn-outline-secondary btn-sm"
+                  data-bs-toggle="modal"
+                  data-bs-target="#recordingsModal"
+              >
+                  Alle Aufnahmen...
+              </button>
 
             </div>
             {% endset %}

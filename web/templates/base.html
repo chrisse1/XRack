@@ -26,9 +26,66 @@
 {% block content %}
 {% endblock %}
 
+<div
+    class="modal fade"
+    id="recordingsModal"
+    tabindex="-1"
+    aria-hidden="true"
+>
+    <div class="modal-dialog modal-xl">
+
+        <div class="modal-content">
+
+            <div class="modal-header">
+
+                <h5 class="modal-title">
+                    Aufnahmen
+                </h5>
+
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="modal"
+                ></button>
+
+            </div>
+
+            <div class="modal-body">
+              
+              <div
+                  id="recordingsList"
+                  class="list-group"
+              >
+              </div>
+
+            </div>
+
+            <div class="modal-footer">
+                <button
+                    id="deleteSelectedButton"
+                    class="btn btn-danger"
+                    disabled
+                >
+                    <i class="bi bi-trash"></i>
+                    Ausgewählte löschen (0)
+                </button>
+
+                <button
+                    class="btn btn-secondary"
+                    data-bs-dismiss="modal"
+                >
+                    Schließen
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
 <script src="{{ url_for('static', path='js/bootstrap.bundle.min.js') }}"></script>
 <script src="{{ url_for('static', path='js/xrack.js') }}"></script>
-
 </body>
 
 </html>

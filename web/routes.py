@@ -1,12 +1,24 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-
+from pathlib import Path
+from core.audio_file import AudioFile
+from audio.models import RecordingInfo
+from fastapi import HTTPException
+from fastapi.responses import FileResponse
+from fastapi import Response
+from audio.models import DeleteRecordingsRequest
 
 class AudioSelection(BaseModel):
     device_id: str
 
 router = APIRouter()
+    
+class RecorderChannels(BaseModel):
+    channels: int
+    
+class RecordingSelection(BaseModel):
+    filename: str
 
 @router.post("/api/audio/select")
 async def audio_select(
@@ -22,6 +34,19 @@ async def audio_select(
 
     return {
         "success": success
+    }
+
+@router.post("/api/audio/rescan")
+async def rescan_audio_devices(
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    application.audio_manager.scan()
+
+    return {
+        "success": True
     }
 
 @router.get("/", response_class=HTMLResponse)
@@ -72,6 +97,111 @@ async def recorder_stop(request: Request):
     return {
         "success": True
     }
+
+@router.post("/api/recorder/channels")
+async def recorder_channels(
+    selection: RecorderChannels,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success = application.set_record_channels(
+        selection.channels
+    )
+
+    return {
+        "success": success
+    }
+
+def get_recording_info(
+    recording: Path,
+) -> RecordingInfo:
+    """Liest die Informationen einer Aufnahme."""
+
+    audio = AudioFile(recording)
+
+    audio.open()
+
+    return RecordingInfo(
+        filename=recording.name,
+        channels=audio.channels,
+        duration=audio.duration,
+        size=recording.stat().st_size,
+        sample_rate=audio.sample_rate,
+        bits_per_sample=audio.bits_per_sample,
+    )
+       
+@router.post("/api/recording/info")
+async def recording_info(
+    selection: RecordingSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    application.logger.info(
+        "Ausgewählte Datei: %s",
+        selection.filename,
+    )
+
+    recording = (
+        application.recorder.writer.directory /
+        selection.filename
+    )
+    
+    if not recording.exists():
+
+        return {
+            "success": False
+        }
+        
+    audio = AudioFile(recording)
+
+    audio.open()
+
+    application.logger.info(
+        "AudioFile: %d Ch | %d Hz | %d Bit | %.1f s",
+        audio.channels,
+        audio.sample_rate,
+        audio.bits_per_sample,
+        audio.duration,
+    )
+
+    return {
+
+        "success": True,
+
+        "filename": recording.name,
+
+        "size": recording.stat().st_size,
+
+        "channels": audio.channels,
+
+        "sample_rate": audio.sample_rate,
+
+        "bits_per_sample": audio.bits_per_sample,
+
+        "duration": audio.duration,
+
+    }
+
+@router.get("/api/recordings")
+async def recordings(request: Request):
+
+    application = request.app.state.application
+
+    items = []
+
+    for recording in sorted(
+        application.recorder.writer.directory.glob("*.w64"),
+        reverse=True,
+    ):
+        items.append(
+            get_recording_info(recording)
+        )
+
+    return items
     
 @router.get("/api/audio/devices")
 async def audio_devices(request: Request):
@@ -83,6 +213,13 @@ async def audio_devices(request: Request):
     devices = []
 
     for device in application.audio_manager.get_devices():
+        application.logger.info(
+            "API: %s | selected=%s",
+            device.id,
+            application.selected_audio_device.id
+            if application.selected_audio_device
+            else "None",
+        )
 
         devices.append(
             {
@@ -97,3 +234,73 @@ async def audio_devices(request: Request):
         )
 
     return devices
+    
+@router.get("/api/recordings/{filename}")
+async def download_recording(
+    filename: str,
+    request: Request,
+):
+    application = request.app.state.application
+
+    recording = (
+        application.recorder.writer.directory
+        / filename
+    )
+
+    if not recording.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Aufnahme nicht gefunden.",
+        )
+
+    return FileResponse(
+        path=recording,
+        filename=recording.name,
+        media_type="application/octet-stream",
+    )
+    
+@router.delete("/api/recordings/{filename}")
+async def delete_recording(
+    filename: str,
+    request: Request,
+):
+    application = request.app.state.application
+
+    recording = (
+        application.recorder.writer.directory
+        / filename
+    )
+
+    if not recording.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Aufnahme nicht gefunden.",
+        )
+
+    recording.unlink()
+
+    return Response(status_code=204)
+    
+@router.post("/api/recordings/delete")
+async def delete_recordings(
+    request_data: DeleteRecordingsRequest,
+    request: Request,
+):
+    application = request.app.state.application
+
+    directory = application.recorder.writer.directory
+
+    deleted = []
+
+    for filename in request_data.filenames:
+
+        recording = directory / filename
+
+        if recording.exists():
+            recording.unlink()
+            deleted.append(filename)
+
+    return {
+        "deleted": deleted,
+        "count": len(deleted),
+    }
