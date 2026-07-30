@@ -8,6 +8,7 @@ import logging
 
 import alsaaudio
 
+from audio.channel_extractor import ChannelExtractor
 from audio.models import AudioDevice, DiagnosticItem
 
 
@@ -24,8 +25,10 @@ class AudioBackend:
 
         self._rate = 0
         self._channels = 0
+        self._native_channels = 0
         self._period_size = 0
         self._format = None
+        self._extractor: ChannelExtractor | None = None
 
     # ---------------------------------------------------------
     # Properties
@@ -72,11 +75,24 @@ class AudioBackend:
     ) -> bool:
         """
         Öffnet das Audiogerät.
+
+        Das Interface wird IMMER mit seiner vollen, festen
+        Kanalzahl (device.channels) geöffnet. Digitalmischpulte wie
+        die Behringer X-Serie kennen über USB keinen Modus mit
+        weniger Kanälen - fordert man dort z.B. 8 statt 18 Kanäle
+        an, nimmt ALSA trotzdem alle 18 auf, meldet aber keinen
+        Fehler. Ohne diese Regel verschieben sich dadurch alle
+        Kanäle im Datenstrom (falsche Spur, falsche Dauer).
+
+        Die gewünschte (kleinere) Kanalzahl wird stattdessen erst
+        beim Lesen in Software aus dem Datenstrom herausgeschnitten,
+        siehe `audio.channel_extractor.ChannelExtractor`.
         """
 
         self.device = device
 
         self._rate = device.sample_rate
+        self._native_channels = device.channels
         self._channels = (
             channels
             if channels is not None
@@ -85,6 +101,11 @@ class AudioBackend:
         self._period_size = 1024
 
         self._format = alsaaudio.PCM_FORMAT_S24_LE
+
+        self._extractor = ChannelExtractor(
+            input_channels=self._native_channels,
+            output_channels=self._channels,
+        )
 
         try:
 
@@ -103,7 +124,7 @@ class AudioBackend:
             )
 
             self._pcm.setchannels(
-                self._channels
+                self._native_channels
             )
 
             self._pcm.setformat(
@@ -115,8 +136,9 @@ class AudioBackend:
             )
 
             self.logger.info(
-                "ALSA geöffnet: %s | %d Ch | %d Hz",
+                "ALSA geöffnet: %s | Hardware: %d Ch | Aufnahme: %d Ch | %d Hz",
                 device.id,
+                self._native_channels,
                 self._channels,
                 self._rate,
             )
@@ -168,7 +190,7 @@ class AudioBackend:
         if length <= 0:
             return None
 
-        return data
+        return self._extractor.extract(data)
 
     # ---------------------------------------------------------
     # Diagnose
