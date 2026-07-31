@@ -54,3 +54,8 @@ class SystemStatus(BaseModel):
     duration: float = 0.0
     recordings: list[str] = []
     recording: bool = False
+
+    playback_active: bool = False
+    playback_filename: str = ""
+    playback_duration: float = 0.0
+    playback_channels: int = 0

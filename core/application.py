@@ -7,7 +7,9 @@ from core.log import create_logger
 from core.status import SystemStatus, RecorderState
 from audio.audio_manager import AudioManager
 from audio.audio_core import AudioCore
+from audio.audio_playback_backend import AudioPlaybackBackend
 from recorder.recorder import Recorder
+from player.player import Player
 import platform
 import psutil
 import time
@@ -38,6 +40,10 @@ class Application:
         
         self.recorder = Recorder(
             self.audio_core.backend
+        )
+
+        self.player = Player(
+            AudioPlaybackBackend()
         )
 
         devices = self.audio_manager.get_devices()
@@ -116,13 +122,32 @@ class Application:
         
         if self.recorder.recording:
             self.status.recorder = RecorderState.RECORDING
+        elif self.player.playing:
+            self.status.recorder = RecorderState.PLAYBACK
         else:
             self.status.recorder = RecorderState.IDLE
-            
+
         self.status.recording = (
             self.recorder.recording
         )
-            
+
+        #
+        # Soundcheck-Wiedergabe
+        #
+
+        self.status.playback_active = self.player.playing
+
+        self.status.playback_filename = (
+            self.player.current_filename
+        )
+
+        self.status.playback_duration = round(
+            self.player.duration,
+            1,
+        )
+
+        self.status.playback_channels = self.player.channels
+
         self.status.audio = (
             self.status.audio_connected
             and self.status.audio_core_open
@@ -227,3 +252,29 @@ class Application:
         )
 
         return True
+
+    def start_soundcheck(self, filename: str) -> bool:
+        """
+        Spielt eine Aufnahme auf denselben Kanälen ab,
+        auf denen sie aufgenommen wurde ("virtueller Soundcheck").
+        """
+
+        if self.selected_audio_device is None:
+            return False
+
+        if self.recorder.recording:
+            return False
+
+        path = self.recorder.writer.directory / filename
+
+        return self.player.start(
+            self.selected_audio_device,
+            path,
+        )
+
+    def stop_soundcheck(self) -> None:
+        """
+        Stoppt eine laufende Soundcheck-Wiedergabe.
+        """
+
+        self.player.stop()

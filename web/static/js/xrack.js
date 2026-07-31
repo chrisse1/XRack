@@ -6,6 +6,7 @@ let selectedRecording = null;
 const selectedRecordings = new Set();
 let selectedRecordingInfo = null;
 let selectedAudioDevice = "";
+let playbackActive = false;
 
 // ============================================================
 // 2. CORE UI UPDATES
@@ -56,11 +57,14 @@ function updateAudioStatus(data) {
 // ============================================================
 
 function updateRecorder(data) {
+    playbackActive = data.playback_active;
+
     updateRecorderStatus(data);
     updateAudioCoreStatus(data);
     updateRecordingInfo(data);
     updateRecordChannels(data);
     updateRecordingList(data.recordings);
+    updateSoundcheckButton(data);
 }
 
 function updateRecorderStatus(data) {
@@ -81,6 +85,15 @@ function updateRecordingInfo(data) {
             data.record_channels,
             data.record_sample_rate,
             data.record_bits_per_sample
+        );
+    } else if (data.playback_active) {
+        showRecordingInfo(
+            data.playback_filename,
+            data.playback_duration,
+            selectedRecordingInfo ? selectedRecordingInfo.size : 0,
+            data.playback_channels,
+            selectedRecordingInfo ? selectedRecordingInfo.sample_rate : 0,
+            selectedRecordingInfo ? selectedRecordingInfo.bits_per_sample : 0
         );
     } else if (selectedRecordingInfo) {
         showRecordingInfo(
@@ -144,6 +157,11 @@ function updateRecordingList(recordings) {
             selectedRecording = recording;
             await loadRecordingInfo();
             updateRecordingList(recordings);
+
+            const button = document.getElementById("btn-recorder-play");
+            if (button && !playbackActive) {
+                button.disabled = false;
+            }
         };
 
         group.appendChild(item);
@@ -244,11 +262,61 @@ async function startRecorder() {
     const result = await response.json();
     console.log(result);
     selectedRecording = null;
+    selectedRecordingInfo = null;
     await refreshDashboard();
 }
 
 async function stopRecorder() {
     const response = await fetch("/api/recorder/stop", { method: "POST" });
+    const result = await response.json();
+    console.log(result);
+    await refreshDashboard();
+}
+
+// ============================================================
+// 7b. SOUNDCHECK (Wiedergabe einer Aufnahme)
+// ============================================================
+
+function updateSoundcheckButton(data) {
+    const button = document.getElementById("btn-recorder-play");
+    if (!button) return;
+
+    if (data.playback_active) {
+        button.innerHTML = `<i class="bi bi-stop-circle me-2"></i>Stop`;
+        button.classList.remove("btn-success");
+        button.classList.add("btn-warning");
+        button.disabled = false;
+    } else {
+        button.innerHTML = `<i class="bi bi-play-circle me-2"></i>Soundcheck`;
+        button.classList.remove("btn-warning");
+        button.classList.add("btn-success");
+        button.disabled = !selectedRecording || data.recording;
+    }
+}
+
+async function toggleSoundcheck() {
+    if (playbackActive) {
+        await stopSoundcheck();
+    } else {
+        await startSoundcheck();
+    }
+}
+
+async function startSoundcheck() {
+    if (!selectedRecording) return;
+
+    const response = await fetch("/api/recorder/soundcheck/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: selectedRecording })
+    });
+    const result = await response.json();
+    console.log(result);
+    await refreshDashboard();
+}
+
+async function stopSoundcheck() {
+    const response = await fetch("/api/recorder/soundcheck/stop", { method: "POST" });
     const result = await response.json();
     console.log(result);
     await refreshDashboard();
@@ -324,8 +392,10 @@ function renderRecordings(recordings) {
 }
 
 function createRecordingCard(recording) {
+    const isSelected = recording.filename === selectedRecording;
+
     const card = document.createElement("div");
-    card.className = "card mb-2";
+    card.className = "card mb-2" + (isSelected ? " border-primary" : "");
     card.innerHTML = `
         <div class="card-body d-flex justify-content-between align-items-start">
             <div class="form-check mt-2">
@@ -335,6 +405,7 @@ function createRecordingCard(recording) {
                 <h6 class="card-title mb-2">
                     <i class="bi bi-music-note-beamed me-2"></i>
                     ${recording.filename}
+                    ${isSelected ? '<span class="badge text-bg-primary ms-2">Für Soundcheck ausgewählt</span>' : ''}
                 </h6>
                 <small class="text-body-secondary">
                     ${recording.channels} Ch •
@@ -345,6 +416,9 @@ function createRecordingCard(recording) {
                 </small>
             </div>
             <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-success btn-sm" title="Für Soundcheck auswählen" data-action="choose" data-filename="${recording.filename}">
+                    <i class="bi bi-play-circle"></i>
+                </button>
                 <button class="btn btn-outline-primary btn-sm" title="Download" data-action="download" data-filename="${recording.filename}">
                     <i class="bi bi-download"></i>
                 </button>
@@ -380,7 +454,26 @@ async function handleRecordingAction(event) {
         case "select":
             toggleRecordingSelection(filename, element.checked);
             break;
+        case "choose":
+            await chooseRecordingForPlayback(filename);
+            break;
     }
+}
+
+async function chooseRecordingForPlayback(filename) {
+    selectedRecording = filename;
+    await loadRecordingInfo();
+
+    const button = document.getElementById("btn-recorder-play");
+    if (button && !playbackActive) {
+        button.disabled = false;
+    }
+
+    const modalElement = document.getElementById("recordingsModal");
+    const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+    modal.hide();
+
+    await refreshDashboard();
 }
 
 function downloadRecording(filename) {
@@ -399,7 +492,13 @@ async function deleteRecording(filename) {
         return;
     }
 
+    if (filename === selectedRecording) {
+        selectedRecording = null;
+        selectedRecordingInfo = null;
+    }
+
     await loadRecordings();
+    await refreshDashboard();
 }
 
 function toggleRecordingSelection(filename, selected) {
@@ -446,9 +545,15 @@ async function deleteSelectedRecordings() {
         return;
     }
 
+    if (selectedRecording && selectedRecordings.has(selectedRecording)) {
+        selectedRecording = null;
+        selectedRecordingInfo = null;
+    }
+
     selectedRecordings.clear();
     updateDeleteSelectedButton();
     await loadRecordings();
+    await refreshDashboard();
 }
 
 // ============================================================

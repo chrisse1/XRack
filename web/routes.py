@@ -20,6 +20,9 @@ class RecorderChannels(BaseModel):
 class RecordingSelection(BaseModel):
     filename: str
 
+class SoundcheckSelection(BaseModel):
+    filename: str
+
 @router.post("/api/audio/select")
 async def audio_select(
     selection: AudioSelection,
@@ -113,6 +116,35 @@ async def recorder_channels(
     return {
         "success": success
     }
+
+@router.post("/api/recorder/soundcheck/start")
+async def soundcheck_start(
+    selection: SoundcheckSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success = application.start_soundcheck(
+        selection.filename
+    )
+
+    return {
+        "success": success
+    }
+
+
+@router.post("/api/recorder/soundcheck/stop")
+async def soundcheck_stop(request: Request):
+
+    application = request.app.state.application
+
+    application.stop_soundcheck()
+
+    return {
+        "success": True
+    }
+
 
 def get_recording_info(
     recording: Path,
