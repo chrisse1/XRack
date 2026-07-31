@@ -11,50 +11,51 @@
 
         <div class="col-12">
 
-            {% set body %}
-            <div class="d-flex flex-wrap align-items-center gap-3">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap align-items-center gap-3">
 
-                <div class="d-flex align-items-center gap-2">
-                    <select
-                        id="audio-device-select"
-                        class="form-select form-select-sm w-auto">
-                    </select>
+                        <div class="d-flex align-items-center gap-2">
+                            <select
+                                id="audio-device-select"
+                                class="form-select form-select-sm w-auto">
+                            </select>
 
-                    <button
-                        id="audio-rescan"
-                        class="btn btn-outline-secondary btn-sm"
-                        title="Audiogeräte neu suchen">
+                            <button
+                                id="audio-rescan"
+                                class="btn btn-outline-secondary btn-sm"
+                                title="Audiogeräte neu suchen">
 
-                        <i class="bi bi-arrow-clockwise"></i>
+                                <i class="bi bi-arrow-clockwise"></i>
 
-                    </button>
+                            </button>
+                        </div>
+
+                        <div class="text-nowrap">
+                            <span class="text-secondary small">Geöffnetes Gerät:</span>
+                            <strong id="audio-state" class="ms-1">
+                                {% if status.audio_connected %}
+                                    🟢 {{ status.audio_device }}
+                                {% else %}
+                                    🔴 {{ status.audio_device }}
+                                {% endif %}
+                            </strong>
+                        </div>
+
+                        <div class="text-nowrap text-secondary small" id="audio-info">
+                            {% if status.audio_connected %}
+                                {{ status.audio_channels }} Ch •
+                                {{ (status.audio_sample_rate / 1000)|int }} kHz •
+                                {{ status.audio_sample_bits }} Bit •
+                                {{ status.audio_formats | join(", ") }}
+                            {% else %}
+                                Audio Interface
+                            {% endif %}
+                        </div>
+
+                    </div>
                 </div>
-
-                <div class="text-nowrap">
-                    <strong id="audio-state" class="ms-1">
-                        {% if status.audio_connected %}
-                            🟢 {{ status.audio_device }}
-                        {% else %}
-                            🔴 {{ status.audio_device }}
-                        {% endif %}
-                    </strong>
-                </div>
-
-                <div class="text-nowrap text-secondary small" id="audio-info">
-                    {% if status.audio_connected %}
-                        {{ status.audio_channels }} Ch •
-                        {{ (status.audio_sample_rate / 1000)|int }} kHz •
-                        {{ status.audio_sample_bits }} Bit •
-                        {{ status.audio_formats | join(", ") }}
-                    {% else %}
-                        Audio Interface
-                    {% endif %}
-                </div>
-
             </div>
-            {% endset %}
-
-            {% include "components/status_card.html" %}
 
         </div>
 
