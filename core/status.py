@@ -8,12 +8,16 @@ from pydantic import BaseModel
 
 
 class RecorderState(str, Enum):
-    """Recorder states."""
+    """
+    Recorder states. Die Werte sind sprachneutrale Token - das
+    Frontend übersetzt sie anhand der aktiven Sprache (siehe
+    web/i18n.py).
+    """
 
-    IDLE = "bereit"
-    RECORDING = "nimmt auf"
-    PLAYBACK = "Wiedergabe"
-    MONITORING = "Pegel testen"
+    IDLE = "idle"
+    RECORDING = "recording"
+    PLAYBACK = "playback"
+    MONITORING = "monitoring"
 
 
 class SystemStatus(BaseModel):

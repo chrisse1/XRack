@@ -63,7 +63,7 @@ function updateAudioStatus(data) {
             `${data.audio_sample_bits} Bit • ` +
             data.audio_formats.join(", ");
     } else {
-        audioInfo.textContent = "Audio Interface";
+        audioInfo.textContent = I18N.audio_interface_fallback;
     }
 }
 
@@ -101,24 +101,32 @@ function updateRecorderToggleButton(data) {
     if (!button) return;
 
     if (data.recording) {
-        button.innerHTML = `<i class="bi bi-stop-circle fs-3"></i><small>Aufnahme stoppen</small>`;
+        button.innerHTML = `<i class="bi bi-stop-circle fs-3"></i><small>${I18N.btn_recording_stop}</small>`;
         button.classList.remove("btn-danger");
         button.classList.add("btn-secondary");
     } else {
-        button.innerHTML = `<i class="bi bi-record-circle fs-3"></i><small>Aufnahme starten</small>`;
+        button.innerHTML = `<i class="bi bi-record-circle fs-3"></i><small>${I18N.btn_recording_start}</small>`;
         button.classList.remove("btn-secondary");
         button.classList.add("btn-danger");
     }
 }
 
+const RECORDER_STATE_LABELS = {
+    idle: () => I18N.state_idle,
+    recording: () => I18N.state_recording,
+    playback: () => I18N.state_playback,
+    monitoring: () => I18N.state_monitoring,
+};
+
 function updateRecorderStatus(data) {
-    document.getElementById("recorder-status").textContent = data.recorder;
+    const label = RECORDER_STATE_LABELS[data.recorder];
+    document.getElementById("recorder-status").textContent = label ? label() : data.recorder;
 }
 
 function updateAudioCoreStatus(data) {
     document.getElementById("engine-status").innerHTML = data.audio_core_open
-        ? `<i class="bi bi-check-circle-fill text-success"></i> geöffnet`
-        : `<i class="bi bi-dash-circle text-secondary"></i> geschlossen`;
+        ? `<i class="bi bi-check-circle-fill text-success"></i> ${I18N.audio_core_open}`
+        : `<i class="bi bi-dash-circle text-secondary"></i> ${I18N.audio_core_closed}`;
 }
 
 function updateRecordingInfo(data) {
@@ -183,7 +191,7 @@ function updateRecordingList(recordings) {
     list.innerHTML = "";
 
     if (recordings.length === 0) {
-        list.innerHTML = `<div class="text-muted text-center py-3">Keine Aufnahmen vorhanden.</div>`;
+        list.innerHTML = `<div class="text-muted text-center py-3">${I18N.no_recordings}</div>`;
         return;
     }
 
@@ -231,7 +239,7 @@ function updateRecordChannels(data) {
     for (let channels = 2; channels <= data.audio_channels; channels += 2) {
         const option = document.createElement("option");
         option.value = channels;
-        option.textContent = channels + " Kanäle";
+        option.textContent = I18N.channels_option.replace("{n}", channels);
         if (channels === data.record_channels) {
             option.selected = true;
         }
@@ -342,12 +350,12 @@ function updateSoundcheckButton(data) {
     if (!button) return;
 
     if (data.playback_active) {
-        button.innerHTML = `<i class="bi bi-stop-circle fs-3"></i><small>Stop</small>`;
+        button.innerHTML = `<i class="bi bi-stop-circle fs-3"></i><small>${I18N.btn_stop}</small>`;
         button.classList.remove("btn-success");
         button.classList.add("btn-warning");
         button.disabled = false;
     } else {
-        button.innerHTML = `<i class="bi bi-play-circle fs-3"></i><small>Soundcheck</small>`;
+        button.innerHTML = `<i class="bi bi-play-circle fs-3"></i><small>${I18N.btn_soundcheck}</small>`;
         button.classList.remove("btn-warning");
         button.classList.add("btn-success");
         button.disabled = !selectedRecording || data.recording || data.music_playing;
@@ -391,17 +399,17 @@ function updateLevelCheckButton(data) {
     if (!button) return;
 
     if (data.recording) {
-        button.innerHTML = `<i class="bi bi-soundwave me-2"></i>Pegel (läuft mit der Aufnahme)`;
+        button.innerHTML = `<i class="bi bi-soundwave me-2"></i>${I18N.btn_level_check_recording}`;
         button.classList.remove("btn-outline-info");
         button.classList.add("btn-info");
         button.disabled = true;
     } else if (data.recorder_monitoring) {
-        button.innerHTML = `<i class="bi bi-soundwave me-2"></i>Pegel testen (Stop)`;
+        button.innerHTML = `<i class="bi bi-soundwave me-2"></i>${I18N.btn_level_check_stop}`;
         button.classList.remove("btn-outline-info");
         button.classList.add("btn-info");
         button.disabled = false;
     } else {
-        button.innerHTML = `<i class="bi bi-soundwave me-2"></i>Pegel testen`;
+        button.innerHTML = `<i class="bi bi-soundwave me-2"></i>${I18N.btn_level_check}`;
         button.classList.remove("btn-info");
         button.classList.add("btn-outline-info");
         button.disabled = false;
@@ -460,7 +468,7 @@ function renderLevelMeters(levels) {
 
     if (!levels || levels.length === 0) {
         container.className = "mb-2";
-        container.innerHTML = `<div class="text-muted text-center py-2"><small>Kein Signal - "Pegel testen" oder Aufnahme starten.</small></div>`;
+        container.innerHTML = `<div class="text-muted text-center py-2"><small>${I18N.level_no_signal}</small></div>`;
         return;
     }
 
@@ -584,7 +592,7 @@ function createRecordingCard(recording) {
                 <h6 class="card-title mb-2">
                     <i class="bi bi-music-note-beamed me-2"></i>
                     ${recording.filename}
-                    ${isSelected ? '<span class="badge text-bg-primary ms-2">Für Soundcheck ausgewählt</span>' : ''}
+                    ${isSelected ? `<span class="badge text-bg-primary ms-2">${I18N.badge_selected_for_soundcheck}</span>` : ''}
                 </h6>
                 <small class="text-body-secondary">
                     ${recording.channels} Ch •
@@ -595,13 +603,13 @@ function createRecordingCard(recording) {
                 </small>
             </div>
             <div class="btn-group btn-group-sm">
-                <button class="btn btn-outline-success btn-sm" title="Für Soundcheck auswählen" data-action="choose" data-filename="${recording.filename}">
+                <button class="btn btn-outline-success btn-sm" title="${I18N.title_choose_for_soundcheck}" data-action="choose" data-filename="${recording.filename}">
                     <i class="bi bi-play-circle"></i>
                 </button>
-                <button class="btn btn-outline-primary btn-sm" title="Download" data-action="download" data-filename="${recording.filename}">
+                <button class="btn btn-outline-primary btn-sm" title="${I18N.title_download}" data-action="download" data-filename="${recording.filename}">
                     <i class="bi bi-download"></i>
                 </button>
-                <button class="btn btn-outline-danger btn-sm" title="Löschen" data-action="delete" data-filename="${recording.filename}">
+                <button class="btn btn-outline-danger btn-sm" title="${I18N.title_delete}" data-action="delete" data-filename="${recording.filename}">
                     <i class="bi bi-trash"></i>
                 </button>
             </div>
@@ -660,14 +668,14 @@ function downloadRecording(filename) {
 }
 
 async function deleteRecording(filename) {
-    if (!confirm(`"${filename}" wirklich löschen?`)) return;
+    if (!confirm(I18N.confirm_delete_file.replace("{name}", filename))) return;
 
     const response = await fetch(`/api/recordings/${encodeURIComponent(filename)}`, {
         method: "DELETE"
     });
 
     if (!response.ok) {
-        alert("Aufnahme konnte nicht gelöscht werden.");
+        alert(I18N.alert_recording_delete_failed);
         return;
     }
 
@@ -696,7 +704,7 @@ function updateDeleteSelectedButton() {
     button.disabled = selectedRecordings.size === 0;
     button.innerHTML = `
         <i class="bi bi-trash"></i>
-        Ausgewählte löschen (${selectedRecordings.size})
+        ${I18N.btn_delete_selected} (${selectedRecordings.size})
     `;
 }
 
@@ -705,7 +713,7 @@ async function deleteSelectedRecordings() {
         return;
     }
 
-    if (!confirm(`${selectedRecordings.size} Aufnahme(n) wirklich löschen?`)) {
+    if (!confirm(I18N.confirm_delete_multi.replace("{count}", selectedRecordings.size))) {
         return;
     }
 
@@ -720,7 +728,7 @@ async function deleteSelectedRecordings() {
     });
 
     if (!response.ok) {
-        alert("Aufnahmen konnten nicht gelöscht werden.");
+        alert(I18N.alert_recordings_delete_failed);
         return;
     }
 
@@ -778,7 +786,7 @@ function updateMusicChannels(data) {
         for (let start = 1; start + 1 <= data.audio_channels; start += 2) {
             const option = document.createElement("option");
             option.value = start;
-            option.textContent = `Kanal ${start}+${start + 1}`;
+            option.textContent = I18N.channel_option.replace("{a}", start).replace("{b}", start + 1);
             select.appendChild(option);
         }
 
@@ -815,8 +823,8 @@ function updateMusicStatus(data) {
     const status = document.getElementById("player-status");
     if (status) {
         status.textContent = data.music_paused
-            ? "pausiert"
-            : (data.music_playing ? "Wiedergabe läuft" : "gestoppt");
+            ? I18N.status_paused
+            : (data.music_playing ? I18N.status_playing : I18N.status_stopped);
     }
 
     const title = document.getElementById("player-title");
@@ -827,7 +835,7 @@ function updateMusicStatus(data) {
     const mode = document.getElementById("player-mode");
     if (mode) {
         mode.textContent = data.music_playing
-            ? (data.music_folder_mode ? "Ordner (Zufall/Schleife)" : "Einzeltitel")
+            ? (data.music_folder_mode ? I18N.mode_folder : I18N.mode_single)
             : "-";
     }
 }
@@ -847,9 +855,9 @@ function updateMusicButtons(data) {
         pauseButton.disabled = !data.music_playing;
 
         if (data.music_paused) {
-            pauseButton.innerHTML = `<i class="bi bi-play-circle me-2"></i>Fortsetzen`;
+            pauseButton.innerHTML = `<i class="bi bi-play-circle me-2"></i>${I18N.btn_resume}`;
         } else {
-            pauseButton.innerHTML = `<i class="bi bi-pause-circle me-2"></i>Pause`;
+            pauseButton.innerHTML = `<i class="bi bi-pause-circle me-2"></i>${I18N.btn_pause}`;
         }
     }
 }
@@ -972,11 +980,11 @@ function renderMusicBreadcrumb(path) {
     rootItem.className = "breadcrumb-item" + (segments.length === 0 ? " active" : "");
 
     if (segments.length === 0) {
-        rootItem.textContent = "Musik";
+        rootItem.textContent = I18N.music_root_breadcrumb;
     } else {
         const link = document.createElement("a");
         link.href = "#";
-        link.textContent = "Musik";
+        link.textContent = I18N.music_root_breadcrumb;
         link.onclick = (event) => { event.preventDefault(); loadMusicBrowse(""); };
         rootItem.appendChild(link);
     }
@@ -1011,7 +1019,7 @@ function renderMusicList(listing) {
     container.innerHTML = "";
 
     if (listing.folders.length === 0 && listing.files.length === 0) {
-        container.innerHTML = `<div class="text-muted text-center py-3">Keine Musikdateien gefunden.</div>`;
+        container.innerHTML = `<div class="text-muted text-center py-3">${I18N.no_music_files}</div>`;
         return;
     }
 
@@ -1024,7 +1032,7 @@ function renderMusicList(listing) {
             <span style="cursor: pointer;">
                 <i class="bi bi-folder-fill me-2 text-warning"></i>${folder}
             </span>
-            <button class="btn btn-outline-success btn-sm" title="Diesen Ordner zufällig abspielen">
+            <button class="btn btn-outline-success btn-sm" title="${I18N.btn_play_folder_shuffle}">
                 <i class="bi bi-shuffle"></i>
             </button>
         `;
@@ -1046,10 +1054,10 @@ function renderMusicList(listing) {
         item.innerHTML = `
             <span><i class="bi bi-file-earmark-music me-2"></i>${file}</span>
             <div class="btn-group btn-group-sm">
-                <button class="btn btn-outline-primary btn-sm" title="Datei abspielen">
+                <button class="btn btn-outline-primary btn-sm" title="${I18N.title_play_file}">
                     <i class="bi bi-play-fill"></i>
                 </button>
-                <button class="btn btn-outline-danger btn-sm" title="Löschen">
+                <button class="btn btn-outline-danger btn-sm" title="${I18N.title_delete}">
                     <i class="bi bi-trash"></i>
                 </button>
             </div>
@@ -1073,7 +1081,7 @@ async function playMusicFolder(path) {
     console.log(result);
 
     if (!result.success) {
-        alert("Wiedergabe konnte nicht gestartet werden.");
+        alert(I18N.alert_playback_start_failed);
         return;
     }
 
@@ -1091,7 +1099,7 @@ async function playMusicFile(path) {
     console.log(result);
 
     if (!result.success) {
-        alert("Wiedergabe konnte nicht gestartet werden.");
+        alert(I18N.alert_playback_start_failed);
         return;
     }
 
@@ -1100,7 +1108,7 @@ async function playMusicFile(path) {
 }
 
 async function deleteMusicFile(path, displayName) {
-    if (!confirm(`"${displayName}" wirklich löschen?`)) return;
+    if (!confirm(I18N.confirm_delete_file.replace("{name}", displayName))) return;
 
     const response = await fetch("/api/music/delete", {
         method: "POST",
@@ -1110,7 +1118,7 @@ async function deleteMusicFile(path, displayName) {
     const result = await response.json();
 
     if (!result.success) {
-        alert("Datei konnte nicht gelöscht werden.");
+        alert(I18N.alert_music_delete_failed);
         return;
     }
 
@@ -1125,7 +1133,7 @@ document.getElementById("btn-new-folder").addEventListener("click", createMusicF
 document.getElementById("music-upload-input").addEventListener("change", uploadMusicFiles);
 
 async function createMusicFolder() {
-    const name = prompt("Name des neuen Ordners:");
+    const name = prompt(I18N.prompt_new_folder_name);
     if (!name) return;
 
     const response = await fetch("/api/music/create-folder", {
@@ -1137,7 +1145,7 @@ async function createMusicFolder() {
     console.log(result);
 
     if (!result.success) {
-        alert("Ordner konnte nicht angelegt werden (existiert er schon?).");
+        alert(I18N.alert_folder_create_failed);
         return;
     }
 
@@ -1212,11 +1220,11 @@ async function uploadMusicFiles(event) {
         console.log(result);
 
         if (result.count === 0) {
-            alert("Es wurden keine Dateien hochgeladen (unterstütztes Format?).");
+            alert(I18N.alert_no_files_uploaded);
         }
     } catch (error) {
         console.error("Upload fehlgeschlagen:", error);
-        alert("Upload fehlgeschlagen.");
+        alert(I18N.alert_upload_failed);
     } finally {
         input.value = "";
         hideUploadProgress();
@@ -1229,19 +1237,14 @@ async function uploadMusicFiles(event) {
 // ============================================================
 
 async function shutdownSystem() {
-    if (!confirm(
-        "Raspberry Pi wirklich herunterfahren?\n\n" +
-        "Laufende Aufnahmen/Wiedergaben werden dabei beendet, und " +
-        "das Webinterface ist danach nicht mehr erreichbar, bis " +
-        "der Pi manuell wieder eingeschaltet wird."
-    )) {
+    if (!confirm(I18N.shutdown_confirm)) {
         return;
     }
 
     const button = document.getElementById("btn-shutdown");
     if (button) {
         button.disabled = true;
-        button.innerHTML = `<i class="bi bi-power me-2"></i>Fährt herunter...`;
+        button.innerHTML = `<i class="bi bi-power me-2"></i>${I18N.btn_shutdown_progress}`;
     }
 
     const response = await fetch("/api/system/shutdown", { method: "POST" });
@@ -1249,10 +1252,10 @@ async function shutdownSystem() {
     console.log(result);
 
     if (!result.success) {
-        alert("Herunterfahren fehlgeschlagen. Ist die sudo-Berechtigung eingerichtet (install.sh)?");
+        alert(I18N.shutdown_failed);
         if (button) {
             button.disabled = false;
-            button.innerHTML = `<i class="bi bi-power me-2"></i>Raspberry Pi herunterfahren`;
+            button.innerHTML = `<i class="bi bi-power me-2"></i>${I18N.btn_shutdown}`;
         }
     }
 }

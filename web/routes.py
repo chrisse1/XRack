@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -9,6 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi import Response
 from fastapi import UploadFile, File, Form
 from audio.models import DeleteRecordingsRequest
+from web.i18n import get_translations
 
 class AudioSelection(BaseModel):
     device_id: str
@@ -78,15 +81,22 @@ async def rescan_audio_devices(
 async def index(request: Request):
 
     application = request.app.state.application
-    
+
     application.update_status()
-    
+
+    language = application.config.data.application.language
+
+    translations = get_translations(language)
+
     return request.app.state.templates.TemplateResponse(
         request=request,
         name="index.html",
         context={
             "application": application,
             "status": application.status,
+            "lang": language,
+            "t": translations,
+            "i18n_json": json.dumps(translations, ensure_ascii=False),
         },
     )
 

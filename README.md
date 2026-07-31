@@ -15,8 +15,8 @@ nötig.
   (z.B. Pause-Musik) oder einzelne Dateien, jeweils auf einem frei
   wählbaren Kanalpaar
 - **Pegelmesser** zur Kontrolle der Eingangspegel vor der Aufnahme
-- **Webinterface** (Bootstrap), auch als PWA installierbar ("Zum
-  Home-Bildschirm hinzufügen" auf iPad/Handy)
+- **Webinterface** (Bootstrap) auf Deutsch oder Englisch, auch als PWA
+  installierbar ("Zum Home-Bildschirm hinzufügen" auf iPad/Handy)
 - **Installierbar per Script**, inkl. automatischem Start beim Booten
   über systemd
 
@@ -49,8 +49,14 @@ Benutzer eine eng begrenzte sudo-Berechtigung, um den Pi über das
 Webinterface herunterfahren zu können (sonst nichts - XRack läuft
 nicht als root).
 
+Dabei fragt es interaktiv nach der bevorzugten Sprache des
+Webinterfaces (Deutsch oder Englisch) sowie dem gewünschten Port
+(Standard: 8080) und speichert beides in `config/local.yaml`. Beides
+lässt sich später jederzeit durch Bearbeiten dieser Datei und einen
+Neustart des Dienstes (`sudo systemctl restart xrack`) ändern.
+
 Nach der Installation ist das Webinterface unter
-`http://<ip-des-pi>:8080` erreichbar.
+`http://<ip-des-pi>:<gewählter-port>` erreichbar (Standard: Port 8080).
 
 Manuell starten/prüfen:
 

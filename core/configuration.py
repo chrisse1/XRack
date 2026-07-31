@@ -15,6 +15,7 @@ class ApplicationConfig(BaseModel):
 
     name: str
     version: str
+    language: str = "de"
 
 class ServerConfig(BaseModel):
     host: str
@@ -43,18 +44,56 @@ class AppConfig(BaseModel):
     logging: LoggingConfig
 
 
+def _deep_merge(base: dict, override: dict) -> dict:
+    """
+    Führt `override` rekursiv in `base` ein (z.B. lokale
+    Einstellungen über die mitgelieferten Standardwerte legen).
+    """
+
+    merged = dict(base)
+
+    for key, value in override.items():
+        if (
+            key in merged
+            and isinstance(merged[key], dict)
+            and isinstance(value, dict)
+        ):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+
+    return merged
+
+
 class Configuration:
     """Loads and stores the application configuration."""
 
-    def __init__(self, filename: str = "config/default.yaml") -> None:
+    def __init__(
+        self,
+        filename: str = "config/default.yaml",
+        local_filename: str = "config/local.yaml",
+    ) -> None:
         self._filename = Path(filename)
+        self._local_filename = Path(local_filename)
         self._config: AppConfig | None = None
 
     def load(self) -> None:
-        """Load and validate the configuration."""
+        """
+        Lädt die Konfiguration. `config/local.yaml` (falls vorhanden,
+        z.B. von install.sh angelegt) überschreibt dabei einzelne
+        Werte aus `config/default.yaml`, etwa Sprache oder Port.
+        """
 
         with self._filename.open("r", encoding="utf-8") as file:
             data = yaml.safe_load(file)
+
+        if self._local_filename.exists():
+
+            with self._local_filename.open("r", encoding="utf-8") as file:
+                local_data = yaml.safe_load(file)
+
+            if local_data:
+                data = _deep_merge(data, local_data)
 
         self._config = AppConfig.model_validate(data)
 

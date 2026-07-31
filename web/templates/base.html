@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de">
+<html lang="{{ lang }}">
 <head>
 
     <meta charset="utf-8">
@@ -53,7 +53,7 @@
             <div class="modal-header">
 
                 <h5 class="modal-title">
-                    Aufnahmen
+                    {{ t.modal_recordings_title }}
                 </h5>
 
                 <button
@@ -65,7 +65,7 @@
             </div>
 
             <div class="modal-body">
-              
+
               <div
                   id="recordingsList"
                   class="list-group"
@@ -81,14 +81,14 @@
                     disabled
                 >
                     <i class="bi bi-trash"></i>
-                    Ausgewählte löschen (0)
+                    {{ t.btn_delete_selected }} (0)
                 </button>
 
                 <button
                     class="btn btn-secondary modal-footer-btn"
                     data-bs-dismiss="modal"
                 >
-                    Schließen
+                    {{ t.btn_close }}
                 </button>
 
             </div>
@@ -111,7 +111,7 @@
             <div class="modal-header">
 
                 <h5 class="modal-title">
-                    Musikbibliothek
+                    {{ t.modal_music_title }}
                 </h5>
 
                 <button
@@ -134,7 +134,7 @@
                         class="btn btn-success btn-sm flex-fill"
                     >
                         <i class="bi bi-shuffle me-2"></i>
-                        Diesen Ordner zufällig abspielen
+                        {{ t.btn_play_folder_shuffle }}
                     </button>
 
                     <button
@@ -142,12 +142,12 @@
                         class="btn btn-outline-secondary btn-sm"
                     >
                         <i class="bi bi-folder-plus me-2"></i>
-                        Neuer Ordner
+                        {{ t.btn_new_folder }}
                     </button>
 
                     <label class="btn btn-outline-primary btn-sm mb-0">
                         <i class="bi bi-upload me-2"></i>
-                        Hochladen
+                        {{ t.btn_upload }}
                         <input
                             type="file"
                             id="music-upload-input"
@@ -186,7 +186,7 @@
                     class="btn btn-secondary"
                     data-bs-dismiss="modal"
                 >
-                    Schließen
+                    {{ t.btn_close }}
                 </button>
             </div>
 
@@ -195,6 +195,7 @@
     </div>
 </div>
 
+<script>window.I18N = {{ i18n_json | safe }};</script>
 <script src="{{ url_for('static', path='js/bootstrap.bundle.min.js') }}"></script>
 <script src="{{ url_for('static', path='js/xrack.js') }}"></script>
 </body>

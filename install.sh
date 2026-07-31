@@ -33,6 +33,44 @@ pip install -r requirements.txt
 deactivate
 
 #
+# Sprache und Port abfragen (config/local.yaml).
+#
+# Läuft das Skript nicht interaktiv (z.B. per "curl | bash"), werden
+# stillschweigend die Standardwerte (Deutsch, Port 8080) verwendet.
+#
+
+XRACK_LANGUAGE="de"
+XRACK_PORT="8080"
+
+if [ -t 0 ]; then
+
+    echo ""
+    read -r -p "Sprache / Language [de/en] (Standard/default: de): " XRACK_LANGUAGE_INPUT || true
+
+    if [ "${XRACK_LANGUAGE_INPUT}" = "en" ]; then
+        XRACK_LANGUAGE="en"
+    fi
+
+    echo ""
+    read -r -p "Port fürs Webinterface / Port for the web interface (Standard/default: 8080): " XRACK_PORT_INPUT || true
+
+    if [ -n "${XRACK_PORT_INPUT}" ] && [ "${XRACK_PORT_INPUT}" -eq "${XRACK_PORT_INPUT}" ] 2>/dev/null; then
+        XRACK_PORT="${XRACK_PORT_INPUT}"
+    fi
+
+fi
+
+echo "XRack: Konfiguration wird geschrieben (Sprache: ${XRACK_LANGUAGE}, Port: ${XRACK_PORT})..."
+
+cat > config/local.yaml <<EOF
+application:
+  language: "${XRACK_LANGUAGE}"
+
+server:
+  port: ${XRACK_PORT}
+EOF
+
+#
 # sudo-Berechtigung für das Herunterfahren einrichten.
 #
 # XRack läuft NICHT als root - der Dienst-Benutzer bekommt über
@@ -92,9 +130,13 @@ echo "Fertig."
 echo ""
 echo "XRack startet ab jetzt automatisch beim Booten (systemd-Dienst 'xrack')."
 echo ""
-echo "Jetzt manuell starten:   sudo systemctl start xrack"
-echo "Status ansehen:          sudo systemctl status xrack"
-echo "Live-Logs ansehen:       journalctl -u xrack -f"
+echo "Webinterface:             http://<ip-des-pi>:${XRACK_PORT}"
+echo "Jetzt manuell starten:    sudo systemctl start xrack"
+echo "Status ansehen:           sudo systemctl status xrack"
+echo "Live-Logs ansehen:        journalctl -u xrack -f"
 echo ""
-echo "Achtung: Wenn der Dienst laeuft, blockiert er Port 8080 -"
+echo "Achtung: Wenn der Dienst laeuft, blockiert er Port ${XRACK_PORT} -"
 echo "dann NICHT zusaetzlich manuell 'python main.py' starten."
+echo ""
+echo "Sprache/Port spaeter aendern: config/local.yaml bearbeiten und"
+echo "den Dienst neu starten (sudo systemctl restart xrack)."

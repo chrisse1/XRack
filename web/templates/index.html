@@ -24,7 +24,7 @@
                             <button
                                 id="audio-rescan"
                                 class="btn btn-outline-secondary btn-sm"
-                                title="Audiogeräte neu suchen">
+                                title="{{ t.audio_rescan_title }}">
 
                                 <i class="bi bi-arrow-clockwise"></i>
 
@@ -32,7 +32,7 @@
                         </div>
 
                         <div class="text-nowrap">
-                            <span class="text-secondary small">Geöffnetes Gerät:</span>
+                            <span class="text-secondary small">{{ t.audio_open_device }}</span>
                             <strong id="audio-state" class="ms-1">
                                 {% if status.audio_connected %}
                                     <i class="bi bi-check-circle-fill text-success"></i> {{ status.audio_device }}
@@ -49,7 +49,7 @@
                                 {{ status.audio_sample_bits }} Bit •
                                 {{ status.audio_formats | join(", ") }}
                             {% else %}
-                                Audio Interface
+                                {{ t.audio_interface_fallback }}
                             {% endif %}
                         </div>
 
@@ -68,20 +68,20 @@
         <div class="col-lg-6">
 
             {% set title %}
-            <i class="bi bi-record-circle-fill text-danger me-2"></i>Virtueller Soundcheck
+            <i class="bi bi-record-circle-fill text-danger me-2"></i>{{ t.soundcheck_title }}
 
             {% endset %}
 
             {% set header_right %}
-            <span class="fw-normal small">Status:</span>
-            <strong id="recorder-status" class="small">bereit</strong>
+            <span class="fw-normal small">{{ t.status_label }}</span>
+            <strong id="recorder-status" class="small">{{ t.state_idle }}</strong>
             {% endset %}
 
             {% set body %}
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
               <div class="d-flex align-items-center gap-2">
                   <span>
-                      Aufnahmekanäle:
+                      {{ t.record_channels_label }}
                   </span>
 
                   <select
@@ -91,12 +91,12 @@
               </div>
 
                 <div>
-                    <span>Audio Core</span>
+                    <span>{{ t.audio_core_label }}</span>
                     <strong id="engine-status" class="ms-2">
                         {% if status.audio_core_open %}
-                            <i class="bi bi-check-circle-fill text-success"></i> Geöffnet
+                            <i class="bi bi-check-circle-fill text-success"></i> {{ t.audio_core_open }}
                         {% else %}
-                            <i class="bi bi-dash-circle text-secondary"></i> Geschlossen
+                            <i class="bi bi-dash-circle text-secondary"></i> {{ t.audio_core_closed }}
                         {% endif %}
                     </strong>
                 </div>
@@ -111,7 +111,7 @@
                   onclick="toggleRecording()"
               >
                   <i class="bi bi-record-circle fs-3"></i>
-                  <small>Aufnahme starten</small>
+                  <small>{{ t.btn_recording_start }}</small>
               </button>
 
               <button
@@ -121,7 +121,7 @@
                   disabled
               >
                   <i class="bi bi-play-circle fs-3"></i>
-                  <small>Soundcheck</small>
+                  <small>{{ t.btn_soundcheck }}</small>
               </button>
             </div>
 
@@ -134,7 +134,7 @@
                   onclick="toggleLevelCheck()"
               >
                   <i class="bi bi-soundwave me-2"></i>
-                  Pegel testen
+                  {{ t.btn_level_check }}
               </button>
             </div>
 
@@ -145,36 +145,36 @@
 
             <div class="d-flex justify-content-between align-items-center" style="gap: 1rem;">
                 <div class="d-flex" style="gap: 0.5rem;">
-                    <span>Datei</span>
+                    <span>{{ t.label_file }}</span>
                     <strong id="recorder-file">-</strong>
                 </div>
                 <div class="d-flex" style="gap: 0.5rem;">
-                    <span>Format</span>
+                    <span>{{ t.label_format }}</span>
                     <strong id="recorder-format">Wave64</strong>
                 </div>
             </div>
 
             <div class="d-flex justify-content-between align-items-center mt-1" style="gap: 1rem;">
                 <div class="d-flex" style="gap: 0.5rem;">
-                    <span>Dauer</span>
+                    <span>{{ t.label_duration }}</span>
                     <strong id="recorder-duration">00:00:00</strong>
                 </div>
                 <div class="d-flex" style="gap: 0.5rem;">
-                    <span>Größe</span>
+                    <span>{{ t.label_size }}</span>
                     <strong id="recorder-size">0 MB</strong>
                 </div>
             </div>
-            
+
             <hr>
 
             <h6 class="mb-3">
-                Zuletzt aufgenommen
+                {{ t.recent_recordings }}
             </h6>
 
             <div id="recording-list">
 
                 <div class="text-muted text-center py-3">
-                    Keine Aufnahmen vorhanden.
+                    {{ t.no_recordings }}
                 </div>
 
             </div>
@@ -185,7 +185,7 @@
                   data-bs-toggle="modal"
                   data-bs-target="#recordingsModal"
               >
-                  Alle Aufnahmen...
+                  {{ t.btn_all_recordings }}
               </button>
 
             </div>
@@ -200,19 +200,19 @@
         <div class="col-lg-6">
 
             {% set title %}
-            <i class="bi bi-music-note-list me-2"></i>Musikspieler
+            <i class="bi bi-music-note-list me-2"></i>{{ t.music_player_title }}
             {% endset %}
 
             {% set header_right %}
-            <span class="fw-normal small">Status:</span>
-            <strong id="player-status" class="small">gestoppt</strong>
+            <span class="fw-normal small">{{ t.status_label }}</span>
+            <strong id="player-status" class="small">{{ t.status_stopped }}</strong>
             {% endset %}
 
             {% set body %}
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
               <div class="d-flex align-items-center gap-2">
                   <span>
-                      Wiedergabekanäle:
+                      {{ t.music_channels_label }}
                   </span>
 
                   <select
@@ -228,7 +228,7 @@
                   data-bs-target="#musicModal"
               >
                   <i class="bi bi-folder2-open me-2"></i>
-                  Ordner öffnen
+                  {{ t.btn_open_folder }}
               </button>
             </div>
 
@@ -242,7 +242,7 @@
                   disabled
               >
                   <i class="bi bi-pause-circle fs-3"></i>
-                  <small>Pause</small>
+                  <small>{{ t.btn_pause }}</small>
               </button>
 
               <button
@@ -252,7 +252,7 @@
                   disabled
               >
                   <i class="bi bi-stop-circle fs-3"></i>
-                  <small>Stop</small>
+                  <small>{{ t.btn_stop }}</small>
               </button>
 
               <button
@@ -262,7 +262,7 @@
                   disabled
               >
                   <i class="bi bi-skip-end-circle fs-3"></i>
-                  <small>Weiter</small>
+                  <small>{{ t.btn_skip }}</small>
               </button>
             </div>
 
@@ -270,11 +270,11 @@
 
             <div class="d-flex justify-content-between align-items-center" style="gap: 1rem;">
                 <div class="d-flex" style="gap: 0.5rem;">
-                    <span>Titel</span>
+                    <span>{{ t.label_title }}</span>
                     <strong id="player-title">-</strong>
                 </div>
                 <div class="d-flex" style="gap: 0.5rem;">
-                    <span>Modus</span>
+                    <span>{{ t.label_mode }}</span>
                     <strong id="player-mode">-</strong>
                 </div>
             </div>

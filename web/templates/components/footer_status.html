@@ -7,7 +7,7 @@
             <div class="col">
 
                 <small class="text-secondary">
-                    Host
+                    {{ t.label_host }}
                 </small>
 
                 <div id="hostname">
@@ -19,7 +19,7 @@
             <div class="col">
 
                 <small class="text-secondary">
-                    CPU
+                    {{ t.label_cpu }}
                 </small>
 
                 <div id="cpu">
@@ -31,7 +31,7 @@
             <div class="col">
 
                 <small class="text-secondary">
-                    RAM
+                    {{ t.label_ram }}
                 </small>
 
                 <div id="ram">
@@ -43,7 +43,7 @@
             <div class="col">
 
                 <small class="text-secondary">
-                    SSD
+                    {{ t.label_disk }}
                 </small>
 
                 <div id="disk">
@@ -61,7 +61,7 @@
                 onclick="shutdownSystem()"
             >
                 <i class="bi bi-power me-2"></i>
-                Raspberry Pi herunterfahren
+                {{ t.btn_shutdown }}
             </button>
         </div>
 
