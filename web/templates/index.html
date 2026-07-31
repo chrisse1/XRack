@@ -11,10 +11,10 @@
 
         <div class="col-12">
 
-            {% set title %}
+<!--        {% set title %}
             <i class="bi bi-hdd-stack me-2"></i>Audio-Interface
             {% endset %}
-
+-->
             {% set body %}
             <div class="d-flex flex-wrap align-items-center gap-3">
 
@@ -35,7 +35,6 @@
                 </div>
 
                 <div class="text-nowrap">
-                    <span class="text-secondary small">Geöffnetes Gerät:</span>
                     <strong id="audio-state" class="ms-1">
                         {% if status.audio_connected %}
                             🟢 {{ status.audio_device }}
