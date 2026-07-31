@@ -406,7 +406,7 @@ class Application:
         if folder is None or not folder.is_dir():
             return False
 
-        self._remember_music_channel(start_channel)
+        self.set_music_channel_preference(start_channel)
 
         return self.music_player.play_folder(
             self.selected_audio_device,
@@ -434,7 +434,7 @@ class Application:
         if path is None or not path.is_file():
             return False
 
-        self._remember_music_channel(start_channel)
+        self.set_music_channel_preference(start_channel)
 
         return self.music_player.play_file(
             self.selected_audio_device,
@@ -442,11 +442,13 @@ class Application:
             start_channel=start_channel - 1,
         )
 
-    def _remember_music_channel(self, start_channel: int) -> None:
+    def set_music_channel_preference(self, start_channel: int) -> bool:
         """
-        Merkt sich den zuletzt für die Musikwiedergabe gewählten
-        Startkanal (1-basiert), damit das Dropdown nach einem
-        Neustart wieder vorbelegt ist.
+        Merkt sich den für die Musikwiedergabe gewählten Startkanal
+        (1-basiert), damit das Dropdown nach einem Neustart wieder
+        vorbelegt ist. Wird sowohl beim bloßen Auswählen im
+        Dropdown als auch beim tatsächlichen Start einer Wiedergabe
+        aufgerufen.
         """
 
         self.music_channel_preference = start_channel
@@ -455,6 +457,8 @@ class Application:
             "music_channel",
             start_channel,
         )
+
+        return True
 
     def stop_music(self) -> None:
         """

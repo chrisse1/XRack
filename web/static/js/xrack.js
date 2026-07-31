@@ -762,6 +762,20 @@ function updateMusicChannels(data) {
     }
 
     select.disabled = isAudioBusy(data);
+
+    select.onchange = () => {
+        setMusicChannelPreference(Number(select.value));
+    };
+}
+
+async function setMusicChannelPreference(startChannel) {
+    const response = await fetch("/api/music/channel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start_channel: startChannel })
+    });
+    const result = await response.json();
+    console.log(result);
 }
 
 function updateMusicStatus(data) {

@@ -42,6 +42,9 @@ class MusicFolderCreate(BaseModel):
 class MusicFileDelete(BaseModel):
     path: str
 
+class MusicChannelSelection(BaseModel):
+    start_channel: int
+
 @router.post("/api/audio/select")
 async def audio_select(
     selection: AudioSelection,
@@ -220,6 +223,23 @@ async def music_browse(
         "path": listing.path,
         "folders": listing.folders,
         "files": listing.files,
+    }
+
+
+@router.post("/api/music/channel")
+async def music_channel(
+    selection: MusicChannelSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success = application.set_music_channel_preference(
+        selection.start_channel
+    )
+
+    return {
+        "success": success
     }
 
 
