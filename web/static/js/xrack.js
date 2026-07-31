@@ -51,9 +51,9 @@ function updateSystemStats(data) {
 
 function updateAudioStatus(data) {
     const audioState = document.getElementById("audio-state");
-    audioState.textContent = data.audio_connected
-        ? "🟢 " + data.audio_device
-        : "🔴 " + data.audio_device;
+    audioState.innerHTML = data.audio_connected
+        ? `<i class="bi bi-check-circle-fill text-success"></i> ${data.audio_device}`
+        : `<i class="bi bi-x-circle-fill text-danger"></i> ${data.audio_device}`;
 
     const audioInfo = document.getElementById("audio-info");
     if (data.audio_connected) {
@@ -116,8 +116,9 @@ function updateRecorderStatus(data) {
 }
 
 function updateAudioCoreStatus(data) {
-    document.getElementById("engine-status").textContent =
-        data.audio_core_open ? "🟢 geöffnet" : "⚪ geschlossen";
+    document.getElementById("engine-status").innerHTML = data.audio_core_open
+        ? `<i class="bi bi-check-circle-fill text-success"></i> geöffnet`
+        : `<i class="bi bi-dash-circle text-secondary"></i> geschlossen`;
 }
 
 function updateRecordingInfo(data) {
