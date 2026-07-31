@@ -109,11 +109,12 @@ class MusicPlayer:
     ) -> bool:
         """
         Spielt alle Musikdateien eines Ordners in zufälliger
-        Reihenfolge in Dauerschleife ab.
+        Reihenfolge in Dauerschleife ab. Löst eine bereits laufende
+        Musikwiedergabe ab (Titel-/Ordnerwechsel).
         """
 
         if self.playing:
-            return False
+            self.stop()
 
         playlist = self.library.build_shuffled_playlist(folder)
 
@@ -134,11 +135,12 @@ class MusicPlayer:
         start_channel: int,
     ) -> bool:
         """
-        Spielt eine einzelne Datei einmalig ab.
+        Spielt eine einzelne Datei einmalig ab. Löst eine bereits
+        laufende Musikwiedergabe ab (Titel-/Ordnerwechsel).
         """
 
         if self.playing:
-            return False
+            self.stop()
 
         if not path.exists():
             return False

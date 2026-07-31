@@ -122,4 +122,23 @@ with tempfile.TemporaryDirectory() as tmp_dir:
     assert not (Path(tmp_dir) / "escape.mp3").exists()
     print("OK: Pfadanteile im Upload-Dateinamen werden entfernt")
 
+    # ---------------------------------------------------------
+    # 8. Löschen
+    # ---------------------------------------------------------
+
+    assert library.delete_file("top.mp3") is True
+    assert not (root / "top.mp3").exists()
+    print("OK: Musikdatei wird gelöscht")
+
+    assert library.delete_file("top.mp3") is False
+    print("OK: Löschen einer nicht existierenden Datei liefert False")
+
+    assert library.delete_file("../secret.mp3") is False
+    assert outside.exists()
+    print("OK: Löschen außerhalb der Bibliothek wird verhindert")
+
+    assert library.delete_file("Rock/cover.jpg") is False
+    assert (root / "Rock" / "cover.jpg").exists()
+    print("OK: Löschen von Nicht-Audiodateien wird verhindert")
+
 print("Alle Tests erfolgreich.")

@@ -39,6 +39,9 @@ class MusicFolderCreate(BaseModel):
     path: str
     name: str
 
+class MusicFileDelete(BaseModel):
+    path: str
+
 @router.post("/api/audio/select")
 async def audio_select(
     selection: AudioSelection,
@@ -273,6 +276,23 @@ async def music_create_folder(
     success = application.create_music_folder(
         selection.path,
         selection.name,
+    )
+
+    return {
+        "success": success
+    }
+
+
+@router.post("/api/music/delete")
+async def music_delete_file(
+    selection: MusicFileDelete,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success = application.delete_music_file(
+        selection.path
     )
 
     return {

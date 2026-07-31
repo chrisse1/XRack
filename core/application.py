@@ -429,3 +429,12 @@ class Application:
             filename,
             source,
         )
+
+    def delete_music_file(self, relative_path: str) -> bool:
+        """
+        Löscht eine Musikdatei aus der Bibliothek.
+        """
+
+        return self.music_library.delete_file(
+            relative_path
+        )

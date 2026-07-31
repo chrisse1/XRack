@@ -832,12 +832,19 @@ function renderMusicList(listing) {
         item.className = "list-group-item d-flex justify-content-between align-items-center";
         item.innerHTML = `
             <span><i class="bi bi-file-earmark-music me-2"></i>${file}</span>
-            <button class="btn btn-outline-primary btn-sm" title="Datei abspielen">
-                <i class="bi bi-play-fill"></i>
-            </button>
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-primary btn-sm" title="Datei abspielen">
+                    <i class="bi bi-play-fill"></i>
+                </button>
+                <button class="btn btn-outline-danger btn-sm" title="Löschen">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
         `;
 
-        item.querySelector("button").onclick = () => playMusicFile(filePath);
+        const buttons = item.querySelectorAll("button");
+        buttons[0].onclick = () => playMusicFile(filePath);
+        buttons[1].onclick = () => deleteMusicFile(filePath, file);
 
         container.appendChild(item);
     });
@@ -877,6 +884,24 @@ async function playMusicFile(path) {
 
     bootstrap.Modal.getOrCreateInstance(musicModal).hide();
     await refreshDashboard();
+}
+
+async function deleteMusicFile(path, displayName) {
+    if (!confirm(`"${displayName}" wirklich löschen?`)) return;
+
+    const response = await fetch("/api/music/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path })
+    });
+    const result = await response.json();
+
+    if (!result.success) {
+        alert("Datei konnte nicht gelöscht werden.");
+        return;
+    }
+
+    await loadMusicBrowse(musicCurrentPath);
 }
 
 // ------------------------------------------------------------

@@ -156,6 +156,23 @@ class MusicLibrary:
 
         return filename
 
+    def delete_file(self, relative_path: str) -> bool:
+        """
+        Löscht eine Musikdatei aus der Bibliothek.
+        """
+
+        path = self.resolve(relative_path)
+
+        if path is None or not path.is_file():
+            return False
+
+        if path.suffix.lower() not in AUDIO_EXTENSIONS:
+            return False
+
+        path.unlink()
+
+        return True
+
     def find_audio_files(self, folder: Path) -> list[Path]:
         """
         Findet rekursiv alle Musikdateien in einem Ordner.
