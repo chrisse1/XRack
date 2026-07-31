@@ -23,6 +23,14 @@ class RecordingSelection(BaseModel):
 class SoundcheckSelection(BaseModel):
     filename: str
 
+class MusicFolderSelection(BaseModel):
+    path: str
+    start_channel: int
+
+class MusicFileSelection(BaseModel):
+    path: str
+    start_channel: int
+
 @router.post("/api/audio/select")
 async def audio_select(
     selection: AudioSelection,
@@ -140,6 +148,89 @@ async def soundcheck_stop(request: Request):
     application = request.app.state.application
 
     application.stop_soundcheck()
+
+    return {
+        "success": True
+    }
+
+
+@router.get("/api/music/browse")
+async def music_browse(
+    request: Request,
+    path: str = "",
+):
+
+    application = request.app.state.application
+
+    listing = application.music_library.browse(path)
+
+    if listing is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Ordner nicht gefunden.",
+        )
+
+    return {
+        "path": listing.path,
+        "folders": listing.folders,
+        "files": listing.files,
+    }
+
+
+@router.post("/api/music/play-folder")
+async def music_play_folder(
+    selection: MusicFolderSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success = application.play_music_folder(
+        selection.path,
+        selection.start_channel,
+    )
+
+    return {
+        "success": success
+    }
+
+
+@router.post("/api/music/play-file")
+async def music_play_file(
+    selection: MusicFileSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success = application.play_music_file(
+        selection.path,
+        selection.start_channel,
+    )
+
+    return {
+        "success": success
+    }
+
+
+@router.post("/api/music/stop")
+async def music_stop(request: Request):
+
+    application = request.app.state.application
+
+    application.stop_music()
+
+    return {
+        "success": True
+    }
+
+
+@router.post("/api/music/skip")
+async def music_skip(request: Request):
+
+    application = request.app.state.application
+
+    application.skip_music()
 
     return {
         "success": True

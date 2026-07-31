@@ -83,6 +83,68 @@
     </div>
 </div>
 
+<div
+    class="modal fade"
+    id="musicModal"
+    tabindex="-1"
+    aria-hidden="true"
+>
+    <div class="modal-dialog modal-xl">
+
+        <div class="modal-content">
+
+            <div class="modal-header">
+
+                <h5 class="modal-title">
+                    Musikbibliothek
+                </h5>
+
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="modal"
+                ></button>
+
+            </div>
+
+            <div class="modal-body">
+
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb" id="musicBreadcrumb"></ol>
+                </nav>
+
+                <div class="d-grid mb-3">
+                    <button
+                        id="btn-play-current-folder"
+                        class="btn btn-success btn-sm"
+                    >
+                        <i class="bi bi-shuffle me-2"></i>
+                        Diesen Ordner zufällig abspielen
+                    </button>
+                </div>
+
+                <div
+                    id="musicList"
+                    class="list-group"
+                >
+                </div>
+
+            </div>
+
+            <div class="modal-footer">
+                <button
+                    class="btn btn-secondary"
+                    data-bs-dismiss="modal"
+                >
+                    Schließen
+                </button>
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
 <script src="{{ url_for('static', path='js/bootstrap.bundle.min.js') }}"></script>
 <script src="{{ url_for('static', path='js/xrack.js') }}"></script>
 </body>

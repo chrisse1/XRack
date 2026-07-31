@@ -2,14 +2,18 @@
 XRack application.
 """
 
+from pathlib import Path
+
 from core.configuration import Configuration
 from core.log import create_logger
-from core.status import SystemStatus, RecorderState
+from core.status import SystemStatus, RecorderState, PlayerState
 from audio.audio_manager import AudioManager
 from audio.audio_core import AudioCore
 from audio.audio_playback_backend import AudioPlaybackBackend
 from recorder.recorder import Recorder
 from player.player import Player
+from player.music_library import MusicLibrary
+from player.music_player import MusicPlayer
 import platform
 import psutil
 import time
@@ -44,6 +48,15 @@ class Application:
 
         self.player = Player(
             AudioPlaybackBackend()
+        )
+
+        self.music_library = MusicLibrary(
+            Path(self.config.data.music.directory)
+        )
+
+        self.music_player = MusicPlayer(
+            AudioPlaybackBackend(),
+            self.music_library,
         )
 
         devices = self.audio_manager.get_devices()
@@ -147,6 +160,26 @@ class Application:
         )
 
         self.status.playback_channels = self.player.channels
+
+        #
+        # Musikspieler
+        #
+
+        self.status.player = (
+            PlayerState.PLAYING
+            if self.music_player.playing
+            else PlayerState.IDLE
+        )
+
+        self.status.music_playing = self.music_player.playing
+
+        self.status.music_track = self.music_player.current_track
+
+        self.status.music_folder_mode = self.music_player.folder_mode
+
+        self.status.music_channels = self.music_player.channels
+
+        self.status.music_start_channel = self.music_player.start_channel
 
         self.status.audio = (
             self.status.audio_connected
@@ -265,6 +298,9 @@ class Application:
         if self.recorder.recording:
             return False
 
+        if self.music_player.playing:
+            return False
+
         path = self.recorder.writer.directory / filename
 
         return self.player.start(
@@ -278,3 +314,71 @@ class Application:
         """
 
         self.player.stop()
+
+    def play_music_folder(
+        self,
+        relative_path: str,
+        start_channel: int,
+    ) -> bool:
+        """
+        Spielt alle Musikdateien eines Ordners zufällig gemischt
+        in Dauerschleife ab. `start_channel` ist 1-basiert
+        (z.B. 17 für Kanal 17+18).
+        """
+
+        if self.selected_audio_device is None:
+            return False
+
+        if self.player.playing:
+            return False
+
+        folder = self.music_library.resolve(relative_path)
+
+        if folder is None or not folder.is_dir():
+            return False
+
+        return self.music_player.play_folder(
+            self.selected_audio_device,
+            folder,
+            start_channel=start_channel - 1,
+        )
+
+    def play_music_file(
+        self,
+        relative_path: str,
+        start_channel: int,
+    ) -> bool:
+        """
+        Spielt eine einzelne Musikdatei einmalig ab.
+        """
+
+        if self.selected_audio_device is None:
+            return False
+
+        if self.player.playing:
+            return False
+
+        path = self.music_library.resolve(relative_path)
+
+        if path is None or not path.is_file():
+            return False
+
+        return self.music_player.play_file(
+            self.selected_audio_device,
+            path,
+            start_channel=start_channel - 1,
+        )
+
+    def stop_music(self) -> None:
+        """
+        Stoppt den Musikspieler.
+        """
+
+        self.music_player.stop()
+
+    def skip_music(self) -> None:
+        """
+        Springt zum nächsten Titel (Ordner-Modus).
+        """
+
+        self.music_player.skip()

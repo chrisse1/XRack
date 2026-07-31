@@ -59,3 +59,9 @@ class SystemStatus(BaseModel):
     playback_filename: str = ""
     playback_duration: float = 0.0
     playback_channels: int = 0
+
+    music_playing: bool = False
+    music_track: str = ""
+    music_folder_mode: bool = False
+    music_channels: int = 2
+    music_start_channel: int = 0

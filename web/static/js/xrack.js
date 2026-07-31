@@ -7,6 +7,8 @@ const selectedRecordings = new Set();
 let selectedRecordingInfo = null;
 let selectedAudioDevice = "";
 let playbackActive = false;
+let musicPlaying = false;
+let musicCurrentPath = "";
 
 // ============================================================
 // 2. CORE UI UPDATES
@@ -25,6 +27,7 @@ async function updateStatus() {
     updateSystemStats(data);
     updateAudioStatus(data);
     updateRecorder(data);
+    updateMusicPlayer(data);
 }
 
 function updateSystemStats(data) {
@@ -290,7 +293,7 @@ function updateSoundcheckButton(data) {
         button.innerHTML = `<i class="bi bi-play-circle me-2"></i>Soundcheck`;
         button.classList.remove("btn-warning");
         button.classList.add("btn-success");
-        button.disabled = !selectedRecording || data.recording;
+        button.disabled = !selectedRecording || data.recording || data.music_playing;
     }
 }
 
@@ -573,6 +576,250 @@ function formatFileSize(bytes) {
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
     if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(2) + " MB";
     return (bytes / 1024 / 1024 / 1024).toFixed(2) + " GB";
+}
+
+// ============================================================
+// 11b. MUSIC PLAYER
+// ============================================================
+
+function updateMusicPlayer(data) {
+    musicPlaying = data.music_playing;
+
+    updateMusicChannels(data);
+    updateMusicStatus(data);
+    updateMusicButtons(data);
+}
+
+function updateMusicChannels(data) {
+    const select = document.getElementById("music-channels");
+    if (!select) return;
+
+    if (select.dataset.built !== String(data.audio_channels)) {
+        select.innerHTML = "";
+
+        for (let start = 1; start + 1 <= data.audio_channels; start += 2) {
+            const option = document.createElement("option");
+            option.value = start;
+            option.textContent = `Kanal ${start}+${start + 1}`;
+            select.appendChild(option);
+        }
+
+        select.dataset.built = String(data.audio_channels);
+    }
+
+    if (data.music_playing) {
+        select.value = data.music_start_channel + 1;
+    }
+
+    select.disabled = data.music_playing;
+}
+
+function updateMusicStatus(data) {
+    const status = document.getElementById("player-status");
+    if (status) {
+        status.textContent = data.music_playing ? "Wiedergabe läuft" : "gestoppt";
+    }
+
+    const title = document.getElementById("player-title");
+    if (title) {
+        title.textContent = data.music_playing ? (data.music_track || "-") : "-";
+    }
+
+    const mode = document.getElementById("player-mode");
+    if (mode) {
+        mode.textContent = data.music_playing
+            ? (data.music_folder_mode ? "Ordner (Zufall/Schleife)" : "Einzeltitel")
+            : "-";
+    }
+}
+
+function updateMusicButtons(data) {
+    const stopButton = document.getElementById("btn-music-stop");
+    if (stopButton) stopButton.disabled = !data.music_playing;
+
+    const skipButton = document.getElementById("btn-music-skip");
+    if (skipButton) skipButton.disabled = !data.music_playing || !data.music_folder_mode;
+
+    const browseButton = document.getElementById("btn-music-browse");
+    if (browseButton) browseButton.disabled = data.playback_active;
+}
+
+function getSelectedMusicChannel() {
+    const select = document.getElementById("music-channels");
+    return select ? Number(select.value) : 1;
+}
+
+async function stopMusic() {
+    const response = await fetch("/api/music/stop", { method: "POST" });
+    const result = await response.json();
+    console.log(result);
+    await refreshDashboard();
+}
+
+async function skipMusic() {
+    const response = await fetch("/api/music/skip", { method: "POST" });
+    const result = await response.json();
+    console.log(result);
+    await refreshDashboard();
+}
+
+// ------------------------------------------------------------
+// Musikbibliothek (Ordner-Browser im Modal)
+// ------------------------------------------------------------
+
+const musicModal = document.getElementById("musicModal");
+musicModal.addEventListener("show.bs.modal", () => loadMusicBrowse(""));
+
+document.getElementById("btn-play-current-folder")
+    .addEventListener("click", () => playMusicFolder(musicCurrentPath));
+
+async function loadMusicBrowse(path) {
+    try {
+        const response = await fetch(`/api/music/browse?path=${encodeURIComponent(path)}`);
+
+        if (!response.ok) {
+            throw new Error("API-Fehler");
+        }
+
+        const listing = await response.json();
+
+        musicCurrentPath = listing.path;
+
+        renderMusicBreadcrumb(listing.path);
+        renderMusicList(listing);
+    } catch (error) {
+        console.error("Fehler beim Laden der Musikbibliothek:", error);
+    }
+}
+
+function renderMusicBreadcrumb(path) {
+    const breadcrumb = document.getElementById("musicBreadcrumb");
+    breadcrumb.innerHTML = "";
+
+    const segments = path ? path.split("/") : [];
+
+    const rootItem = document.createElement("li");
+    rootItem.className = "breadcrumb-item" + (segments.length === 0 ? " active" : "");
+
+    if (segments.length === 0) {
+        rootItem.textContent = "Musik";
+    } else {
+        const link = document.createElement("a");
+        link.href = "#";
+        link.textContent = "Musik";
+        link.onclick = (event) => { event.preventDefault(); loadMusicBrowse(""); };
+        rootItem.appendChild(link);
+    }
+    breadcrumb.appendChild(rootItem);
+
+    let accumulated = "";
+
+    segments.forEach((segment, index) => {
+        accumulated = accumulated ? `${accumulated}/${segment}` : segment;
+        const isLast = index === segments.length - 1;
+
+        const item = document.createElement("li");
+        item.className = "breadcrumb-item" + (isLast ? " active" : "");
+
+        if (isLast) {
+            item.textContent = segment;
+        } else {
+            const target = accumulated;
+            const link = document.createElement("a");
+            link.href = "#";
+            link.textContent = segment;
+            link.onclick = (event) => { event.preventDefault(); loadMusicBrowse(target); };
+            item.appendChild(link);
+        }
+
+        breadcrumb.appendChild(item);
+    });
+}
+
+function renderMusicList(listing) {
+    const container = document.getElementById("musicList");
+    container.innerHTML = "";
+
+    if (listing.folders.length === 0 && listing.files.length === 0) {
+        container.innerHTML = `<div class="text-muted text-center py-3">Keine Musikdateien gefunden.</div>`;
+        return;
+    }
+
+    listing.folders.forEach((folder) => {
+        const childPath = listing.path ? `${listing.path}/${folder}` : folder;
+
+        const item = document.createElement("div");
+        item.className = "list-group-item d-flex justify-content-between align-items-center";
+        item.innerHTML = `
+            <span style="cursor: pointer;">
+                <i class="bi bi-folder-fill me-2 text-warning"></i>${folder}
+            </span>
+            <button class="btn btn-outline-success btn-sm" title="Diesen Ordner zufällig abspielen">
+                <i class="bi bi-shuffle"></i>
+            </button>
+        `;
+
+        item.querySelector("span").onclick = () => loadMusicBrowse(childPath);
+        item.querySelector("button").onclick = (event) => {
+            event.stopPropagation();
+            playMusicFolder(childPath);
+        };
+
+        container.appendChild(item);
+    });
+
+    listing.files.forEach((file) => {
+        const filePath = listing.path ? `${listing.path}/${file}` : file;
+
+        const item = document.createElement("div");
+        item.className = "list-group-item d-flex justify-content-between align-items-center";
+        item.innerHTML = `
+            <span><i class="bi bi-file-earmark-music me-2"></i>${file}</span>
+            <button class="btn btn-outline-primary btn-sm" title="Datei abspielen">
+                <i class="bi bi-play-fill"></i>
+            </button>
+        `;
+
+        item.querySelector("button").onclick = () => playMusicFile(filePath);
+
+        container.appendChild(item);
+    });
+}
+
+async function playMusicFolder(path) {
+    const response = await fetch("/api/music/play-folder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path, start_channel: getSelectedMusicChannel() })
+    });
+    const result = await response.json();
+    console.log(result);
+
+    if (!result.success) {
+        alert("Wiedergabe konnte nicht gestartet werden.");
+        return;
+    }
+
+    bootstrap.Modal.getOrCreateInstance(musicModal).hide();
+    await refreshDashboard();
+}
+
+async function playMusicFile(path) {
+    const response = await fetch("/api/music/play-file", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path, start_channel: getSelectedMusicChannel() })
+    });
+    const result = await response.json();
+    console.log(result);
+
+    if (!result.success) {
+        alert("Wiedergabe konnte nicht gestartet werden.");
+        return;
+    }
+
+    bootstrap.Modal.getOrCreateInstance(musicModal).hide();
+    await refreshDashboard();
 }
 
 // ============================================================

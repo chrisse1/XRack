@@ -121,6 +121,35 @@ for input_channels in (18, 8, 2):
     print(f"OK: ChannelInserter {input_channels} -> 18 Kanäle ({len(result)} Bytes)")
 
 # ----------------------------------------------------------------
+# 2b. ChannelInserter mit start_channel: Musik auf Kanal 17+18
+# ----------------------------------------------------------------
+
+stereo_frame = bytearray(2 * BYTES_PER_SAMPLE)
+stereo_frame[0] = 1                        # linker Kanal
+stereo_frame[BYTES_PER_SAMPLE] = 2         # rechter Kanal
+
+music_inserter = ChannelInserter(
+    input_channels=2,
+    output_channels=18,
+    start_channel=16,  # 0-basiert -> Kanal 17+18
+)
+
+music_result = music_inserter.insert(bytes(stereo_frame))
+
+assert len(music_result) == 18 * BYTES_PER_SAMPLE
+
+for channel in range(18):
+    value = channel_value(music_result, channel)
+    if channel == 16:
+        assert value == 1, "Linker Kanal landet nicht auf Kanal 17."
+    elif channel == 17:
+        assert value == 2, "Rechter Kanal landet nicht auf Kanal 18."
+    else:
+        assert value == 0, f"Kanal {channel + 1} ist nicht stumm."
+
+print("OK: ChannelInserter start_channel=16 -> Musik auf Kanal 17+18")
+
+# ----------------------------------------------------------------
 # 3. Extractor + Inserter: voller Roundtrip (Aufnahme -> Wiedergabe)
 # ----------------------------------------------------------------
 

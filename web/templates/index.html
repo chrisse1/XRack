@@ -140,30 +140,76 @@
         <div class="col-lg-6">
 
             {% set title %}
-            <i class="bi bi-music-note-list me-2"></i>Player
+            <i class="bi bi-music-note-list me-2"></i>Musikspieler
             {% endset %}
 
             {% set body %}
-            <div class="d-flex justify-content-between">
-                <span>Status</span>
-                <strong id="player-status">Stopped</strong>
+            <div class="d-flex justify-content-between align-items-center">
+              <div class="row align-items-center">
+                  <div class="col-auto">
+                      <span>
+                          Wiedergabekanäle:
+                      </span>
+                  </div>
+
+                  <div class="col">
+                      <select
+                          id="music-channels"
+                          class="form-select form-select-sm">
+                      </select>
+                  </div>
+              </div>
+                <div>
+                    <span>Status</span>
+                    <strong id="player-status" class="ms-2">gestoppt</strong>
+                </div>
             </div>
 
             <hr>
 
-            <div class="d-flex justify-content-between">
-                <span>Titel</span>
-                <strong id="player-title">-</strong>
+            <div class="d-flex gap-2">
+              <button
+                  id="btn-music-browse"
+                  class="btn btn-primary flex-fill"
+                  data-bs-toggle="modal"
+                  data-bs-target="#musicModal"
+              >
+                  <i class="bi bi-folder2-open me-2"></i>
+                  Ordner öffnen
+              </button>
+
+              <button
+                  id="btn-music-skip"
+                  class="btn btn-secondary flex-fill"
+                  onclick="skipMusic()"
+                  disabled
+              >
+                  <i class="bi bi-skip-end-circle me-2"></i>
+                  Weiter
+              </button>
+
+              <button
+                  id="btn-music-stop"
+                  class="btn btn-outline-danger flex-fill"
+                  onclick="stopMusic()"
+                  disabled
+              >
+                  <i class="bi bi-stop-circle me-2"></i>
+                  Stop
+              </button>
             </div>
 
-            <div class="d-flex justify-content-between">
-                <span>Shuffle</span>
-                <strong id="player-shuffle">Aus</strong>
-            </div>
+            <hr>
 
-            <div class="d-flex justify-content-between">
-                <span>Repeat</span>
-                <strong id="player-repeat">Aus</strong>
+            <div class="d-flex justify-content-between align-items-center" style="gap: 1rem;">
+                <div class="d-flex" style="gap: 0.5rem;">
+                    <span>Titel</span>
+                    <strong id="player-title">-</strong>
+                </div>
+                <div class="d-flex" style="gap: 0.5rem;">
+                    <span>Modus</span>
+                    <strong id="player-mode">-</strong>
+                </div>
             </div>
             {% endset %}
 

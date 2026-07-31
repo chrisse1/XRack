@@ -39,17 +39,26 @@ class AudioPlaybackBackend:
         device: AudioDevice,
         channels: int,
         rate: int,
+        start_channel: int = 0,
+        sample_format: int = alsaaudio.PCM_FORMAT_S24_LE,
     ) -> bool:
         """
         Öffnet das Audiogerät für die Wiedergabe.
 
         Genau wie beim Aufnehmen wird auch hier immer mit der
         vollen, nativen Kanalzahl des Interfaces geöffnet. Die
-        Datei bringt ggf. weniger Kanäle mit (z.B. 8 statt 18) -
-        diese werden per ChannelInserter auf die ersten Kanäle des
-        Interfaces gelegt, alle übrigen Kanäle bleiben stumm. So
-        landet das Signal wieder auf genau den Kanälen, auf denen
-        es aufgenommen wurde.
+        Quelle bringt ggf. weniger Kanäle mit (z.B. 2 für Stereo-
+        Musik) - diese werden per ChannelInserter ab `start_channel`
+        auf die Kanäle des Interfaces gelegt, alle übrigen Kanäle
+        bleiben stumm. So landet z.B. eine Aufnahme wieder auf
+        genau den Kanälen, auf denen sie aufgenommen wurde
+        (start_channel=0), oder Musik auf frei wählbaren Kanälen
+        (z.B. start_channel=16 für Kanal 17+18).
+
+        `sample_format` ist wählbar (aber immer 4 Byte pro Sample,
+        siehe BYTES_PER_SAMPLE), da Musikdateien über ffmpeg als
+        volles S32_LE dekodiert werden, während Aufnahmen im
+        S24_LE-Format (24 Bit in einem 32-Bit-Container) vorliegen.
         """
 
         self.device = device
@@ -57,11 +66,12 @@ class AudioPlaybackBackend:
         self._rate = rate
         self._native_channels = device.channels
         self._channels = channels
-        self._format = alsaaudio.PCM_FORMAT_S24_LE
+        self._format = sample_format
 
         self._inserter = ChannelInserter(
             input_channels=self._channels,
             output_channels=self._native_channels,
+            start_channel=start_channel,
         )
 
         try:
