@@ -9,6 +9,13 @@ let selectedAudioDevice = "";
 let playbackActive = false;
 let musicPlaying = false;
 let musicCurrentPath = "";
+let musicSeekDragging = false;
+
+// Gerät/Kanäle dürfen während keiner laufenden Aufnahme oder
+// Wiedergabe (Soundcheck oder Musik) geändert werden.
+function isAudioBusy(data) {
+    return data.recording || data.playback_active || data.music_playing;
+}
 
 // ============================================================
 // 2. CORE UI UPDATES
@@ -26,6 +33,7 @@ async function updateStatus() {
 
     updateSystemStats(data);
     updateAudioStatus(data);
+    updateAudioDeviceSelectState(data);
     updateRecorder(data);
     updateMusicPlayer(data);
 }
@@ -53,6 +61,14 @@ function updateAudioStatus(data) {
     } else {
         audioInfo.textContent = "Audio Interface";
     }
+}
+
+function updateAudioDeviceSelectState(data) {
+    const select = document.getElementById("audio-device-select");
+    if (select) select.disabled = isAudioBusy(data);
+
+    const rescanButton = document.getElementById("audio-rescan");
+    if (rescanButton) rescanButton.disabled = isAudioBusy(data);
 }
 
 // ============================================================
@@ -194,6 +210,8 @@ function updateRecordChannels(data) {
     select.onchange = () => {
         setRecordChannels(Number(select.value));
     };
+
+    select.disabled = isAudioBusy(data);
 }
 
 async function setRecordChannels(channels) {
@@ -588,6 +606,7 @@ function updateMusicPlayer(data) {
     updateMusicChannels(data);
     updateMusicStatus(data);
     updateMusicButtons(data);
+    updateMusicSeek(data);
 }
 
 function updateMusicChannels(data) {
@@ -611,7 +630,7 @@ function updateMusicChannels(data) {
         select.value = data.music_start_channel + 1;
     }
 
-    select.disabled = data.music_playing;
+    select.disabled = isAudioBusy(data);
 }
 
 function updateMusicStatus(data) {
@@ -643,6 +662,44 @@ function updateMusicButtons(data) {
     const browseButton = document.getElementById("btn-music-browse");
     if (browseButton) browseButton.disabled = data.playback_active;
 }
+
+function updateMusicSeek(data) {
+    const slider = document.getElementById("music-seek");
+    const positionLabel = document.getElementById("music-position");
+    const durationLabel = document.getElementById("music-duration");
+    if (!slider) return;
+
+    const duration = data.music_duration || 0;
+
+    slider.max = duration > 0 ? duration : 100;
+    slider.disabled = !data.music_playing || duration <= 0;
+
+    if (!musicSeekDragging) {
+        slider.value = data.music_playing ? data.music_position : 0;
+    }
+
+    if (positionLabel) positionLabel.textContent = formatDuration(data.music_playing ? data.music_position : 0);
+    if (durationLabel) durationLabel.textContent = formatDuration(duration);
+}
+
+async function seekMusic(position) {
+    const response = await fetch("/api/music/seek", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ position })
+    });
+    const result = await response.json();
+    console.log(result);
+    await refreshDashboard();
+}
+
+const musicSeekSlider = document.getElementById("music-seek");
+musicSeekSlider.addEventListener("mousedown", () => { musicSeekDragging = true; });
+musicSeekSlider.addEventListener("touchstart", () => { musicSeekDragging = true; });
+musicSeekSlider.addEventListener("change", async (event) => {
+    musicSeekDragging = false;
+    await seekMusic(Number(event.target.value));
+});
 
 function getSelectedMusicChannel() {
     const select = document.getElementById("music-channels");
@@ -820,6 +877,60 @@ async function playMusicFile(path) {
 
     bootstrap.Modal.getOrCreateInstance(musicModal).hide();
     await refreshDashboard();
+}
+
+// ------------------------------------------------------------
+// Ordner anlegen / Musik hochladen
+// ------------------------------------------------------------
+
+document.getElementById("btn-new-folder").addEventListener("click", createMusicFolder);
+document.getElementById("music-upload-input").addEventListener("change", uploadMusicFiles);
+
+async function createMusicFolder() {
+    const name = prompt("Name des neuen Ordners:");
+    if (!name) return;
+
+    const response = await fetch("/api/music/create-folder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: musicCurrentPath, name })
+    });
+    const result = await response.json();
+    console.log(result);
+
+    if (!result.success) {
+        alert("Ordner konnte nicht angelegt werden (existiert er schon?).");
+        return;
+    }
+
+    await loadMusicBrowse(musicCurrentPath);
+}
+
+async function uploadMusicFiles(event) {
+    const input = event.target;
+    const files = input.files;
+    if (!files || files.length === 0) return;
+
+    const formData = new FormData();
+    formData.append("path", musicCurrentPath);
+    for (const file of files) {
+        formData.append("files", file);
+    }
+
+    const response = await fetch("/api/music/upload", {
+        method: "POST",
+        body: formData
+    });
+    const result = await response.json();
+    console.log(result);
+
+    input.value = "";
+
+    if (result.count === 0) {
+        alert("Es wurden keine Dateien hochgeladen (unterstütztes Format?).");
+    }
+
+    await loadMusicBrowse(musicCurrentPath);
 }
 
 // ============================================================

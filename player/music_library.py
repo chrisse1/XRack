@@ -4,6 +4,7 @@ konfigurierten Musikverzeichnisses).
 """
 
 import random
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -95,6 +96,65 @@ class MusicLibrary:
             folders=folders,
             files=files,
         )
+
+    def create_folder(self, relative_path: str, name: str) -> bool:
+        """
+        Legt einen neuen Unterordner an.
+        """
+
+        parent = self.resolve(relative_path)
+
+        if parent is None or not parent.is_dir():
+            return False
+
+        name = name.strip()
+
+        if not name or "/" in name or "\\" in name or name in (".", ".."):
+            return False
+
+        new_folder = parent / name
+
+        if new_folder.exists():
+            return False
+
+        new_folder.mkdir()
+
+        return True
+
+    def save_upload(
+        self,
+        relative_path: str,
+        filename: str,
+        source,
+    ) -> str | None:
+        """
+        Speichert eine hochgeladene Musikdatei in einem Ordner.
+        Liefert den gespeicherten Dateinamen oder None bei Fehlern.
+        """
+
+        folder = self.resolve(relative_path)
+
+        if folder is None or not folder.is_dir():
+            return None
+
+        #
+        # Nur den reinen Dateinamen übernehmen (kein Pfad aus dem
+        # Upload verwenden).
+        #
+        filename = Path(filename).name
+
+        if not filename:
+            return None
+
+        if Path(filename).suffix.lower() not in AUDIO_EXTENSIONS:
+            return None
+
+        destination = folder / filename
+
+        with destination.open("wb") as target:
+            shutil.copyfileobj(source, target)
+
+        return filename
 
     def find_audio_files(self, folder: Path) -> list[Path]:
         """

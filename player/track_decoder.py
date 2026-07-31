@@ -14,6 +14,40 @@ import subprocess
 from pathlib import Path
 
 
+def probe_duration(path: Path) -> float:
+    """
+    Ermittelt die Länge einer Musikdatei in Sekunden über ffprobe
+    (Teil von ffmpeg). Liefert 0.0, wenn die Länge nicht bestimmt
+    werden kann.
+    """
+
+    try:
+
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "csv=p=0",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        return float(result.stdout.strip())
+
+    except (
+        subprocess.SubprocessError,
+        FileNotFoundError,
+        ValueError,
+        OSError,
+    ):
+
+        return 0.0
+
+
 class TrackDecoder:
     """Startet ffmpeg und liest die dekodierten PCM-Daten."""
 
@@ -32,14 +66,20 @@ class TrackDecoder:
         path: Path,
         channels: int,
         rate: int,
+        start_position: float = 0.0,
     ) -> bool:
         """
-        Startet ffmpeg für die angegebene Datei.
+        Startet ffmpeg für die angegebene Datei. `start_position`
+        (Sekunden) erlaubt das Spulen an eine Stelle im Titel -
+        ffmpeg überspringt die Datei bis dahin selbst.
         """
 
-        command = [
-            "ffmpeg",
-            "-v", "error",
+        command = ["ffmpeg", "-v", "error"]
+
+        if start_position > 0:
+            command += ["-ss", str(start_position)]
+
+        command += [
             "-i", str(path),
             "-f", "s32le",
             "-acodec", "pcm_s32le",

@@ -181,6 +181,16 @@ class Application:
 
         self.status.music_start_channel = self.music_player.start_channel
 
+        self.status.music_position = round(
+            self.music_player.track_position,
+            1,
+        )
+
+        self.status.music_duration = round(
+            self.music_player.track_duration,
+            1,
+        )
+
         self.status.audio = (
             self.status.audio_connected
             and self.status.audio_core_open
@@ -382,3 +392,40 @@ class Application:
         """
 
         self.music_player.skip()
+
+    def seek_music(self, position: float) -> None:
+        """
+        Springt an eine Position (in Sekunden) im aktuellen Titel.
+        """
+
+        self.music_player.seek(position)
+
+    def create_music_folder(
+        self,
+        relative_path: str,
+        name: str,
+    ) -> bool:
+        """
+        Legt einen neuen Ordner in der Musikbibliothek an.
+        """
+
+        return self.music_library.create_folder(
+            relative_path,
+            name,
+        )
+
+    def upload_music_file(
+        self,
+        relative_path: str,
+        filename: str,
+        source,
+    ) -> str | None:
+        """
+        Speichert eine hochgeladene Musikdatei.
+        """
+
+        return self.music_library.save_upload(
+            relative_path,
+            filename,
+            source,
+        )

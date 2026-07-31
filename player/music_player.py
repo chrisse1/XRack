@@ -5,13 +5,14 @@ XRack Musikspieler.
 import logging
 import threading
 from pathlib import Path
+from time import monotonic
 
 import alsaaudio
 
 from audio.audio_playback_backend import AudioPlaybackBackend
 from audio.models import AudioDevice
 from player.music_library import MusicLibrary
-from player.track_decoder import TrackDecoder
+from player.track_decoder import TrackDecoder, probe_duration
 
 CHANNELS = 2
 CHUNK_FRAMES = 1024
@@ -52,6 +53,12 @@ class MusicPlayer:
 
         self._skip_requested = False
 
+        self._seek_target: float | None = None
+
+        self._track_duration = 0.0
+        self._track_offset = 0.0
+        self._track_start_time = monotonic()
+
         self._channels = CHANNELS
         self._start_channel = 0
         self._rate = 48000
@@ -75,6 +82,24 @@ class MusicPlayer:
     @property
     def start_channel(self) -> int:
         return self._start_channel
+
+    @property
+    def track_duration(self) -> float:
+        return self._track_duration
+
+    @property
+    def track_position(self) -> float:
+        """
+        Verstrichene Zeit im aktuellen Titel (Sekunden).
+        """
+
+        if not self.playing:
+            return 0.0
+
+        return (
+            self._track_offset +
+            (monotonic() - self._track_start_time)
+        )
 
     def play_folder(
         self,
@@ -155,6 +180,18 @@ class MusicPlayer:
 
         self.decoder.close()
 
+    def seek(self, position: float) -> None:
+        """
+        Springt an eine Position (Sekunden) im aktuellen Titel.
+        """
+
+        if not self.playing:
+            return
+
+        self._seek_target = max(0.0, position)
+
+        self.decoder.close()
+
     def _start(
         self,
         device: AudioDevice,
@@ -225,14 +262,11 @@ class MusicPlayer:
 
             self._current_track = track.name
 
-            self._skip_requested = False
+            self._track_duration = probe_duration(track)
 
-            if not self.decoder.open(
-                track,
-                channels=self._channels,
-                rate=self._rate,
-            ):
-                self._index += 1
+            if self._play_track(track, chunk_bytes):
+                consecutive_failures = 0
+            else:
                 consecutive_failures += 1
 
                 if consecutive_failures >= 3:
@@ -241,21 +275,6 @@ class MusicPlayer:
                         "dekodiert werden, Wiedergabe wird gestoppt."
                     )
                     break
-
-                continue
-
-            consecutive_failures = 0
-
-            while self._playing and not self._skip_requested:
-
-                data = self.decoder.read(chunk_bytes)
-
-                if data is None:
-                    break
-
-                self.backend.write(data)
-
-            self.decoder.close()
 
             self._index += 1
 
@@ -268,3 +287,55 @@ class MusicPlayer:
         self.logger.info(
             "Musikspieler gestoppt."
         )
+
+    def _play_track(self, track: Path, chunk_bytes: int) -> bool:
+        """
+        Spielt einen einzelnen Titel ab und dekodiert ihn bei Bedarf
+        (Spulen) erneut ab einer neuen Position. Liefert False, wenn
+        die Datei nicht geöffnet werden konnte.
+        """
+
+        position = 0.0
+
+        opened_at_least_once = False
+
+        while self._playing:
+
+            self._skip_requested = False
+            self._seek_target = None
+
+            self._track_offset = position
+            self._track_start_time = monotonic()
+
+            if not self.decoder.open(
+                track,
+                channels=self._channels,
+                rate=self._rate,
+                start_position=position,
+            ):
+                return opened_at_least_once
+
+            opened_at_least_once = True
+
+            while (
+                self._playing
+                and not self._skip_requested
+                and self._seek_target is None
+            ):
+
+                data = self.decoder.read(chunk_bytes)
+
+                if data is None:
+                    break
+
+                self.backend.write(data)
+
+            self.decoder.close()
+
+            if self._playing and self._seek_target is not None:
+                position = self._seek_target
+                continue
+
+            break
+
+        return opened_at_least_once

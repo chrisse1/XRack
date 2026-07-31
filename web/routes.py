@@ -7,6 +7,7 @@ from audio.models import RecordingInfo
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
 from fastapi import Response
+from fastapi import UploadFile, File, Form
 from audio.models import DeleteRecordingsRequest
 
 class AudioSelection(BaseModel):
@@ -30,6 +31,13 @@ class MusicFolderSelection(BaseModel):
 class MusicFileSelection(BaseModel):
     path: str
     start_channel: int
+
+class MusicSeekSelection(BaseModel):
+    position: float
+
+class MusicFolderCreate(BaseModel):
+    path: str
+    name: str
 
 @router.post("/api/audio/select")
 async def audio_select(
@@ -234,6 +242,69 @@ async def music_skip(request: Request):
 
     return {
         "success": True
+    }
+
+
+@router.post("/api/music/seek")
+async def music_seek(
+    selection: MusicSeekSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    application.seek_music(
+        selection.position
+    )
+
+    return {
+        "success": True
+    }
+
+
+@router.post("/api/music/create-folder")
+async def music_create_folder(
+    selection: MusicFolderCreate,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success = application.create_music_folder(
+        selection.path,
+        selection.name,
+    )
+
+    return {
+        "success": success
+    }
+
+
+@router.post("/api/music/upload")
+async def music_upload(
+    request: Request,
+    path: str = Form(""),
+    files: list[UploadFile] = File(...),
+):
+
+    application = request.app.state.application
+
+    uploaded = []
+
+    for upload in files:
+
+        filename = application.upload_music_file(
+            path,
+            upload.filename,
+            upload.file,
+        )
+
+        if filename is not None:
+            uploaded.append(filename)
+
+    return {
+        "uploaded": uploaded,
+        "count": len(uploaded),
     }
 
 

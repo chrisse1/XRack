@@ -77,4 +77,49 @@ with tempfile.TemporaryDirectory() as tmp_dir:
     assert sorted(p.name for p in playlist) == names
     print("OK: Shuffle-Playlist enthält alle Dateien (nur andere Reihenfolge)")
 
+    # ---------------------------------------------------------
+    # 6. Ordner anlegen
+    # ---------------------------------------------------------
+
+    assert library.create_folder("", "Klassik") is True
+    assert (root / "Klassik").is_dir()
+    print("OK: Neuer Ordner im Wurzelverzeichnis angelegt")
+
+    assert library.create_folder("Rock", "Subgenre") is True
+    assert (root / "Rock" / "Subgenre").is_dir()
+    print("OK: Neuer Unterordner angelegt")
+
+    # Doppelt anlegen soll fehlschlagen, nicht überschreiben
+    assert library.create_folder("", "Klassik") is False
+    print("OK: Existierender Ordner wird nicht überschrieben")
+
+    # Kein Ausbruch über ".." oder Pfadtrenner im Namen
+    assert library.create_folder("", "../evil") is False
+    assert library.create_folder("", "sub/evil") is False
+    assert not (Path(tmp_dir) / "evil").exists()
+    print("OK: Ordnername mit Pfadtrenner/'..' wird abgelehnt")
+
+    # ---------------------------------------------------------
+    # 7. Upload
+    # ---------------------------------------------------------
+
+    import io
+
+    uploaded_name = library.save_upload("", "new_song.mp3", io.BytesIO(b"audio-daten"))
+    assert uploaded_name == "new_song.mp3"
+    assert (root / "new_song.mp3").read_bytes() == b"audio-daten"
+    print("OK: Upload einer Musikdatei ins Wurzelverzeichnis")
+
+    # Nicht-Audiodatei wird abgelehnt
+    assert library.save_upload("", "malware.exe", io.BytesIO(b"x")) is None
+    assert not (root / "malware.exe").exists()
+    print("OK: Nicht-Audiodatei wird beim Upload abgelehnt")
+
+    # Pfad im Dateinamen wird auf den reinen Namen reduziert
+    uploaded_name = library.save_upload("Jazz", "../../escape.mp3", io.BytesIO(b"x"))
+    assert uploaded_name == "escape.mp3"
+    assert (root / "Jazz" / "escape.mp3").exists()
+    assert not (Path(tmp_dir) / "escape.mp3").exists()
+    print("OK: Pfadanteile im Upload-Dateinamen werden entfernt")
+
 print("Alle Tests erfolgreich.")

@@ -211,6 +211,23 @@
                     <strong id="player-mode">-</strong>
                 </div>
             </div>
+
+            <div class="mt-2">
+                <input
+                    type="range"
+                    class="form-range"
+                    id="music-seek"
+                    min="0"
+                    max="100"
+                    value="0"
+                    step="1"
+                    disabled
+                >
+                <div class="d-flex justify-content-between">
+                    <small id="music-position" class="text-body-secondary">00:00</small>
+                    <small id="music-duration" class="text-body-secondary">00:00</small>
+                </div>
+            </div>
             {% endset %}
 
             {% include "components/status_card.html" %}

@@ -65,3 +65,5 @@ class SystemStatus(BaseModel):
     music_folder_mode: bool = False
     music_channels: int = 2
     music_start_channel: int = 0
+    music_position: float = 0.0
+    music_duration: float = 0.0
