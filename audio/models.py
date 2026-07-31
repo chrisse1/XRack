@@ -65,12 +65,6 @@ class DiagnosticItem:
     name: str
     ok: bool
     message: str
-    
-@dataclass
-class DiagnosticItem:
-    name: str
-    ok: bool
-    message: str
     category: str = "general"
     
 @dataclass

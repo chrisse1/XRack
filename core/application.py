@@ -6,7 +6,7 @@ from pathlib import Path
 
 from core.configuration import Configuration
 from core.log import create_logger
-from core.status import SystemStatus, RecorderState, PlayerState
+from core.status import SystemStatus, RecorderState
 from audio.audio_manager import AudioManager
 from audio.audio_core import AudioCore
 from audio.audio_playback_backend import AudioPlaybackBackend
@@ -19,7 +19,6 @@ from core.state_store import StateStore
 import platform
 import psutil
 import time
-import re
 
 class Application:
     """Main XRack application."""
@@ -138,8 +137,6 @@ class Application:
 
         self.status.disk = round(psutil.disk_usage("/").percent, 1)
 
-        uptime = int(psutil.boot_time())
-
         self.status.uptime = str(
             int((time.time() - psutil.boot_time()) // 60)
         ) + " min"
@@ -207,12 +204,6 @@ class Application:
         #
         # Musikspieler
         #
-
-        self.status.player = (
-            PlayerState.PLAYING
-            if self.music_player.playing
-            else PlayerState.IDLE
-        )
 
         self.status.music_playing = self.music_player.playing
 

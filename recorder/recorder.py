@@ -4,7 +4,6 @@ XRack Recorder.
 
 import logging
 import threading
-import time
 
 from audio.audio_backend import AudioBackend
 from recorder.level_meter import LevelMeter

@@ -4,7 +4,7 @@ System status management for XRack.
 
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class RecorderState(str, Enum):
@@ -16,21 +16,11 @@ class RecorderState(str, Enum):
     MONITORING = "Pegel testen"
 
 
-class PlayerState(str, Enum):
-    """Music player states."""
-
-    IDLE = "idle"
-    PLAYING = "playing"
-    PAUSED = "paused"
-
-
 class SystemStatus(BaseModel):
     """Current XRack system status."""
 
     audio: bool = False
     recorder: RecorderState = RecorderState.IDLE
-    player: PlayerState = PlayerState.IDLE
-    device: str | None = None
     cpu: float = 0.0
     ram: float = 0.0
     disk: float = 0.0
