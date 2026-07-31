@@ -41,6 +41,13 @@ class MusicPlayer:
 
         self._playing = False
 
+        self._paused = False
+
+        self._pause_event = threading.Event()
+        self._pause_event.set()
+
+        self._resume_position = 0.0
+
         self._thread: threading.Thread | None = None
 
         self._folder_mode = False
@@ -66,6 +73,10 @@ class MusicPlayer:
     @property
     def playing(self) -> bool:
         return self._playing
+
+    @property
+    def paused(self) -> bool:
+        return self._paused
 
     @property
     def folder_mode(self) -> bool:
@@ -95,6 +106,9 @@ class MusicPlayer:
 
         if not self.playing:
             return 0.0
+
+        if self.paused:
+            return self._resume_position
 
         return (
             self._track_offset +
@@ -162,6 +176,14 @@ class MusicPlayer:
 
         self._playing = False
 
+        #
+        # Eine pausierte Wiedergabe wartet im Worker-Thread auf
+        # das Event - ohne das Aufwecken hier würde stop() dort
+        # ewig hängen bleiben (join() wartet auf den Thread).
+        #
+        self._paused = False
+        self._pause_event.set()
+
         self.decoder.close()
 
         if self._thread is not None:
@@ -169,6 +191,36 @@ class MusicPlayer:
             self._thread.join()
 
             self._thread = None
+
+    def pause(self) -> None:
+        """
+        Pausiert die Wiedergabe. Das Audiogerät bleibt geöffnet
+        (reserviert), damit sofort fortgesetzt werden kann - ein
+        gleichzeitiger Soundcheck ist währenddessen nicht möglich.
+        """
+
+        if not self.playing or self.paused:
+            return
+
+        self._resume_position = self.track_position
+
+        self._paused = True
+
+        self._pause_event.clear()
+
+        self.decoder.close()
+
+    def resume(self) -> None:
+        """
+        Setzt eine pausierte Wiedergabe fort.
+        """
+
+        if not self.playing or not self.paused:
+            return
+
+        self._paused = False
+
+        self._pause_event.set()
 
     def skip(self) -> None:
         """
@@ -179,6 +231,8 @@ class MusicPlayer:
             return
 
         self._skip_requested = True
+
+        self._wake_if_paused()
 
         self.decoder.close()
 
@@ -192,7 +246,19 @@ class MusicPlayer:
 
         self._seek_target = max(0.0, position)
 
+        self._wake_if_paused()
+
         self.decoder.close()
+
+    def _wake_if_paused(self) -> None:
+        """
+        Weckt eine pausierte Wiedergabe auf (z.B. für Spulen/Weiter,
+        während pausiert ist).
+        """
+
+        if self._paused:
+            self._paused = False
+            self._pause_event.set()
 
     def _start(
         self,
@@ -207,6 +273,9 @@ class MusicPlayer:
         self._folder_mode = folder_mode
         self._channels = CHANNELS
         self._start_channel = start_channel
+
+        self._paused = False
+        self._pause_event.set()
 
         if not self.backend.open(
             device,
@@ -323,6 +392,7 @@ class MusicPlayer:
                 self._playing
                 and not self._skip_requested
                 and self._seek_target is None
+                and not self._paused
             ):
 
                 data = self.decoder.read(chunk_bytes)
@@ -333,6 +403,23 @@ class MusicPlayer:
                 self.backend.write(data)
 
             self.decoder.close()
+
+            if self._playing and self._paused:
+
+                self._pause_event.wait()
+
+                if not self._playing:
+                    break
+
+                if self._skip_requested:
+                    break
+
+                position = (
+                    self._seek_target
+                    if self._seek_target is not None
+                    else self._resume_position
+                )
+                continue
 
             if self._playing and self._seek_target is not None:
                 position = self._seek_target

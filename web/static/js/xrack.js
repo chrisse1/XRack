@@ -8,6 +8,7 @@ let selectedRecordingInfo = null;
 let selectedAudioDevice = "";
 let playbackActive = false;
 let musicPlaying = false;
+let musicPaused = false;
 let musicCurrentPath = "";
 let musicSeekDragging = false;
 
@@ -602,6 +603,7 @@ function formatFileSize(bytes) {
 
 function updateMusicPlayer(data) {
     musicPlaying = data.music_playing;
+    musicPaused = data.music_paused;
 
     updateMusicChannels(data);
     updateMusicStatus(data);
@@ -636,7 +638,9 @@ function updateMusicChannels(data) {
 function updateMusicStatus(data) {
     const status = document.getElementById("player-status");
     if (status) {
-        status.textContent = data.music_playing ? "Wiedergabe läuft" : "gestoppt";
+        status.textContent = data.music_paused
+            ? "pausiert"
+            : (data.music_playing ? "Wiedergabe läuft" : "gestoppt");
     }
 
     const title = document.getElementById("player-title");
@@ -661,6 +665,39 @@ function updateMusicButtons(data) {
 
     const browseButton = document.getElementById("btn-music-browse");
     if (browseButton) browseButton.disabled = data.playback_active;
+
+    const pauseButton = document.getElementById("btn-music-pause");
+    if (pauseButton) {
+        pauseButton.disabled = !data.music_playing;
+
+        if (data.music_paused) {
+            pauseButton.innerHTML = `<i class="bi bi-play-circle me-2"></i>Fortsetzen`;
+        } else {
+            pauseButton.innerHTML = `<i class="bi bi-pause-circle me-2"></i>Pause`;
+        }
+    }
+}
+
+async function toggleMusicPause() {
+    if (musicPaused) {
+        await resumeMusic();
+    } else {
+        await pauseMusic();
+    }
+}
+
+async function pauseMusic() {
+    const response = await fetch("/api/music/pause", { method: "POST" });
+    const result = await response.json();
+    console.log(result);
+    await refreshDashboard();
+}
+
+async function resumeMusic() {
+    const response = await fetch("/api/music/resume", { method: "POST" });
+    const result = await response.json();
+    console.log(result);
+    await refreshDashboard();
 }
 
 function updateMusicSeek(data) {

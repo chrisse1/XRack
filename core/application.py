@@ -173,6 +173,8 @@ class Application:
 
         self.status.music_playing = self.music_player.playing
 
+        self.status.music_paused = self.music_player.paused
+
         self.status.music_track = self.music_player.current_track
 
         self.status.music_folder_mode = self.music_player.folder_mode
@@ -385,6 +387,20 @@ class Application:
         """
 
         self.music_player.stop()
+
+    def pause_music(self) -> None:
+        """
+        Pausiert den Musikspieler.
+        """
+
+        self.music_player.pause()
+
+    def resume_music(self) -> None:
+        """
+        Setzt den pausierten Musikspieler fort.
+        """
+
+        self.music_player.resume()
 
     def skip_music(self) -> None:
         """

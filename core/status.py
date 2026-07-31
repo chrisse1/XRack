@@ -61,6 +61,7 @@ class SystemStatus(BaseModel):
     playback_channels: int = 0
 
     music_playing: bool = False
+    music_paused: bool = False
     music_track: str = ""
     music_folder_mode: bool = False
     music_channels: int = 2

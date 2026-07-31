@@ -236,6 +236,30 @@ async def music_stop(request: Request):
     }
 
 
+@router.post("/api/music/pause")
+async def music_pause(request: Request):
+
+    application = request.app.state.application
+
+    application.pause_music()
+
+    return {
+        "success": True
+    }
+
+
+@router.post("/api/music/resume")
+async def music_resume(request: Request):
+
+    application = request.app.state.application
+
+    application.resume_music()
+
+    return {
+        "success": True
+    }
+
+
 @router.post("/api/music/skip")
 async def music_skip(request: Request):
 
