@@ -71,3 +71,4 @@ class SystemStatus(BaseModel):
     music_start_channel: int = 0
     music_position: float = 0.0
     music_duration: float = 0.0
+    music_preferred_start_channel: int = 1

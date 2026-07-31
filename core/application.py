@@ -15,6 +15,7 @@ from player.player import Player
 from player.music_library import MusicLibrary
 from player.music_player import MusicPlayer
 from core.system_control import SystemControl
+from core.state_store import StateStore
 import platform
 import psutil
 import time
@@ -32,17 +33,29 @@ class Application:
         )
 
         self.status = SystemStatus()
-        
+
+        self.state_store = StateStore(
+            Path("config/state.json")
+        )
+
         self.audio_manager = AudioManager()
-        
+
         self.audio_core = AudioCore()
-        
+
         self.audio_manager.scan()
 
         self.selected_audio_device = None
-        
-        self.record_channels = 18
-        
+
+        self.record_channels = self.state_store.get(
+            "record_channels",
+            18,
+        )
+
+        self.music_channel_preference = self.state_store.get(
+            "music_channel",
+            1,
+        )
+
         self.recorder = Recorder(
             self.audio_core.backend
         )
@@ -65,7 +78,24 @@ class Application:
         devices = self.audio_manager.get_devices()
 
         if devices:
-            self.selected_audio_device = devices[0]
+
+            #
+            # Zuletzt gewähltes Gerät wiederfinden, falls es noch
+            # angeschlossen ist - sonst das erste gefundene Gerät.
+            #
+
+            saved_device_id = self.state_store.get("audio_device_id")
+
+            initial_device = next(
+                (
+                    device
+                    for device in devices
+                    if device.id == saved_device_id
+                ),
+                devices[0],
+            )
+
+            self.selected_audio_device = initial_device
             self.logger.info("Initiales Audiogerät wird geöffnet...")
             self.select_audio_device(
                 self.selected_audio_device.id
@@ -196,6 +226,10 @@ class Application:
 
         self.status.music_start_channel = self.music_player.start_channel
 
+        self.status.music_preferred_start_channel = (
+            self.music_channel_preference
+        )
+
         self.status.music_position = round(
             self.music_player.track_position,
             1,
@@ -256,6 +290,11 @@ class Application:
             self.record_channels,
         )
 
+        self.state_store.set(
+            "record_channels",
+            self.record_channels,
+        )
+
         return True
     
     def select_audio_device(self, device_id: str) -> bool:
@@ -275,11 +314,16 @@ class Application:
         self.audio_core.close()
 
         self.selected_audio_device = device
-        
+
         self.logger.info(
             "Selected Audio Device: %s (%s)",
             self.selected_audio_device.name,
             self.selected_audio_device.id,
+        )
+
+        self.state_store.set(
+            "audio_device_id",
+            device.id,
         )
 
         #
@@ -362,6 +406,8 @@ class Application:
         if folder is None or not folder.is_dir():
             return False
 
+        self._remember_music_channel(start_channel)
+
         return self.music_player.play_folder(
             self.selected_audio_device,
             folder,
@@ -388,10 +434,26 @@ class Application:
         if path is None or not path.is_file():
             return False
 
+        self._remember_music_channel(start_channel)
+
         return self.music_player.play_file(
             self.selected_audio_device,
             path,
             start_channel=start_channel - 1,
+        )
+
+    def _remember_music_channel(self, start_channel: int) -> None:
+        """
+        Merkt sich den zuletzt für die Musikwiedergabe gewählten
+        Startkanal (1-basiert), damit das Dropdown nach einem
+        Neustart wieder vorbelegt ist.
+        """
+
+        self.music_channel_preference = start_channel
+
+        self.state_store.set(
+            "music_channel",
+            start_channel,
         )
 
     def stop_music(self) -> None:

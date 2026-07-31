@@ -245,7 +245,7 @@ async function loadAudioDevices() {
     devices.forEach(device => {
         const option = document.createElement("option");
         option.value = device.id;
-        option.textContent = device.description;
+        option.textContent = device.name;
         if (device.id === selectedAudioDevice) {
             option.selected = true;
         }
@@ -750,6 +750,11 @@ function updateMusicChannels(data) {
         }
 
         select.dataset.built = String(data.audio_channels);
+
+        // Zuletzt genutzten Kanal vorbelegen (nur beim (Neu-)Aufbau
+        // der Optionen, nicht bei jeder Statusabfrage - sonst
+        // würde eine manuelle Auswahl ständig überschrieben).
+        select.value = data.music_preferred_start_channel;
     }
 
     if (data.music_playing) {
@@ -1092,6 +1097,56 @@ async function createMusicFolder() {
     await loadMusicBrowse(musicCurrentPath);
 }
 
+function uploadWithProgress(formData) {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/music/upload");
+
+        xhr.upload.addEventListener("progress", (event) => {
+            if (event.lengthComputable) {
+                updateUploadProgress(event.loaded, event.total);
+            }
+        });
+
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    resolve(JSON.parse(xhr.responseText));
+                } catch (error) {
+                    reject(error);
+                }
+            } else {
+                reject(new Error(`Upload fehlgeschlagen (${xhr.status})`));
+            }
+        };
+
+        xhr.onerror = () => reject(new Error("Netzwerkfehler beim Upload"));
+
+        xhr.send(formData);
+    });
+}
+
+function updateUploadProgress(loaded, total) {
+    const wrapper = document.getElementById("uploadProgressWrapper");
+    const bar = document.getElementById("uploadProgressBar");
+    const label = document.getElementById("uploadProgressLabel");
+    if (!wrapper || !bar) return;
+
+    wrapper.classList.remove("d-none");
+
+    const percent = total > 0 ? Math.round((loaded / total) * 100) : 0;
+    bar.style.width = percent + "%";
+
+    if (label) {
+        label.textContent = `${formatFileSize(loaded)} / ${formatFileSize(total)} (${percent}%)`;
+    }
+}
+
+function hideUploadProgress() {
+    const wrapper = document.getElementById("uploadProgressWrapper");
+    if (wrapper) wrapper.classList.add("d-none");
+}
+
 async function uploadMusicFiles(event) {
     const input = event.target;
     const files = input.files;
@@ -1103,20 +1158,23 @@ async function uploadMusicFiles(event) {
         formData.append("files", file);
     }
 
-    const response = await fetch("/api/music/upload", {
-        method: "POST",
-        body: formData
-    });
-    const result = await response.json();
-    console.log(result);
+    updateUploadProgress(0, 1);
 
-    input.value = "";
+    try {
+        const result = await uploadWithProgress(formData);
+        console.log(result);
 
-    if (result.count === 0) {
-        alert("Es wurden keine Dateien hochgeladen (unterstütztes Format?).");
+        if (result.count === 0) {
+            alert("Es wurden keine Dateien hochgeladen (unterstütztes Format?).");
+        }
+    } catch (error) {
+        console.error("Upload fehlgeschlagen:", error);
+        alert("Upload fehlgeschlagen.");
+    } finally {
+        input.value = "";
+        hideUploadProgress();
+        await loadMusicBrowse(musicCurrentPath);
     }
-
-    await loadMusicBrowse(musicCurrentPath);
 }
 
 // ============================================================
