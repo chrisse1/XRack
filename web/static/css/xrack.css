@@ -5,3 +5,56 @@ body {
     color: white;
 
 }
+
+/* Pegelanzeige: kompaktes Raster, 8 Kanäle pro Reihe */
+
+.level-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 0.35rem 0.5rem;
+}
+
+@media (max-width: 480px) {
+    .level-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+.level-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-width: 0;
+}
+
+.level-label {
+    width: 1.4rem;
+    text-align: right;
+    color: #9aa4ad;
+    flex-shrink: 0;
+    font-size: 0.7rem;
+}
+
+.level-track {
+    flex: 1;
+    height: 8px;
+    background: #2a2f34;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.level-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 4px;
+    background: #2ecc71;
+    transition: width 0.1s linear;
+}
+
+.level-fill-yellow {
+    background: #f1c40f;
+}
+
+.level-fill-red {
+    background: #e74c3c;
+}

@@ -397,45 +397,64 @@ async function stopLevelCheck() {
     await refreshDashboard();
 }
 
+// Untere Anzeigegrenze in dBFS (alles darunter zeigt als "aus").
+// Es geht nur darum, ob überhaupt Signal ankommt - keine präzise
+// Pegelmessung (die macht das Mischpult).
+const LEVEL_METER_MIN_DB = -50;
+const LEVEL_METER_YELLOW_DB = -12;
+const LEVEL_METER_RED_DB = -3;
+
+function levelToDb(level) {
+    if (level <= 0) return -Infinity;
+    return 20 * Math.log10(level);
+}
+
+function levelToPercent(level) {
+    const db = Math.max(LEVEL_METER_MIN_DB, Math.min(0, levelToDb(level)));
+    return ((db - LEVEL_METER_MIN_DB) / -LEVEL_METER_MIN_DB) * 100;
+}
+
+function levelColorClass(level) {
+    const db = levelToDb(level);
+    if (db >= LEVEL_METER_RED_DB) return "level-fill-red";
+    if (db >= LEVEL_METER_YELLOW_DB) return "level-fill-yellow";
+    return "";
+}
+
 function renderLevelMeters(levels) {
     const container = document.getElementById("level-meters");
     if (!container) return;
 
     if (!levels || levels.length === 0) {
-        container.innerHTML = `<div class="text-muted text-center py-2"><small>Keine Pegel - "Pegel testen" oder Aufnahme starten.</small></div>`;
+        container.className = "mb-2";
+        container.innerHTML = `<div class="text-muted text-center py-2"><small>Kein Signal - "Pegel testen" oder Aufnahme starten.</small></div>`;
         return;
     }
 
     if (container.children.length !== levels.length) {
+        container.className = "level-grid mb-2";
         container.innerHTML = "";
 
         levels.forEach((_, index) => {
-            const row = document.createElement("div");
-            row.className = "d-flex align-items-center mb-1";
-            row.style.gap = "0.5rem";
-            row.innerHTML = `
-                <small style="width: 3rem;">Ch ${index + 1}</small>
-                <div class="progress flex-fill" style="height: 10px;">
-                    <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+            const cell = document.createElement("div");
+            cell.className = "level-cell";
+            cell.innerHTML = `
+                <small class="level-label">${index + 1}</small>
+                <div class="level-track">
+                    <div class="level-fill"></div>
                 </div>
             `;
-            container.appendChild(row);
+            container.appendChild(cell);
         });
     }
 
     levels.forEach((level, index) => {
-        const bar = container.children[index].querySelector(".progress-bar");
-        const percent = Math.min(100, Math.max(0, level * 100));
-        bar.style.width = percent + "%";
+        const fill = container.children[index].querySelector(".level-fill");
+        fill.style.width = levelToPercent(level) + "%";
 
-        bar.classList.remove("bg-success", "bg-warning", "bg-danger");
-        if (level >= 0.95) {
-            bar.classList.add("bg-danger");
-        } else if (level >= 0.7) {
-            bar.classList.add("bg-warning");
-        } else {
-            bar.classList.add("bg-success");
-        }
+        fill.classList.remove("level-fill-yellow", "level-fill-red");
+        const colorClass = levelColorClass(level);
+        if (colorClass) fill.classList.add(colorClass);
     });
 }
 
