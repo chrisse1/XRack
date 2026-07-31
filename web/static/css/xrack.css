@@ -6,29 +6,28 @@ body {
 
 }
 
-/* Header: Icon + Version links, Geräteauswahl rechts */
+/* Header: Logo + Version links, Geräteauswahl rechts */
 
-.header-icon {
-    width: 56px;
-    height: 56px;
+.header-logo {
+    height: 40px;
+    width: auto;
     object-fit: contain;
-    flex-shrink: 0;
 }
 
 .header-audio {
-    flex: 1 1 260px;
-    max-width: 480px;
+    flex: 0 1 auto;
+    max-width: 280px;
     min-width: 0;
 }
 
 @media (max-width: 575.98px) {
-    .header-icon {
-        width: 44px;
-        height: 44px;
+    .header-logo {
+        height: 32px;
     }
 
     .header-audio {
         max-width: none;
+        flex-basis: 100%;
     }
 }
 
@@ -95,4 +94,20 @@ body {
 
 .level-fill-red {
     background: #e74c3c;
+}
+
+/* Player-Transportleiste: Icon oben, Beschriftung darunter */
+
+.player-transport-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    flex: 1 1 0;
+    padding: 0.6rem 0.5rem;
+}
+
+.player-transport-btn small {
+    font-size: 0.75rem;
 }

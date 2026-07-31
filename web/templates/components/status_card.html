@@ -1,7 +1,10 @@
 <div class="card shadow-sm h-100">
 
-    <div class="card-header fw-semibold">
-        {{ title }}
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center gap-2">
+        <div>{{ title }}</div>
+        {% if header_right is defined %}
+        <div>{{ header_right | safe }}</div>
+        {% endif %}
     </div>
 
     <div class="card-body">

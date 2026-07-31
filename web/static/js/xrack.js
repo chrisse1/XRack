@@ -79,9 +79,12 @@ function updateAudioDeviceSelectState(data) {
 // 3. RECORDER UI
 // ============================================================
 
+let recorderRecording = false;
+
 function updateRecorder(data) {
     playbackActive = data.playback_active;
     recorderMonitoring = data.recorder_monitoring;
+    recorderRecording = data.recording;
 
     updateRecorderStatus(data);
     updateAudioCoreStatus(data);
@@ -90,6 +93,22 @@ function updateRecorder(data) {
     updateRecordingList(data.recordings);
     updateSoundcheckButton(data);
     updateLevelCheckButton(data);
+    updateRecorderToggleButton(data);
+}
+
+function updateRecorderToggleButton(data) {
+    const button = document.getElementById("btn-recorder-toggle");
+    if (!button) return;
+
+    if (data.recording) {
+        button.innerHTML = `<i class="bi bi-stop-circle me-2"></i>Aufnahme stoppen`;
+        button.classList.remove("btn-danger");
+        button.classList.add("btn-secondary");
+    } else {
+        button.innerHTML = `<i class="bi bi-record-circle me-2"></i>Aufnahme starten`;
+        button.classList.remove("btn-secondary");
+        button.classList.add("btn-danger");
+    }
 }
 
 function updateRecorderStatus(data) {
@@ -134,8 +153,13 @@ function updateRecordingInfo(data) {
     }
 }
 
+function basename(path) {
+    if (!path) return path;
+    return path.split("/").pop();
+}
+
 function showRecordingInfo(filename, duration, size, channels, sampleRate, bitsPerSample) {
-    document.getElementById("recorder-file").textContent = filename ?? "-";
+    document.getElementById("recorder-file").textContent = filename ? basename(filename) : "-";
     document.getElementById("recorder-duration").textContent = formatDuration(duration);
     document.getElementById("recorder-size").textContent = formatFileSize(size);
     document.getElementById("recorder-format").textContent =
@@ -283,6 +307,14 @@ async function rescanAudioDevices() {
 // ============================================================
 // 7. RECORDER CONTROL
 // ============================================================
+
+async function toggleRecording() {
+    if (recorderRecording) {
+        await stopRecorder();
+    } else {
+        await startRecorder();
+    }
+}
 
 async function startRecorder() {
     const response = await fetch("/api/recorder/start", { method: "POST" });
