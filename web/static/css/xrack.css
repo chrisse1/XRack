@@ -6,7 +6,7 @@ body {
 
 }
 
-/* Header: Logo + Version links, Geräteauswahl rechts */
+/* Header: Logo + Version */
 
 .header-logo {
     height: 40px;
@@ -14,20 +14,9 @@ body {
     object-fit: contain;
 }
 
-.header-audio {
-    flex: 0 1 auto;
-    max-width: 280px;
-    min-width: 0;
-}
-
 @media (max-width: 575.98px) {
     .header-logo {
         height: 32px;
-    }
-
-    .header-audio {
-        max-width: none;
-        flex-basis: 100%;
     }
 }
 

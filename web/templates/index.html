@@ -5,6 +5,66 @@
 <div class="container py-4">
     {% include "components/header.html" %}
 
+    <div class="row g-4 mb-4">
+
+        <!-- Audio-Interface ------------------------------------------->
+
+        <div class="col-12">
+
+            {% set title %}
+            <i class="bi bi-hdd-stack me-2"></i>Audio-Interface
+            {% endset %}
+
+            {% set body %}
+            <div class="d-flex flex-wrap align-items-center gap-3">
+
+                <div class="d-flex align-items-center gap-2">
+                    <select
+                        id="audio-device-select"
+                        class="form-select form-select-sm w-auto">
+                    </select>
+
+                    <button
+                        id="audio-rescan"
+                        class="btn btn-outline-secondary btn-sm"
+                        title="Audiogeräte neu suchen">
+
+                        <i class="bi bi-arrow-clockwise"></i>
+
+                    </button>
+                </div>
+
+                <div class="text-nowrap">
+                    <span class="text-secondary small">Geöffnetes Gerät:</span>
+                    <strong id="audio-state" class="ms-1">
+                        {% if status.audio_connected %}
+                            🟢 {{ status.audio_device }}
+                        {% else %}
+                            🔴 {{ status.audio_device }}
+                        {% endif %}
+                    </strong>
+                </div>
+
+                <div class="text-nowrap text-secondary small" id="audio-info">
+                    {% if status.audio_connected %}
+                        {{ status.audio_channels }} Ch •
+                        {{ (status.audio_sample_rate / 1000)|int }} kHz •
+                        {{ status.audio_sample_bits }} Bit •
+                        {{ status.audio_formats | join(", ") }}
+                    {% else %}
+                        Audio Interface
+                    {% endif %}
+                </div>
+
+            </div>
+            {% endset %}
+
+            {% include "components/status_card.html" %}
+
+        </div>
+
+    </div>
+
     <div class="row g-4">
 
         <!-- Recorder ---------------------------------------------------->
