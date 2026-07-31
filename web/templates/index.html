@@ -17,26 +17,23 @@
             {% endset %}
 
             {% set body %}
-            <div class="d-flex justify-content-between align-items-center">
-              <div class="row align-items-center">
-                  <div class="col-auto">
-                      <span>
-                          Aufnahmekanäle:
-                      </span>
-                  </div>
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+              <div class="d-flex align-items-center gap-2">
+                  <span>
+                      Aufnahmekanäle:
+                  </span>
 
-                  <div class="col">
-                      <select
-                          id="record-channels"
-                          class="form-select form-select-sm">
-                      </select>
-                  </div>
+                  <select
+                      id="record-channels"
+                      class="form-select form-select-sm w-auto">
+                  </select>
               </div>
+
                 <div>
                     <span>Status</span>
                     <strong id="recorder-status" class="ms-2">bereit</strong>
                 </div>
-                
+
                 <div>
                     <span>Audio Core</span>
                     <strong id="engine-status" class="ms-2">
@@ -67,7 +64,7 @@
 
             <hr>
 
-            <div class="d-flex gap-2">
+            <div class="d-flex flex-column flex-sm-row gap-2">
               <button
                   id="btn-recorder-start"
                   class="btn btn-danger flex-fill"
@@ -85,7 +82,7 @@
                   <i class="bi bi-stop-circle me-2"></i>
                   Aufnahme stoppen
               </button>
-              
+
               <button
                   id="btn-recorder-play"
                   class="btn btn-success flex-fill"
@@ -96,7 +93,7 @@
                   Soundcheck
               </button>
             </div>
-            
+
             <hr>
 
             <div class="d-flex justify-content-between align-items-center" style="gap: 1rem;">
@@ -160,21 +157,18 @@
             {% endset %}
 
             {% set body %}
-            <div class="d-flex justify-content-between align-items-center">
-              <div class="row align-items-center">
-                  <div class="col-auto">
-                      <span>
-                          Wiedergabekanäle:
-                      </span>
-                  </div>
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+              <div class="d-flex align-items-center gap-2">
+                  <span>
+                      Wiedergabekanäle:
+                  </span>
 
-                  <div class="col">
-                      <select
-                          id="music-channels"
-                          class="form-select form-select-sm">
-                      </select>
-                  </div>
+                  <select
+                      id="music-channels"
+                      class="form-select form-select-sm w-auto">
+                  </select>
               </div>
+
                 <div>
                     <span>Status</span>
                     <strong id="player-status" class="ms-2">gestoppt</strong>
@@ -183,46 +177,54 @@
 
             <hr>
 
-            <div class="d-flex gap-2">
+            <div class="row row-cols-2 row-cols-sm-4 g-2">
+              <div class="col">
               <button
                   id="btn-music-browse"
-                  class="btn btn-primary flex-fill"
+                  class="btn btn-primary w-100 h-100"
                   data-bs-toggle="modal"
                   data-bs-target="#musicModal"
               >
                   <i class="bi bi-folder2-open me-2"></i>
                   Ordner öffnen
               </button>
+              </div>
 
+              <div class="col">
               <button
                   id="btn-music-pause"
-                  class="btn btn-outline-secondary flex-fill"
+                  class="btn btn-outline-secondary w-100 h-100"
                   onclick="toggleMusicPause()"
                   disabled
               >
                   <i class="bi bi-pause-circle me-2"></i>
                   Pause
               </button>
+              </div>
 
+              <div class="col">
               <button
                   id="btn-music-stop"
-                  class="btn btn-outline-danger flex-fill"
+                  class="btn btn-outline-danger w-100 h-100"
                   onclick="stopMusic()"
                   disabled
               >
                   <i class="bi bi-stop-circle me-2"></i>
                   Stop
               </button>
+              </div>
 
+              <div class="col">
               <button
                   id="btn-music-skip"
-                  class="btn btn-secondary flex-fill"
+                  class="btn btn-secondary w-100 h-100"
                   onclick="skipMusic()"
                   disabled
               >
                   <i class="bi bi-skip-end-circle me-2"></i>
                   Weiter
               </button>
+              </div>
             </div>
 
             <hr>

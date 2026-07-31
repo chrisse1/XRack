@@ -4,10 +4,24 @@
 
     <meta charset="utf-8">
 
-    <title>{{ title }}</title>
+    <title>{{ application.config.data.application.name }}</title>
 
     <meta name="viewport"
-          content="width=device-width, initial-scale=1">
+          content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+    <meta name="theme-color" content="#1d2125">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/static/img/icon.png">
+
+    <!-- Safari: "Zum Home-Bildschirm hinzufügen" -->
+    <link rel="apple-touch-icon" href="/static/img/icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="XRack">
+
+    <!-- PWA-Manifest (Android/Chrome "Installieren") -->
+    <link rel="manifest" href="/static/manifest.json">
 
     <link rel="stylesheet"
       href="/static/css/bootstrap.min.css">
@@ -59,10 +73,10 @@
 
             </div>
 
-            <div class="modal-footer">
+            <div class="modal-footer flex-column flex-sm-row">
                 <button
                     id="deleteSelectedButton"
-                    class="btn btn-danger"
+                    class="btn btn-danger modal-footer-btn"
                     disabled
                 >
                     <i class="bi bi-trash"></i>
@@ -70,7 +84,7 @@
                 </button>
 
                 <button
-                    class="btn btn-secondary"
+                    class="btn btn-secondary modal-footer-btn"
                     data-bs-dismiss="modal"
                 >
                     Schließen

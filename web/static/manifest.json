@@ -1,0 +1,17 @@
+{
+    "name": "XRack",
+    "short_name": "XRack",
+    "start_url": "/",
+    "display": "standalone",
+    "orientation": "any",
+    "background_color": "#1d2125",
+    "theme_color": "#1d2125",
+    "icons": [
+        {
+            "src": "/static/img/icon.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}
