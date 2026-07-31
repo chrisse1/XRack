@@ -48,9 +48,25 @@
                     </strong>
                 </div>
             </div>
-            
+
             <hr>
-            
+
+            <div class="d-grid mb-2">
+              <button
+                  id="btn-recorder-monitor"
+                  class="btn btn-outline-info"
+                  onclick="toggleLevelCheck()"
+              >
+                  <i class="bi bi-soundwave me-2"></i>
+                  Pegel testen
+              </button>
+            </div>
+
+            <div id="level-meters" class="mb-2" style="max-height: 220px; overflow-y: auto;">
+            </div>
+
+            <hr>
+
             <div class="d-flex gap-2">
               <button
                   id="btn-recorder-start"

@@ -12,10 +12,13 @@ let musicPaused = false;
 let musicCurrentPath = "";
 let musicSeekDragging = false;
 
-// Gerät/Kanäle dürfen während keiner laufenden Aufnahme oder
-// Wiedergabe (Soundcheck oder Musik) geändert werden.
+let recorderMonitoring = false;
+
+// Gerät/Kanäle dürfen während keiner laufenden Aufnahme,
+// Pegelprüfung oder Wiedergabe (Soundcheck oder Musik) geändert
+// werden.
 function isAudioBusy(data) {
-    return data.recording || data.playback_active || data.music_playing;
+    return data.recording || data.recorder_monitoring || data.playback_active || data.music_playing;
 }
 
 // ============================================================
@@ -78,6 +81,7 @@ function updateAudioDeviceSelectState(data) {
 
 function updateRecorder(data) {
     playbackActive = data.playback_active;
+    recorderMonitoring = data.recorder_monitoring;
 
     updateRecorderStatus(data);
     updateAudioCoreStatus(data);
@@ -85,6 +89,7 @@ function updateRecorder(data) {
     updateRecordChannels(data);
     updateRecordingList(data.recordings);
     updateSoundcheckButton(data);
+    updateLevelCheckButton(data);
 }
 
 function updateRecorderStatus(data) {
@@ -342,6 +347,106 @@ async function stopSoundcheck() {
     const result = await response.json();
     console.log(result);
     await refreshDashboard();
+}
+
+// ============================================================
+// 7c. PEGELANZEIGE (Level Meter)
+// ============================================================
+
+function updateLevelCheckButton(data) {
+    const button = document.getElementById("btn-recorder-monitor");
+    if (!button) return;
+
+    if (data.recording) {
+        button.innerHTML = `<i class="bi bi-soundwave me-2"></i>Pegel (läuft mit der Aufnahme)`;
+        button.classList.remove("btn-outline-info");
+        button.classList.add("btn-info");
+        button.disabled = true;
+    } else if (data.recorder_monitoring) {
+        button.innerHTML = `<i class="bi bi-soundwave me-2"></i>Pegel testen (Stop)`;
+        button.classList.remove("btn-outline-info");
+        button.classList.add("btn-info");
+        button.disabled = false;
+    } else {
+        button.innerHTML = `<i class="bi bi-soundwave me-2"></i>Pegel testen`;
+        button.classList.remove("btn-info");
+        button.classList.add("btn-outline-info");
+        button.disabled = false;
+    }
+}
+
+async function toggleLevelCheck() {
+    if (recorderMonitoring) {
+        await stopLevelCheck();
+    } else {
+        await startLevelCheck();
+    }
+}
+
+async function startLevelCheck() {
+    const response = await fetch("/api/recorder/monitor/start", { method: "POST" });
+    const result = await response.json();
+    console.log(result);
+    await refreshDashboard();
+}
+
+async function stopLevelCheck() {
+    const response = await fetch("/api/recorder/monitor/stop", { method: "POST" });
+    const result = await response.json();
+    console.log(result);
+    await refreshDashboard();
+}
+
+function renderLevelMeters(levels) {
+    const container = document.getElementById("level-meters");
+    if (!container) return;
+
+    if (!levels || levels.length === 0) {
+        container.innerHTML = `<div class="text-muted text-center py-2"><small>Keine Pegel - "Pegel testen" oder Aufnahme starten.</small></div>`;
+        return;
+    }
+
+    if (container.children.length !== levels.length) {
+        container.innerHTML = "";
+
+        levels.forEach((_, index) => {
+            const row = document.createElement("div");
+            row.className = "d-flex align-items-center mb-1";
+            row.style.gap = "0.5rem";
+            row.innerHTML = `
+                <small style="width: 3rem;">Ch ${index + 1}</small>
+                <div class="progress flex-fill" style="height: 10px;">
+                    <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                </div>
+            `;
+            container.appendChild(row);
+        });
+    }
+
+    levels.forEach((level, index) => {
+        const bar = container.children[index].querySelector(".progress-bar");
+        const percent = Math.min(100, Math.max(0, level * 100));
+        bar.style.width = percent + "%";
+
+        bar.classList.remove("bg-success", "bg-warning", "bg-danger");
+        if (level >= 0.95) {
+            bar.classList.add("bg-danger");
+        } else if (level >= 0.7) {
+            bar.classList.add("bg-warning");
+        } else {
+            bar.classList.add("bg-success");
+        }
+    });
+}
+
+async function pollLevels() {
+    try {
+        const response = await fetch("/api/recorder/levels");
+        const data = await response.json();
+        renderLevelMeters(data.monitoring ? data.levels : []);
+    } catch (error) {
+        console.error("Fehler beim Abrufen der Pegel:", error);
+    }
 }
 
 // ============================================================
@@ -1040,3 +1145,4 @@ async function initializeDashboard() {
 
 initializeDashboard();
 setInterval(refreshDashboard, 1000);
+setInterval(pollLevels, 150);

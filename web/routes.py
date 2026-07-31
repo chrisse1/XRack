@@ -136,6 +136,41 @@ async def recorder_channels(
         "success": success
     }
 
+
+@router.post("/api/recorder/monitor/start")
+async def recorder_monitor_start(request: Request):
+
+    application = request.app.state.application
+
+    success = application.start_level_check()
+
+    return {
+        "success": success
+    }
+
+
+@router.post("/api/recorder/monitor/stop")
+async def recorder_monitor_stop(request: Request):
+
+    application = request.app.state.application
+
+    application.stop_level_check()
+
+    return {
+        "success": True
+    }
+
+
+@router.get("/api/recorder/levels")
+async def recorder_levels(request: Request):
+
+    application = request.app.state.application
+
+    return {
+        "monitoring": application.recorder.monitoring,
+        "levels": application.recorder.levels,
+    }
+
 @router.post("/api/recorder/soundcheck/start")
 async def soundcheck_start(
     selection: SoundcheckSelection,

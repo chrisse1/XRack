@@ -140,11 +140,21 @@ class Application:
             self.status.recorder = RecorderState.RECORDING
         elif self.player.playing:
             self.status.recorder = RecorderState.PLAYBACK
+        elif self.recorder.monitoring:
+            self.status.recorder = RecorderState.MONITORING
         else:
             self.status.recorder = RecorderState.IDLE
 
         self.status.recording = (
             self.recorder.recording
+        )
+
+        self.status.recorder_monitoring = (
+            self.recorder.monitoring
+        )
+
+        self.status.recorder_levels = (
+            self.recorder.levels
         )
 
         #
@@ -457,6 +467,20 @@ class Application:
         return self.music_library.delete_file(
             relative_path
         )
+
+    def start_level_check(self) -> bool:
+        """
+        Startet die reine Pegelprüfung (ohne aufzuzeichnen).
+        """
+
+        return self.recorder.start_monitoring()
+
+    def stop_level_check(self) -> None:
+        """
+        Stoppt die reine Pegelprüfung.
+        """
+
+        self.recorder.stop_monitoring()
 
     def shutdown_system(self) -> bool:
         """

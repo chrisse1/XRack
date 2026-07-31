@@ -13,6 +13,7 @@ class RecorderState(str, Enum):
     IDLE = "bereit"
     RECORDING = "nimmt auf"
     PLAYBACK = "Wiedergabe"
+    MONITORING = "Pegel testen"
 
 
 class PlayerState(str, Enum):
@@ -54,6 +55,8 @@ class SystemStatus(BaseModel):
     duration: float = 0.0
     recordings: list[str] = []
     recording: bool = False
+    recorder_monitoring: bool = False
+    recorder_levels: list[float] = []
 
     playback_active: bool = False
     playback_filename: str = ""
