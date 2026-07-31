@@ -103,6 +103,8 @@ class AudioCore:
         ):
             return False
 
+        self.device = device
+
         self.logger.info(
             "Audio Core geöffnet: %s | %s | %d Kanäle | %d Hz",
             self.name,
@@ -130,8 +132,10 @@ class AudioCore:
         """
         self.backend.close()
 
+        self.device = None
+
         self.logger.info("Audio Core geschlossen.")
-        
+
         self.state = AudioState.CLOSED
         
         self.health = AudioHealth.NOT_READY
