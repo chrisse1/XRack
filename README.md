@@ -1,11 +1,101 @@
 # XRack
 
+*[English](#english) | [Deutsch](#deutsch)*
+
+<a id="english"></a>
+
+## English
+
+XRack is a web-based multichannel recording and playback system for
+digital mixing consoles. It runs on a Raspberry Pi and is fully
+controlled through a web interface - no screen or keyboard needed on
+the Pi itself.
+
+### Features
+
+- **Multichannel recording** straight from the mixing console to
+  Wave64 (.w64), with a freely selectable channel count
+- **Virtual soundcheck**: recordings are played back on the same
+  channels they were recorded on
+- **Music player**: shuffle playback with looping for a whole folder
+  (e.g. walk-in music) or single files, each on a freely selectable
+  channel pair
+- **Level meter** to check input levels before recording
+- **Web interface** (Bootstrap) in German or English, installable as a
+  PWA ("Add to Home Screen" on iPad/phone)
+- **Installable via script**, including automatic startup on boot via
+  systemd
+
+### Requirements
+
+XRack always reads and writes at the native channel count of the
+connected audio interface (Behringer X-series & compatible digital
+mixing consoles don't support a reduced channel count) - selecting
+individual channels happens in software.
+
+Tested with:
+
+- Behringer XAir 18 on a Raspberry Pi 5, Debian Trixie
+
+A test with the Behringer X32 is still pending.
+
+### Installation (Raspberry Pi / Debian)
+
+```bash
+git clone <repo-url> XRack
+cd XRack
+./install.sh
+```
+
+`install.sh` also installs `ffmpeg` (for the music player, decodes
+MP3/FLAC/... to raw data) and `alsa-utils` (for device detection) via
+`apt`, sets up a systemd service that starts XRack automatically on
+boot, and grants the service user a tightly scoped sudo permission to
+shut down the Pi via the web interface (nothing else - XRack does not
+run as root).
+
+Along the way it interactively asks for the preferred language of the
+web interface (German or English) and the desired port (default:
+8080), and saves both to `config/local.yaml`. Both can be changed
+later at any time by editing that file and restarting the service
+(`sudo systemctl restart xrack`).
+
+After installation the web interface is reachable at
+`http://<pi-ip>:<chosen-port>` (default: port 8080).
+
+Start/check manually:
+
+```bash
+sudo systemctl start xrack     # start the service now
+sudo systemctl status xrack    # check status
+journalctl -u xrack -f         # view live logs
+```
+
+For manual development/troubleshooting outside the service (e.g. as
+used so far in this project):
+
+```bash
+sudo systemctl stop xrack      # stop the service so port 8080 is free
+source .venv/bin/activate
+python main.py
+```
+
+### License
+
+XRack is licensed under the [GNU General Public License v3.0](LICENSE).
+
+---
+
+<a id="deutsch"></a>
+
+## Deutsch
+
 XRack ist ein webbasiertes Mehrkanal-Aufnahme- und Playback-System für
 digitale Mischpulte. Es läuft auf einem Raspberry Pi und wird komplett
 über ein Webinterface bedient - kein Bildschirm oder Tastatur am Pi
 nötig.
 
-## Funktionen
+### Funktionen
 
 - **Mehrkanalaufnahme** direkt vom Mischpult in Wave64 (.w64), mit frei
   wählbarer Kanalzahl
@@ -20,7 +110,7 @@ nötig.
 - **Installierbar per Script**, inkl. automatischem Start beim Booten
   über systemd
 
-## Voraussetzungen
+### Voraussetzungen
 
 XRack liest und schreibt immer mit der nativen Kanalzahl des
 angeschlossenen Audio-Interfaces (Behringer X-Serie & kompatible
@@ -33,7 +123,7 @@ Getestet mit:
 
 Ein Test mit dem Behringer X32 steht noch aus.
 
-## Installation (Raspberry Pi / Debian)
+### Installation (Raspberry Pi / Debian)
 
 ```bash
 git clone <repo-url> XRack
@@ -75,6 +165,6 @@ source .venv/bin/activate
 python main.py
 ```
 
-## Lizenz
+### Lizenz
 
 XRack steht unter der [GNU General Public License v3.0](LICENSE).
