@@ -996,6 +996,39 @@ async function uploadMusicFiles(event) {
 }
 
 // ============================================================
+// 11c. SYSTEM
+// ============================================================
+
+async function shutdownSystem() {
+    if (!confirm(
+        "Raspberry Pi wirklich herunterfahren?\n\n" +
+        "Laufende Aufnahmen/Wiedergaben werden dabei beendet, und " +
+        "das Webinterface ist danach nicht mehr erreichbar, bis " +
+        "der Pi manuell wieder eingeschaltet wird."
+    )) {
+        return;
+    }
+
+    const button = document.getElementById("btn-shutdown");
+    if (button) {
+        button.disabled = true;
+        button.innerHTML = `<i class="bi bi-power me-2"></i>Fährt herunter...`;
+    }
+
+    const response = await fetch("/api/system/shutdown", { method: "POST" });
+    const result = await response.json();
+    console.log(result);
+
+    if (!result.success) {
+        alert("Herunterfahren fehlgeschlagen. Ist die sudo-Berechtigung eingerichtet (install.sh)?");
+        if (button) {
+            button.disabled = false;
+            button.innerHTML = `<i class="bi bi-power me-2"></i>Raspberry Pi herunterfahren`;
+        }
+    }
+}
+
+// ============================================================
 // 12. INITIALIZATION
 // ============================================================
 

@@ -14,6 +14,7 @@ from recorder.recorder import Recorder
 from player.player import Player
 from player.music_library import MusicLibrary
 from player.music_player import MusicPlayer
+from core.system_control import SystemControl
 import platform
 import psutil
 import time
@@ -58,6 +59,8 @@ class Application:
             AudioPlaybackBackend(),
             self.music_library,
         )
+
+        self.system_control = SystemControl()
 
         devices = self.audio_manager.get_devices()
 
@@ -454,3 +457,10 @@ class Application:
         return self.music_library.delete_file(
             relative_path
         )
+
+    def shutdown_system(self) -> bool:
+        """
+        Fährt den Raspberry Pi herunter.
+        """
+
+        return self.system_control.shutdown()

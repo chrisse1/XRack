@@ -324,6 +324,18 @@ async def music_delete_file(
     }
 
 
+@router.post("/api/system/shutdown")
+async def system_shutdown(request: Request):
+
+    application = request.app.state.application
+
+    success = application.shutdown_system()
+
+    return {
+        "success": success
+    }
+
+
 @router.post("/api/music/upload")
 async def music_upload(
     request: Request,
