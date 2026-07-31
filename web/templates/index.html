@@ -17,7 +17,8 @@
             {% endset %}
 
             {% set header_right %}
-            <strong id="recorder-status" class="fw-normal small">bereit</strong>
+            <span class="fw-normal small">Status:</span>
+            <strong id="recorder-status" class="small">bereit</strong>
             {% endset %}
 
             {% set body %}
@@ -47,24 +48,24 @@
 
             <hr>
 
-            <div class="d-flex flex-column flex-sm-row gap-2">
+            <div class="d-flex justify-content-around gap-2">
               <button
                   id="btn-recorder-toggle"
-                  class="btn btn-danger flex-fill"
+                  class="btn btn-danger player-transport-btn"
                   onclick="toggleRecording()"
               >
-                  <i class="bi bi-record-circle me-2"></i>
-                  Aufnahme starten
+                  <i class="bi bi-record-circle fs-3"></i>
+                  <small>Aufnahme starten</small>
               </button>
 
               <button
                   id="btn-recorder-play"
-                  class="btn btn-success flex-fill"
+                  class="btn btn-success player-transport-btn"
                   onclick="toggleSoundcheck()"
                   disabled
               >
-                  <i class="bi bi-play-circle me-2"></i>
-                  Soundcheck
+                  <i class="bi bi-play-circle fs-3"></i>
+                  <small>Soundcheck</small>
               </button>
             </div>
 
@@ -147,7 +148,8 @@
             {% endset %}
 
             {% set header_right %}
-            <strong id="player-status" class="fw-normal small">gestoppt</strong>
+            <span class="fw-normal small">Status:</span>
+            <strong id="player-status" class="small">gestoppt</strong>
             {% endset %}
 
             {% set body %}

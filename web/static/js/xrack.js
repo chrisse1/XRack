@@ -101,11 +101,11 @@ function updateRecorderToggleButton(data) {
     if (!button) return;
 
     if (data.recording) {
-        button.innerHTML = `<i class="bi bi-stop-circle me-2"></i>Aufnahme stoppen`;
+        button.innerHTML = `<i class="bi bi-stop-circle fs-3"></i><small>Aufnahme stoppen</small>`;
         button.classList.remove("btn-danger");
         button.classList.add("btn-secondary");
     } else {
-        button.innerHTML = `<i class="bi bi-record-circle me-2"></i>Aufnahme starten`;
+        button.innerHTML = `<i class="bi bi-record-circle fs-3"></i><small>Aufnahme starten</small>`;
         button.classList.remove("btn-secondary");
         button.classList.add("btn-danger");
     }
@@ -341,12 +341,12 @@ function updateSoundcheckButton(data) {
     if (!button) return;
 
     if (data.playback_active) {
-        button.innerHTML = `<i class="bi bi-stop-circle me-2"></i>Stop`;
+        button.innerHTML = `<i class="bi bi-stop-circle fs-3"></i><small>Stop</small>`;
         button.classList.remove("btn-success");
         button.classList.add("btn-warning");
         button.disabled = false;
     } else {
-        button.innerHTML = `<i class="bi bi-play-circle me-2"></i>Soundcheck`;
+        button.innerHTML = `<i class="bi bi-play-circle fs-3"></i><small>Soundcheck</small>`;
         button.classList.remove("btn-warning");
         button.classList.add("btn-success");
         button.disabled = !selectedRecording || data.recording || data.music_playing;

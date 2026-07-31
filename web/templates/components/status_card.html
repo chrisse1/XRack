@@ -1,9 +1,9 @@
 <div class="card shadow-sm h-100">
 
-    <div class="card-header fw-semibold d-flex justify-content-between align-items-center gap-2">
-        <div>{{ title }}</div>
+    <div class="card-header fw-semibold d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div class="text-nowrap">{{ title }}</div>
         {% if header_right is defined %}
-        <div>{{ header_right | safe }}</div>
+        <div class="text-nowrap">{{ header_right | safe }}</div>
         {% endif %}
     </div>
 
