@@ -563,6 +563,15 @@ class Application:
             relative_path
         )
 
+    def delete_music_files(self, relative_paths: list[str]) -> list[str]:
+        """
+        Löscht mehrere Musikdateien auf einmal.
+        """
+
+        return self.music_library.delete_files(
+            relative_paths
+        )
+
     def start_level_check(self) -> bool:
         """
         Startet die reine Pegelprüfung (ohne aufzuzeichnen).

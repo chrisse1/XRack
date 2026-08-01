@@ -11,6 +11,7 @@ let musicPlaying = false;
 let musicPaused = false;
 let musicCurrentPath = "";
 let musicSeekDragging = false;
+const selectedMusicFiles = new Set();
 
 let recorderMonitoring = false;
 
@@ -956,10 +957,19 @@ async function skipMusic() {
 // ------------------------------------------------------------
 
 const musicModal = document.getElementById("musicModal");
-musicModal.addEventListener("show.bs.modal", () => loadMusicBrowse(""));
+musicModal.addEventListener("show.bs.modal", () => {
+    selectedMusicFiles.clear();
+    loadMusicBrowse("");
+});
 
 document.getElementById("btn-play-current-folder")
     .addEventListener("click", () => playMusicFolder(musicCurrentPath));
+
+document.getElementById("btn-music-select-all")
+    .addEventListener("click", selectAllMusicFiles);
+
+document.getElementById("deleteSelectedMusicButton")
+    .addEventListener("click", deleteSelectedMusicFiles);
 
 async function loadMusicBrowse(path) {
     try {
@@ -971,10 +981,18 @@ async function loadMusicBrowse(path) {
 
         const listing = await response.json();
 
+        // Auswahl bezieht sich immer nur auf den gerade angezeigten
+        // Ordner - beim Navigieren verschwinden die Checkboxen ja
+        // ohnehin aus dem DOM.
+        if (listing.path !== musicCurrentPath) {
+            selectedMusicFiles.clear();
+        }
+
         musicCurrentPath = listing.path;
 
         renderMusicBreadcrumb(listing.path);
         renderMusicList(listing);
+        updateDeleteSelectedMusicButton();
     } catch (error) {
         console.error("Fehler beim Laden der Musikbibliothek:", error);
     }
@@ -1062,7 +1080,15 @@ function renderMusicList(listing) {
         const item = document.createElement("div");
         item.className = "list-group-item d-flex justify-content-between align-items-center";
         item.innerHTML = `
-            <span><i class="bi bi-file-earmark-music me-2"></i>${file}</span>
+            <div class="d-flex align-items-center gap-2">
+                <input
+                    class="form-check-input mt-0 music-file-checkbox"
+                    type="checkbox"
+                    data-path="${filePath}"
+                    ${selectedMusicFiles.has(filePath) ? "checked" : ""}
+                >
+                <span><i class="bi bi-file-earmark-music me-2"></i>${file}</span>
+            </div>
             <div class="btn-group btn-group-sm">
                 <button class="btn btn-outline-primary btn-sm" title="${I18N.title_play_file}">
                     <i class="bi bi-play-fill"></i>
@@ -1073,12 +1099,67 @@ function renderMusicList(listing) {
             </div>
         `;
 
+        item.querySelector(".music-file-checkbox").onchange = (event) => {
+            toggleMusicFileSelection(filePath, event.target.checked);
+        };
+
         const buttons = item.querySelectorAll("button");
         buttons[0].onclick = () => playMusicFile(filePath);
         buttons[1].onclick = () => deleteMusicFile(filePath, file);
 
         container.appendChild(item);
     });
+}
+
+function toggleMusicFileSelection(path, selected) {
+    if (selected) {
+        selectedMusicFiles.add(path);
+    } else {
+        selectedMusicFiles.delete(path);
+    }
+    updateDeleteSelectedMusicButton();
+}
+
+function updateDeleteSelectedMusicButton() {
+    const button = document.getElementById("deleteSelectedMusicButton");
+    if (!button) return;
+
+    button.disabled = selectedMusicFiles.size === 0;
+    button.innerHTML = `
+        <i class="bi bi-trash"></i>
+        ${I18N.btn_delete_selected} (${selectedMusicFiles.size})
+    `;
+}
+
+function selectAllMusicFiles() {
+    document.querySelectorAll("#musicList .music-file-checkbox").forEach((checkbox) => {
+        checkbox.checked = true;
+        selectedMusicFiles.add(checkbox.dataset.path);
+    });
+
+    updateDeleteSelectedMusicButton();
+}
+
+async function deleteSelectedMusicFiles() {
+    if (selectedMusicFiles.size === 0) return;
+
+    if (!confirm(I18N.confirm_delete_music_multi.replace("{count}", selectedMusicFiles.size))) {
+        return;
+    }
+
+    const response = await fetch("/api/music/delete-multi", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paths: Array.from(selectedMusicFiles) })
+    });
+
+    if (!response.ok) {
+        alert(I18N.alert_music_files_delete_failed);
+        return;
+    }
+
+    selectedMusicFiles.clear();
+    await loadMusicBrowse(musicCurrentPath);
 }
 
 async function playMusicFolder(path) {

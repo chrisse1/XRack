@@ -156,6 +156,14 @@
                             hidden
                         >
                     </label>
+
+                    <button
+                        id="btn-music-select-all"
+                        class="btn btn-outline-secondary btn-sm"
+                    >
+                        <i class="bi bi-check2-square me-2"></i>
+                        {{ t.btn_select_all }}
+                    </button>
                 </div>
 
                 <div id="uploadProgressWrapper" class="mb-3 d-none">
@@ -181,9 +189,18 @@
 
             </div>
 
-            <div class="modal-footer">
+            <div class="modal-footer flex-column flex-sm-row">
                 <button
-                    class="btn btn-secondary"
+                    id="deleteSelectedMusicButton"
+                    class="btn btn-danger modal-footer-btn"
+                    disabled
+                >
+                    <i class="bi bi-trash"></i>
+                    {{ t.btn_delete_selected }} (0)
+                </button>
+
+                <button
+                    class="btn btn-secondary modal-footer-btn"
                     data-bs-dismiss="modal"
                 >
                     {{ t.btn_close }}

@@ -173,6 +173,23 @@ class MusicLibrary:
 
         return True
 
+    def delete_files(self, relative_paths: list[str]) -> list[str]:
+        """
+        Löscht mehrere Musikdateien auf einmal. Liefert die relativen
+        Pfade der tatsächlich gelöschten Dateien - nicht existierende
+        oder außerhalb der Bibliothek liegende Pfade werden dabei
+        einfach übersprungen, ohne die übrigen zu blockieren.
+        """
+
+        deleted = []
+
+        for relative_path in relative_paths:
+
+            if self.delete_file(relative_path):
+                deleted.append(relative_path)
+
+        return deleted
+
     def find_audio_files(self, folder: Path) -> list[Path]:
         """
         Findet rekursiv alle Musikdateien in einem Ordner.

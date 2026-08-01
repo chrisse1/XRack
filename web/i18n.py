@@ -112,6 +112,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Es wurden keine Dateien hochgeladen (unterstütztes Format?)."
         ),
         "alert_upload_failed": "Upload fehlgeschlagen.",
+        "btn_select_all": "Alle auswählen",
+        "confirm_delete_music_multi": "{count} Datei(en) wirklich löschen?",
+        "alert_music_files_delete_failed": "Dateien konnten nicht gelöscht werden.",
 
         # Einstellungen-Modal
         "settings_icon_title": "Einstellungen",
@@ -277,6 +280,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "No files were uploaded (unsupported format?)."
         ),
         "alert_upload_failed": "Upload failed.",
+        "btn_select_all": "Select all",
+        "confirm_delete_music_multi": "Really delete {count} file(s)?",
+        "alert_music_files_delete_failed": "The files could not be deleted.",
 
         # Settings modal
         "settings_icon_title": "Settings",

@@ -45,6 +45,9 @@ class MusicFolderCreate(BaseModel):
 class MusicFileDelete(BaseModel):
     path: str
 
+class MusicFilesDelete(BaseModel):
+    paths: list[str]
+
 class MusicChannelSelection(BaseModel):
     start_channel: int
 
@@ -404,6 +407,24 @@ async def music_delete_file(
 
     return {
         "success": success
+    }
+
+
+@router.post("/api/music/delete-multi")
+async def music_delete_files(
+    selection: MusicFilesDelete,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    deleted = application.delete_music_files(
+        selection.paths
+    )
+
+    return {
+        "deleted": deleted,
+        "count": len(deleted),
     }
 
 
