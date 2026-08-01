@@ -32,4 +32,12 @@ nmcli connection modify "XRack-AP" \
     wifi-sec.psk-flags 0 \
     connection.autoconnect yes
 
+# Läuft der Access Point bereits, übernimmt ein reines "connection
+# up" auf der schon aktiven Verbindung SSID/Passwort-Änderungen
+# nicht zuverlässig live (der Funkbetrieb läuft mit den alten Werten
+# weiter, das Profil zeigt aber schon die neuen - "falsches
+# Passwort" trotz korrektem, gespeichertem Passwort). Deshalb hier
+# ausdrücklich erst herunter-, dann wieder hochfahren.
+nmcli connection down "XRack-AP" >/dev/null 2>&1 || true
+
 nmcli connection up "XRack-AP" ifname "${IFACE}"

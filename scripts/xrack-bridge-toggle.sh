@@ -48,6 +48,12 @@ if [ "${MODE}" = "on" ]; then
 
     nmcli connection up "XRack-Bridge"
     nmcli connection up "XRack-Bridge-eth0" ifname eth0
+
+    # War der Access Point bereits aktiv (Standalone-Betrieb), reicht
+    # ein reines "connection up" nach dem Umhängen auf die Bridge oft
+    # nicht - erst herunterfahren erzwingt einen sauberen Neustart mit
+    # der neuen master/slave-Konfiguration.
+    nmcli connection down "XRack-AP" >/dev/null 2>&1 || true
     nmcli connection up "XRack-AP" ifname "${AP_IFACE}"
 
 elif [ "${MODE}" = "off" ]; then
@@ -63,6 +69,7 @@ elif [ "${MODE}" = "off" ]; then
     nmcli connection modify "XRack-Bridge-eth0" connection.autoconnect no
     nmcli connection modify "XRack-Bridge" connection.autoconnect no
 
+    nmcli connection down "XRack-AP" >/dev/null 2>&1 || true
     nmcli connection up "XRack-AP" ifname "${AP_IFACE}"
 
 else

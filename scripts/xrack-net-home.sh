@@ -31,4 +31,9 @@ nmcli connection modify "XRack-Home" \
     wifi-sec.psk-flags 0 \
     connection.autoconnect yes
 
+# Ist die Verbindung bereits aktiv, übernimmt ein reines "connection
+# up" SSID/Passwort-Änderungen nicht zuverlässig live - deshalb hier
+# ausdrücklich erst trennen, dann mit den neuen Werten neu verbinden.
+nmcli connection down "XRack-Home" >/dev/null 2>&1 || true
+
 nmcli connection up "XRack-Home" ifname "${IFACE}"
