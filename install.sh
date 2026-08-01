@@ -33,14 +33,17 @@ pip install -r requirements.txt
 deactivate
 
 #
-# Sprache und Port abfragen (config/local.yaml).
+# Sprache, Port und Hostname abfragen (config/local.yaml + System-
+# Hostname).
 #
 # Läuft das Skript nicht interaktiv (z.B. per "curl | bash"), werden
-# stillschweigend die Standardwerte (Deutsch, Port 8080) verwendet.
+# stillschweigend die Standardwerte (Deutsch, Port 8080, Hostname
+# "xrack") verwendet.
 #
 
 XRACK_LANGUAGE="de"
 XRACK_PORT="8080"
+XRACK_HOSTNAME="xrack"
 
 if [ -t 0 ]; then
 
@@ -58,6 +61,17 @@ if [ -t 0 ]; then
         XRACK_PORT="${XRACK_PORT_INPUT}"
     fi
 
+    echo ""
+    read -r -p "Hostname (Standard: xrack, erreichbar als http://<hostname>.local): " XRACK_HOSTNAME_INPUT || true
+
+    if [ -n "${XRACK_HOSTNAME_INPUT}" ]; then
+        if [[ "${XRACK_HOSTNAME_INPUT}" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]]; then
+            XRACK_HOSTNAME="${XRACK_HOSTNAME_INPUT}"
+        else
+            echo "Ungültiger Hostname (nur Buchstaben, Ziffern, Bindestriche) - verwende 'xrack'."
+        fi
+    fi
+
 fi
 
 echo "XRack: Konfiguration wird geschrieben (Sprache: ${XRACK_LANGUAGE}, Port: ${XRACK_PORT})..."
@@ -69,6 +83,44 @@ application:
 server:
   port: ${XRACK_PORT}
 EOF
+
+#
+# Hostname setzen, damit der Pi im lokalen Netz per mDNS (Avahi)
+# unter http://<hostname>.local erreichbar ist. Avahi kündigt den
+# aktuellen System-Hostnamen automatisch an - hier wird nur der
+# Hostname gesetzt und Avahi neu gestartet, damit er den neuen Namen
+# sofort übernimmt (ohne Reboot).
+#
+
+echo "XRack: Hostname wird gesetzt (${XRACK_HOSTNAME})..."
+
+sudo hostnamectl set-hostname "${XRACK_HOSTNAME}"
+
+if grep -q "^127.0.1.1" /etc/hosts; then
+    sudo sed -i "s/^127.0.1.1.*/127.0.1.1\t${XRACK_HOSTNAME}/" /etc/hosts
+else
+    echo -e "127.0.1.1\t${XRACK_HOSTNAME}" | sudo tee -a /etc/hosts > /dev/null
+fi
+
+if command -v avahi-daemon >/dev/null 2>&1; then
+    sudo systemctl enable avahi-daemon >/dev/null 2>&1 || true
+    sudo systemctl restart avahi-daemon
+else
+    echo "Hinweis: avahi-daemon nicht gefunden - '${XRACK_HOSTNAME}.local' wird im Netzwerk nicht auffindbar sein."
+fi
+
+#
+# Falls eine Firewall (ufw) aktiv ist, Freigaben für mDNS und das
+# Webinterface ergänzen. Auf einem frischen Raspberry Pi OS/Debian
+# ist standardmäßig keine Firewall aktiv - dieser Schritt greift nur,
+# falls der Nutzer selbst ufw eingerichtet hat.
+#
+
+if command -v ufw >/dev/null 2>&1 && sudo ufw status | grep -q "^Status: active"; then
+    echo "XRack: ufw ist aktiv - Firewall-Regeln werden ergänzt..."
+    sudo ufw allow 5353/udp comment 'XRack mDNS (Avahi)'
+    sudo ufw allow "${XRACK_PORT}/tcp" comment 'XRack Webinterface'
+fi
 
 #
 # sudo-Berechtigung für das Herunterfahren einrichten.
@@ -130,7 +182,8 @@ echo "Fertig."
 echo ""
 echo "XRack startet ab jetzt automatisch beim Booten (systemd-Dienst 'xrack')."
 echo ""
-echo "Webinterface:             http://<ip-des-pi>:${XRACK_PORT}"
+echo "Webinterface:             http://${XRACK_HOSTNAME}.local:${XRACK_PORT}"
+echo "                          (alternativ per IP: http://<ip-des-pi>:${XRACK_PORT})"
 echo "Jetzt manuell starten:    sudo systemctl start xrack"
 echo "Status ansehen:           sudo systemctl status xrack"
 echo "Live-Logs ansehen:        journalctl -u xrack -f"
@@ -140,3 +193,5 @@ echo "dann NICHT zusaetzlich manuell 'python main.py' starten."
 echo ""
 echo "Sprache/Port spaeter aendern: config/local.yaml bearbeiten und"
 echo "den Dienst neu starten (sudo systemctl restart xrack)."
+echo "Hostname spaeter aendern:     sudo hostnamectl set-hostname <name>"
+echo "                              und /etc/hosts entsprechend anpassen."

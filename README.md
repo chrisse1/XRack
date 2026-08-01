@@ -55,13 +55,18 @@ shut down the Pi via the web interface (nothing else - XRack does not
 run as root).
 
 Along the way it interactively asks for the preferred language of the
-web interface (German or English) and the desired port (default:
-8080), and saves both to `config/local.yaml`. Both can be changed
-later at any time by editing that file and restarting the service
+web interface (German or English), the desired port (default: 8080),
+and a hostname (default: `xrack`) - saving language and port to
+`config/local.yaml` and setting the hostname at the system level via
+`hostnamectl`. All three can be changed later: language/port by
+editing `config/local.yaml`, the hostname via `hostnamectl
+set-hostname <name>` - followed by a service restart
 (`sudo systemctl restart xrack`).
 
 After installation the web interface is reachable at
-`http://<pi-ip>:<chosen-port>` (default: port 8080).
+`http://<hostname>.local:<chosen-port>` (default:
+`http://xrack.local:8080`) via mDNS (Avahi), or by IP address as a
+fallback (`http://<pi-ip>:<chosen-port>`).
 
 Start/check manually:
 
@@ -140,13 +145,18 @@ Webinterface herunterfahren zu können (sonst nichts - XRack läuft
 nicht als root).
 
 Dabei fragt es interaktiv nach der bevorzugten Sprache des
-Webinterfaces (Deutsch oder Englisch) sowie dem gewünschten Port
-(Standard: 8080) und speichert beides in `config/local.yaml`. Beides
-lässt sich später jederzeit durch Bearbeiten dieser Datei und einen
-Neustart des Dienstes (`sudo systemctl restart xrack`) ändern.
+Webinterfaces (Deutsch oder Englisch), dem gewünschten Port (Standard:
+8080) sowie einem Hostnamen (Standard: `xrack`) - Sprache und Port
+werden in `config/local.yaml` gespeichert, der Hostname wird direkt
+auf Systemebene per `hostnamectl` gesetzt. Alle drei lassen sich
+später ändern: Sprache/Port durch Bearbeiten von `config/local.yaml`,
+der Hostname per `hostnamectl set-hostname <name>` - jeweils gefolgt
+von einem Neustart des Dienstes (`sudo systemctl restart xrack`).
 
-Nach der Installation ist das Webinterface unter
-`http://<ip-des-pi>:<gewählter-port>` erreichbar (Standard: Port 8080).
+Nach der Installation ist das Webinterface per mDNS (Avahi) unter
+`http://<hostname>.local:<gewählter-port>` erreichbar (Standard:
+`http://xrack.local:8080`), alternativ per IP-Adresse
+(`http://<ip-des-pi>:<gewählter-port>`).
 
 Manuell starten/prüfen:
 
