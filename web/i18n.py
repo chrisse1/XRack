@@ -149,6 +149,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "label_ssid": "Name (SSID)",
         "label_password": "Passwort",
+        "label_password_confirm": "Passwort wiederholen",
+        "title_toggle_password": "Passwort anzeigen/verbergen",
+        "alert_password_mismatch": "Die beiden Passwörter stimmen nicht überein.",
         "confirm_home_wifi_change": (
             "Heimnetz-WLAN wirklich ändern? Falls XRack aktuell darüber "
             "erreichbar ist, kann die Verbindung kurz unterbrochen werden."
@@ -305,6 +308,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "label_ssid": "Name (SSID)",
         "label_password": "Password",
+        "label_password_confirm": "Confirm password",
+        "title_toggle_password": "Show/hide password",
+        "alert_password_mismatch": "The two passwords do not match.",
         "confirm_home_wifi_change": (
             "Really change the home Wi-Fi? If XRack is currently reachable "
             "through it, the connection may briefly drop."

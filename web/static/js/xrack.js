@@ -1314,12 +1314,14 @@ function applyWlanSettings(wlan) {
     if (wlan.home_ssid) {
         document.getElementById("settings-home-ssid").value = wlan.home_ssid;
         document.getElementById("settings-home-password").value = "";
+        document.getElementById("settings-home-password-confirm").value = "";
     }
 
     toggleConfiguredSection("ap", wlan.ap_ssid);
     if (wlan.ap_ssid) {
         document.getElementById("settings-ap-ssid").value = wlan.ap_ssid;
         document.getElementById("settings-ap-password").value = "";
+        document.getElementById("settings-ap-password-confirm").value = "";
     }
 
     const bridgeNotConfigured = document.getElementById("settings-bridge-not-configured");
@@ -1419,20 +1421,51 @@ document.getElementById("btn-settings-home-save").addEventListener("click", save
 document.getElementById("btn-settings-ap-save").addEventListener("click", saveApWifi);
 document.getElementById("settings-bridge-toggle").addEventListener("change", toggleBridge);
 
-async function saveHomeWifi() {
-    if (!confirm(I18N.confirm_home_wifi_change)) return;
+document.querySelectorAll(".settings-password-toggle").forEach((button) => {
+    button.addEventListener("click", () => togglePasswordVisibility(button));
+});
 
+function togglePasswordVisibility(button) {
+    const input = document.getElementById(button.dataset.target);
+    const icon = button.querySelector("i");
+
+    if (input.type === "password") {
+        input.type = "text";
+        icon.classList.remove("bi-eye");
+        icon.classList.add("bi-eye-slash");
+    } else {
+        input.type = "password";
+        icon.classList.remove("bi-eye-slash");
+        icon.classList.add("bi-eye");
+    }
+}
+
+async function saveHomeWifi() {
     const ssid = document.getElementById("settings-home-ssid").value;
     const password = document.getElementById("settings-home-password").value;
+    const passwordConfirm = document.getElementById("settings-home-password-confirm").value;
+
+    if (password !== passwordConfirm) {
+        alert(I18N.alert_password_mismatch);
+        return;
+    }
+
+    if (!confirm(I18N.confirm_home_wifi_change)) return;
 
     await submitWifiChange("/api/settings/wifi/home", ssid, password);
 }
 
 async function saveApWifi() {
-    if (!confirm(I18N.confirm_ap_wifi_change)) return;
-
     const ssid = document.getElementById("settings-ap-ssid").value;
     const password = document.getElementById("settings-ap-password").value;
+    const passwordConfirm = document.getElementById("settings-ap-password-confirm").value;
+
+    if (password !== passwordConfirm) {
+        alert(I18N.alert_password_mismatch);
+        return;
+    }
+
+    if (!confirm(I18N.confirm_ap_wifi_change)) return;
 
     await submitWifiChange("/api/settings/wifi/ap", ssid, password);
 }

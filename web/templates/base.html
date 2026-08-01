@@ -290,13 +290,40 @@
                                 placeholder="{{ t.label_ssid }}"
                                 maxlength="32"
                             >
-                            <input
-                                type="password"
-                                id="settings-home-password"
-                                class="form-control form-control-sm mb-2"
-                                placeholder="{{ t.label_password }}"
-                                maxlength="63"
-                            >
+                            <div class="input-group input-group-sm mb-2">
+                                <input
+                                    type="password"
+                                    id="settings-home-password"
+                                    class="form-control"
+                                    placeholder="{{ t.label_password }}"
+                                    maxlength="63"
+                                >
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-secondary settings-password-toggle"
+                                    data-target="settings-home-password"
+                                    title="{{ t.title_toggle_password }}"
+                                >
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                            <div class="input-group input-group-sm mb-2">
+                                <input
+                                    type="password"
+                                    id="settings-home-password-confirm"
+                                    class="form-control"
+                                    placeholder="{{ t.label_password_confirm }}"
+                                    maxlength="63"
+                                >
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-secondary settings-password-toggle"
+                                    data-target="settings-home-password-confirm"
+                                    title="{{ t.title_toggle_password }}"
+                                >
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
                             <button id="btn-settings-home-save" class="btn btn-primary btn-sm">
                                 {{ t.btn_save }}
                             </button>
@@ -323,13 +350,40 @@
                                 placeholder="{{ t.label_ssid }}"
                                 maxlength="32"
                             >
-                            <input
-                                type="password"
-                                id="settings-ap-password"
-                                class="form-control form-control-sm mb-2"
-                                placeholder="{{ t.label_password }}"
-                                maxlength="63"
-                            >
+                            <div class="input-group input-group-sm mb-2">
+                                <input
+                                    type="password"
+                                    id="settings-ap-password"
+                                    class="form-control"
+                                    placeholder="{{ t.label_password }}"
+                                    maxlength="63"
+                                >
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-secondary settings-password-toggle"
+                                    data-target="settings-ap-password"
+                                    title="{{ t.title_toggle_password }}"
+                                >
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                            <div class="input-group input-group-sm mb-2">
+                                <input
+                                    type="password"
+                                    id="settings-ap-password-confirm"
+                                    class="form-control"
+                                    placeholder="{{ t.label_password_confirm }}"
+                                    maxlength="63"
+                                >
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-secondary settings-password-toggle"
+                                    data-target="settings-ap-password-confirm"
+                                    title="{{ t.title_toggle_password }}"
+                                >
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
                             <button id="btn-settings-ap-save" class="btn btn-primary btn-sm">
                                 {{ t.btn_save }}
                             </button>
