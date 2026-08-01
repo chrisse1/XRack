@@ -1627,3 +1627,68 @@ async function toggleBridge(event) {
 
     alert(I18N.settings_saved);
 }
+
+// ============================================================
+// 14. STOPPUHR
+// ============================================================
+//
+// Rein clientseitig (kein Server-Zustand nötig) - für z.B. die
+// Pausenlänge zwischen zwei Sets. Läuft unabhängig vom restlichen
+// Status-Polling und übersteht keinen Seitenneuladen, das ist für
+// diesen Zweck auch nicht nötig.
+
+let stopwatchElapsed = 0;
+let stopwatchRunning = false;
+let stopwatchStartedAt = 0;
+let stopwatchInterval = null;
+
+function stopwatchCurrentElapsed() {
+    if (!stopwatchRunning) return stopwatchElapsed;
+    return stopwatchElapsed + (Date.now() - stopwatchStartedAt) / 1000;
+}
+
+function updateStopwatchDisplay() {
+    document.getElementById("stopwatch-display").textContent =
+        formatDuration(stopwatchCurrentElapsed());
+}
+
+function updateStopwatchToggleButton() {
+    const button = document.getElementById("btn-stopwatch-toggle");
+    if (stopwatchRunning) {
+        button.innerHTML = `<i class="bi bi-pause-fill me-1"></i>${I18N.btn_pause}`;
+    } else {
+        button.innerHTML = `<i class="bi bi-play-fill me-1"></i>${I18N.btn_start}`;
+    }
+}
+
+function toggleStopwatch() {
+    if (stopwatchRunning) {
+        stopwatchElapsed = stopwatchCurrentElapsed();
+        stopwatchRunning = false;
+        clearInterval(stopwatchInterval);
+        stopwatchInterval = null;
+    } else {
+        stopwatchStartedAt = Date.now();
+        stopwatchRunning = true;
+        stopwatchInterval = setInterval(updateStopwatchDisplay, 250);
+    }
+
+    updateStopwatchToggleButton();
+    updateStopwatchDisplay();
+}
+
+function resetStopwatch() {
+    stopwatchElapsed = 0;
+    stopwatchRunning = false;
+
+    if (stopwatchInterval) {
+        clearInterval(stopwatchInterval);
+        stopwatchInterval = null;
+    }
+
+    updateStopwatchToggleButton();
+    updateStopwatchDisplay();
+}
+
+document.getElementById("btn-stopwatch-toggle").addEventListener("click", toggleStopwatch);
+document.getElementById("btn-stopwatch-reset").addEventListener("click", resetStopwatch);
