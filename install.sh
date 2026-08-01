@@ -208,15 +208,29 @@ if [ -t 0 ] && command -v nmcli >/dev/null 2>&1; then
                 read -r -p "Heimnetz-SSID: " HOME_SSID || true
                 read -r -s -p "Heimnetz-Passwort: " HOME_PASSWORD || true
                 echo ""
+                read -r -s -p "Heimnetz-Passwort (Wiederholung): " HOME_PASSWORD_CONFIRM || true
+                echo ""
 
                 echo ""
                 read -r -p "Name des Access Points (Standard: XRack): " AP_SSID_INPUT || true
                 AP_SSID="${AP_SSID_INPUT:-XRack}"
                 read -r -s -p "Passwort für den Access Point (mind. 8 Zeichen): " AP_PASSWORD || true
                 echo ""
+                read -r -s -p "Passwort für den Access Point (Wiederholung): " AP_PASSWORD_CONFIRM || true
+                echo ""
+
+                if [ "${HOME_PASSWORD}" != "${HOME_PASSWORD_CONFIRM}" ]; then
+                    echo "Die beiden Heimnetz-Passwörter stimmen nicht überein - Heimnetz-Verbindung wird übersprungen."
+                    HOME_PASSWORD=""
+                fi
+
+                if [ "${AP_PASSWORD}" != "${AP_PASSWORD_CONFIRM}" ]; then
+                    echo "Die beiden Access-Point-Passwörter stimmen nicht überein - Access Point wird übersprungen."
+                    AP_PASSWORD=""
+                fi
 
                 if [ -z "${HOME_SSID}" ] || [ "${#HOME_PASSWORD}" -lt 8 ]; then
-                    echo "Heimnetz-SSID fehlt oder Passwort zu kurz (mind. 8 Zeichen) - Heimnetz-Verbindung übersprungen."
+                    echo "Heimnetz-SSID fehlt oder Passwort fehlt/zu kurz (mind. 8 Zeichen) - Heimnetz-Verbindung übersprungen."
                 else
 
                     echo "XRack: Verbinde ${CLIENT_IFACE} mit '${HOME_SSID}'..."
@@ -238,7 +252,7 @@ if [ -t 0 ] && command -v nmcli >/dev/null 2>&1; then
                 fi
 
                 if [ "${#AP_PASSWORD}" -lt 8 ]; then
-                    echo "Access-Point-Passwort zu kurz (mind. 8 Zeichen) - Access Point übersprungen."
+                    echo "Access-Point-Passwort fehlt/zu kurz (mind. 8 Zeichen) - Access Point übersprungen."
                 else
 
                     echo "XRack: Access Point '${AP_SSID}' wird auf ${AP_IFACE} eingerichtet..."
