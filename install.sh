@@ -46,6 +46,7 @@ XRACK_PORT="8080"
 XRACK_HOSTNAME="xrack"
 XRACK_WLAN_CLIENT_SSID=""
 XRACK_WLAN_AP_SSID=""
+XRACK_WLAN_BRIDGE=""
 
 if [ -t 0 ]; then
 
@@ -274,6 +275,60 @@ if [ -t 0 ] && command -v nmcli >/dev/null 2>&1; then
 
                         sudo nmcli connection up "XRack-AP" ifname "${AP_IFACE}" \
                             || echo "Warnung: Access Point konnte nicht gestartet werden."
+
+                        #
+                        # Optional: Ethernet-Interface (z.B. das per Kabel
+                        # angeschlossene Mischpult) mit dem Access Point
+                        # bridgen, damit Steuerungs-Apps (z.B. Mixing
+                        # Station) das Pult über den AP finden - beide
+                        # landen dann im selben Netz statt in getrennten,
+                        # sich gegenseitig nicht sehenden Subnetzen.
+                        #
+
+                        echo ""
+                        read -r -p "Ethernet-Interface (z.B. Mischpult an eth0) mit dem Access Point bridgen, damit Apps es finden? [J/n]: " XRACK_BRIDGE_SETUP || true
+
+                        if [ "${XRACK_BRIDGE_SETUP}" != "n" ] && [ "${XRACK_BRIDGE_SETUP}" != "N" ]; then
+
+                            echo "XRack: Bridge aus eth0 und ${AP_IFACE} wird eingerichtet..."
+
+                            ETH0_CON="$(nmcli -t -f NAME,DEVICE connection show | awk -F: '$2=="eth0"{print $1; exit}')"
+
+                            if [ -n "${ETH0_CON}" ]; then
+                                sudo nmcli connection delete "${ETH0_CON}" >/dev/null 2>&1 || true
+                            fi
+
+                            sudo nmcli connection delete "XRack-Bridge-eth0" >/dev/null 2>&1 || true
+                            sudo nmcli connection delete "XRack-Bridge" >/dev/null 2>&1 || true
+
+                            if sudo nmcli connection add type bridge ifname br0 con-name "XRack-Bridge" >/dev/null \
+                                && sudo nmcli connection modify "XRack-Bridge" ipv4.method shared \
+                                && sudo nmcli connection add type ethernet ifname eth0 con-name "XRack-Bridge-eth0" \
+                                    master "XRack-Bridge" slave-type bridge >/dev/null; then
+
+                                # Das Setzen von master/slave-type auf dem AP-Profil
+                                # löscht nebenbei dessen IPv4/IPv6-Einstellungen
+                                # (Bridge-Slaves bekommen keine eigene IP-Konfiguration
+                                # - das übernimmt die Bridge) und kann dabei auch das
+                                # gespeicherte WLAN-Passwort zurücksetzen. Deshalb wird
+                                # es im selben Schritt gleich wieder mitgesetzt.
+                                sudo nmcli connection modify "XRack-AP" \
+                                    master "XRack-Bridge" slave-type bridge \
+                                    wifi-sec.psk "${AP_PASSWORD}" \
+                                    wifi-sec.psk-flags 0
+
+                                sudo nmcli connection up "XRack-Bridge" >/dev/null
+                                sudo nmcli connection up "XRack-Bridge-eth0" ifname eth0 >/dev/null
+
+                                if sudo nmcli connection up "XRack-AP" ifname "${AP_IFACE}"; then
+                                    XRACK_WLAN_BRIDGE="ja"
+                                else
+                                    echo "Warnung: Access Point konnte nach dem Bridgen nicht neu gestartet werden."
+                                fi
+                            else
+                                echo "Warnung: Bridge konnte nicht eingerichtet werden."
+                            fi
+                        fi
                     else
                         echo "Warnung: Access-Point-Profil konnte nicht angelegt werden."
                     fi
@@ -370,6 +425,10 @@ fi
 
 if [ -n "${XRACK_WLAN_AP_SSID}" ]; then
     echo "WLAN-Access-Point:        '${XRACK_WLAN_AP_SSID}'"
+fi
+
+if [ "${XRACK_WLAN_BRIDGE}" = "ja" ]; then
+    echo "Ethernet+AP gebridged:    eth0 (Mischpult) und Access Point im selben Netz (br0)"
 fi
 
 if [ -n "${XRACK_WLAN_CLIENT_SSID}" ] || [ -n "${XRACK_WLAN_AP_SSID}" ]; then

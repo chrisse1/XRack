@@ -79,7 +79,12 @@ country (ISO code, e.g. `DE`/`US`/`GB`) and sets it via `raspi-config`
 flashed Pi that never went through the interactive first-boot wizard.
 Both connections are configured as NetworkManager connection profiles
 (`XRack-Home` / `XRack-AP`) and can be changed later via `nmcli` or
-`nmtui`.
+`nmtui`. If a mixing console is connected via Ethernet, the installer
+can additionally bridge that Ethernet interface with the access point
+(`XRack-Bridge`) so the console and app-connected phones/tablets end
+up on the same network - otherwise a control app on an AP client
+generally can't discover the console at all, since it lives on a
+separate, unreachable subnet.
 
 Start/check manually:
 
@@ -183,7 +188,12 @@ WLAN auf einem frisch geflashten Pi, der nie durch den interaktiven
 Ersteinrichtungs-Assistenten gelaufen ist, oft per `rfkill`
 softblockiert. Beides wird als NetworkManager-Verbindungsprofil
 (`XRack-Home` / `XRack-AP`) angelegt und lässt sich später per `nmcli`
-oder `nmtui` ändern.
+oder `nmtui` ändern. Hängt ein Mischpult per Ethernet am Pi, kann der
+Installer dieses Ethernet-Interface zusätzlich mit dem Access Point
+bridgen (`XRack-Bridge`), damit Pult und per App verbundene
+Handys/Tablets im selben Netz landen - sonst findet eine Steuer-App
+auf einem AP-Client das Pult in der Regel gar nicht, weil es in einem
+separaten, nicht erreichbaren Subnetz hängt.
 
 Manuell starten/prüfen:
 
