@@ -351,25 +351,39 @@ elif [ -t 0 ]; then
 fi
 
 #
-# sudo-Berechtigung für das Herunterfahren einrichten.
+# sudo-Berechtigung für Herunterfahren, Dienst-Neustart und die
+# WLAN-Einstellungen (Webinterface -> Einstellungen) einrichten.
 #
-# XRack läuft NICHT als root - der Dienst-Benutzer bekommt über
-# eine dedizierte sudoers-Regel ausschließlich das Recht, den Pi
-# herunterzufahren, sonst nichts. Die Regel wird erst in eine
-# temporäre Datei geschrieben und mit "visudo -c" geprüft, bevor
-# sie aktiv wird, damit ein Tippfehler nicht die sudo-Konfiguration
-# beschädigen kann.
+# XRack läuft NICHT als root - der Dienst-Benutzer bekommt über eine
+# dedizierte sudoers-Regel ausschließlich das Recht, den Pi
+# herunterzufahren, sich selbst neu zu starten und die vier festen
+# Wrapper-Skripte unter scripts/ auszuführen (die ihrerseits jeweils
+# genau einen engen nmcli-Vorgang kapseln) - sonst nichts. Die Regel
+# wird erst in eine temporäre Datei geschrieben und mit "visudo -c"
+# geprüft, bevor sie aktiv wird, damit ein Tippfehler nicht die
+# sudo-Konfiguration beschädigen kann.
 #
 
-echo "XRack: sudo-Berechtigung fürs Herunterfahren einrichten..."
+echo "XRack: sudo-Berechtigung fürs Herunterfahren/Neustarten/WLAN einrichten..."
 
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVICE_USER="$(whoami)"
 
+chmod +x \
+    "${INSTALL_DIR}/scripts/xrack-restart.sh" \
+    "${INSTALL_DIR}/scripts/xrack-net-home.sh" \
+    "${INSTALL_DIR}/scripts/xrack-net-ap.sh" \
+    "${INSTALL_DIR}/scripts/xrack-bridge-toggle.sh"
+
 SUDOERS_FILE="/etc/sudoers.d/xrack"
 SUDOERS_TMP="$(mktemp)"
 
-echo "${SERVICE_USER} ALL=(root) NOPASSWD: /usr/sbin/poweroff, /sbin/poweroff, /usr/sbin/shutdown, /sbin/shutdown" \
+echo "${SERVICE_USER} ALL=(root) NOPASSWD: \
+/usr/sbin/poweroff, /sbin/poweroff, /usr/sbin/shutdown, /sbin/shutdown, \
+${INSTALL_DIR}/scripts/xrack-restart.sh, \
+${INSTALL_DIR}/scripts/xrack-net-home.sh *, \
+${INSTALL_DIR}/scripts/xrack-net-ap.sh *, \
+${INSTALL_DIR}/scripts/xrack-bridge-toggle.sh *" \
     > "${SUDOERS_TMP}"
 
 sudo visudo -cf "${SUDOERS_TMP}"

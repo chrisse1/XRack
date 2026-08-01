@@ -1273,3 +1273,208 @@ async function initializeDashboard() {
 initializeDashboard();
 setInterval(refreshDashboard, 1000);
 setInterval(pollLevels, 150);
+
+// ============================================================
+// 13. EINSTELLUNGEN (Sprache, Port, WLAN, Bridge)
+// ============================================================
+
+const settingsModal = document.getElementById("settingsModal");
+settingsModal.addEventListener("show.bs.modal", loadSettings);
+
+async function loadSettings() {
+    document.getElementById("btn-settings-restart").classList.add("d-none");
+
+    try {
+        const response = await fetch("/api/settings");
+        const data = await response.json();
+
+        document.getElementById("settings-language").value = data.language;
+        document.getElementById("settings-port").value = data.port;
+
+        applyWlanSettings(data.wlan);
+    } catch (error) {
+        console.error("Fehler beim Laden der Einstellungen:", error);
+    }
+}
+
+function applyWlanSettings(wlan) {
+    const unavailable = document.getElementById("settings-wlan-unavailable");
+    const sections = document.getElementById("settings-wlan-sections");
+
+    if (!wlan || !wlan.available) {
+        unavailable.classList.remove("d-none");
+        sections.classList.add("d-none");
+        return;
+    }
+
+    unavailable.classList.add("d-none");
+    sections.classList.remove("d-none");
+
+    toggleConfiguredSection("home", wlan.home_ssid);
+    if (wlan.home_ssid) {
+        document.getElementById("settings-home-ssid").value = wlan.home_ssid;
+        document.getElementById("settings-home-password").value = "";
+    }
+
+    toggleConfiguredSection("ap", wlan.ap_ssid);
+    if (wlan.ap_ssid) {
+        document.getElementById("settings-ap-ssid").value = wlan.ap_ssid;
+        document.getElementById("settings-ap-password").value = "";
+    }
+
+    const bridgeNotConfigured = document.getElementById("settings-bridge-not-configured");
+    const bridgeField = document.getElementById("settings-bridge-field");
+
+    if (wlan.bridge_configured) {
+        bridgeNotConfigured.classList.add("d-none");
+        bridgeField.classList.remove("d-none");
+        document.getElementById("settings-bridge-toggle").checked = wlan.bridge_enabled;
+    } else {
+        bridgeNotConfigured.classList.remove("d-none");
+        bridgeField.classList.add("d-none");
+    }
+}
+
+function toggleConfiguredSection(prefix, configured) {
+    document.getElementById(`settings-${prefix}-not-configured`)
+        .classList.toggle("d-none", Boolean(configured));
+    document.getElementById(`settings-${prefix}-fields`)
+        .classList.toggle("d-none", !configured);
+}
+
+// ------------------------------------------------------------
+// Sprache
+// ------------------------------------------------------------
+
+document.getElementById("btn-settings-language-save").addEventListener("click", saveLanguage);
+
+async function saveLanguage() {
+    const language = document.getElementById("settings-language").value;
+
+    const response = await fetch("/api/settings/language", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language })
+    });
+    const result = await response.json();
+
+    if (!result.success) {
+        alert(I18N.alert_change_failed);
+        return;
+    }
+
+    window.location.reload();
+}
+
+// ------------------------------------------------------------
+// Port
+// ------------------------------------------------------------
+
+document.getElementById("btn-settings-port-save").addEventListener("click", savePort);
+document.getElementById("btn-settings-restart").addEventListener("click", restartService);
+
+async function savePort() {
+    const port = Number(document.getElementById("settings-port").value);
+
+    const response = await fetch("/api/settings/port", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ port })
+    });
+    const result = await response.json();
+
+    if (!result.success) {
+        alert(I18N.alert_change_failed);
+        return;
+    }
+
+    alert(I18N.settings_saved_restart_needed);
+    document.getElementById("btn-settings-restart").classList.remove("d-none");
+}
+
+async function restartService() {
+    if (!confirm(I18N.confirm_restart)) return;
+
+    const newPort = Number(document.getElementById("settings-port").value);
+
+    const response = await fetch("/api/system/restart", { method: "POST" });
+    const result = await response.json();
+    console.log(result);
+
+    if (!result.success) {
+        alert(I18N.alert_change_failed);
+        return;
+    }
+
+    setTimeout(() => {
+        window.location.href = `${window.location.protocol}//${window.location.hostname}:${newPort}/`;
+    }, 5000);
+}
+
+// ------------------------------------------------------------
+// WLAN: Heimnetz / Access Point / Bridge
+// ------------------------------------------------------------
+
+document.getElementById("btn-settings-home-save").addEventListener("click", saveHomeWifi);
+document.getElementById("btn-settings-ap-save").addEventListener("click", saveApWifi);
+document.getElementById("settings-bridge-toggle").addEventListener("change", toggleBridge);
+
+async function saveHomeWifi() {
+    if (!confirm(I18N.confirm_home_wifi_change)) return;
+
+    const ssid = document.getElementById("settings-home-ssid").value;
+    const password = document.getElementById("settings-home-password").value;
+
+    await submitWifiChange("/api/settings/wifi/home", ssid, password);
+}
+
+async function saveApWifi() {
+    if (!confirm(I18N.confirm_ap_wifi_change)) return;
+
+    const ssid = document.getElementById("settings-ap-ssid").value;
+    const password = document.getElementById("settings-ap-password").value;
+
+    await submitWifiChange("/api/settings/wifi/ap", ssid, password);
+}
+
+async function submitWifiChange(url, ssid, password) {
+    const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ssid, password })
+    });
+    const result = await response.json();
+
+    if (!result.success) {
+        alert(I18N.alert_settings_change_failed.replace("{message}", result.message || ""));
+        return;
+    }
+
+    alert(I18N.settings_saved);
+    await loadSettings();
+}
+
+async function toggleBridge(event) {
+    const enabled = event.target.checked;
+    const confirmText = enabled ? I18N.confirm_bridge_on : I18N.confirm_bridge_off;
+
+    if (!confirm(confirmText)) {
+        event.target.checked = !enabled;
+        return;
+    }
+
+    const response = await fetch("/api/settings/bridge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled })
+    });
+    const result = await response.json();
+
+    if (!result.success) {
+        alert(I18N.alert_settings_change_failed.replace("{message}", result.message || ""));
+        event.target.checked = !enabled;
+        return;
+    }
+
+    alert(I18N.settings_saved);
+}

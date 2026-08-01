@@ -15,6 +15,7 @@ from player.player import Player
 from player.music_library import MusicLibrary
 from player.music_player import MusicPlayer
 from core.system_control import SystemControl
+from core.wlan_control import WlanControl
 from core.state_store import StateStore
 import platform
 import psutil
@@ -73,6 +74,8 @@ class Application:
         )
 
         self.system_control = SystemControl()
+
+        self.wlan_control = WlanControl()
 
         devices = self.audio_manager.get_devices()
 
@@ -545,3 +548,84 @@ class Application:
         """
 
         return self.system_control.shutdown()
+
+    def restart_service(self) -> bool:
+        """
+        Startet den XRack-Dienst neu (z.B. damit ein geänderter
+        Port wirksam wird).
+        """
+
+        return self.system_control.restart_service()
+
+    def set_language(self, language: str) -> bool:
+        """
+        Ändert die Sprache der Weboberfläche. Wirkt sofort, ohne
+        Neustart - Übersetzungen werden bei jedem Seitenaufruf neu
+        anhand der aktuellen Konfiguration geladen.
+        """
+
+        if language not in ("de", "en"):
+            return False
+
+        self.config.set_override("application", "language", language)
+
+        self.config.data.application.language = language
+
+        return True
+
+    def set_port(self, port: int) -> bool:
+        """
+        Ändert den Port des Webinterfaces. Wird dauerhaft
+        gespeichert, wirkt aber erst nach einem Dienst-Neustart
+        (siehe restart_service()).
+        """
+
+        if not 1 <= port <= 65535:
+            return False
+
+        self.config.set_override("server", "port", port)
+
+        self.config.data.server.port = port
+
+        return True
+
+    def get_wlan_status(self) -> dict:
+        """
+        Liefert den aktuellen (nicht-geheimen) WLAN-/Bridge-Status
+        fürs Einstellungs-Modal.
+        """
+
+        return self.wlan_control.get_status()
+
+    def set_home_wifi(self, ssid: str, password: str) -> tuple[bool, str]:
+        """
+        Setzt SSID/Passwort der Heimnetz-WLAN-Verbindung neu.
+        """
+
+        if not 1 <= len(ssid) <= 32:
+            return False, "Ungültige SSID."
+
+        if not 8 <= len(password) <= 63:
+            return False, "Passwort muss 8-63 Zeichen lang sein."
+
+        return self.wlan_control.set_home_wifi(ssid, password)
+
+    def set_ap_wifi(self, ssid: str, password: str) -> tuple[bool, str]:
+        """
+        Setzt SSID/Passwort des Access Points neu.
+        """
+
+        if not 1 <= len(ssid) <= 32:
+            return False, "Ungültige SSID."
+
+        if not 8 <= len(password) <= 63:
+            return False, "Passwort muss 8-63 Zeichen lang sein."
+
+        return self.wlan_control.set_ap_wifi(ssid, password)
+
+    def set_bridge(self, enabled: bool) -> tuple[bool, str]:
+        """
+        Schaltet die Ethernet+Access-Point-Bridge an oder aus.
+        """
+
+        return self.wlan_control.set_bridge(enabled)

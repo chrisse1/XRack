@@ -112,6 +112,61 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Es wurden keine Dateien hochgeladen (unterstütztes Format?)."
         ),
         "alert_upload_failed": "Upload fehlgeschlagen.",
+
+        # Einstellungen-Modal
+        "settings_icon_title": "Einstellungen",
+        "modal_settings_title": "Einstellungen",
+        "settings_language_label": "Sprache",
+        "settings_port_label": "Port",
+        "settings_port_hint": "Wird erst nach einem Neustart wirksam.",
+        "btn_save": "Speichern",
+        "btn_restart_now": "Jetzt neu starten",
+        "confirm_restart": (
+            "XRack jetzt neu starten? Das Webinterface ist danach kurz "
+            "nicht erreichbar."
+        ),
+        "settings_saved": "Gespeichert.",
+        "settings_saved_restart_needed": (
+            "Gespeichert - Neustart nötig, damit der neue Port wirksam wird."
+        ),
+        "settings_wlan_unavailable": (
+            "NetworkManager (nmcli) nicht gefunden - WLAN-Einstellungen "
+            "nicht verfügbar."
+        ),
+        "settings_not_configured": (
+            "Noch nicht eingerichtet (install.sh mit WLAN-Setup ausführen)."
+        ),
+        "settings_home_wifi_title": "Heimnetz (Client)",
+        "settings_ap_wifi_title": "Access Point",
+        "settings_bridge_title": "Ethernet+AP-Bridge",
+        "settings_bridge_hint": (
+            "Verbindet ein per Kabel angeschlossenes Mischpult mit dem "
+            "Access Point, damit Apps es finden."
+        ),
+        "settings_wifi_hint": (
+            "SSID und Passwort werden beim Speichern immer beide neu "
+            "gesetzt."
+        ),
+        "label_ssid": "Name (SSID)",
+        "label_password": "Passwort",
+        "confirm_home_wifi_change": (
+            "Heimnetz-WLAN wirklich ändern? Falls XRack aktuell darüber "
+            "erreichbar ist, kann die Verbindung kurz unterbrochen werden."
+        ),
+        "confirm_ap_wifi_change": (
+            "Access Point wirklich ändern? Verbundene Geräte müssen sich "
+            "danach neu verbinden."
+        ),
+        "confirm_bridge_on": (
+            "Bridge einschalten? Die Verbindung kann dabei kurz "
+            "unterbrochen werden."
+        ),
+        "confirm_bridge_off": (
+            "Bridge ausschalten? Die Verbindung kann dabei kurz "
+            "unterbrochen werden."
+        ),
+        "alert_settings_change_failed": "Änderung fehlgeschlagen: {message}",
+        "alert_change_failed": "Änderung fehlgeschlagen.",
     },
     "en": {
         # Audio interface
@@ -214,6 +269,60 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "No files were uploaded (unsupported format?)."
         ),
         "alert_upload_failed": "Upload failed.",
+
+        # Settings modal
+        "settings_icon_title": "Settings",
+        "modal_settings_title": "Settings",
+        "settings_language_label": "Language",
+        "settings_port_label": "Port",
+        "settings_port_hint": "Takes effect after a restart.",
+        "btn_save": "Save",
+        "btn_restart_now": "Restart now",
+        "confirm_restart": (
+            "Restart XRack now? The web interface will be briefly "
+            "unreachable afterwards."
+        ),
+        "settings_saved": "Saved.",
+        "settings_saved_restart_needed": (
+            "Saved - a restart is needed for the new port to take effect."
+        ),
+        "settings_wlan_unavailable": (
+            "NetworkManager (nmcli) not found - Wi-Fi settings "
+            "unavailable."
+        ),
+        "settings_not_configured": (
+            "Not set up yet (run install.sh with Wi-Fi setup)."
+        ),
+        "settings_home_wifi_title": "Home network (client)",
+        "settings_ap_wifi_title": "Access Point",
+        "settings_bridge_title": "Ethernet+AP bridge",
+        "settings_bridge_hint": (
+            "Connects a mixing console plugged in via Ethernet with the "
+            "access point, so apps can find it."
+        ),
+        "settings_wifi_hint": (
+            "SSID and password are always both set anew when saving."
+        ),
+        "label_ssid": "Name (SSID)",
+        "label_password": "Password",
+        "confirm_home_wifi_change": (
+            "Really change the home Wi-Fi? If XRack is currently reachable "
+            "through it, the connection may briefly drop."
+        ),
+        "confirm_ap_wifi_change": (
+            "Really change the access point? Connected devices will need "
+            "to reconnect afterwards."
+        ),
+        "confirm_bridge_on": (
+            "Turn the bridge on? The connection may briefly drop while "
+            "this happens."
+        ),
+        "confirm_bridge_off": (
+            "Turn the bridge off? The connection may briefly drop while "
+            "this happens."
+        ),
+        "alert_settings_change_failed": "Change failed: {message}",
+        "alert_change_failed": "Change failed.",
     },
 }
 

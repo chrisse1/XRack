@@ -23,6 +23,9 @@ the Pi itself.
 - **Level meter** to check input levels before recording
 - **Web interface** (Bootstrap) in German or English, installable as a
   PWA ("Add to Home Screen" on iPad/phone)
+- **Settings dialog** (gear icon in the header) to change language,
+  port, home Wi-Fi/access point credentials, and the Ethernet+AP
+  bridge - no re-running the installer needed
 - **Installable via script**, including automatic startup on boot via
   systemd
 
@@ -135,6 +138,9 @@ nötig.
 - **Pegelmesser** zur Kontrolle der Eingangspegel vor der Aufnahme
 - **Webinterface** (Bootstrap) auf Deutsch oder Englisch, auch als PWA
   installierbar ("Zum Home-Bildschirm hinzufügen" auf iPad/Handy)
+- **Einstellungsdialog** (Zahnrad-Icon im Header) für Sprache, Port,
+  Heimnetz-/Access-Point-Zugangsdaten und die Ethernet+AP-Bridge -
+  ganz ohne erneutes Ausführen des Installationsskripts
 - **Installierbar per Script**, inkl. automatischem Start beim Booten
   über systemd
 

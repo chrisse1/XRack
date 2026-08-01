@@ -48,6 +48,19 @@ class MusicFileDelete(BaseModel):
 class MusicChannelSelection(BaseModel):
     start_channel: int
 
+class LanguageSelection(BaseModel):
+    language: str
+
+class PortSelection(BaseModel):
+    port: int
+
+class WifiCredentials(BaseModel):
+    ssid: str
+    password: str
+
+class BridgeSelection(BaseModel):
+    enabled: bool
+
 @router.post("/api/audio/select")
 async def audio_select(
     selection: AudioSelection,
@@ -398,6 +411,118 @@ async def system_shutdown(request: Request):
 
     return {
         "success": success
+    }
+
+
+@router.post("/api/system/restart")
+async def system_restart(request: Request):
+
+    application = request.app.state.application
+
+    success = application.restart_service()
+
+    return {
+        "success": success
+    }
+
+
+@router.get("/api/settings")
+async def get_settings(request: Request):
+
+    application = request.app.state.application
+
+    wlan = application.get_wlan_status()
+
+    return {
+        "language": application.config.data.application.language,
+        "port": application.config.data.server.port,
+        "wlan": wlan,
+    }
+
+
+@router.post("/api/settings/language")
+async def set_language(
+    selection: LanguageSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success = application.set_language(selection.language)
+
+    return {
+        "success": success
+    }
+
+
+@router.post("/api/settings/port")
+async def set_port(
+    selection: PortSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success = application.set_port(selection.port)
+
+    return {
+        "success": success
+    }
+
+
+@router.post("/api/settings/wifi/home")
+async def set_home_wifi(
+    credentials: WifiCredentials,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.set_home_wifi(
+        credentials.ssid,
+        credentials.password,
+    )
+
+    return {
+        "success": success,
+        "message": message,
+    }
+
+
+@router.post("/api/settings/wifi/ap")
+async def set_ap_wifi(
+    credentials: WifiCredentials,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.set_ap_wifi(
+        credentials.ssid,
+        credentials.password,
+    )
+
+    return {
+        "success": success,
+        "message": message,
+    }
+
+
+@router.post("/api/settings/bridge")
+async def set_bridge(
+    selection: BridgeSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.set_bridge(
+        selection.enabled
+    )
+
+    return {
+        "success": success,
+        "message": message,
     }
 
 

@@ -1,4 +1,4 @@
-<header class="d-flex mb-4 container">
+<header class="d-flex mb-4 container justify-content-between align-items-start">
 
   <div class="d-flex flex-column">
 
@@ -13,5 +13,15 @@
     </small>
 
   </div>
+
+  <button
+      id="btn-settings"
+      class="btn btn-outline-secondary btn-sm"
+      data-bs-toggle="modal"
+      data-bs-target="#settingsModal"
+      title="{{ t.settings_icon_title }}"
+  >
+      <i class="bi bi-gear"></i>
+  </button>
 
 </header>

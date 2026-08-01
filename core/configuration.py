@@ -105,3 +105,23 @@ class Configuration:
             raise RuntimeError("Configuration has not been loaded.")
 
         return self._config
+
+    def set_override(self, section: str, key: str, value) -> None:
+        """
+        Schreibt einen einzelnen Wert dauerhaft nach
+        `config/local.yaml`, ohne andere dort bereits gespeicherte
+        Overrides zu verlieren (z.B. Sprache ändern, ohne einen
+        zuvor gesetzten Port zu überschreiben).
+        """
+
+        local_data: dict = {}
+
+        if self._local_filename.exists():
+
+            with self._local_filename.open("r", encoding="utf-8") as file:
+                local_data = yaml.safe_load(file) or {}
+
+        local_data.setdefault(section, {})[key] = value
+
+        with self._local_filename.open("w", encoding="utf-8") as file:
+            yaml.safe_dump(local_data, file, allow_unicode=True)

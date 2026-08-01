@@ -195,6 +195,191 @@
     </div>
 </div>
 
+<div
+    class="modal fade"
+    id="settingsModal"
+    tabindex="-1"
+    aria-hidden="true"
+>
+    <div class="modal-dialog">
+
+        <div class="modal-content">
+
+            <div class="modal-header">
+
+                <h5 class="modal-title">
+                    {{ t.modal_settings_title }}
+                </h5>
+
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="modal"
+                ></button>
+
+            </div>
+
+            <div class="modal-body">
+
+                <!-- Sprache ------------------------------------------->
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">
+                        {{ t.settings_language_label }}
+                    </label>
+                    <div class="d-flex gap-2">
+                        <select id="settings-language" class="form-select form-select-sm w-auto">
+                            <option value="de">Deutsch</option>
+                            <option value="en">English</option>
+                        </select>
+                        <button id="btn-settings-language-save" class="btn btn-primary btn-sm">
+                            {{ t.btn_save }}
+                        </button>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- Port ------------------------------------------------>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">
+                        {{ t.settings_port_label }}
+                    </label>
+                    <div class="d-flex gap-2 align-items-center flex-wrap">
+                        <input
+                            type="number"
+                            id="settings-port"
+                            class="form-control form-control-sm"
+                            style="width: 8rem;"
+                            min="1"
+                            max="65535"
+                        >
+                        <button id="btn-settings-port-save" class="btn btn-primary btn-sm">
+                            {{ t.btn_save }}
+                        </button>
+                        <button id="btn-settings-restart" class="btn btn-outline-warning btn-sm d-none">
+                            <i class="bi bi-arrow-clockwise me-1"></i>{{ t.btn_restart_now }}
+                        </button>
+                    </div>
+                    <small class="text-body-secondary">{{ t.settings_port_hint }}</small>
+                </div>
+
+                <hr>
+
+                <!-- WLAN --------------------------------------------->
+
+                <div id="settings-wlan-unavailable" class="text-muted d-none">
+                    {{ t.settings_wlan_unavailable }}
+                </div>
+
+                <div id="settings-wlan-sections">
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">
+                            {{ t.settings_home_wifi_title }}
+                        </label>
+                        <div id="settings-home-not-configured" class="text-muted small d-none">
+                            {{ t.settings_not_configured }}
+                        </div>
+                        <div id="settings-home-fields">
+                            <input
+                                type="text"
+                                id="settings-home-ssid"
+                                class="form-control form-control-sm mb-2"
+                                placeholder="{{ t.label_ssid }}"
+                                maxlength="32"
+                            >
+                            <input
+                                type="password"
+                                id="settings-home-password"
+                                class="form-control form-control-sm mb-2"
+                                placeholder="{{ t.label_password }}"
+                                maxlength="63"
+                            >
+                            <button id="btn-settings-home-save" class="btn btn-primary btn-sm">
+                                {{ t.btn_save }}
+                            </button>
+                            <div>
+                                <small class="text-body-secondary">{{ t.settings_wifi_hint }}</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">
+                            {{ t.settings_ap_wifi_title }}
+                        </label>
+                        <div id="settings-ap-not-configured" class="text-muted small d-none">
+                            {{ t.settings_not_configured }}
+                        </div>
+                        <div id="settings-ap-fields">
+                            <input
+                                type="text"
+                                id="settings-ap-ssid"
+                                class="form-control form-control-sm mb-2"
+                                placeholder="{{ t.label_ssid }}"
+                                maxlength="32"
+                            >
+                            <input
+                                type="password"
+                                id="settings-ap-password"
+                                class="form-control form-control-sm mb-2"
+                                placeholder="{{ t.label_password }}"
+                                maxlength="63"
+                            >
+                            <button id="btn-settings-ap-save" class="btn btn-primary btn-sm">
+                                {{ t.btn_save }}
+                            </button>
+                            <div>
+                                <small class="text-body-secondary">{{ t.settings_wifi_hint }}</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">
+                            {{ t.settings_bridge_title }}
+                        </label>
+                        <div id="settings-bridge-not-configured" class="text-muted small d-none">
+                            {{ t.settings_not_configured }}
+                        </div>
+                        <div id="settings-bridge-field" class="form-check form-switch">
+                            <input
+                                type="checkbox"
+                                role="switch"
+                                id="settings-bridge-toggle"
+                                class="form-check-input"
+                            >
+                            <label class="form-check-label" for="settings-bridge-toggle">
+                                {{ t.settings_bridge_title }}
+                            </label>
+                        </div>
+                        <small class="text-body-secondary">{{ t.settings_bridge_hint }}</small>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="modal-footer">
+                <button
+                    class="btn btn-secondary"
+                    data-bs-dismiss="modal"
+                >
+                    {{ t.btn_close }}
+                </button>
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
 <script>window.I18N = {{ i18n_json | safe }};</script>
 <script src="{{ url_for('static', path='js/bootstrap.bundle.min.js') }}"></script>
 <script src="{{ url_for('static', path='js/xrack.js') }}"></script>
