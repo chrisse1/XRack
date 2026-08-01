@@ -143,23 +143,23 @@
 
             <hr>
 
-            <div class="d-flex justify-content-between align-items-center" style="gap: 1rem;">
-                <div class="d-flex" style="gap: 0.5rem;">
-                    <span>{{ t.label_file }}</span>
-                    <strong id="recorder-file">-</strong>
+            <div class="d-flex flex-column flex-sm-row" style="gap: 0.25rem 1rem;">
+                <div class="d-flex" style="gap: 0.5rem; flex: 1 1 0; min-width: 0;">
+                    <span class="flex-shrink-0">{{ t.label_file }}</span>
+                    <strong id="recorder-file" class="text-break" style="min-width: 0;">-</strong>
                 </div>
-                <div class="d-flex" style="gap: 0.5rem;">
-                    <span>{{ t.label_format }}</span>
-                    <strong id="recorder-format">Wave64</strong>
+                <div class="d-flex" style="gap: 0.5rem; flex: 1 1 0; min-width: 0;">
+                    <span class="flex-shrink-0">{{ t.label_format }}</span>
+                    <strong id="recorder-format" class="text-break" style="min-width: 0;">Wave64</strong>
                 </div>
             </div>
 
-            <div class="d-flex justify-content-between align-items-center mt-1" style="gap: 1rem;">
+            <div class="d-flex flex-column flex-sm-row justify-content-sm-between mt-1" style="gap: 0.25rem 1rem;">
                 <div class="d-flex" style="gap: 0.5rem;">
                     <span>{{ t.label_duration }}</span>
                     <strong id="recorder-duration">00:00:00</strong>
                 </div>
-                <div class="d-flex" style="gap: 0.5rem;">
+                <div class="d-flex flex-shrink-0" style="gap: 0.5rem;">
                     <span>{{ t.label_size }}</span>
                     <strong id="recorder-size">0 MB</strong>
                 </div>
@@ -268,14 +268,14 @@
 
             <hr>
 
-            <div class="d-flex justify-content-between align-items-center" style="gap: 1rem;">
-                <div class="d-flex" style="gap: 0.5rem;">
-                    <span>{{ t.label_title }}</span>
-                    <strong id="player-title">-</strong>
+            <div class="d-flex flex-column flex-sm-row" style="gap: 0.25rem 1rem;">
+                <div class="d-flex" style="gap: 0.5rem; flex: 1 1 0; min-width: 0;">
+                    <span class="flex-shrink-0">{{ t.label_title }}</span>
+                    <strong id="player-title" class="text-break" style="min-width: 0;">-</strong>
                 </div>
-                <div class="d-flex" style="gap: 0.5rem;">
-                    <span>{{ t.label_mode }}</span>
-                    <strong id="player-mode">-</strong>
+                <div class="d-flex" style="gap: 0.5rem; flex: 1 1 0; min-width: 0;">
+                    <span class="flex-shrink-0">{{ t.label_mode }}</span>
+                    <strong id="player-mode" class="text-break" style="min-width: 0;">-</strong>
                 </div>
             </div>
 
