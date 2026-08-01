@@ -147,6 +147,32 @@ if [ -t 0 ] && command -v nmcli >/dev/null 2>&1; then
 
     if [ "${XRACK_WLAN_SETUP}" = "j" ] || [ "${XRACK_WLAN_SETUP}" = "J" ]; then
 
+        #
+        # WLAN-Land setzen. Ohne gesetztes Regulierungsgebiet bleibt
+        # WLAN auf frisch aufgesetzten Raspberry Pis oft per rfkill
+        # soft-blockiert (Geräte existieren, sind aber "nicht
+        # verfügbar") - das kostet sonst viel Fehlersuche.
+        #
+
+        echo ""
+        read -r -p "WLAN-Land (2-stelliger ISO-Code, z.B. DE/AT/CH/US/GB) - nötig, damit WLAN nicht per rfkill blockiert bleibt: " XRACK_WLAN_COUNTRY_INPUT || true
+        XRACK_WLAN_COUNTRY="$(echo "${XRACK_WLAN_COUNTRY_INPUT}" | tr '[:lower:]' '[:upper:]')"
+
+        if [[ "${XRACK_WLAN_COUNTRY}" =~ ^[A-Z]{2}$ ]]; then
+
+            echo "XRack: WLAN-Land wird gesetzt (${XRACK_WLAN_COUNTRY})..."
+
+            if command -v raspi-config >/dev/null 2>&1; then
+                sudo raspi-config nonint do_wifi_country "${XRACK_WLAN_COUNTRY}"
+            else
+                sudo rfkill unblock wifi
+                sudo iw reg set "${XRACK_WLAN_COUNTRY}" || true
+                echo "Hinweis: raspi-config nicht gefunden - WLAN-Land ist damit ggf. nicht dauerhaft gesetzt (nach einem Neustart mit 'rfkill list' prüfen)."
+            fi
+        else
+            echo "Ungültiger oder leerer Ländercode - WLAN-Land wird übersprungen (WLAN kann per rfkill blockiert bleiben, siehe 'rfkill list')."
+        fi
+
         mapfile -t WIFI_INTERFACES < <(nmcli -t -f DEVICE,TYPE device status | awk -F: '$2=="wifi"{print $1}')
 
         if [ "${#WIFI_INTERFACES[@]}" -lt 2 ]; then

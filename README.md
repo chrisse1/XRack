@@ -73,9 +73,13 @@ Optionally (if two Wi-Fi interfaces are detected and NetworkManager's
 interface joins your home network as a client (for remote access to
 XRack), the other spans its own access point (default name `XRack`)
 so a mixing app can talk to XRack/the mixing console directly,
-standalone, without any router on site. Both are configured as
-NetworkManager connection profiles (`XRack-Home` / `XRack-AP`) and can
-be changed later via `nmcli` or `nmtui`.
+standalone, without any router on site. It also asks for your Wi-Fi
+country (ISO code, e.g. `DE`/`US`/`GB`) and sets it via `raspi-config`
+- without it, Wi-Fi is often soft-blocked by `rfkill` on a freshly
+flashed Pi that never went through the interactive first-boot wizard.
+Both connections are configured as NetworkManager connection profiles
+(`XRack-Home` / `XRack-AP`) and can be changed later via `nmcli` or
+`nmtui`.
 
 Start/check manually:
 
@@ -173,7 +177,11 @@ ein: ein Interface verbindet sich als Client mit deinem Heimnetz (für
 Fernzugriff auf XRack), das andere spannt einen eigenen Access Point
 auf (Standardname `XRack`), über den z.B. eine Misch-App direkt mit
 XRack/dem Mischpult sprechen kann - komplett standalone, ganz ohne
-Router vor Ort. Beides wird als NetworkManager-Verbindungsprofil
+Router vor Ort. Dabei wird auch nach dem WLAN-Land gefragt (ISO-Code,
+z.B. `DE`/`AT`/`CH`) und per `raspi-config` gesetzt - ohne das bleibt
+WLAN auf einem frisch geflashten Pi, der nie durch den interaktiven
+Ersteinrichtungs-Assistenten gelaufen ist, oft per `rfkill`
+softblockiert. Beides wird als NetworkManager-Verbindungsprofil
 (`XRack-Home` / `XRack-AP`) angelegt und lässt sich später per `nmcli`
 oder `nmtui` ändern.
 
