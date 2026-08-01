@@ -44,6 +44,8 @@ deactivate
 XRACK_LANGUAGE="de"
 XRACK_PORT="8080"
 XRACK_HOSTNAME="xrack"
+XRACK_WLAN_CLIENT_SSID=""
+XRACK_WLAN_AP_SSID=""
 
 if [ -t 0 ]; then
 
@@ -123,6 +125,131 @@ if command -v ufw >/dev/null 2>&1 && sudo ufw status | grep -q "^Status: active"
 fi
 
 #
+# Optional: WLAN einrichten (Heimnetz-Client + eigener Access Point).
+#
+# Für Setups mit zwei WLAN-Interfaces, z.B. Onboard-WLAN als Client
+# im Heimnetz (Fernzugriff auf XRack) und ein zusätzlicher USB-WLAN-
+# Stick als eigener Access Point, über den z.B. eine Misch-App direkt
+# mit dem Pi/Mischpult spricht - ganz ohne Router vor Ort. Komplett
+# optional und nur bei interaktivem Lauf, per NetworkManager (nmcli).
+#
+
+valid_wifi_index() {
+    local index="$1"
+    local max="$2"
+    [[ "${index}" =~ ^[0-9]+$ ]] && [ "${index}" -ge 1 ] && [ "${index}" -le "${max}" ]
+}
+
+if [ -t 0 ] && command -v nmcli >/dev/null 2>&1; then
+
+    echo ""
+    read -r -p "WLAN einrichten - Heimnetz-Verbindung + eigener Access Point? [j/N]: " XRACK_WLAN_SETUP || true
+
+    if [ "${XRACK_WLAN_SETUP}" = "j" ] || [ "${XRACK_WLAN_SETUP}" = "J" ]; then
+
+        mapfile -t WIFI_INTERFACES < <(nmcli -t -f DEVICE,TYPE device status | awk -F: '$2=="wifi"{print $1}')
+
+        if [ "${#WIFI_INTERFACES[@]}" -lt 2 ]; then
+            echo "Es wurden nur ${#WIFI_INTERFACES[@]} WLAN-Interface(s) gefunden - für Client + Access Point werden zwei benötigt. WLAN-Setup übersprungen."
+        else
+
+            echo ""
+            echo "Gefundene WLAN-Interfaces:"
+            for i in "${!WIFI_INTERFACES[@]}"; do
+                echo "  $((i + 1))) ${WIFI_INTERFACES[$i]}"
+            done
+
+            echo ""
+            read -r -p "Welches Interface soll sich mit deinem Heimnetz verbinden (Nummer)? " CLIENT_INDEX || true
+            read -r -p "Welches Interface soll den Access Point aufspannen (Nummer)? " AP_INDEX || true
+
+            CLIENT_IFACE=""
+            AP_IFACE=""
+
+            if valid_wifi_index "${CLIENT_INDEX}" "${#WIFI_INTERFACES[@]}" \
+                && valid_wifi_index "${AP_INDEX}" "${#WIFI_INTERFACES[@]}" \
+                && [ "${CLIENT_INDEX}" != "${AP_INDEX}" ]; then
+
+                CLIENT_IFACE="${WIFI_INTERFACES[$((CLIENT_INDEX - 1))]}"
+                AP_IFACE="${WIFI_INTERFACES[$((AP_INDEX - 1))]}"
+            fi
+
+            if [ -z "${CLIENT_IFACE}" ] || [ -z "${AP_IFACE}" ]; then
+                echo "Ungültige oder gleiche Auswahl - WLAN-Setup übersprungen."
+            else
+
+                echo ""
+                read -r -p "Heimnetz-SSID: " HOME_SSID || true
+                read -r -s -p "Heimnetz-Passwort: " HOME_PASSWORD || true
+                echo ""
+
+                echo ""
+                read -r -p "Name des Access Points (Standard: XRack): " AP_SSID_INPUT || true
+                AP_SSID="${AP_SSID_INPUT:-XRack}"
+                read -r -s -p "Passwort für den Access Point (mind. 8 Zeichen): " AP_PASSWORD || true
+                echo ""
+
+                if [ -z "${HOME_SSID}" ] || [ "${#HOME_PASSWORD}" -lt 8 ]; then
+                    echo "Heimnetz-SSID fehlt oder Passwort zu kurz (mind. 8 Zeichen) - Heimnetz-Verbindung übersprungen."
+                else
+
+                    echo "XRack: Verbinde ${CLIENT_IFACE} mit '${HOME_SSID}'..."
+                    echo "Hinweis: Falls du gerade über dieses Interface per WLAN verbunden bist, kann die Verbindung kurz unterbrochen werden."
+
+                    sudo nmcli connection delete "XRack-Home" >/dev/null 2>&1 || true
+
+                    if sudo nmcli connection add type wifi ifname "${CLIENT_IFACE}" con-name "XRack-Home" \
+                        ssid "${HOME_SSID}" wifi-sec.key-mgmt wpa-psk wifi-sec.psk "${HOME_PASSWORD}" \
+                        connection.autoconnect yes >/dev/null; then
+
+                        XRACK_WLAN_CLIENT_SSID="${HOME_SSID}"
+
+                        sudo nmcli connection up "XRack-Home" \
+                            || echo "Warnung: Verbindung zu '${HOME_SSID}' konnte nicht sofort hergestellt werden (SSID/Passwort prüfen)."
+                    else
+                        echo "Warnung: WLAN-Client-Profil konnte nicht angelegt werden."
+                    fi
+                fi
+
+                if [ "${#AP_PASSWORD}" -lt 8 ]; then
+                    echo "Access-Point-Passwort zu kurz (mind. 8 Zeichen) - Access Point übersprungen."
+                else
+
+                    echo "XRack: Access Point '${AP_SSID}' wird auf ${AP_IFACE} eingerichtet..."
+
+                    sudo nmcli connection delete "XRack-AP" >/dev/null 2>&1 || true
+
+                    if sudo nmcli connection add type wifi ifname "${AP_IFACE}" con-name "XRack-AP" \
+                        ssid "${AP_SSID}" mode ap >/dev/null; then
+
+                        sudo nmcli connection modify "XRack-AP" \
+                            802-11-wireless.band bg \
+                            ipv4.method shared \
+                            wifi-sec.key-mgmt wpa-psk \
+                            wifi-sec.proto rsn \
+                            wifi-sec.psk "${AP_PASSWORD}" \
+                            connection.autoconnect yes
+
+                        XRACK_WLAN_AP_SSID="${AP_SSID}"
+
+                        sudo nmcli connection up "XRack-AP" \
+                            || echo "Warnung: Access Point konnte nicht gestartet werden."
+                    else
+                        echo "Warnung: Access-Point-Profil konnte nicht angelegt werden."
+                    fi
+                fi
+
+            fi
+        fi
+
+    fi
+
+elif [ -t 0 ]; then
+    echo ""
+    echo "Hinweis: nmcli (NetworkManager) nicht gefunden - WLAN-Setup (Heimnetz + Access Point) übersprungen."
+fi
+
+#
 # sudo-Berechtigung für das Herunterfahren einrichten.
 #
 # XRack läuft NICHT als root - der Dienst-Benutzer bekommt über
@@ -195,3 +322,16 @@ echo "Sprache/Port spaeter aendern: config/local.yaml bearbeiten und"
 echo "den Dienst neu starten (sudo systemctl restart xrack)."
 echo "Hostname spaeter aendern:     sudo hostnamectl set-hostname <name>"
 echo "                              und /etc/hosts entsprechend anpassen."
+
+if [ -n "${XRACK_WLAN_CLIENT_SSID}" ]; then
+    echo ""
+    echo "WLAN-Heimnetz:            '${XRACK_WLAN_CLIENT_SSID}' (Profil 'XRack-Home')"
+fi
+
+if [ -n "${XRACK_WLAN_AP_SSID}" ]; then
+    echo "WLAN-Access-Point:        '${XRACK_WLAN_AP_SSID}'"
+fi
+
+if [ -n "${XRACK_WLAN_CLIENT_SSID}" ] || [ -n "${XRACK_WLAN_AP_SSID}" ]; then
+    echo "WLAN-Status pruefen:      nmcli connection show"
+fi
