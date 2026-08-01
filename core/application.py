@@ -14,8 +14,10 @@ from recorder.recorder import Recorder
 from player.player import Player
 from player.music_library import MusicLibrary
 from player.music_player import MusicPlayer
+from player.bluetooth_player import BluetoothPlayer
 from core.system_control import SystemControl
 from core.wlan_control import WlanControl
+from core.bluetooth_control import BluetoothControl
 from core.state_store import StateStore
 import platform
 import psutil
@@ -61,6 +63,11 @@ class Application:
             "Soundcheck",
         )
 
+        self.bluetooth_channel_preference = self.state_store.get(
+            "bluetooth_channel",
+            1,
+        )
+
         self.recorder = Recorder(
             self.audio_core.backend
         )
@@ -81,6 +88,13 @@ class Application:
         self.system_control = SystemControl()
 
         self.wlan_control = WlanControl()
+
+        self.bluetooth_control = BluetoothControl()
+
+        self.bluetooth_player = BluetoothPlayer(
+            AudioPlaybackBackend(),
+            self.bluetooth_control,
+        )
 
         devices = self.audio_manager.get_devices()
 
@@ -112,7 +126,16 @@ class Application:
                 "Ausgewähltes Gerät: %s",
                 self.selected_audio_device.description,
             )
-            
+
+        #
+        # War Bluetooth beim letzten Mal an, direkt wieder auf
+        # eingehende Streams lauschen (ohne dass der Nutzer den
+        # Schalter im Webinterface erneut betätigen muss).
+        #
+
+        if self.bluetooth_control.get_status().get("powered"):
+            self._start_bluetooth_monitor()
+
     def update_status(self) -> None:
         """Aktualisiert den aktuellen Systemstatus."""
         
@@ -231,6 +254,18 @@ class Application:
 
         self.status.music_preferred_start_channel = (
             self.music_channel_preference
+        )
+
+        #
+        # Bluetooth (Status-Werte ohne bluetoothctl-Aufruf - reine
+        # Python-Eigenschaften des Überwachungs-Threads, deshalb
+        # unbedenklich im schnellen 1s-Statuspolling).
+        #
+
+        self.status.bluetooth_streaming = self.bluetooth_player.streaming
+
+        self.status.bluetooth_device_name = (
+            self.bluetooth_player.connected_device_name
         )
 
         self.status.music_position = round(
@@ -673,3 +708,74 @@ class Application:
         """
 
         return self.wlan_control.set_bridge(enabled)
+
+    def get_bluetooth_status(self) -> dict:
+        """
+        Liefert den aktuellen Bluetooth-Status fürs Webinterface.
+        """
+
+        status = self.bluetooth_control.get_status()
+
+        status["streaming"] = self.bluetooth_player.streaming
+        status["preferred_start_channel"] = self.bluetooth_channel_preference
+
+        return status
+
+    def _start_bluetooth_monitor(self) -> None:
+
+        if self.selected_audio_device is None:
+            return
+
+        self.bluetooth_player.start(
+            self.selected_audio_device,
+            self.bluetooth_channel_preference - 1,
+            self.selected_audio_device.sample_rate,
+        )
+
+    def set_bluetooth_power(self, enabled: bool) -> tuple[bool, str]:
+        """
+        Schaltet den Bluetooth-Adapter (und damit das Lauschen auf
+        eingehende Audiostreams) an oder aus.
+        """
+
+        success, message = self.bluetooth_control.set_power(enabled)
+
+        if success:
+            if enabled:
+                self._start_bluetooth_monitor()
+            else:
+                self.bluetooth_player.stop()
+
+        return success, message
+
+    def start_bluetooth_pairing(self) -> tuple[bool, str]:
+        """
+        Macht XRack für ein kurzes Zeitfenster koppelbar.
+        """
+
+        return self.bluetooth_control.start_pairing()
+
+    def forget_bluetooth_devices(self) -> tuple[bool, str]:
+        """
+        Entfernt alle gekoppelten Bluetooth-Geräte.
+        """
+
+        return self.bluetooth_control.forget_devices()
+
+    def set_bluetooth_channel_preference(self, start_channel: int) -> bool:
+        """
+        Merkt sich das für Bluetooth-Audio gewählte Ziel-Stereopaar
+        (1-basiert). Wirkt beim nächsten neu erkannten Verbindungs-
+        aufbau eines Geräts.
+        """
+
+        self.bluetooth_channel_preference = start_channel
+
+        self.state_store.set(
+            "bluetooth_channel",
+            start_channel,
+        )
+
+        self.bluetooth_player.set_start_channel(start_channel - 1)
+
+        return True

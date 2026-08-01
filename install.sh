@@ -18,7 +18,10 @@ sudo apt-get install -y \
     python3-pip \
     libasound2-dev \
     alsa-utils \
-    ffmpeg
+    ffmpeg \
+    bluez \
+    bluez-tools \
+    bluez-alsa-utils
 
 echo "XRack: Python-Umgebung einrichten..."
 
@@ -351,6 +354,63 @@ elif [ -t 0 ]; then
 fi
 
 #
+# Bluetooth-Audio einrichten (XRack als Bluetooth-Lautsprecher).
+#
+# bluez-alsa (bluealsa) registriert ein eigenes A2DP-Sink-Angebot
+# beim Bluetooth-Adapter, unabhängig von XRack selbst - der Dienst
+# läuft dauerhaft im Hintergrund. Sobald ein Handy/Tablet aktiv Audio
+# schickt, liest XRack das über ein ALSA-Capture-Gerät aus (siehe
+# player/bluetooth_player.py) und legt es auf das im Webinterface
+# gewählte Stereopaar.
+#
+# Ein separater Kopplungs-Agent (bt-agent, "Just Works", ohne PIN-
+# Bestätigung) läuft ebenfalls dauerhaft im Hintergrund, nimmt aber
+# nur dann eine Kopplungsanfrage an, wenn XRack den Adapter zuvor per
+# Knopfdruck im Webinterface koppelbar gemacht hat (siehe
+# scripts/xrack-bt-pair.sh) - ohne das ist der Adapter nicht
+# auffindbar.
+#
+
+if command -v bluetoothctl >/dev/null 2>&1; then
+
+    echo "XRack: Bluetooth-Audio (bluealsa) wird eingerichtet..."
+
+    sudo mkdir -p /etc/systemd/system/bluealsa.service.d
+
+    sudo tee /etc/systemd/system/bluealsa.service.d/xrack.conf > /dev/null <<'EOF'
+[Service]
+ExecStart=
+ExecStart=/usr/bin/bluealsa -p a2dp-sink
+EOF
+
+    sudo tee /etc/systemd/system/xrack-bt-agent.service > /dev/null <<'EOF'
+[Unit]
+Description=XRack Bluetooth-Kopplungs-Agent (Just Works)
+After=bluetooth.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/bt-agent --capability=NoInputNoOutput
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    sudo systemctl daemon-reload
+
+    sudo systemctl enable bluetooth.service bluealsa.service xrack-bt-agent.service >/dev/null 2>&1 || true
+    sudo systemctl restart bluetooth.service
+    sudo systemctl restart bluealsa.service
+    sudo systemctl restart xrack-bt-agent.service
+
+else
+    echo ""
+    echo "Hinweis: bluetoothctl (BlueZ) nicht gefunden - Bluetooth-Audio nicht verfügbar."
+fi
+
+#
 # sudo-Berechtigung für Herunterfahren, Dienst-Neustart und die
 # WLAN-Einstellungen (Webinterface -> Einstellungen) einrichten.
 #
@@ -373,7 +433,10 @@ chmod +x \
     "${INSTALL_DIR}/scripts/xrack-restart.sh" \
     "${INSTALL_DIR}/scripts/xrack-net-home.sh" \
     "${INSTALL_DIR}/scripts/xrack-net-ap.sh" \
-    "${INSTALL_DIR}/scripts/xrack-bridge-toggle.sh"
+    "${INSTALL_DIR}/scripts/xrack-bridge-toggle.sh" \
+    "${INSTALL_DIR}/scripts/xrack-bt-power.sh" \
+    "${INSTALL_DIR}/scripts/xrack-bt-pair.sh" \
+    "${INSTALL_DIR}/scripts/xrack-bt-forget.sh"
 
 SUDOERS_FILE="/etc/sudoers.d/xrack"
 SUDOERS_TMP="$(mktemp)"
@@ -383,7 +446,10 @@ echo "${SERVICE_USER} ALL=(root) NOPASSWD: \
 ${INSTALL_DIR}/scripts/xrack-restart.sh, \
 ${INSTALL_DIR}/scripts/xrack-net-home.sh *, \
 ${INSTALL_DIR}/scripts/xrack-net-ap.sh *, \
-${INSTALL_DIR}/scripts/xrack-bridge-toggle.sh *" \
+${INSTALL_DIR}/scripts/xrack-bridge-toggle.sh *, \
+${INSTALL_DIR}/scripts/xrack-bt-power.sh *, \
+${INSTALL_DIR}/scripts/xrack-bt-pair.sh, \
+${INSTALL_DIR}/scripts/xrack-bt-forget.sh" \
     > "${SUDOERS_TMP}"
 
 sudo visudo -cf "${SUDOERS_TMP}"

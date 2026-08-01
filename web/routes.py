@@ -67,6 +67,12 @@ class BridgeSelection(BaseModel):
 class RecordingPrefixSelection(BaseModel):
     prefix: str
 
+class BluetoothPowerSelection(BaseModel):
+    enabled: bool
+
+class BluetoothChannelSelection(BaseModel):
+    start_channel: int
+
 @router.post("/api/audio/select")
 async def audio_select(
     selection: AudioSelection,
@@ -565,6 +571,75 @@ async def set_bridge(
     return {
         "success": success,
         "message": message,
+    }
+
+
+@router.get("/api/bluetooth/status")
+async def bluetooth_status(request: Request):
+
+    application = request.app.state.application
+
+    return application.get_bluetooth_status()
+
+
+@router.post("/api/bluetooth/power")
+async def bluetooth_power(
+    selection: BluetoothPowerSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.set_bluetooth_power(
+        selection.enabled
+    )
+
+    return {
+        "success": success,
+        "message": message,
+    }
+
+
+@router.post("/api/bluetooth/pair")
+async def bluetooth_pair(request: Request):
+
+    application = request.app.state.application
+
+    success, message = application.start_bluetooth_pairing()
+
+    return {
+        "success": success,
+        "message": message,
+    }
+
+
+@router.post("/api/bluetooth/forget")
+async def bluetooth_forget(request: Request):
+
+    application = request.app.state.application
+
+    success, message = application.forget_bluetooth_devices()
+
+    return {
+        "success": success,
+        "message": message,
+    }
+
+
+@router.post("/api/bluetooth/channel")
+async def bluetooth_channel(
+    selection: BluetoothChannelSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success = application.set_bluetooth_channel_preference(
+        selection.start_channel
+    )
+
+    return {
+        "success": success
     }
 
 

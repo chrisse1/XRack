@@ -29,6 +29,9 @@ the Pi itself.
 - **Settings dialog** (gear icon in the header) to change language,
   port, home Wi-Fi/access point credentials, and the Ethernet+AP
   bridge - no re-running the installer needed
+- **Bluetooth audio**: turn XRack into a Bluetooth speaker - pair a
+  phone/tablet from the dashboard and route its audio stream onto a
+  freely selectable channel pair, just like the music player
 - **Installable via script**, including automatic startup on boot via
   systemd
 
@@ -97,6 +100,15 @@ would cut that session. It's applied on the next reboot instead, which
 the installer offers to do right at the end, once everything else is
 already set up.
 
+If a Bluetooth adapter is present, the installer also sets up
+Bluetooth audio (`bluez`, `bluez-tools`, `bluez-alsa-utils`): a
+`bluealsa` service acting as an A2DP sink so XRack shows up as a
+Bluetooth speaker, plus a "Just Works" pairing agent that only accepts
+connections while pairing mode is switched on from the dashboard.
+Power, pairing, and the target channel pair are then controlled
+entirely from the new Bluetooth card next to the music player - no
+extra setup needed.
+
 Start/check manually:
 
 ```bash
@@ -146,6 +158,9 @@ nötig.
 - **Einstellungsdialog** (Zahnrad-Icon im Header) für Sprache, Port,
   Heimnetz-/Access-Point-Zugangsdaten und die Ethernet+AP-Bridge -
   ganz ohne erneutes Ausführen des Installationsskripts
+- **Bluetooth-Audio**: XRack als Bluetooth-Lautsprecher - Handy/Tablet
+  direkt vom Dashboard aus koppeln und dessen Audiostream auf ein frei
+  wählbares Kanalpaar legen, genau wie beim Musikplayer
 - **Installierbar per Script**, inkl. automatischem Start beim Booten
   über systemd
 
@@ -215,6 +230,15 @@ konfigurieren einen frisch geflashten Pi per SSH über Ethernet, und
 eth0 sofort zu bridgen würde genau diese Verbindung kappen. Aktiv wird
 sie erst beim nächsten Neustart, den der Installer ganz am Ende
 anbietet, wenn der Rest der Installation bereits fertig ist.
+
+Ist ein Bluetooth-Adapter vorhanden, richtet der Installer außerdem
+Bluetooth-Audio ein (`bluez`, `bluez-tools`, `bluez-alsa-utils`): ein
+`bluealsa`-Dienst als A2DP-Sink, damit XRack als Bluetooth-Lautsprecher
+erscheint, dazu ein "Just Works"-Kopplungs-Agent, der Verbindungen nur
+annimmt, solange der Koppelmodus über das Dashboard eingeschaltet ist.
+Ein-/Ausschalten, Koppeln und das Ziel-Kanalpaar werden danach
+vollständig über die neue Bluetooth-Karte neben dem Musikplayer
+gesteuert - keine weitere Einrichtung nötig.
 
 Manuell starten/prüfen:
 

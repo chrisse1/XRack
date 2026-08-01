@@ -19,8 +19,10 @@ let recorderMonitoring = false;
 // Pegelprüfung oder Wiedergabe (Soundcheck oder Musik) geändert
 // werden.
 function isAudioBusy(data) {
-    return data.recording || data.recorder_monitoring || data.playback_active || data.music_playing;
+    return data.recording || data.recorder_monitoring || data.playback_active || data.music_playing || data.bluetooth_streaming;
 }
+
+let lastStatusData = {};
 
 // ============================================================
 // 2. CORE UI UPDATES
@@ -34,6 +36,8 @@ async function updateStatus() {
     const response = await fetch("/api/status");
     const data = await response.json();
 
+    lastStatusData = data;
+
     selectedAudioDevice = data.selected_audio_device;
 
     updateSystemStats(data);
@@ -41,6 +45,7 @@ async function updateStatus() {
     updateAudioDeviceSelectState(data);
     updateRecorder(data);
     updateMusicPlayer(data);
+    updateBluetooth(data);
 }
 
 function updateSystemStats(data) {
@@ -1626,4 +1631,162 @@ async function toggleBridge(event) {
     }
 
     alert(I18N.settings_saved);
+}
+
+// ============================================================
+// 14. BLUETOOTH
+// ============================================================
+
+// Schnelle Werte (streaming/device-name) kommen mit jedem 1s-
+// Statuspoll (siehe updateStatus/lastStatusData). Power/Discoverable/
+// gekoppeltes Gerät erfordern dagegen einen bluetoothctl-Aufruf im
+// Backend - dafür ein eigener, langsamerer Poll, damit nicht jede
+// Sekunde unnötig bluetoothctl aufgerufen wird.
+let bluetoothSlowStatus = {
+    available: false,
+    powered: false,
+    discoverable: false,
+    paired_device: null,
+    preferred_start_channel: 1,
+};
+
+function updateBluetooth(data) {
+    updateBluetoothChannels(data);
+    updateBluetoothStatusText(data);
+    updateBluetoothControlsState(data);
+}
+
+function updateBluetoothChannels(data) {
+    const select = document.getElementById("bluetooth-channels");
+    if (!select) return;
+
+    if (select.dataset.built !== String(data.audio_channels)) {
+        select.innerHTML = "";
+
+        for (let start = 1; start + 1 <= data.audio_channels; start += 2) {
+            const option = document.createElement("option");
+            option.value = start;
+            option.textContent = I18N.channel_option.replace("{a}", start).replace("{b}", start + 1);
+            select.appendChild(option);
+        }
+
+        select.dataset.built = String(data.audio_channels);
+        select.value = bluetoothSlowStatus.preferred_start_channel || 1;
+    }
+
+    select.onchange = () => {
+        setBluetoothChannelPreference(Number(select.value));
+    };
+}
+
+function updateBluetoothStatusText(data) {
+    const label = document.getElementById("bluetooth-status");
+    if (!label) return;
+
+    if (data.bluetooth_streaming) {
+        label.textContent = I18N.bluetooth_status_connected.replace("{name}", data.bluetooth_device_name || "");
+    } else if (bluetoothSlowStatus.discoverable) {
+        label.textContent = I18N.bluetooth_status_pairing;
+    } else if (bluetoothSlowStatus.powered) {
+        label.textContent = I18N.bluetooth_status_ready;
+    } else {
+        label.textContent = I18N.bluetooth_status_off;
+    }
+}
+
+function updateBluetoothControlsState(data) {
+    const toggle = document.getElementById("bluetooth-power-toggle");
+    if (toggle && document.activeElement !== toggle) {
+        toggle.checked = bluetoothSlowStatus.powered;
+    }
+
+    const select = document.getElementById("bluetooth-channels");
+    if (select) select.disabled = isAudioBusy(data);
+
+    const pairButton = document.getElementById("btn-bluetooth-pair");
+    if (pairButton) pairButton.disabled = !bluetoothSlowStatus.powered;
+
+    const forgetButton = document.getElementById("btn-bluetooth-forget");
+    if (forgetButton) forgetButton.disabled = !bluetoothSlowStatus.powered;
+}
+
+async function refreshBluetoothStatus() {
+    try {
+        const response = await fetch("/api/bluetooth/status");
+        const data = await response.json();
+
+        bluetoothSlowStatus = data;
+
+        const unavailable = document.getElementById("bluetooth-unavailable");
+        const fields = document.getElementById("bluetooth-fields");
+        if (unavailable && fields) {
+            unavailable.classList.toggle("d-none", data.available);
+            fields.classList.toggle("d-none", !data.available);
+        }
+
+        updateBluetoothStatusText(lastStatusData);
+    } catch (error) {
+        console.error("Fehler beim Laden des Bluetooth-Status:", error);
+    }
+}
+
+setInterval(refreshBluetoothStatus, 3000);
+refreshBluetoothStatus();
+
+document.getElementById("bluetooth-power-toggle").addEventListener("change", toggleBluetoothPower);
+
+async function toggleBluetoothPower(event) {
+    const enabled = event.target.checked;
+
+    const response = await fetch("/api/bluetooth/power", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled })
+    });
+    const result = await response.json();
+
+    if (!result.success) {
+        alert(I18N.alert_settings_change_failed.replace("{message}", result.message || ""));
+        event.target.checked = !enabled;
+        return;
+    }
+
+    await refreshBluetoothStatus();
+}
+
+async function startBluetoothPairing() {
+    const response = await fetch("/api/bluetooth/pair", { method: "POST" });
+    const result = await response.json();
+
+    if (!result.success) {
+        alert(I18N.alert_settings_change_failed.replace("{message}", result.message || ""));
+        return;
+    }
+
+    alert(I18N.alert_bluetooth_pairing_started);
+    await refreshBluetoothStatus();
+}
+
+async function forgetBluetoothDevices() {
+    if (!confirm(I18N.confirm_bluetooth_forget)) return;
+
+    const response = await fetch("/api/bluetooth/forget", { method: "POST" });
+    const result = await response.json();
+
+    if (!result.success) {
+        alert(I18N.alert_settings_change_failed.replace("{message}", result.message || ""));
+        return;
+    }
+
+    await refreshBluetoothStatus();
+}
+
+async function setBluetoothChannelPreference(startChannel) {
+    const response = await fetch("/api/bluetooth/channel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start_channel: startChannel })
+    });
+    const result = await response.json();
+    console.log(result);
 }

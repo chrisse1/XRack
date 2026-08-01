@@ -195,9 +195,10 @@
 
         </div>
 
-        <!-- Player ------------------------------------------------------>
+        <!-- Player + Bluetooth --------------------------------------------->
 
         <div class="col-lg-6">
+          <div class="d-flex flex-column gap-4">
 
             {% set title %}
             <i class="bi bi-music-note-list me-2"></i>{{ t.music_player_title }}
@@ -299,6 +300,73 @@
 
             {% include "components/status_card.html" %}
 
+            {% set title %}
+            <i class="bi bi-bluetooth me-2"></i>{{ t.bluetooth_title }}
+            {% endset %}
+
+            {% set header_right %}
+            <span class="fw-normal small">{{ t.status_label }}</span>
+            <strong id="bluetooth-status" class="small">{{ t.bluetooth_status_off }}</strong>
+            {% endset %}
+
+            {% set body %}
+            <div id="bluetooth-unavailable" class="text-muted small d-none">
+                {{ t.bluetooth_unavailable }}
+            </div>
+
+            <div id="bluetooth-fields" class="d-none">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                  <div class="d-flex align-items-center gap-2">
+                      <span>
+                          {{ t.bluetooth_channels_label }}
+                      </span>
+
+                      <select
+                          id="bluetooth-channels"
+                          class="form-select form-select-sm w-auto">
+                      </select>
+                  </div>
+
+                  <div class="form-check form-switch mb-0">
+                      <input
+                          class="form-check-input"
+                          type="checkbox"
+                          role="switch"
+                          id="bluetooth-power-toggle"
+                      >
+                      <label class="form-check-label" for="bluetooth-power-toggle">
+                          {{ t.bluetooth_power_label }}
+                      </label>
+                  </div>
+                </div>
+
+                <hr>
+
+                <div class="d-flex justify-content-around gap-2">
+                  <button
+                      id="btn-bluetooth-pair"
+                      class="btn btn-primary player-transport-btn"
+                      onclick="startBluetoothPairing()"
+                  >
+                      <i class="bi bi-bluetooth fs-3"></i>
+                      <small>{{ t.btn_bluetooth_pair }}</small>
+                  </button>
+
+                  <button
+                      id="btn-bluetooth-forget"
+                      class="btn btn-outline-danger player-transport-btn"
+                      onclick="forgetBluetoothDevices()"
+                  >
+                      <i class="bi bi-x-circle fs-3"></i>
+                      <small>{{ t.btn_bluetooth_forget }}</small>
+                  </button>
+                </div>
+            </div>
+            {% endset %}
+
+            {% include "components/status_card.html" %}
+
+          </div>
         </div>
 
     </div>

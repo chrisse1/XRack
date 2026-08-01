@@ -178,6 +178,25 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "alert_settings_change_failed": "Änderung fehlgeschlagen: {message}",
         "alert_change_failed": "Änderung fehlgeschlagen.",
+
+        # Bluetooth-Karte
+        "bluetooth_title": "Bluetooth",
+        "bluetooth_channels_label": "Zielkanäle:",
+        "bluetooth_power_label": "Bluetooth",
+        "bluetooth_status_off": "Aus",
+        "bluetooth_status_ready": "Bereit",
+        "bluetooth_status_pairing": "Koppelbar...",
+        "bluetooth_status_connected": "Verbunden: {name}",
+        "bluetooth_unavailable": (
+            "Bluetooth (BlueZ) nicht gefunden - Funktion nicht "
+            "verfügbar."
+        ),
+        "btn_bluetooth_pair": "Koppeln",
+        "btn_bluetooth_forget": "Vergessen",
+        "confirm_bluetooth_forget": "Alle gekoppelten Geräte wirklich vergessen?",
+        "alert_bluetooth_pairing_started": (
+            "Koppelbar für 2 Minuten - jetzt am Handy/Tablet verbinden."
+        ),
     },
     "en": {
         # Audio interface
@@ -345,6 +364,24 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "alert_settings_change_failed": "Change failed: {message}",
         "alert_change_failed": "Change failed.",
+
+        # Bluetooth card
+        "bluetooth_title": "Bluetooth",
+        "bluetooth_channels_label": "Target channels:",
+        "bluetooth_power_label": "Bluetooth",
+        "bluetooth_status_off": "Off",
+        "bluetooth_status_ready": "Ready",
+        "bluetooth_status_pairing": "Pairing mode...",
+        "bluetooth_status_connected": "Connected: {name}",
+        "bluetooth_unavailable": (
+            "Bluetooth (BlueZ) not found - feature not available."
+        ),
+        "btn_bluetooth_pair": "Pair",
+        "btn_bluetooth_forget": "Forget",
+        "confirm_bluetooth_forget": "Really forget all paired devices?",
+        "alert_bluetooth_pairing_started": (
+            "Pairing mode for 2 minutes - connect from your phone/tablet now."
+        ),
     },
 }
 
