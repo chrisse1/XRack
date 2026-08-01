@@ -204,7 +204,7 @@ if [ -t 0 ] && command -v nmcli >/dev/null 2>&1; then
 
                         XRACK_WLAN_CLIENT_SSID="${HOME_SSID}"
 
-                        sudo nmcli connection up "XRack-Home" \
+                        sudo nmcli connection up "XRack-Home" ifname "${CLIENT_IFACE}" \
                             || echo "Warnung: Verbindung zu '${HOME_SSID}' konnte nicht sofort hergestellt werden (SSID/Passwort prüfen)."
                     else
                         echo "Warnung: WLAN-Client-Profil konnte nicht angelegt werden."
@@ -232,7 +232,7 @@ if [ -t 0 ] && command -v nmcli >/dev/null 2>&1; then
 
                         XRACK_WLAN_AP_SSID="${AP_SSID}"
 
-                        sudo nmcli connection up "XRack-AP" \
+                        sudo nmcli connection up "XRack-AP" ifname "${AP_IFACE}" \
                             || echo "Warnung: Access Point konnte nicht gestartet werden."
                     else
                         echo "Warnung: Access-Point-Profil konnte nicht angelegt werden."
