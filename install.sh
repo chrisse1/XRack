@@ -290,41 +290,47 @@ if [ -t 0 ] && command -v nmcli >/dev/null 2>&1; then
 
                         if [ "${XRACK_BRIDGE_SETUP}" != "n" ] && [ "${XRACK_BRIDGE_SETUP}" != "N" ]; then
 
-                            echo "XRack: Bridge aus eth0 und ${AP_IFACE} wird eingerichtet..."
+                            echo "XRack: Bridge aus eth0 und ${AP_IFACE} wird vorbereitet..."
+                            echo "Hinweis: Wird jetzt nur angelegt, nicht sofort aktiviert - viele"
+                            echo "konfigurieren den Pi anfangs per SSH über eth0, das würde sonst"
+                            echo "genau jetzt abbrechen. Aktiv wird die Bridge erst nach einem"
+                            echo "Neustart (Abfrage dazu kommt ganz am Ende)."
+
+                            #
+                            # Das bisherige eth0-Profil wird nur deaktiviert (nicht
+                            # gelöscht!), damit eine gerade laufende SSH-Sitzung
+                            # über eth0 nicht sofort abreißt. Es wird erst beim
+                            # nächsten Neustart durch das Bridge-Profil ersetzt.
+                            #
 
                             ETH0_CON="$(nmcli -t -f NAME,DEVICE connection show | awk -F: '$2=="eth0"{print $1; exit}')"
 
-                            if [ -n "${ETH0_CON}" ]; then
-                                sudo nmcli connection delete "${ETH0_CON}" >/dev/null 2>&1 || true
+                            if [ -n "${ETH0_CON}" ] && [ "${ETH0_CON}" != "XRack-Bridge-eth0" ]; then
+                                sudo nmcli connection modify "${ETH0_CON}" connection.autoconnect no
                             fi
 
                             sudo nmcli connection delete "XRack-Bridge-eth0" >/dev/null 2>&1 || true
                             sudo nmcli connection delete "XRack-Bridge" >/dev/null 2>&1 || true
 
-                            if sudo nmcli connection add type bridge ifname br0 con-name "XRack-Bridge" >/dev/null \
+                            if sudo nmcli connection add type bridge ifname br0 con-name "XRack-Bridge" \
+                                connection.autoconnect yes >/dev/null \
                                 && sudo nmcli connection modify "XRack-Bridge" ipv4.method shared \
                                 && sudo nmcli connection add type ethernet ifname eth0 con-name "XRack-Bridge-eth0" \
-                                    master "XRack-Bridge" slave-type bridge >/dev/null; then
+                                    master "XRack-Bridge" slave-type bridge connection.autoconnect yes >/dev/null; then
 
                                 # Das Setzen von master/slave-type auf dem AP-Profil
-                                # löscht nebenbei dessen IPv4/IPv6-Einstellungen
-                                # (Bridge-Slaves bekommen keine eigene IP-Konfiguration
-                                # - das übernimmt die Bridge) und kann dabei auch das
-                                # gespeicherte WLAN-Passwort zurücksetzen. Deshalb wird
-                                # es im selben Schritt gleich wieder mitgesetzt.
+                                # kann dabei das gespeicherte WLAN-Passwort
+                                # zurücksetzen - deshalb wird es im selben Schritt
+                                # gleich wieder mitgesetzt. Die Aktivierung selbst
+                                # (nmcli connection up) passiert bewusst nicht hier,
+                                # sondern erst nach dem Neustart am Ende des Skripts.
                                 sudo nmcli connection modify "XRack-AP" \
                                     master "XRack-Bridge" slave-type bridge \
                                     wifi-sec.psk "${AP_PASSWORD}" \
-                                    wifi-sec.psk-flags 0
+                                    wifi-sec.psk-flags 0 \
+                                    connection.autoconnect yes
 
-                                sudo nmcli connection up "XRack-Bridge" >/dev/null
-                                sudo nmcli connection up "XRack-Bridge-eth0" ifname eth0 >/dev/null
-
-                                if sudo nmcli connection up "XRack-AP" ifname "${AP_IFACE}"; then
-                                    XRACK_WLAN_BRIDGE="ja"
-                                else
-                                    echo "Warnung: Access Point konnte nach dem Bridgen nicht neu gestartet werden."
-                                fi
+                                XRACK_WLAN_BRIDGE="ja"
                             else
                                 echo "Warnung: Bridge konnte nicht eingerichtet werden."
                             fi
@@ -429,8 +435,39 @@ fi
 
 if [ "${XRACK_WLAN_BRIDGE}" = "ja" ]; then
     echo "Ethernet+AP gebridged:    eth0 (Mischpult) und Access Point im selben Netz (br0)"
+    echo "                          (wird erst nach einem Neustart aktiv, siehe unten)"
 fi
 
 if [ -n "${XRACK_WLAN_CLIENT_SSID}" ] || [ -n "${XRACK_WLAN_AP_SSID}" ]; then
     echo "WLAN-Status pruefen:      nmcli connection show"
+fi
+
+#
+# Falls eine Ethernet+AP-Bridge eingerichtet wurde, wird sie erst
+# jetzt - ganz am Ende, nach Sudoers/systemd-Setup - zur Aktivierung
+# angeboten. Ein Neustart hier ist sicher, weil die komplette
+# Installation zu diesem Zeitpunkt bereits fertig ist.
+#
+
+if [ "${XRACK_WLAN_BRIDGE}" = "ja" ]; then
+
+    echo ""
+    echo "Die Ethernet+AP-Bridge wird erst nach einem Neustart aktiv"
+    echo "(damit eine laufende SSH-Verbindung über eth0 nicht mitten in"
+    echo "der Installation abbricht)."
+
+    if [ -t 0 ]; then
+
+        echo ""
+        read -r -p "Jetzt neu starten? [j/N]: " XRACK_REBOOT_NOW || true
+
+        if [ "${XRACK_REBOOT_NOW}" = "j" ] || [ "${XRACK_REBOOT_NOW}" = "J" ]; then
+            echo "XRack: Neustart..."
+            sudo reboot
+        else
+            echo "Bitte bei Gelegenheit manuell neu starten: sudo reboot"
+        fi
+    else
+        echo "Bitte manuell neu starten, sobald es passt: sudo reboot"
+    fi
 fi

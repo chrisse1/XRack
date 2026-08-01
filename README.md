@@ -84,7 +84,12 @@ can additionally bridge that Ethernet interface with the access point
 (`XRack-Bridge`) so the console and app-connected phones/tablets end
 up on the same network - otherwise a control app on an AP client
 generally can't discover the console at all, since it lives on a
-separate, unreachable subnet.
+separate, unreachable subnet. The bridge is only prepared during
+installation, not activated immediately - many people configure a
+freshly flashed Pi over SSH via Ethernet, and bridging eth0 right away
+would cut that session. It's applied on the next reboot instead, which
+the installer offers to do right at the end, once everything else is
+already set up.
 
 Start/check manually:
 
@@ -193,7 +198,12 @@ Installer dieses Ethernet-Interface zusätzlich mit dem Access Point
 bridgen (`XRack-Bridge`), damit Pult und per App verbundene
 Handys/Tablets im selben Netz landen - sonst findet eine Steuer-App
 auf einem AP-Client das Pult in der Regel gar nicht, weil es in einem
-separaten, nicht erreichbaren Subnetz hängt.
+separaten, nicht erreichbaren Subnetz hängt. Die Bridge wird bei der
+Installation nur vorbereitet, nicht sofort aktiviert - viele
+konfigurieren einen frisch geflashten Pi per SSH über Ethernet, und
+eth0 sofort zu bridgen würde genau diese Verbindung kappen. Aktiv wird
+sie erst beim nächsten Neustart, den der Installer ganz am Ende
+anbietet, wenn der Rest der Installation bereits fertig ist.
 
 Manuell starten/prüfen:
 
