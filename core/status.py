@@ -60,6 +60,8 @@ class SystemStatus(BaseModel):
     music_playing: bool = False
     music_paused: bool = False
     music_track: str = ""
+    music_track_title: str = ""
+    music_track_artist: str = ""
     music_folder_mode: bool = False
     music_channels: int = 2
     music_start_channel: int = 0

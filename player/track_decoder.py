@@ -9,9 +9,63 @@ Voraussetzung: ffmpeg ist auf dem System installiert
 (z.B. `sudo apt install ffmpeg`).
 """
 
+import json
 import logging
 import subprocess
 from pathlib import Path
+
+
+def probe_tags(path: Path) -> dict[str, str]:
+    """
+    Liest Titel/Interpret einer Musikdatei über ffprobe aus
+    eingebetteten Metadaten (ID3 o.ä.) aus. Liefert leere Strings,
+    wenn keine Tags vorhanden sind oder ffprobe fehlschlägt - das
+    Frontend zeigt dann wie bisher den Dateinamen an.
+    """
+
+    try:
+
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v", "error",
+                "-print_format", "json",
+                "-show_entries", "format_tags=title,artist",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        data = json.loads(result.stdout)
+
+        tags = data.get("format", {}).get("tags", {}) or {}
+
+        title = ""
+        artist = ""
+
+        for key, value in tags.items():
+
+            if not isinstance(value, str):
+                continue
+
+            if key.lower() == "title" and not title:
+                title = value.strip()
+            elif key.lower() == "artist" and not artist:
+                artist = value.strip()
+
+        return {"title": title, "artist": artist}
+
+    except (
+        subprocess.SubprocessError,
+        FileNotFoundError,
+        ValueError,
+        OSError,
+        json.JSONDecodeError,
+    ):
+
+        return {"title": "", "artist": ""}
 
 
 def probe_duration(path: Path) -> float:

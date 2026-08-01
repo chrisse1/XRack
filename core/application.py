@@ -56,6 +56,11 @@ class Application:
             1,
         )
 
+        self.record_name_prefix = self.state_store.get(
+            "record_name_prefix",
+            "Soundcheck",
+        )
+
         self.recorder = Recorder(
             self.audio_core.backend
         )
@@ -213,6 +218,10 @@ class Application:
         self.status.music_paused = self.music_player.paused
 
         self.status.music_track = self.music_player.current_track
+
+        self.status.music_track_title = self.music_player.current_track_title
+
+        self.status.music_track_artist = self.music_player.current_track_artist
 
         self.status.music_folder_mode = self.music_player.folder_mode
 
@@ -450,6 +459,32 @@ class Application:
         self.state_store.set(
             "music_channel",
             start_channel,
+        )
+
+        return True
+
+    def set_record_name_prefix(self, prefix: str) -> bool:
+        """
+        Ändert das Namenspräfix für neue Aufnahmen (z.B. "Soundcheck"
+        -> Dateien "Soundcheck-1.w64", "Soundcheck-2.w64", ...).
+        """
+
+        prefix = prefix.strip()
+
+        if (
+            not prefix
+            or len(prefix) > 40
+            or "/" in prefix
+            or "\\" in prefix
+            or prefix in (".", "..")
+        ):
+            return False
+
+        self.record_name_prefix = prefix
+
+        self.state_store.set(
+            "record_name_prefix",
+            prefix,
         )
 
         return True

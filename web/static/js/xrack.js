@@ -819,6 +819,16 @@ async function setMusicChannelPreference(startChannel) {
     console.log(result);
 }
 
+function formatTrackLabel(data) {
+    if (data.music_track_title) {
+        return data.music_track_artist
+            ? `${data.music_track_artist} - ${data.music_track_title}`
+            : data.music_track_title;
+    }
+
+    return data.music_track || "-";
+}
+
 function updateMusicStatus(data) {
     const status = document.getElementById("player-status");
     if (status) {
@@ -829,7 +839,7 @@ function updateMusicStatus(data) {
 
     const title = document.getElementById("player-title");
     if (title) {
-        title.textContent = data.music_playing ? (data.music_track || "-") : "-";
+        title.textContent = data.music_playing ? formatTrackLabel(data) : "-";
     }
 
     const mode = document.getElementById("player-mode");
@@ -1290,6 +1300,7 @@ async function loadSettings() {
 
         document.getElementById("settings-language").value = data.language;
         document.getElementById("settings-port").value = data.port;
+        document.getElementById("settings-recording-prefix").value = data.record_name_prefix;
 
         applyWlanSettings(data.wlan);
     } catch (error) {
@@ -1411,6 +1422,30 @@ async function restartService() {
     setTimeout(() => {
         window.location.href = `${window.location.protocol}//${window.location.hostname}:${newPort}/`;
     }, 5000);
+}
+
+// ------------------------------------------------------------
+// Aufnahmename
+// ------------------------------------------------------------
+
+document.getElementById("btn-settings-recording-save").addEventListener("click", saveRecordingPrefix);
+
+async function saveRecordingPrefix() {
+    const prefix = document.getElementById("settings-recording-prefix").value;
+
+    const response = await fetch("/api/settings/recording", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prefix })
+    });
+    const result = await response.json();
+
+    if (!result.success) {
+        alert(I18N.alert_change_failed);
+        return;
+    }
+
+    alert(I18N.settings_saved);
 }
 
 // ------------------------------------------------------------

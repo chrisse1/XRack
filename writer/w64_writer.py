@@ -43,13 +43,14 @@ class W64Writer(AudioWriter):
         channels: int,
         sample_rate: int,
         bits_per_sample: int,
+        name_prefix: str = "Soundcheck",
     ):
 
         self.channels = channels
         self.sample_rate = sample_rate
         self.bits_per_sample = bits_per_sample
 
-        filename = self.create_filename("w64")
+        filename = self.create_filename("w64", prefix=name_prefix)
 
         self.file = open(
             filename,

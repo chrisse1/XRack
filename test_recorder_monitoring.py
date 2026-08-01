@@ -49,7 +49,7 @@ class FakeWriter:
         self.close_count = 0
         self.directory = Path(".")
 
-    def open(self, channels, sample_rate, bits_per_sample):
+    def open(self, channels, sample_rate, bits_per_sample, name_prefix="Soundcheck"):
         self.filename = "fake.w64"
         self.opened = True
 

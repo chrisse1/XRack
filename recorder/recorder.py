@@ -82,10 +82,11 @@ class Recorder:
 
         return self.meter.levels
 
-    def start(self) -> bool:
+    def start(self, name_prefix: str = "Soundcheck") -> bool:
         """
         Startet die Aufnahme. Läuft bereits eine reine
         Pegelprüfung, wird sie nahtlos zur Aufnahme erweitert.
+        `name_prefix` bestimmt den Dateinamen ("<Präfix>-<Nummer>").
         """
 
         if self.recording:
@@ -99,6 +100,7 @@ class Recorder:
             channels=self.backend.channels,
             sample_rate=self.backend.rate,
             bits_per_sample=24,
+            name_prefix=name_prefix,
         )
 
         self._current_filename = self.writer.filename

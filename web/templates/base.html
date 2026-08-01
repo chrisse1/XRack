@@ -267,6 +267,28 @@
 
                 <hr>
 
+                <!-- Aufnahmename ----------------------------------------->
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">
+                        {{ t.settings_recording_label }}
+                    </label>
+                    <div class="d-flex gap-2">
+                        <input
+                            type="text"
+                            id="settings-recording-prefix"
+                            class="form-control form-control-sm"
+                            maxlength="40"
+                        >
+                        <button id="btn-settings-recording-save" class="btn btn-primary btn-sm">
+                            {{ t.btn_save }}
+                        </button>
+                    </div>
+                    <small class="text-body-secondary">{{ t.settings_recording_hint }}</small>
+                </div>
+
+                <hr>
+
                 <!-- WLAN --------------------------------------------->
 
                 <div id="settings-wlan-unavailable" class="text-muted d-none">

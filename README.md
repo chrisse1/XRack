@@ -14,12 +14,15 @@ the Pi itself.
 ### Features
 
 - **Multichannel recording** straight from the mixing console to
-  Wave64 (.w64), with a freely selectable channel count
+  Wave64 (.w64), with a freely selectable channel count and a
+  configurable, consecutively numbered file name (e.g.
+  "Soundcheck-1", "Soundcheck-2", ...)
 - **Virtual soundcheck**: recordings are played back on the same
   channels they were recorded on
 - **Music player**: shuffle playback with looping for a whole folder
   (e.g. walk-in music) or single files, each on a freely selectable
-  channel pair
+  channel pair - shows title/artist from a file's metadata when
+  available
 - **Level meter** to check input levels before recording
 - **Web interface** (Bootstrap) in German or English, installable as a
   PWA ("Add to Home Screen" on iPad/phone)
@@ -129,12 +132,14 @@ nötig.
 ### Funktionen
 
 - **Mehrkanalaufnahme** direkt vom Mischpult in Wave64 (.w64), mit frei
-  wählbarer Kanalzahl
+  wählbarer Kanalzahl und einem einstellbaren, fortlaufend
+  nummerierten Dateinamen (z.B. "Soundcheck-1", "Soundcheck-2", ...)
 - **Virtueller Soundcheck**: Aufnahmen werden auf denselben Kanälen
   wiedergegeben, auf denen sie aufgenommen wurden
 - **Musikplayer**: Ordner mit Zufallswiedergabe und Dauerschleife
   (z.B. Pause-Musik) oder einzelne Dateien, jeweils auf einem frei
-  wählbaren Kanalpaar
+  wählbaren Kanalpaar - zeigt Titel/Interpret aus den Metadaten einer
+  Datei an, falls vorhanden
 - **Pegelmesser** zur Kontrolle der Eingangspegel vor der Aufnahme
 - **Webinterface** (Bootstrap) auf Deutsch oder Englisch, auch als PWA
   installierbar ("Zum Home-Bildschirm hinzufügen" auf iPad/Handy)

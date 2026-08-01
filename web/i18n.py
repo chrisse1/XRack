@@ -119,6 +119,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_language_label": "Sprache",
         "settings_port_label": "Port",
         "settings_port_hint": "Wird erst nach einem Neustart wirksam.",
+        "settings_recording_label": "Aufnahmename",
+        "settings_recording_hint": (
+            "Aufnahmen werden fortlaufend nummeriert benannt, z.B. "
+            '"Soundcheck-1", "Soundcheck-2", ...'
+        ),
         "btn_save": "Speichern",
         "btn_restart_now": "Jetzt neu starten",
         "confirm_restart": (
@@ -279,6 +284,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_language_label": "Language",
         "settings_port_label": "Port",
         "settings_port_hint": "Takes effect after a restart.",
+        "settings_recording_label": "Recording name",
+        "settings_recording_hint": (
+            'Recordings are numbered consecutively, e.g. "Soundcheck-1", '
+            '"Soundcheck-2", ...'
+        ),
         "btn_save": "Save",
         "btn_restart_now": "Restart now",
         "confirm_restart": (

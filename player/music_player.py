@@ -12,7 +12,7 @@ import alsaaudio
 from audio.audio_playback_backend import AudioPlaybackBackend
 from audio.models import AudioDevice
 from player.music_library import MusicLibrary
-from player.track_decoder import TrackDecoder, probe_duration
+from player.track_decoder import TrackDecoder, probe_duration, probe_tags
 
 CHANNELS = 2
 CHUNK_FRAMES = 1024
@@ -57,6 +57,8 @@ class MusicPlayer:
         self._index = 0
 
         self._current_track = ""
+        self._current_track_title = ""
+        self._current_track_artist = ""
 
         self._skip_requested = False
 
@@ -85,6 +87,14 @@ class MusicPlayer:
     @property
     def current_track(self) -> str:
         return self._current_track
+
+    @property
+    def current_track_title(self) -> str:
+        return self._current_track_title
+
+    @property
+    def current_track_artist(self) -> str:
+        return self._current_track_artist
 
     @property
     def channels(self) -> int:
@@ -333,6 +343,10 @@ class MusicPlayer:
 
             self._current_track = track.name
 
+            tags = probe_tags(track)
+            self._current_track_title = tags["title"]
+            self._current_track_artist = tags["artist"]
+
             self._track_duration = probe_duration(track)
 
             if self._play_track(track, chunk_bytes):
@@ -352,6 +366,8 @@ class MusicPlayer:
         self._playing = False
 
         self._current_track = ""
+        self._current_track_title = ""
+        self._current_track_artist = ""
 
         self.backend.close()
 

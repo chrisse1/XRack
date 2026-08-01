@@ -61,6 +61,9 @@ class WifiCredentials(BaseModel):
 class BridgeSelection(BaseModel):
     enabled: bool
 
+class RecordingPrefixSelection(BaseModel):
+    prefix: str
+
 @router.post("/api/audio/select")
 async def audio_select(
     selection: AudioSelection,
@@ -128,7 +131,9 @@ async def recorder_start(request: Request):
 
     application = request.app.state.application
 
-    success = application.recorder.start()
+    success = application.recorder.start(
+        application.record_name_prefix
+    )
 
     return {
         "success": success
@@ -436,7 +441,23 @@ async def get_settings(request: Request):
     return {
         "language": application.config.data.application.language,
         "port": application.config.data.server.port,
+        "record_name_prefix": application.record_name_prefix,
         "wlan": wlan,
+    }
+
+
+@router.post("/api/settings/recording")
+async def set_recording_prefix(
+    selection: RecordingPrefixSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success = application.set_record_name_prefix(selection.prefix)
+
+    return {
+        "success": success
     }
 
 
