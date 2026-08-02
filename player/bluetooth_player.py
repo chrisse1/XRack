@@ -20,6 +20,18 @@ von AudioPlaybackBackend erwartete S32_LE bei der Ziel-Samplerate des
 Interfaces übernimmt deshalb, wie schon beim Abspielen von
 Musikdateien (siehe player/track_decoder.py), ein ffmpeg-Subprozess.
 
+Wichtig: die bluealsa-Capture-Verbindung (pcm) wird für einen
+Kanalwechsel NIE geschlossen und neu geöffnet. Live-Tests zeigten,
+dass bluealsa (Stand 4.3.1-3) nach wiederholtem Öffnen/Schließen
+desselben Transports dauerhaft "Device or resource busy" liefert -
+reproduzierbar sogar mit bluealsas eigenem Kommandozeilenwerkzeug
+(bluealsa-aplay), also unabhängig von XRack. Ein Kanalwechsel schließt
+und öffnet deshalb ausschließlich AudioPlaybackBackend (rein lokales
+ALSA-Wiedergabegerät, ohne bluealsa-Beteiligung) neu, während
+bluealsa-Capture und ffmpeg unangetastet weiterlaufen. Nur bei einer
+echten Neuverbindung (Handy verbindet sich neu) wird die
+bluealsa-Verbindung tatsächlich neu aufgebaut.
+
 Es wird kein Playback erzwungen, solange kein Handy tatsächlich
 Audio schickt: Ein Hintergrund-Thread sucht laufend nach einem
 verbundenen Gerät und versucht, dessen Capture-PCM zu öffnen - das
@@ -76,7 +88,7 @@ class BluetoothPlayer:
 
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
-        self._restart_event = threading.Event()
+        self._channel_change_event = threading.Event()
 
     @property
     def enabled(self) -> bool:
@@ -93,11 +105,9 @@ class BluetoothPlayer:
     def set_start_channel(self, start_channel: int) -> None:
         """
         Ändert das Ziel-Stereopaar (0-basiert). Läuft gerade eine
-        Wiedergabe, wird der Stream kurz neu verbunden, damit die
-        Änderung sofort hörbar wirkt - ein reines Aktualisieren von
-        `_start_channel` würde die schon offene AudioPlaybackBackend/
-        ChannelInserter-Verbindung nicht mehr erreichen, die ihr
-        Ziel-Stereopaar beim Öffnen fest einbettet.
+        Wiedergabe, wird nur das lokale Wiedergabegerät kurz neu
+        geöffnet (siehe Moduldoku) - die bluealsa-Verbindung bleibt
+        dabei komplett unberührt.
         """
 
         if start_channel == self._start_channel:
@@ -106,7 +116,7 @@ class BluetoothPlayer:
         self._start_channel = start_channel
 
         if self._streaming:
-            self._restart_event.set()
+            self._channel_change_event.set()
 
     def start(
         self,
@@ -127,7 +137,7 @@ class BluetoothPlayer:
         self._rate = rate
         self._enabled = True
         self._stop_event.clear()
-        self._restart_event.clear()
+        self._channel_change_event.clear()
 
         self._thread = threading.Thread(
             target=self._monitor,
@@ -149,7 +159,7 @@ class BluetoothPlayer:
 
         self._enabled = False
         self._stop_event.set()
-        self._restart_event.clear()
+        self._channel_change_event.clear()
 
         if self._thread is not None:
             self._thread.join()
@@ -185,7 +195,9 @@ class BluetoothPlayer:
         Versucht, den Audiostream eines verbundenen Geräts zu öffnen
         und weiterzuleiten, solange er läuft. Kehrt zurück, sobald
         kein Stream (mehr) verfügbar ist - der Aufrufer versucht es
-        dann erneut.
+        dann erneut. Ein Kanalwechsel während der Wiedergabe (siehe
+        set_start_channel) führt NICHT zu einem Rücksprung hierher -
+        er wird direkt in der Schreibschleife unten behandelt.
         """
 
         try:
@@ -255,14 +267,7 @@ class BluetoothPlayer:
 
         self._streaming = True
 
-        #
-        # Ein Kanalwechsel, der genau während des Verbindungsaufbaus
-        # oben eintraf, darf die gerade frisch mit dem aktuellen
-        # `_start_channel` geöffnete Wiedergabe nicht sofort wieder
-        # abbrechen - das Event bezieht sich nur auf eine schon
-        # laufende Wiedergabe mit veraltetem Zielkanal.
-        #
-        self._restart_event.clear()
+        self._channel_change_event.clear()
 
         self.logger.info(
             "Bluetooth-Wiedergabe gestartet: %s -> Kanal %d+%d",
@@ -274,25 +279,17 @@ class BluetoothPlayer:
         #
         # bluealsa-Capture (pcm) und ffmpeg-stdin gehören exklusiv
         # diesem Feeder-Thread - ein blockierendes pcm.read() lässt
-        # sich von außen nicht sicher unterbrechen. Die Schleife prüft
-        # deshalb VOR jedem (bis zu ~23ms blockierenden) read() selbst
-        # auf Stop/Restart, statt nur passiv auf einen Lese- oder
-        # Schreibfehler zu warten - sonst bliebe pcm bei einem
-        # Kanalwechsel noch offen, während der Haupt-Thread schon eine
-        # neue bluealsa-Verbindung für dasselbe Gerät versucht (die
-        # dann mit "Device or resource busy" scheitert, weil bluealsa
-        # pro Transport nur einen Client gleichzeitig erlaubt).
+        # sich von außen nicht sicher unterbrechen, deshalb läuft es
+        # in einem eigenen Thread, den dieser Aufruf am Ende (nach
+        # Abbruch/Fehler der Leseschleife unten) einfach mitbeendet.
+        # Ein Kanalwechsel (siehe unten) rührt dieses Handle nicht an.
         #
 
         def feed() -> None:
 
             try:
 
-                while (
-                    self._enabled
-                    and not self._stop_event.is_set()
-                    and not self._restart_event.is_set()
-                ):
+                while self._enabled and not self._stop_event.is_set():
 
                     length, data = pcm.read()
 
@@ -324,11 +321,11 @@ class BluetoothPlayer:
 
         try:
 
-            while (
-                self._enabled
-                and not self._stop_event.is_set()
-                and not self._restart_event.is_set()
-            ):
+            while self._enabled and not self._stop_event.is_set():
+
+                if self._channel_change_event.is_set():
+                    self._channel_change_event.clear()
+                    self._reopen_backend()
 
                 data = ffmpeg_process.stdout.read(chunk_bytes)
 
@@ -339,9 +336,6 @@ class BluetoothPlayer:
 
         finally:
 
-            restarting = self._restart_event.is_set()
-            self._restart_event.clear()
-
             feeder_thread.join(timeout=2)
 
             self._terminate_ffmpeg(ffmpeg_process)
@@ -350,10 +344,37 @@ class BluetoothPlayer:
             self._streaming = False
 
             self.logger.info(
-                "Bluetooth-Wiedergabe %s (%s).",
-                "wird mit neuem Zielkanal neu verbunden" if restarting else "beendet",
+                "Bluetooth-Wiedergabe beendet (%s).",
                 self._connected_name,
             )
+
+    def _reopen_backend(self) -> None:
+        """
+        Öffnet nur das lokale Wiedergabegerät mit dem neuen
+        Zielkanal neu - die bluealsa-Verbindung/ffmpeg-Pipeline
+        läuft währenddessen ununterbrochen weiter.
+        """
+
+        self.backend.close()
+
+        if not self.backend.open(
+            self._device,
+            channels=CHANNELS,
+            rate=self._rate,
+            start_channel=self._start_channel,
+            sample_format=alsaaudio.PCM_FORMAT_S32_LE,
+        ):
+            self.logger.error(
+                "Bluetooth: Wiedergabegerät konnte nach Kanalwechsel "
+                "nicht neu geöffnet werden (belegt?)."
+            )
+            return
+
+        self.logger.info(
+            "Bluetooth: Zielkanal gewechselt -> Kanal %d+%d",
+            self._start_channel + 1,
+            self._start_channel + 2,
+        )
 
     @staticmethod
     def _terminate_ffmpeg(process: subprocess.Popen) -> None:
