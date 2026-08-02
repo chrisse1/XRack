@@ -6,116 +6,55 @@
 
 ## English
 
-XRack is a web-based multichannel recording and playback system for
-digital mixing consoles. It runs on a Raspberry Pi and is fully
+XRack is a web-based multichannel recorder/player built for **live use
+with Behringer X-series digital mixing consoles and compatible
+devices** (XAir, X32, ...). It runs on a Raspberry Pi and is fully
 controlled through a web interface - no screen or keyboard needed on
 the Pi itself.
 
 ### Features
 
-- **Multichannel recording** straight from the mixing console to
-  Wave64 (.w64), with a freely selectable channel count and a
-  configurable, consecutively numbered file name (e.g.
-  "Soundcheck-1", "Soundcheck-2", ...)
-- **Virtual soundcheck**: recordings are played back on the same
-  channels they were recorded on
-- **Music player**: shuffle playback with looping for a whole folder
-  (e.g. walk-in music) or single files, each on a freely selectable
-  channel pair - shows title/artist from a file's metadata when
-  available
-- **Level meter** to check input levels before recording
-- **Web interface** (Bootstrap) in German or English, installable as a
-  PWA ("Add to Home Screen" on iPad/phone)
-- **Settings dialog** (gear icon in the header) to change language,
-  port, home Wi-Fi/access point credentials, and the Ethernet+AP
-  bridge - no re-running the installer needed
-- **Bluetooth audio**: turn XRack into a Bluetooth speaker - pair a
-  phone/tablet from the dashboard and route its audio stream onto a
-  freely selectable channel pair, just like the music player
-- **Installable via script**, including automatic startup on boot via
-  systemd
+- **Virtual soundcheck**: record all channels straight from the
+  console to Wave64 (.w64), then play them back on the exact same
+  channels - lets the band soundcheck without playing live.
+- **Music player**: shuffle-play a whole folder in a loop (e.g.
+  walk-in/break music) or single files, on a freely selectable channel
+  pair - shows title/artist from the file's metadata when available.
+- **Bluetooth audio**: pair a phone/tablet from the dashboard and
+  route its audio stream onto a freely selectable channel pair, just
+  like the music player. Deliberately optional and off after every
+  restart, since Bluetooth is only partially suited for live use.
+- Level meter, a settings dialog (language/port/Wi-Fi/bridge), optional
+  Wi-Fi client + access point setup, installable as a PWA.
 
 ### Requirements
 
-XRack always reads and writes at the native channel count of the
-connected audio interface (Behringer X-series & compatible digital
-mixing consoles don't support a reduced channel count) - selecting
-individual channels happens in software.
+Tested hardware:
 
-Tested with:
+- Raspberry Pi 5
+- Behringer XAir18 (or a comparable Behringer X-series console)
+- optional: a MediaTek MT7612U USB Wi-Fi adapter, for the access point
 
-- Behringer XAir 18 on a Raspberry Pi 5, Debian Trixie
-
-A test with the Behringer X32 is still pending.
+XRack always reads and writes at the mixing console's native channel
+count (X-series consoles don't support a reduced channel count) -
+selecting individual channels happens purely in software.
 
 ### Installation (Raspberry Pi / Debian)
 
 ```bash
-git clone <repo-url> XRack
+git clone https://github.com/chrisse1/XRack.git
 cd XRack
 ./install.sh
 ```
 
-`install.sh` also installs `ffmpeg` (for the music player, decodes
-MP3/FLAC/... to raw data) and `alsa-utils` (for device detection) via
-`apt`, sets up a systemd service that starts XRack automatically on
-boot, and grants the service user a tightly scoped sudo permission to
-shut down the Pi via the web interface (nothing else - XRack does not
-run as root).
+`install.sh` installs all dependencies and sets up a systemd service
+that starts XRack automatically on boot. It interactively asks for the
+web interface's language, port, and hostname, and optionally sets up
+Wi-Fi (home network + access point) and Bluetooth audio - the prompts
+explain each step as you go.
 
-Along the way it interactively asks for the preferred language of the
-web interface (German or English), the desired port (default: 8080),
-and a hostname (default: `xrack`) - saving language and port to
-`config/local.yaml` and setting the hostname at the system level via
-`hostnamectl`. All three can be changed later: language/port by
-editing `config/local.yaml`, the hostname via `hostnamectl
-set-hostname <name>` - followed by a service restart
-(`sudo systemctl restart xrack`).
-
-After installation the web interface is reachable at
-`http://<hostname>.local:<chosen-port>` (default:
-`http://xrack.local:8080`) via mDNS (Avahi), or by IP address as a
-fallback (`http://<pi-ip>:<chosen-port>`).
-
-Optionally (if two Wi-Fi interfaces are detected and NetworkManager's
-`nmcli` is available), the installer can also set up Wi-Fi: one
-interface joins your home network as a client (for remote access to
-XRack), the other spans its own access point (default name `XRack`)
-so a mixing app can talk to XRack/the mixing console directly,
-standalone, without any router on site. It also asks for your Wi-Fi
-country (ISO code, e.g. `DE`/`US`/`GB`) and sets it via `raspi-config`
-- without it, Wi-Fi is often soft-blocked by `rfkill` on a freshly
-flashed Pi that never went through the interactive first-boot wizard.
-Both connections are configured as NetworkManager connection profiles
-(`XRack-Home` / `XRack-AP`) and can be changed later via `nmcli` or
-`nmtui`. If a mixing console is connected via Ethernet, the installer
-can additionally bridge that Ethernet interface with the access point
-(`XRack-Bridge`) so the console and app-connected phones/tablets end
-up on the same network - otherwise a control app on an AP client
-generally can't discover the console at all, since it lives on a
-separate, unreachable subnet. The bridge is only prepared during
-installation, not activated immediately - many people configure a
-freshly flashed Pi over SSH via Ethernet, and bridging eth0 right away
-would cut that session. It's applied on the next reboot instead, which
-the installer offers to do right at the end, once everything else is
-already set up.
-
-If a Bluetooth adapter is present, the installer also sets up
-Bluetooth audio (`bluez`, `bluez-alsa-utils`, `python3-dbus`,
-`python3-gi`): a `bluealsa` service acting as an A2DP sink so XRack
-shows up as a Bluetooth speaker, plus a "Just Works" pairing agent
-(a small XRack-own script - `bt-agent` from `bluez-tools` turned out
-unreliable against current BlueZ versions) that only accepts
-connections while pairing mode is switched on from the dashboard. It
-also disables `bluealsa-aplay.service` - a service bundled with
-`bluez-alsa-utils` that would otherwise auto-play every incoming
-Bluetooth stream to channel 1+2 on its own, bypassing XRack's channel
-selection entirely. Power, pairing, and the target channel pair are
-then controlled entirely from the new Bluetooth card next to the
-music player - no extra setup needed. Bluetooth is always off after a
-boot/restart regardless of its state before, since it's an optional
-feature only partially suited for live use - switch it on again from
-the dashboard whenever you actually need it.
+Afterwards the web interface is reachable at
+`http://<hostname>.local:<port>` (default: `http://xrack.local:8080`).
 
 Start/check manually:
 
@@ -123,15 +62,6 @@ Start/check manually:
 sudo systemctl start xrack     # start the service now
 sudo systemctl status xrack    # check status
 journalctl -u xrack -f         # view live logs
-```
-
-For manual development/troubleshooting outside the service (e.g. as
-used so far in this project):
-
-```bash
-sudo systemctl stop xrack      # stop the service so port 8080 is free
-source .venv/bin/activate
-python main.py
 ```
 
 ### License
@@ -144,119 +74,56 @@ XRack is licensed under the [GNU General Public License v3.0](LICENSE).
 
 ## Deutsch
 
-XRack ist ein webbasiertes Mehrkanal-Aufnahme- und Playback-System für
-digitale Mischpulte. Es läuft auf einem Raspberry Pi und wird komplett
-über ein Webinterface bedient - kein Bildschirm oder Tastatur am Pi
-nötig.
+XRack ist ein webbasiertes Mehrkanal-Recorder/Player-System für den
+**Live-Einsatz mit Behringer-Mischpulten der X-Serie und kompatiblen
+Geräten** (XAir, X32, ...). Es läuft auf einem Raspberry Pi und wird
+komplett über ein Webinterface bedient - kein Bildschirm oder Tastatur
+am Pi nötig.
 
 ### Funktionen
 
-- **Mehrkanalaufnahme** direkt vom Mischpult in Wave64 (.w64), mit frei
-  wählbarer Kanalzahl und einem einstellbaren, fortlaufend
-  nummerierten Dateinamen (z.B. "Soundcheck-1", "Soundcheck-2", ...)
-- **Virtueller Soundcheck**: Aufnahmen werden auf denselben Kanälen
-  wiedergegeben, auf denen sie aufgenommen wurden
-- **Musikplayer**: Ordner mit Zufallswiedergabe und Dauerschleife
-  (z.B. Pause-Musik) oder einzelne Dateien, jeweils auf einem frei
-  wählbaren Kanalpaar - zeigt Titel/Interpret aus den Metadaten einer
-  Datei an, falls vorhanden
-- **Pegelmesser** zur Kontrolle der Eingangspegel vor der Aufnahme
-- **Webinterface** (Bootstrap) auf Deutsch oder Englisch, auch als PWA
-  installierbar ("Zum Home-Bildschirm hinzufügen" auf iPad/Handy)
-- **Einstellungsdialog** (Zahnrad-Icon im Header) für Sprache, Port,
-  Heimnetz-/Access-Point-Zugangsdaten und die Ethernet+AP-Bridge -
-  ganz ohne erneutes Ausführen des Installationsskripts
-- **Bluetooth-Audio**: XRack als Bluetooth-Lautsprecher - Handy/Tablet
-  direkt vom Dashboard aus koppeln und dessen Audiostream auf ein frei
-  wählbares Kanalpaar legen, genau wie beim Musikplayer
-- **Installierbar per Script**, inkl. automatischem Start beim Booten
-  über systemd
+- **Virtueller Soundcheck**: Alle Kanäle direkt vom Pult in Wave64
+  (.w64) aufnehmen, danach exakt auf denselben Kanälen wieder
+  abspielen - die Band kann so soundchecken, ohne live zu spielen.
+- **Musikplayer**: Ordner mit Zufallswiedergabe in Dauerschleife (z.B.
+  Pausenmusik) oder einzelne Dateien, auf einem frei wählbaren
+  Kanalpaar - zeigt Titel/Interpret aus den Metadaten, falls vorhanden.
+- **Bluetooth-Audio**: Handy/Tablet direkt vom Dashboard aus koppeln
+  und dessen Audiostream auf ein frei wählbares Kanalpaar legen, genau
+  wie beim Musikplayer. Bewusst optional und nach jedem Neustart aus,
+  da Bluetooth für den Live-Einsatz nur bedingt geeignet ist.
+- Pegelmesser, Einstellungsdialog (Sprache/Port/WLAN/Bridge),
+  optionale WLAN-Client- und Access-Point-Einrichtung, als PWA
+  installierbar.
 
 ### Voraussetzungen
 
+Getestete Hardware:
+
+- Raspberry Pi 5
+- Behringer XAir18 (oder ein vergleichbares Mischpult der X-Serie)
+- optional: ein MediaTek MT7612U USB-WLAN-Adapter, für den Access Point
+
 XRack liest und schreibt immer mit der nativen Kanalzahl des
-angeschlossenen Audio-Interfaces (Behringer X-Serie & kompatible
-digitale Mischpulte unterstützen keine reduzierte Kanalzahl) - die
-Auswahl einzelner Kanäle passiert in Software.
-
-Getestet mit:
-
-- Behringer XAir 18 an einem Raspberry Pi 5, Debian Trixie
-
-Ein Test mit dem Behringer X32 steht noch aus.
+Mischpults (die X-Serie unterstützt keine reduzierte Kanalzahl) - die
+Auswahl einzelner Kanäle passiert rein in Software.
 
 ### Installation (Raspberry Pi / Debian)
 
 ```bash
-git clone <repo-url> XRack
+git clone https://github.com/chrisse1/XRack.git
 cd XRack
 ./install.sh
 ```
 
-`install.sh` installiert dabei auch `ffmpeg` (für den Musikspieler,
-dekodiert MP3/FLAC/... zu Rohdaten) und `alsa-utils` (für die
-Geräteerkennung) über `apt`, richtet einen systemd-Dienst ein, der
-XRack automatisch beim Booten startet, und erteilt dem Dienst-
-Benutzer eine eng begrenzte sudo-Berechtigung, um den Pi über das
-Webinterface herunterfahren zu können (sonst nichts - XRack läuft
-nicht als root).
+`install.sh` installiert alle Abhängigkeiten und richtet einen
+systemd-Dienst ein, der XRack automatisch beim Booten startet. Es
+fragt interaktiv nach Sprache, Port und Hostname des Webinterfaces und
+richtet optional WLAN (Heimnetz + Access Point) sowie Bluetooth-Audio
+ein - die Abfragen dazu erklären sich beim Durchlaufen von selbst.
 
-Dabei fragt es interaktiv nach der bevorzugten Sprache des
-Webinterfaces (Deutsch oder Englisch), dem gewünschten Port (Standard:
-8080) sowie einem Hostnamen (Standard: `xrack`) - Sprache und Port
-werden in `config/local.yaml` gespeichert, der Hostname wird direkt
-auf Systemebene per `hostnamectl` gesetzt. Alle drei lassen sich
-später ändern: Sprache/Port durch Bearbeiten von `config/local.yaml`,
-der Hostname per `hostnamectl set-hostname <name>` - jeweils gefolgt
-von einem Neustart des Dienstes (`sudo systemctl restart xrack`).
-
-Nach der Installation ist das Webinterface per mDNS (Avahi) unter
-`http://<hostname>.local:<gewählter-port>` erreichbar (Standard:
-`http://xrack.local:8080`), alternativ per IP-Adresse
-(`http://<ip-des-pi>:<gewählter-port>`).
-
-Optional (falls zwei WLAN-Interfaces erkannt werden und
-NetworkManagers `nmcli` vorhanden ist) richtet der Installer auch WLAN
-ein: ein Interface verbindet sich als Client mit deinem Heimnetz (für
-Fernzugriff auf XRack), das andere spannt einen eigenen Access Point
-auf (Standardname `XRack`), über den z.B. eine Misch-App direkt mit
-XRack/dem Mischpult sprechen kann - komplett standalone, ganz ohne
-Router vor Ort. Dabei wird auch nach dem WLAN-Land gefragt (ISO-Code,
-z.B. `DE`/`AT`/`CH`) und per `raspi-config` gesetzt - ohne das bleibt
-WLAN auf einem frisch geflashten Pi, der nie durch den interaktiven
-Ersteinrichtungs-Assistenten gelaufen ist, oft per `rfkill`
-softblockiert. Beides wird als NetworkManager-Verbindungsprofil
-(`XRack-Home` / `XRack-AP`) angelegt und lässt sich später per `nmcli`
-oder `nmtui` ändern. Hängt ein Mischpult per Ethernet am Pi, kann der
-Installer dieses Ethernet-Interface zusätzlich mit dem Access Point
-bridgen (`XRack-Bridge`), damit Pult und per App verbundene
-Handys/Tablets im selben Netz landen - sonst findet eine Steuer-App
-auf einem AP-Client das Pult in der Regel gar nicht, weil es in einem
-separaten, nicht erreichbaren Subnetz hängt. Die Bridge wird bei der
-Installation nur vorbereitet, nicht sofort aktiviert - viele
-konfigurieren einen frisch geflashten Pi per SSH über Ethernet, und
-eth0 sofort zu bridgen würde genau diese Verbindung kappen. Aktiv wird
-sie erst beim nächsten Neustart, den der Installer ganz am Ende
-anbietet, wenn der Rest der Installation bereits fertig ist.
-
-Ist ein Bluetooth-Adapter vorhanden, richtet der Installer außerdem
-Bluetooth-Audio ein (`bluez`, `bluez-alsa-utils`, `python3-dbus`,
-`python3-gi`): ein `bluealsa`-Dienst als A2DP-Sink, damit XRack als
-Bluetooth-Lautsprecher erscheint, dazu ein eigener "Just Works"-
-Kopplungs-Agent (ein kleines XRack-Skript - `bt-agent` aus
-`bluez-tools` hat sich gegen aktuelle BlueZ-Versionen als
-unzuverlässig erwiesen), der Verbindungen nur annimmt, solange der
-Koppelmodus über das Dashboard eingeschaltet ist. Zusätzlich wird
-`bluealsa-aplay.service` deaktiviert - ein mit `bluez-alsa-utils`
-mitgelieferter Dienst, der sonst jeden eingehenden Bluetooth-Stream
-selbstständig auf Kanal 1+2 abspielen würde, komplett an XRacks
-Kanalwahl vorbei. Ein-/Ausschalten, Koppeln und das Ziel-Kanalpaar
-werden danach vollständig über die neue Bluetooth-Karte neben dem
-Musikplayer gesteuert - keine weitere Einrichtung nötig. Nach jedem
-Neustart ist Bluetooth immer aus, unabhängig vom Zustand davor - es
-ist eine bewusst optionale Funktion, die für den Live-Einsatz nur
-bedingt geeignet ist, und wird bei Bedarf im Dashboard wieder
-eingeschaltet.
+Danach ist das Webinterface unter `http://<hostname>.local:<port>`
+erreichbar (Standard: `http://xrack.local:8080`).
 
 Manuell starten/prüfen:
 
@@ -264,15 +131,6 @@ Manuell starten/prüfen:
 sudo systemctl start xrack     # Dienst jetzt starten
 sudo systemctl status xrack    # Status prüfen
 journalctl -u xrack -f         # Live-Logs ansehen
-```
-
-Für die manuelle Entwicklung/Fehlersuche außerhalb des Dienstes
-(z.B. wie bisher in diesem Projekt):
-
-```bash
-sudo systemctl stop xrack      # Dienst anhalten, damit Port 8080 frei ist
-source .venv/bin/activate
-python main.py
 ```
 
 ### Lizenz
