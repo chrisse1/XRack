@@ -1,6 +1,6 @@
 application:
   name: "XRack"
-  version: "0.9.6"
+  version: "0.9.7"
   # "de" oder "en" - wird von install.sh in config/local.yaml
   # abgefragt und überschrieben.
   language: "de"

@@ -340,20 +340,22 @@
                   </div>
                 </div>
 
-                <div class="d-grid mt-2">
+                <div class="d-flex gap-2 mt-2">
                   <button
                       id="btn-bluetooth-pair"
-                      class="btn btn-primary btn-sm"
+                      class="btn btn-primary btn-sm flex-fill"
                       onclick="startBluetoothPairing()"
                   >
                       <i class="bi bi-bluetooth me-2"></i>{{ t.btn_bluetooth_pair }}
                   </button>
-                </div>
 
-                <div class="small fw-semibold mt-2 mb-1">{{ t.bluetooth_paired_title }}</div>
-
-                <div id="bluetooth-paired-list">
-                    <div class="text-muted small">{{ t.bluetooth_no_paired_devices }}</div>
+                  <button
+                      class="btn btn-outline-secondary btn-sm flex-fill"
+                      data-bs-toggle="modal"
+                      data-bs-target="#bluetoothDevicesModal"
+                  >
+                      <i class="bi bi-list-ul me-2"></i>{{ t.btn_bluetooth_devices }}
+                  </button>
                 </div>
             </div>
             {% endset %}

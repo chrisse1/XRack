@@ -117,14 +117,22 @@ class BluetoothControl:
 
     def paired_devices(self) -> list[dict]:
         """
-        Liefert alle gekoppelten Geräte (MAC + lesbarer Name) fürs
-        Webinterface, damit man sieht (und einzeln vergessen kann),
-        was tatsächlich gekoppelt ist - unabhängig davon, ob gerade
-        eine Verbindung besteht.
+        Liefert alle gekoppelten Geräte (MAC, lesbarer Name, aktuell
+        verbunden?) fürs Webinterface, damit man sieht (und einzeln
+        trennen/vergessen kann), was tatsächlich gekoppelt ist -
+        unabhängig davon, ob gerade eine Verbindung besteht.
         """
 
+        connected_macs = {
+            mac for mac, _ in self._connected_devices()
+        }
+
         return [
-            {"mac": mac, "name": name}
+            {
+                "mac": mac,
+                "name": name,
+                "connected": mac in connected_macs,
+            }
             for mac, name in self._paired_devices()
         ]
 
@@ -222,3 +230,11 @@ class BluetoothControl:
         """
 
         return self._run_script("xrack-bt-forget.sh", mac)
+
+    def disconnect_device(self, mac: str) -> tuple[bool, str]:
+        """
+        Trennt die Verbindung zu einem gekoppelten Gerät, ohne die
+        Kopplung selbst aufzuheben.
+        """
+
+        return self._run_script("xrack-bt-disconnect.sh", mac)

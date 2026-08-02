@@ -768,6 +768,14 @@ class Application:
 
         return self.bluetooth_control.forget_device(mac)
 
+    def disconnect_bluetooth_device(self, mac: str) -> tuple[bool, str]:
+        """
+        Trennt die Verbindung zu einem gekoppelten Bluetooth-Gerät,
+        ohne die Kopplung selbst aufzuheben.
+        """
+
+        return self.bluetooth_control.disconnect_device(mac)
+
     def set_bluetooth_channel_preference(self, start_channel: int) -> bool:
         """
         Merkt sich das für Bluetooth-Audio gewählte Ziel-Stereopaar

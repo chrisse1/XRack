@@ -456,7 +456,8 @@ chmod +x \
     "${INSTALL_DIR}/scripts/xrack-bridge-toggle.sh" \
     "${INSTALL_DIR}/scripts/xrack-bt-power.sh" \
     "${INSTALL_DIR}/scripts/xrack-bt-pair.sh" \
-    "${INSTALL_DIR}/scripts/xrack-bt-forget.sh"
+    "${INSTALL_DIR}/scripts/xrack-bt-forget.sh" \
+    "${INSTALL_DIR}/scripts/xrack-bt-disconnect.sh"
 
 SUDOERS_FILE="/etc/sudoers.d/xrack"
 SUDOERS_TMP="$(mktemp)"
@@ -469,7 +470,8 @@ ${INSTALL_DIR}/scripts/xrack-net-ap.sh *, \
 ${INSTALL_DIR}/scripts/xrack-bridge-toggle.sh *, \
 ${INSTALL_DIR}/scripts/xrack-bt-power.sh *, \
 ${INSTALL_DIR}/scripts/xrack-bt-pair.sh, \
-${INSTALL_DIR}/scripts/xrack-bt-forget.sh *" \
+${INSTALL_DIR}/scripts/xrack-bt-forget.sh *, \
+${INSTALL_DIR}/scripts/xrack-bt-disconnect.sh *" \
     > "${SUDOERS_TMP}"
 
 sudo visudo -cf "${SUDOERS_TMP}"

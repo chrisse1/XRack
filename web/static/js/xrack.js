@@ -1712,37 +1712,62 @@ function updateBluetoothControlsState(data) {
     if (pairButton) pairButton.disabled = !bluetoothSlowStatus.powered;
 }
 
-function renderBluetoothPairedList(devices) {
-    const container = document.getElementById("bluetooth-paired-list");
+function renderBluetoothDevicesList(devices) {
+    const container = document.getElementById("bluetoothDevicesList");
     if (!container) return;
 
     container.innerHTML = "";
 
     if (!devices || devices.length === 0) {
         const empty = document.createElement("div");
-        empty.className = "text-muted small";
+        empty.className = "text-muted small p-2";
         empty.textContent = I18N.bluetooth_no_paired_devices;
         container.appendChild(empty);
         return;
     }
 
     for (const device of devices) {
-        const row = document.createElement("div");
-        row.className = "d-flex justify-content-between align-items-center py-1";
+        const item = document.createElement("div");
+        item.className = "list-group-item d-flex justify-content-between align-items-center gap-2";
 
-        const name = document.createElement("span");
-        name.className = "text-break";
+        const info = document.createElement("div");
+        info.className = "text-break";
+
+        const name = document.createElement("div");
         name.textContent = device.name;
-        row.appendChild(name);
+        info.appendChild(name);
 
-        const button = document.createElement("button");
-        button.className = "btn btn-sm btn-outline-danger flex-shrink-0 ms-2";
-        button.title = I18N.title_bluetooth_forget_device;
-        button.innerHTML = '<i class="bi bi-trash"></i>';
-        button.addEventListener("click", () => forgetBluetoothDevice(device.mac, device.name));
-        row.appendChild(button);
+        if (device.connected) {
+            const badge = document.createElement("span");
+            badge.className = "badge text-bg-success";
+            badge.textContent = I18N.badge_bluetooth_connected;
+            info.appendChild(badge);
+        }
 
-        container.appendChild(row);
+        item.appendChild(info);
+
+        const actions = document.createElement("div");
+        actions.className = "btn-group btn-group-sm flex-shrink-0";
+
+        if (device.connected) {
+            const disconnectButton = document.createElement("button");
+            disconnectButton.className = "btn btn-outline-warning";
+            disconnectButton.title = I18N.title_bluetooth_disconnect_device;
+            disconnectButton.innerHTML = '<i class="bi bi-bluetooth"></i>';
+            disconnectButton.addEventListener("click", () => disconnectBluetoothDevice(device.mac, device.name));
+            actions.appendChild(disconnectButton);
+        }
+
+        const forgetButton = document.createElement("button");
+        forgetButton.className = "btn btn-outline-danger";
+        forgetButton.title = I18N.title_bluetooth_forget_device;
+        forgetButton.innerHTML = '<i class="bi bi-trash"></i>';
+        forgetButton.addEventListener("click", () => forgetBluetoothDevice(device.mac, device.name));
+        actions.appendChild(forgetButton);
+
+        item.appendChild(actions);
+
+        container.appendChild(item);
     }
 }
 
@@ -1760,7 +1785,7 @@ async function refreshBluetoothStatus() {
             fields.classList.toggle("d-none", !data.available);
         }
 
-        renderBluetoothPairedList(data.paired_devices);
+        renderBluetoothDevicesList(data.paired_devices);
         updateBluetoothStatusText(lastStatusData);
     } catch (error) {
         console.error("Fehler beim Laden des Bluetooth-Status:", error);
@@ -1821,6 +1846,27 @@ async function forgetBluetoothDevice(mac, name) {
 
     await refreshBluetoothStatus();
 }
+
+async function disconnectBluetoothDevice(mac, name) {
+    if (!confirm(I18N.confirm_bluetooth_disconnect_device.replace("{name}", name))) return;
+
+    const response = await fetch("/api/bluetooth/disconnect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mac })
+    });
+    const result = await response.json();
+
+    if (!result.success) {
+        alert(I18N.alert_settings_change_failed.replace("{message}", result.message || ""));
+        return;
+    }
+
+    await refreshBluetoothStatus();
+}
+
+document.getElementById("bluetoothDevicesModal")
+    .addEventListener("show.bs.modal", refreshBluetoothStatus);
 
 async function setBluetoothChannelPreference(startChannel) {
     const response = await fetch("/api/bluetooth/channel", {
