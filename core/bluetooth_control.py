@@ -115,15 +115,18 @@ class BluetoothControl:
 
         return connected[0][1] if connected else None
 
-    def paired_device_name(self) -> str | None:
+    def paired_devices(self) -> list[dict]:
         """
-        Liefert den Namen des ersten gekoppelten Geräts (unabhängig
-        davon, ob es gerade verbunden ist).
+        Liefert alle gekoppelten Geräte (MAC + lesbarer Name) fürs
+        Webinterface, damit man sieht (und einzeln vergessen kann),
+        was tatsächlich gekoppelt ist - unabhängig davon, ob gerade
+        eine Verbindung besteht.
         """
 
-        paired = self._paired_devices()
-
-        return paired[0][1] if paired else None
+        return [
+            {"mac": mac, "name": name}
+            for mac, name in self._paired_devices()
+        ]
 
     def get_status(self) -> dict:
         """
@@ -135,7 +138,7 @@ class BluetoothControl:
                 "available": False,
                 "powered": False,
                 "discoverable": False,
-                "paired_device": None,
+                "paired_devices": [],
             }
 
         info = self._bluetoothctl("show") or ""
@@ -144,10 +147,7 @@ class BluetoothControl:
             "available": True,
             "powered": "Powered: yes" in info,
             "discoverable": "Discoverable: yes" in info,
-            "paired_device": (
-                self.connected_device_name()
-                or self.paired_device_name()
-            ),
+            "paired_devices": self.paired_devices(),
         }
 
     def _run_script(self, name: str, *args: str) -> tuple[bool, str]:
@@ -216,9 +216,9 @@ class BluetoothControl:
 
         return self._run_script("xrack-bt-pair.sh")
 
-    def forget_devices(self) -> tuple[bool, str]:
+    def forget_device(self, mac: str) -> tuple[bool, str]:
         """
-        Entfernt alle gekoppelten Bluetooth-Geräte.
+        Entfernt ein einzelnes gekoppeltes Bluetooth-Gerät.
         """
 
-        return self._run_script("xrack-bt-forget.sh")
+        return self._run_script("xrack-bt-forget.sh", mac)

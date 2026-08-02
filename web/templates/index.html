@@ -342,24 +342,22 @@
 
                 <hr>
 
-                <div class="d-flex justify-content-around gap-2">
+                <div class="d-grid">
                   <button
                       id="btn-bluetooth-pair"
-                      class="btn btn-primary player-transport-btn"
+                      class="btn btn-primary"
                       onclick="startBluetoothPairing()"
                   >
-                      <i class="bi bi-bluetooth fs-3"></i>
-                      <small>{{ t.btn_bluetooth_pair }}</small>
+                      <i class="bi bi-bluetooth me-2"></i>{{ t.btn_bluetooth_pair }}
                   </button>
+                </div>
 
-                  <button
-                      id="btn-bluetooth-forget"
-                      class="btn btn-outline-danger player-transport-btn"
-                      onclick="forgetBluetoothDevices()"
-                  >
-                      <i class="bi bi-x-circle fs-3"></i>
-                      <small>{{ t.btn_bluetooth_forget }}</small>
-                  </button>
+                <hr>
+
+                <h6 class="mb-2">{{ t.bluetooth_paired_title }}</h6>
+
+                <div id="bluetooth-paired-list">
+                    <div class="text-muted small">{{ t.bluetooth_no_paired_devices }}</div>
                 </div>
             </div>
             {% endset %}

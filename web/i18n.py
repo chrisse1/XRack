@@ -192,8 +192,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "verfügbar."
         ),
         "btn_bluetooth_pair": "Koppeln",
-        "btn_bluetooth_forget": "Vergessen",
-        "confirm_bluetooth_forget": "Alle gekoppelten Geräte wirklich vergessen?",
+        "bluetooth_paired_title": "Gekoppelte Geräte",
+        "bluetooth_no_paired_devices": "Keine Geräte gekoppelt.",
+        "title_bluetooth_forget_device": "Gerät vergessen",
+        "confirm_bluetooth_forget_device": '"{name}" wirklich vergessen?',
         "alert_bluetooth_pairing_started": (
             "Koppelbar für 2 Minuten - jetzt am Handy/Tablet verbinden."
         ),
@@ -377,8 +379,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Bluetooth (BlueZ) not found - feature not available."
         ),
         "btn_bluetooth_pair": "Pair",
-        "btn_bluetooth_forget": "Forget",
-        "confirm_bluetooth_forget": "Really forget all paired devices?",
+        "bluetooth_paired_title": "Paired devices",
+        "bluetooth_no_paired_devices": "No devices paired.",
+        "title_bluetooth_forget_device": "Forget device",
+        "confirm_bluetooth_forget_device": 'Really forget "{name}"?',
         "alert_bluetooth_pairing_started": (
             "Pairing mode for 2 minutes - connect from your phone/tablet now."
         ),

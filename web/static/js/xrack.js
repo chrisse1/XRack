@@ -1646,7 +1646,7 @@ let bluetoothSlowStatus = {
     available: false,
     powered: false,
     discoverable: false,
-    paired_device: null,
+    paired_devices: [],
     preferred_start_channel: 1,
 };
 
@@ -1705,9 +1705,40 @@ function updateBluetoothControlsState(data) {
 
     const pairButton = document.getElementById("btn-bluetooth-pair");
     if (pairButton) pairButton.disabled = !bluetoothSlowStatus.powered;
+}
 
-    const forgetButton = document.getElementById("btn-bluetooth-forget");
-    if (forgetButton) forgetButton.disabled = !bluetoothSlowStatus.powered;
+function renderBluetoothPairedList(devices) {
+    const container = document.getElementById("bluetooth-paired-list");
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    if (!devices || devices.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "text-muted small";
+        empty.textContent = I18N.bluetooth_no_paired_devices;
+        container.appendChild(empty);
+        return;
+    }
+
+    for (const device of devices) {
+        const row = document.createElement("div");
+        row.className = "d-flex justify-content-between align-items-center py-1";
+
+        const name = document.createElement("span");
+        name.className = "text-break";
+        name.textContent = device.name;
+        row.appendChild(name);
+
+        const button = document.createElement("button");
+        button.className = "btn btn-sm btn-outline-danger flex-shrink-0 ms-2";
+        button.title = I18N.title_bluetooth_forget_device;
+        button.innerHTML = '<i class="bi bi-trash"></i>';
+        button.addEventListener("click", () => forgetBluetoothDevice(device.mac, device.name));
+        row.appendChild(button);
+
+        container.appendChild(row);
+    }
 }
 
 async function refreshBluetoothStatus() {
@@ -1724,6 +1755,7 @@ async function refreshBluetoothStatus() {
             fields.classList.toggle("d-none", !data.available);
         }
 
+        renderBluetoothPairedList(data.paired_devices);
         updateBluetoothStatusText(lastStatusData);
     } catch (error) {
         console.error("Fehler beim Laden des Bluetooth-Status:", error);
@@ -1767,10 +1799,14 @@ async function startBluetoothPairing() {
     await refreshBluetoothStatus();
 }
 
-async function forgetBluetoothDevices() {
-    if (!confirm(I18N.confirm_bluetooth_forget)) return;
+async function forgetBluetoothDevice(mac, name) {
+    if (!confirm(I18N.confirm_bluetooth_forget_device.replace("{name}", name))) return;
 
-    const response = await fetch("/api/bluetooth/forget", { method: "POST" });
+    const response = await fetch("/api/bluetooth/forget", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mac })
+    });
     const result = await response.json();
 
     if (!result.success) {

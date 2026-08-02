@@ -755,12 +755,12 @@ class Application:
 
         return self.bluetooth_control.start_pairing()
 
-    def forget_bluetooth_devices(self) -> tuple[bool, str]:
+    def forget_bluetooth_device(self, mac: str) -> tuple[bool, str]:
         """
-        Entfernt alle gekoppelten Bluetooth-Geräte.
+        Entfernt ein einzelnes gekoppeltes Bluetooth-Gerät.
         """
 
-        return self.bluetooth_control.forget_devices()
+        return self.bluetooth_control.forget_device(mac)
 
     def set_bluetooth_channel_preference(self, start_channel: int) -> bool:
         """

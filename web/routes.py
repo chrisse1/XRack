@@ -73,6 +73,9 @@ class BluetoothPowerSelection(BaseModel):
 class BluetoothChannelSelection(BaseModel):
     start_channel: int
 
+class BluetoothForgetSelection(BaseModel):
+    mac: str
+
 @router.post("/api/audio/select")
 async def audio_select(
     selection: AudioSelection,
@@ -614,11 +617,16 @@ async def bluetooth_pair(request: Request):
 
 
 @router.post("/api/bluetooth/forget")
-async def bluetooth_forget(request: Request):
+async def bluetooth_forget(
+    selection: BluetoothForgetSelection,
+    request: Request,
+):
 
     application = request.app.state.application
 
-    success, message = application.forget_bluetooth_devices()
+    success, message = application.forget_bluetooth_device(
+        selection.mac
+    )
 
     return {
         "success": success,
