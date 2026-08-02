@@ -6,9 +6,19 @@ auf ein frei wählbares Stereopaar des Interfaces um - technisch
 dasselbe Prinzip wie beim Musikspieler (siehe player/music_player.py):
 AudioPlaybackBackend + ChannelInserter. Der Unterschied ist nur die
 Quelle: statt einer per ffmpeg dekodierten Datei ist es ein
-fortlaufender Live-Capture-Stream vom bluez-alsa-Dienst (bluealsa),
-der über das ALSA-Plugin "bluealsa" als ganz normales PCM-Capture-
-Gerät angesprochen wird.
+fortlaufender Live-Capture-Stream vom bluez-alsa-Dienst (bluealsa).
+
+Das ALSA-Plugin "bluealsa" liefert dabei IMMER genau das Format, mit
+dem der Bluetooth-Codec tatsächlich sendet (16 Bit, üblicherweise
+44100 Hz Stereo für den SBC-Standardcodec) - es macht selbst keine
+Formatanpassung. Ein vorangestelltes "plug:" ("plug:bluealsa:...")
+ist dafür KEINE gültige Lösung: Alsa-lib interpretiert alles nach dem
+ersten Doppelpunkt als Parameterliste von "plug" selbst, nicht als
+verschachtelten Gerätenamen - das führt zum Laufzeitfehler "Unknown
+parameter bluealsa:DEV" und funktioniert nicht. Die Umwandlung auf das
+von AudioPlaybackBackend erwartete S32_LE bei der Ziel-Samplerate des
+Interfaces übernimmt deshalb, wie schon beim Abspielen von
+Musikdateien (siehe player/track_decoder.py), ein ffmpeg-Subprozess.
 
 Es wird kein Playback erzwungen, solange kein Handy tatsächlich
 Audio schickt: Ein Hintergrund-Thread sucht laufend nach einem
@@ -22,6 +32,7 @@ weiterläuft, sobald das Gerät wieder frei ist.
 """
 
 import logging
+import subprocess
 import threading
 
 import alsaaudio
@@ -32,6 +43,12 @@ from core.bluetooth_control import BluetoothControl
 
 CHANNELS = 2
 CHUNK_FRAMES = 1024
+
+# Sendeformat des bluealsa-ALSA-Plugins: immer 16 Bit, die Samplerate
+# ist beim mandatorischen SBC-Codec praktisch immer 44100 Hz.
+SOURCE_FORMAT = alsaaudio.PCM_FORMAT_S16_LE
+SOURCE_RATE = 44100
+
 RETRY_DELAY = 2.0
 
 
@@ -159,19 +176,17 @@ class BluetoothPlayer:
         dann erneut.
         """
 
-        pcm = None
-
         try:
 
             pcm = alsaaudio.PCM(
                 type=alsaaudio.PCM_CAPTURE,
                 mode=alsaaudio.PCM_NORMAL,
-                device=f"plug:bluealsa:DEV={mac},PROFILE=a2dp",
+                device=f"bluealsa:DEV={mac},PROFILE=a2dp",
             )
 
-            pcm.setrate(self._rate)
+            pcm.setrate(SOURCE_RATE)
             pcm.setchannels(CHANNELS)
-            pcm.setformat(alsaaudio.PCM_FORMAT_S32_LE)
+            pcm.setformat(SOURCE_FORMAT)
             pcm.setperiodsize(CHUNK_FRAMES)
 
         except Exception as exc:
@@ -181,9 +196,36 @@ class BluetoothPlayer:
                 mac,
                 exc,
             )
-            pcm = None
+            self._stop_event.wait(RETRY_DELAY)
+            return
 
-        if pcm is None:
+        try:
+
+            ffmpeg_process = subprocess.Popen(
+                [
+                    "ffmpeg", "-v", "error",
+                    "-f", "s16le",
+                    "-ar", str(SOURCE_RATE),
+                    "-ac", str(CHANNELS),
+                    "-i", "pipe:0",
+                    "-f", "s32le",
+                    "-acodec", "pcm_s32le",
+                    "-ar", str(self._rate),
+                    "-ac", str(CHANNELS),
+                    "-",
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+            )
+
+        except FileNotFoundError:
+
+            self.logger.error(
+                "Bluetooth: ffmpeg nicht gefunden - "
+                "Audioumwandlung nicht möglich."
+            )
+            pcm.close()
             self._stop_event.wait(RETRY_DELAY)
             return
 
@@ -195,6 +237,7 @@ class BluetoothPlayer:
             sample_format=alsaaudio.PCM_FORMAT_S32_LE,
         ):
             pcm.close()
+            self._terminate_ffmpeg(ffmpeg_process)
             self._stop_event.wait(RETRY_DELAY)
             return
 
@@ -207,20 +250,65 @@ class BluetoothPlayer:
             self._start_channel + 2,
         )
 
+        #
+        # bluealsa-Capture (pcm) und ffmpeg-stdin gehören exklusiv
+        # diesem Feeder-Thread - ein blockierendes pcm.read() lässt
+        # sich von außen nicht sicher unterbrechen, deshalb läuft es
+        # in einem eigenen Thread, den dieser Aufruf am Ende (nach
+        # Abbruch/Fehler der Leseschleife unten) einfach mitbeendet.
+        #
+
+        def feed() -> None:
+
+            try:
+
+                while True:
+
+                    length, data = pcm.read()
+
+                    if length <= 0:
+                        break
+
+                    try:
+                        ffmpeg_process.stdin.write(data)
+                    except (BrokenPipeError, OSError):
+                        break
+
+            finally:
+
+                pcm.close()
+
+                try:
+                    ffmpeg_process.stdin.close()
+                except OSError:
+                    pass
+
+        feeder_thread = threading.Thread(target=feed, daemon=True)
+        feeder_thread.start()
+
+        chunk_bytes = (
+            CHUNK_FRAMES *
+            CHANNELS *
+            AudioPlaybackBackend.BYTES_PER_SAMPLE
+        )
+
         try:
 
             while self._enabled and not self._stop_event.is_set():
 
-                length, data = pcm.read()
+                data = ffmpeg_process.stdout.read(chunk_bytes)
 
-                if length <= 0:
+                if not data:
                     break
 
                 self.backend.write(data)
 
         finally:
 
-            pcm.close()
+            feeder_thread.join(timeout=2)
+
+            self._terminate_ffmpeg(ffmpeg_process)
+
             self.backend.close()
             self._streaming = False
 
@@ -228,3 +316,17 @@ class BluetoothPlayer:
                 "Bluetooth-Wiedergabe beendet (%s).",
                 self._connected_name,
             )
+
+    @staticmethod
+    def _terminate_ffmpeg(process: subprocess.Popen) -> None:
+
+        if process.poll() is not None:
+            return
+
+        process.terminate()
+
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
