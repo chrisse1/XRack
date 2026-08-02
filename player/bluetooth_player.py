@@ -111,7 +111,19 @@ class BluetoothPlayer:
         """
 
         if start_channel == self._start_channel:
+            self.logger.info(
+                "Bluetooth: set_start_channel(%d) - unverändert "
+                "gegenüber aktuellem Wert, keine Aktion.",
+                start_channel,
+            )
             return
+
+        self.logger.info(
+            "Bluetooth: set_start_channel(%d) - vorher %d, streaming=%s.",
+            start_channel,
+            self._start_channel,
+            self._streaming,
+        )
 
         self._start_channel = start_channel
 

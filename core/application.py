@@ -726,6 +726,12 @@ class Application:
         if self.selected_audio_device is None:
             return
 
+        self.logger.info(
+            "Bluetooth: Überwachung wird mit Zielkanal-Präferenz %d "
+            "gestartet (1-basiert).",
+            self.bluetooth_channel_preference,
+        )
+
         self.bluetooth_player.start(
             self.selected_audio_device,
             self.bluetooth_channel_preference - 1,
@@ -768,6 +774,11 @@ class Application:
         (1-basiert). Läuft gerade eine Wiedergabe, wird sie kurz neu
         verbunden, damit die Änderung sofort wirkt.
         """
+
+        self.logger.info(
+            "Bluetooth: Zielkanal-Präferenz auf %d gesetzt (1-basiert).",
+            start_channel,
+        )
 
         self.bluetooth_channel_preference = start_channel
 
