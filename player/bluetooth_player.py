@@ -21,16 +21,19 @@ Interfaces übernimmt deshalb, wie schon beim Abspielen von
 Musikdateien (siehe player/track_decoder.py), ein ffmpeg-Subprozess.
 
 Wichtig: die bluealsa-Capture-Verbindung (pcm) wird für einen
-Kanalwechsel NIE geschlossen und neu geöffnet. Live-Tests zeigten,
-dass bluealsa (Stand 4.3.1-3) nach wiederholtem Öffnen/Schließen
-desselben Transports dauerhaft "Device or resource busy" liefert -
-reproduzierbar sogar mit bluealsas eigenem Kommandozeilenwerkzeug
-(bluealsa-aplay), also unabhängig von XRack. Ein Kanalwechsel schließt
-und öffnet deshalb ausschließlich AudioPlaybackBackend (rein lokales
-ALSA-Wiedergabegerät, ohne bluealsa-Beteiligung) neu, während
-bluealsa-Capture und ffmpeg unangetastet weiterlaufen. Nur bei einer
-echten Neuverbindung (Handy verbindet sich neu) wird die
-bluealsa-Verbindung tatsächlich neu aufgebaut.
+Kanalwechsel NIE geschlossen und neu geöffnet, sondern läuft während
+der gesamten Wiedergabe ununterbrochen; nur AudioPlaybackBackend
+(rein lokales ALSA-Wiedergabegerät, ohne bluealsa-Beteiligung) wird
+bei einem Kanalwechsel neu geöffnet. Das ist zwar unnötiges Öffnen/
+Schließen der bluealsa-Verbindung wert zu vermeiden, war aber NICHT
+die eigentliche Ursache für zeitweise beobachtetes "Device or
+resource busy": Der wahre Übeltäter war der von bluez-alsa-utils
+mitgelieferte, standardmäßig aktivierte Dienst
+"bluealsa-aplay.service" (startet "bluealsa-aplay -S" beim Booten) -
+er schnappt sich JEDEN eingehenden Bluetooth-Audiostream automatisch
+für sich (immer auf Kanal 1+2 des System-Standardgeräts, ganz ohne
+Kanalwahl), bevor XRack drankommt. install.sh deaktiviert diesen
+Dienst deshalb explizit.
 
 Es wird kein Playback erzwungen, solange kein Handy tatsächlich
 Audio schickt: Ein Hintergrund-Thread sucht laufend nach einem

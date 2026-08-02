@@ -405,6 +405,20 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
+    #
+    # Das Debian-Paket bluez-alsa-utils bringt einen eigenen Dienst
+    # mit (bluealsa-aplay.service, startet "bluealsa-aplay -S" beim
+    # Booten), der automatisch JEDEN eingehenden Bluetooth-Audiostream
+    # an das System-Standardgerät weiterleitet - ganz ohne Kanalwahl,
+    # immer auf Kanal 1+2. Der kollidiert direkt mit XRacks eigener
+    # Kanalsteuerung: er schnappt sich die bluealsa-Verbindung zuerst,
+    # XRacks eigener Verbindungsversuch scheitert dann mit "Device or
+    # resource busy". Muss deaktiviert sein, sonst landet Audio immer
+    # auf Kanal 1+2, egal was im Webinterface gewählt wird.
+    #
+
+    sudo systemctl disable --now bluealsa-aplay.service >/dev/null 2>&1 || true
+
     sudo systemctl daemon-reload
 
     sudo systemctl enable bluetooth.service bluealsa.service xrack-bt-agent.service >/dev/null 2>&1 || true

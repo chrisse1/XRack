@@ -101,13 +101,18 @@ the installer offers to do right at the end, once everything else is
 already set up.
 
 If a Bluetooth adapter is present, the installer also sets up
-Bluetooth audio (`bluez`, `bluez-tools`, `bluez-alsa-utils`): a
-`bluealsa` service acting as an A2DP sink so XRack shows up as a
-Bluetooth speaker, plus a "Just Works" pairing agent that only accepts
-connections while pairing mode is switched on from the dashboard.
-Power, pairing, and the target channel pair are then controlled
-entirely from the new Bluetooth card next to the music player - no
-extra setup needed.
+Bluetooth audio (`bluez`, `bluez-alsa-utils`, `python3-dbus`,
+`python3-gi`): a `bluealsa` service acting as an A2DP sink so XRack
+shows up as a Bluetooth speaker, plus a "Just Works" pairing agent
+(a small XRack-own script - `bt-agent` from `bluez-tools` turned out
+unreliable against current BlueZ versions) that only accepts
+connections while pairing mode is switched on from the dashboard. It
+also disables `bluealsa-aplay.service` - a service bundled with
+`bluez-alsa-utils` that would otherwise auto-play every incoming
+Bluetooth stream to channel 1+2 on its own, bypassing XRack's channel
+selection entirely. Power, pairing, and the target channel pair are
+then controlled entirely from the new Bluetooth card next to the
+music player - no extra setup needed.
 
 Start/check manually:
 
@@ -232,13 +237,19 @@ sie erst beim nächsten Neustart, den der Installer ganz am Ende
 anbietet, wenn der Rest der Installation bereits fertig ist.
 
 Ist ein Bluetooth-Adapter vorhanden, richtet der Installer außerdem
-Bluetooth-Audio ein (`bluez`, `bluez-tools`, `bluez-alsa-utils`): ein
-`bluealsa`-Dienst als A2DP-Sink, damit XRack als Bluetooth-Lautsprecher
-erscheint, dazu ein "Just Works"-Kopplungs-Agent, der Verbindungen nur
-annimmt, solange der Koppelmodus über das Dashboard eingeschaltet ist.
-Ein-/Ausschalten, Koppeln und das Ziel-Kanalpaar werden danach
-vollständig über die neue Bluetooth-Karte neben dem Musikplayer
-gesteuert - keine weitere Einrichtung nötig.
+Bluetooth-Audio ein (`bluez`, `bluez-alsa-utils`, `python3-dbus`,
+`python3-gi`): ein `bluealsa`-Dienst als A2DP-Sink, damit XRack als
+Bluetooth-Lautsprecher erscheint, dazu ein eigener "Just Works"-
+Kopplungs-Agent (ein kleines XRack-Skript - `bt-agent` aus
+`bluez-tools` hat sich gegen aktuelle BlueZ-Versionen als
+unzuverlässig erwiesen), der Verbindungen nur annimmt, solange der
+Koppelmodus über das Dashboard eingeschaltet ist. Zusätzlich wird
+`bluealsa-aplay.service` deaktiviert - ein mit `bluez-alsa-utils`
+mitgelieferter Dienst, der sonst jeden eingehenden Bluetooth-Stream
+selbstständig auf Kanal 1+2 abspielen würde, komplett an XRacks
+Kanalwahl vorbei. Ein-/Ausschalten, Koppeln und das Ziel-Kanalpaar
+werden danach vollständig über die neue Bluetooth-Karte neben dem
+Musikplayer gesteuert - keine weitere Einrichtung nötig.
 
 Manuell starten/prüfen:
 
