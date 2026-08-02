@@ -8,6 +8,8 @@
 
 set -e
 
+INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 echo "XRack: Systemabhängigkeiten installieren..."
 
 sudo apt-get update
@@ -20,8 +22,9 @@ sudo apt-get install -y \
     alsa-utils \
     ffmpeg \
     bluez \
-    bluez-tools \
-    bluez-alsa-utils
+    bluez-alsa-utils \
+    python3-dbus \
+    python3-gi
 
 echo "XRack: Python-Umgebung einrichten..."
 
@@ -363,12 +366,14 @@ fi
 # player/bluetooth_player.py) und legt es auf das im Webinterface
 # gewählte Stereopaar.
 #
-# Ein separater Kopplungs-Agent (bt-agent, "Just Works", ohne PIN-
-# Bestätigung) läuft ebenfalls dauerhaft im Hintergrund, nimmt aber
-# nur dann eine Kopplungsanfrage an, wenn XRack den Adapter zuvor per
-# Knopfdruck im Webinterface koppelbar gemacht hat (siehe
-# scripts/xrack-bt-pair.sh) - ohne das ist der Adapter nicht
-# auffindbar.
+# Ein separater Kopplungs-Agent (scripts/xrack-bt-agent.py, "Just
+# Works", ohne PIN-/Code-Bestätigung) läuft ebenfalls dauerhaft im
+# Hintergrund - koppeln kann sich damit trotzdem nur, wer den Adapter
+# zuvor per Knopfdruck im Webinterface koppelbar gemacht hat (siehe
+# scripts/xrack-bt-pair.sh), ohne das ist der Adapter nicht
+# auffindbar. Eigene, minimale Implementierung nach dem offiziellen
+# BlueZ-Beispielagenten (statt bt-agent aus bluez-tools, das sich
+# gegen aktuelle BlueZ-Versionen als unzuverlässig erwiesen hat).
 #
 
 if command -v bluetoothctl >/dev/null 2>&1; then
@@ -383,14 +388,16 @@ ExecStart=
 ExecStart=/usr/bin/bluealsa -p a2dp-sink
 EOF
 
-    sudo tee /etc/systemd/system/xrack-bt-agent.service > /dev/null <<'EOF'
+    chmod +x "${INSTALL_DIR}/scripts/xrack-bt-agent.py"
+
+    sudo tee /etc/systemd/system/xrack-bt-agent.service > /dev/null <<EOF
 [Unit]
 Description=XRack Bluetooth-Kopplungs-Agent (Just Works)
 After=bluetooth.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/bt-agent --capability=NoInputNoOutput
+ExecStart=/usr/bin/python3 ${INSTALL_DIR}/scripts/xrack-bt-agent.py
 Restart=on-failure
 RestartSec=5
 
@@ -426,7 +433,6 @@ fi
 
 echo "XRack: sudo-Berechtigung fürs Herunterfahren/Neustarten/WLAN einrichten..."
 
-INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVICE_USER="$(whoami)"
 
 chmod +x \
