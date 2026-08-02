@@ -274,16 +274,25 @@ class BluetoothPlayer:
         #
         # bluealsa-Capture (pcm) und ffmpeg-stdin gehören exklusiv
         # diesem Feeder-Thread - ein blockierendes pcm.read() lässt
-        # sich von außen nicht sicher unterbrechen, deshalb läuft es
-        # in einem eigenen Thread, den dieser Aufruf am Ende (nach
-        # Abbruch/Fehler der Leseschleife unten) einfach mitbeendet.
+        # sich von außen nicht sicher unterbrechen. Die Schleife prüft
+        # deshalb VOR jedem (bis zu ~23ms blockierenden) read() selbst
+        # auf Stop/Restart, statt nur passiv auf einen Lese- oder
+        # Schreibfehler zu warten - sonst bliebe pcm bei einem
+        # Kanalwechsel noch offen, während der Haupt-Thread schon eine
+        # neue bluealsa-Verbindung für dasselbe Gerät versucht (die
+        # dann mit "Device or resource busy" scheitert, weil bluealsa
+        # pro Transport nur einen Client gleichzeitig erlaubt).
         #
 
         def feed() -> None:
 
             try:
 
-                while True:
+                while (
+                    self._enabled
+                    and not self._stop_event.is_set()
+                    and not self._restart_event.is_set()
+                ):
 
                     length, data = pcm.read()
 
