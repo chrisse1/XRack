@@ -76,6 +76,7 @@ class BluetoothPlayer:
 
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
+        self._restart_event = threading.Event()
 
     @property
     def enabled(self) -> bool:
@@ -91,12 +92,21 @@ class BluetoothPlayer:
 
     def set_start_channel(self, start_channel: int) -> None:
         """
-        Ändert das Ziel-Stereopaar (0-basiert). Wirkt beim nächsten
-        neu erkannten Verbindungsaufbau, eine bereits laufende
-        Wiedergabe wird nicht mitten im Stream umgehängt.
+        Ändert das Ziel-Stereopaar (0-basiert). Läuft gerade eine
+        Wiedergabe, wird der Stream kurz neu verbunden, damit die
+        Änderung sofort hörbar wirkt - ein reines Aktualisieren von
+        `_start_channel` würde die schon offene AudioPlaybackBackend/
+        ChannelInserter-Verbindung nicht mehr erreichen, die ihr
+        Ziel-Stereopaar beim Öffnen fest einbettet.
         """
 
+        if start_channel == self._start_channel:
+            return
+
         self._start_channel = start_channel
+
+        if self._streaming:
+            self._restart_event.set()
 
     def start(
         self,
@@ -117,6 +127,7 @@ class BluetoothPlayer:
         self._rate = rate
         self._enabled = True
         self._stop_event.clear()
+        self._restart_event.clear()
 
         self._thread = threading.Thread(
             target=self._monitor,
@@ -138,6 +149,7 @@ class BluetoothPlayer:
 
         self._enabled = False
         self._stop_event.set()
+        self._restart_event.clear()
 
         if self._thread is not None:
             self._thread.join()
@@ -243,6 +255,15 @@ class BluetoothPlayer:
 
         self._streaming = True
 
+        #
+        # Ein Kanalwechsel, der genau während des Verbindungsaufbaus
+        # oben eintraf, darf die gerade frisch mit dem aktuellen
+        # `_start_channel` geöffnete Wiedergabe nicht sofort wieder
+        # abbrechen - das Event bezieht sich nur auf eine schon
+        # laufende Wiedergabe mit veraltetem Zielkanal.
+        #
+        self._restart_event.clear()
+
         self.logger.info(
             "Bluetooth-Wiedergabe gestartet: %s -> Kanal %d+%d",
             self._connected_name,
@@ -294,7 +315,11 @@ class BluetoothPlayer:
 
         try:
 
-            while self._enabled and not self._stop_event.is_set():
+            while (
+                self._enabled
+                and not self._stop_event.is_set()
+                and not self._restart_event.is_set()
+            ):
 
                 data = ffmpeg_process.stdout.read(chunk_bytes)
 
@@ -305,6 +330,9 @@ class BluetoothPlayer:
 
         finally:
 
+            restarting = self._restart_event.is_set()
+            self._restart_event.clear()
+
             feeder_thread.join(timeout=2)
 
             self._terminate_ffmpeg(ffmpeg_process)
@@ -313,7 +341,8 @@ class BluetoothPlayer:
             self._streaming = False
 
             self.logger.info(
-                "Bluetooth-Wiedergabe beendet (%s).",
+                "Bluetooth-Wiedergabe %s (%s).",
+                "wird mit neuem Zielkanal neu verbunden" if restarting else "beendet",
                 self._connected_name,
             )
 

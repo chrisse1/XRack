@@ -765,8 +765,8 @@ class Application:
     def set_bluetooth_channel_preference(self, start_channel: int) -> bool:
         """
         Merkt sich das für Bluetooth-Audio gewählte Ziel-Stereopaar
-        (1-basiert). Wirkt beim nächsten neu erkannten Verbindungs-
-        aufbau eines Geräts.
+        (1-basiert). Läuft gerade eine Wiedergabe, wird sie kurz neu
+        verbunden, damit die Änderung sofort wirkt.
         """
 
         self.bluetooth_channel_preference = start_channel

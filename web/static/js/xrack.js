@@ -1700,8 +1700,13 @@ function updateBluetoothControlsState(data) {
         toggle.checked = bluetoothSlowStatus.powered;
     }
 
+    // Anders als bei Aufnahme-/Musikkanälen ist die Bluetooth-
+    // Kanalwahl auch während einer laufenden Wiedergabe änderbar -
+    // BluetoothPlayer verbindet dafür selbst kurz neu (siehe
+    // player/bluetooth_player.py), die Hardware muss also nicht erst
+    // freigegeben werden.
     const select = document.getElementById("bluetooth-channels");
-    if (select) select.disabled = isAudioBusy(data);
+    if (select) select.disabled = !bluetoothSlowStatus.powered;
 
     const pairButton = document.getElementById("btn-bluetooth-pair");
     if (pairButton) pairButton.disabled = !bluetoothSlowStatus.powered;

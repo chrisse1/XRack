@@ -198,7 +198,7 @@
         <!-- Player + Bluetooth --------------------------------------------->
 
         <div class="col-lg-6">
-          <div class="d-flex flex-column gap-4">
+          <div class="player-stack">
 
             {% set title %}
             <i class="bi bi-music-note-list me-2"></i>{{ t.music_player_title }}
@@ -340,21 +340,17 @@
                   </div>
                 </div>
 
-                <hr>
-
-                <div class="d-grid">
+                <div class="d-grid mt-2">
                   <button
                       id="btn-bluetooth-pair"
-                      class="btn btn-primary"
+                      class="btn btn-primary btn-sm"
                       onclick="startBluetoothPairing()"
                   >
                       <i class="bi bi-bluetooth me-2"></i>{{ t.btn_bluetooth_pair }}
                   </button>
                 </div>
 
-                <hr>
-
-                <h6 class="mb-2">{{ t.bluetooth_paired_title }}</h6>
+                <div class="small fw-semibold mt-2 mb-1">{{ t.bluetooth_paired_title }}</div>
 
                 <div id="bluetooth-paired-list">
                     <div class="text-muted small">{{ t.bluetooth_no_paired_devices }}</div>
