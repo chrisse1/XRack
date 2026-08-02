@@ -93,7 +93,6 @@ function updateRecorder(data) {
     recorderRecording = data.recording;
 
     updateRecorderStatus(data);
-    updateAudioCoreStatus(data);
     updateRecordingInfo(data);
     updateRecordChannels(data);
     updateRecordingList(data.recordings);
@@ -127,12 +126,6 @@ const RECORDER_STATE_LABELS = {
 function updateRecorderStatus(data) {
     const label = RECORDER_STATE_LABELS[data.recorder];
     document.getElementById("recorder-status").textContent = label ? label() : data.recorder;
-}
-
-function updateAudioCoreStatus(data) {
-    document.getElementById("engine-status").innerHTML = data.audio_core_open
-        ? `<i class="bi bi-check-circle-fill text-success"></i> ${I18N.audio_core_open}`
-        : `<i class="bi bi-dash-circle text-secondary"></i> ${I18N.audio_core_closed}`;
 }
 
 function updateRecordingInfo(data) {

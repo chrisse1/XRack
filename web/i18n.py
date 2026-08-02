@@ -21,9 +21,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "soundcheck_title": "Virtueller Soundcheck",
         "status_label": "Status:",
         "record_channels_label": "Aufnahmekanäle:",
-        "audio_core_label": "Audio Core",
-        "audio_core_open": "Geöffnet",
-        "audio_core_closed": "Geschlossen",
         "btn_recording_start": "Aufnahme starten",
         "btn_recording_stop": "Aufnahme stoppen",
         "btn_soundcheck": "Soundcheck",
@@ -44,7 +41,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Musikspieler-Karte
         "music_player_title": "Musikspieler",
         "music_channels_label": "Wiedergabekanäle:",
-        "btn_open_folder": "Ordner öffnen",
+        "btn_open_folder": "Musik öffnen",
         "btn_pause": "Pause",
         "btn_resume": "Fortsetzen",
         "btn_skip": "Weiter",
@@ -183,10 +180,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "bluetooth_title": "Bluetooth",
         "bluetooth_channels_label": "Zielkanäle:",
         "bluetooth_power_label": "Bluetooth",
-        "bluetooth_status_off": "Aus",
-        "bluetooth_status_ready": "Bereit",
-        "bluetooth_status_pairing": "Koppelbar...",
-        "bluetooth_status_connected": "Verbunden: {name}",
+        "bluetooth_status_off": "aus",
+        "bluetooth_status_ready": "bereit",
+        "bluetooth_status_pairing": "koppelbar...",
+        "bluetooth_status_connected": "verbunden mit {name}",
         "bluetooth_unavailable": (
             "Bluetooth (BlueZ) nicht gefunden - Funktion nicht "
             "verfügbar."
@@ -214,9 +211,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "soundcheck_title": "Virtual Soundcheck",
         "status_label": "Status:",
         "record_channels_label": "Recording channels:",
-        "audio_core_label": "Audio Core",
-        "audio_core_open": "Open",
-        "audio_core_closed": "Closed",
         "btn_recording_start": "Start recording",
         "btn_recording_stop": "Stop recording",
         "btn_soundcheck": "Soundcheck",
@@ -237,7 +231,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Music player card
         "music_player_title": "Music Player",
         "music_channels_label": "Playback channels:",
-        "btn_open_folder": "Open folder",
+        "btn_open_folder": "Open music",
         "btn_pause": "Pause",
         "btn_resume": "Resume",
         "btn_skip": "Skip",
@@ -375,10 +369,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "bluetooth_title": "Bluetooth",
         "bluetooth_channels_label": "Target channels:",
         "bluetooth_power_label": "Bluetooth",
-        "bluetooth_status_off": "Off",
-        "bluetooth_status_ready": "Ready",
-        "bluetooth_status_pairing": "Pairing mode...",
-        "bluetooth_status_connected": "Connected: {name}",
+        "bluetooth_status_off": "off",
+        "bluetooth_status_ready": "ready",
+        "bluetooth_status_pairing": "pairing mode...",
+        "bluetooth_status_connected": "connected to {name}",
         "bluetooth_unavailable": (
             "Bluetooth (BlueZ) not found - feature not available."
         ),

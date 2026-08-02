@@ -89,17 +89,6 @@
                       class="form-select form-select-sm w-auto">
                   </select>
               </div>
-
-                <div>
-                    <span>{{ t.audio_core_label }}</span>
-                    <strong id="engine-status" class="ms-2">
-                        {% if status.audio_core_open %}
-                            <i class="bi bi-check-circle-fill text-success"></i> {{ t.audio_core_open }}
-                        {% else %}
-                            <i class="bi bi-dash-circle text-secondary"></i> {{ t.audio_core_closed }}
-                        {% endif %}
-                    </strong>
-                </div>
             </div>
 
             <hr>

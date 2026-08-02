@@ -112,7 +112,10 @@ also disables `bluealsa-aplay.service` - a service bundled with
 Bluetooth stream to channel 1+2 on its own, bypassing XRack's channel
 selection entirely. Power, pairing, and the target channel pair are
 then controlled entirely from the new Bluetooth card next to the
-music player - no extra setup needed.
+music player - no extra setup needed. Bluetooth is always off after a
+boot/restart regardless of its state before, since it's an optional
+feature only partially suited for live use - switch it on again from
+the dashboard whenever you actually need it.
 
 Start/check manually:
 
@@ -249,7 +252,11 @@ mitgelieferter Dienst, der sonst jeden eingehenden Bluetooth-Stream
 selbstständig auf Kanal 1+2 abspielen würde, komplett an XRacks
 Kanalwahl vorbei. Ein-/Ausschalten, Koppeln und das Ziel-Kanalpaar
 werden danach vollständig über die neue Bluetooth-Karte neben dem
-Musikplayer gesteuert - keine weitere Einrichtung nötig.
+Musikplayer gesteuert - keine weitere Einrichtung nötig. Nach jedem
+Neustart ist Bluetooth immer aus, unabhängig vom Zustand davor - es
+ist eine bewusst optionale Funktion, die für den Live-Einsatz nur
+bedingt geeignet ist, und wird bei Bedarf im Dashboard wieder
+eingeschaltet.
 
 Manuell starten/prüfen:
 

@@ -128,13 +128,18 @@ class Application:
             )
 
         #
-        # War Bluetooth beim letzten Mal an, direkt wieder auf
-        # eingehende Streams lauschen (ohne dass der Nutzer den
-        # Schalter im Webinterface erneut betätigen muss).
+        # Bluetooth ist eine bewusst optionale Funktion (für den
+        # Live-Einsatz nur bedingt geeignet) - deshalb bei jedem
+        # Systemstart immer aus, unabhängig vom Zustand vor einem
+        # Neustart. Manche Systeme (BlueZ-"AutoEnable") schalten den
+        # Adapter beim Booten von selbst wieder ein - das hier stellt
+        # sicher, dass der Zustand im Webinterface ("Aus") und der
+        # tatsächliche Adapter-Zustand übereinstimmen. Wer Bluetooth
+        # nutzen möchte, schaltet es im Dashboard bewusst wieder ein.
         #
 
-        if self.bluetooth_control.get_status().get("powered"):
-            self._start_bluetooth_monitor()
+        if self.bluetooth_control.available:
+            self.bluetooth_control.set_power(False)
 
     def update_status(self) -> None:
         """Aktualisiert den aktuellen Systemstatus."""
