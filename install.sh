@@ -694,8 +694,8 @@ ExecStart=${INSTALL_DIR}/scripts/xrack-usb-unmount.sh
 EOF
 
     sudo tee "/etc/udev/rules.d/99-xrack-usb.rules" > /dev/null <<'EOF'
-ACTION=="add", SUBSYSTEM=="block", KERNEL=="sd*[0-9]", TAG+="systemd", ENV{SYSTEMD_WANTS}+="xrack-usb-mount@%k.service"
-ACTION=="remove", SUBSYSTEM=="block", KERNEL=="sd*[0-9]", RUN+="/usr/bin/systemctl --no-block start xrack-usb-unmount.service"
+ACTION=="add", SUBSYSTEM=="block", KERNEL=="sd*", ENV{ID_FS_USAGE}=="filesystem", TAG+="systemd", ENV{SYSTEMD_WANTS}+="xrack-usb-mount@%k.service"
+ACTION=="remove", SUBSYSTEM=="block", KERNEL=="sd*", RUN+="/usr/bin/systemctl --no-block start xrack-usb-unmount.service"
 EOF
 
     sudo systemctl daemon-reload

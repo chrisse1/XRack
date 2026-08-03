@@ -19,10 +19,18 @@ DEVICE="/dev/${PARTITION}"
 MOUNT_POINT="/media/xrack-usb"
 
 # Nur echte Wechseldatenträger automatisch einhängen - kein internes
-# Dateisystem (z.B. Root-/Boot-Partition bei einem per USB gebooteten Pi).
+# Dateisystem (z.B. Root-/Boot-Partition bei einem per USB gebooteten
+# Pi). Manche Sticks (v.a. ab Werk NTFS/exFAT-formatiert) haben keine
+# Partitionstabelle ("Superfloppy") - das Dateisystem liegt dann
+# direkt auf der ganzen Platte (z.B. /dev/sda statt /dev/sda1), lsblk
+# liefert dafür kein PKNAME. In dem Fall ist die Platte selbst zu prüfen.
 DISK_NAME="$(lsblk -no PKNAME "${DEVICE}" 2>/dev/null || true)"
 
-if [ -z "${DISK_NAME}" ] || [ "$(cat "/sys/block/${DISK_NAME}/removable" 2>/dev/null)" != "1" ]; then
+if [ -z "${DISK_NAME}" ]; then
+    DISK_NAME="${PARTITION}"
+fi
+
+if [ "$(cat "/sys/block/${DISK_NAME}/removable" 2>/dev/null)" != "1" ]; then
     exit 0
 fi
 

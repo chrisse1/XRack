@@ -14,12 +14,24 @@
 
   </div>
 
-  <button
-      id="btn-settings"
-      class="btn btn-outline-secondary btn-sm"
-      title="{{ t.settings_icon_title }}"
-  >
-      <i class="bi bi-gear"></i>
-  </button>
+  <div class="d-flex gap-2">
+
+    <button
+        id="btn-usb-eject"
+        class="btn btn-outline-secondary btn-sm d-none"
+        title="{{ t.btn_usb_eject }}"
+    >
+        <i class="bi bi-eject"></i>
+    </button>
+
+    <button
+        id="btn-settings"
+        class="btn btn-outline-secondary btn-sm"
+        title="{{ t.settings_icon_title }}"
+    >
+        <i class="bi bi-gear"></i>
+    </button>
+
+  </div>
 
 </header>
