@@ -731,7 +731,8 @@ configure_sudoers() {
         "${INSTALL_DIR}/scripts/xrack-bt-power.sh" \
         "${INSTALL_DIR}/scripts/xrack-bt-pair.sh" \
         "${INSTALL_DIR}/scripts/xrack-bt-forget.sh" \
-        "${INSTALL_DIR}/scripts/xrack-bt-disconnect.sh"
+        "${INSTALL_DIR}/scripts/xrack-bt-disconnect.sh" \
+        "${INSTALL_DIR}/scripts/xrack-usb-unmount.sh"
 
     SUDOERS_FILE="/etc/sudoers.d/xrack"
     SUDOERS_TMP="$(mktemp)"
@@ -745,7 +746,8 @@ ${INSTALL_DIR}/scripts/xrack-bridge-toggle.sh *, \
 ${INSTALL_DIR}/scripts/xrack-bt-power.sh *, \
 ${INSTALL_DIR}/scripts/xrack-bt-pair.sh, \
 ${INSTALL_DIR}/scripts/xrack-bt-forget.sh *, \
-${INSTALL_DIR}/scripts/xrack-bt-disconnect.sh *" \
+${INSTALL_DIR}/scripts/xrack-bt-disconnect.sh *, \
+${INSTALL_DIR}/scripts/xrack-usb-unmount.sh" \
         > "${SUDOERS_TMP}"
 
     sudo visudo -cf "${SUDOERS_TMP}"

@@ -71,3 +71,5 @@ class SystemStatus(BaseModel):
 
     bluetooth_streaming: bool = False
     bluetooth_device_name: str = ""
+
+    usb_connected: bool = False

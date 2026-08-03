@@ -13,45 +13,58 @@
 
             <div class="card shadow-sm">
                 <div class="card-body">
-                    <div class="d-flex flex-wrap align-items-center gap-3">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
 
-                        <div class="d-flex align-items-center gap-2">
-                            <select
-                                id="audio-device-select"
-                                class="form-select form-select-sm w-auto">
-                            </select>
+                        <div class="d-flex flex-wrap align-items-center gap-3">
 
-                            <button
-                                id="audio-rescan"
-                                class="btn btn-outline-secondary btn-sm"
-                                title="{{ t.audio_rescan_title }}">
+                            <div class="d-flex align-items-center gap-2">
+                                <select
+                                    id="audio-device-select"
+                                    class="form-select form-select-sm w-auto">
+                                </select>
 
-                                <i class="bi bi-arrow-clockwise"></i>
+                                <button
+                                    id="audio-rescan"
+                                    class="btn btn-outline-secondary btn-sm"
+                                    title="{{ t.audio_rescan_title }}">
 
-                            </button>
-                        </div>
+                                    <i class="bi bi-arrow-clockwise"></i>
 
-                        <div class="text-nowrap">
-                            <span class="text-secondary small">{{ t.audio_open_device }}</span>
-                            <strong id="audio-state" class="ms-1">
+                                </button>
+                            </div>
+
+                            <div class="text-nowrap">
+                                <span class="text-secondary small">{{ t.audio_open_device }}</span>
+                                <strong id="audio-state" class="ms-1">
+                                    {% if status.audio_connected %}
+                                        <i class="bi bi-check-circle-fill text-success"></i> {{ status.audio_device }}
+                                    {% else %}
+                                        <i class="bi bi-x-circle-fill text-danger"></i> {{ status.audio_device }}
+                                    {% endif %}
+                                </strong>
+                            </div>
+
+                            <div class="text-nowrap text-secondary small" id="audio-info">
                                 {% if status.audio_connected %}
-                                    <i class="bi bi-check-circle-fill text-success"></i> {{ status.audio_device }}
+                                    {{ status.audio_channels }} Ch •
+                                    {{ (status.audio_sample_rate / 1000)|int }} kHz •
+                                    {{ status.audio_sample_bits }} Bit •
+                                    {{ status.audio_formats | join(", ") }}
                                 {% else %}
-                                    <i class="bi bi-x-circle-fill text-danger"></i> {{ status.audio_device }}
+                                    {{ t.audio_interface_fallback }}
                                 {% endif %}
-                            </strong>
+                            </div>
+
                         </div>
 
-                        <div class="text-nowrap text-secondary small" id="audio-info">
-                            {% if status.audio_connected %}
-                                {{ status.audio_channels }} Ch •
-                                {{ (status.audio_sample_rate / 1000)|int }} kHz •
-                                {{ status.audio_sample_bits }} Bit •
-                                {{ status.audio_formats | join(", ") }}
-                            {% else %}
-                                {{ t.audio_interface_fallback }}
-                            {% endif %}
-                        </div>
+                        <button
+                            id="btn-usb-eject"
+                            class="btn btn-outline-secondary btn-sm d-none"
+                            title="{{ t.btn_usb_eject }}">
+
+                            <i class="bi bi-eject me-2"></i>{{ t.btn_usb_eject }}
+
+                        </button>
 
                     </div>
                 </div>

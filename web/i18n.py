@@ -16,6 +16,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "audio_rescan_title": "Audiogeräte neu suchen",
         "audio_open_device": "Geöffnetes Gerät:",
         "audio_interface_fallback": "Audio Interface",
+        "btn_usb_eject": "USB-Stick auswerfen",
+        "confirm_usb_eject": "USB-Stick jetzt auswerfen?",
+        "alert_usb_eject_success": "USB-Stick kann jetzt entfernt werden.",
+        "alert_usb_eject_failed": "USB-Stick konnte nicht ausgeworfen werden.",
+        "alert_usb_eject_busy": "Es läuft noch ein Kopiervorgang - bitte warten.",
 
         # Soundcheck-Karte
         "soundcheck_title": "Virtueller Soundcheck",
@@ -94,6 +99,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "alert_usb_copy_success": "Auf den USB-Stick kopiert.",
         "alert_usb_copy_already_exists": "War schon auf dem USB-Stick vorhanden.",
         "alert_usb_copy_failed": "Kopieren auf den USB-Stick fehlgeschlagen.",
+        "alert_usb_copy_busy": "Es läuft schon ein Kopiervorgang - bitte warten.",
+        "alert_usb_copy_no_usb": "Kein USB-Stick angeschlossen.",
 
         # Musikbibliothek-Modal
         "modal_music_title": "Musikbibliothek",
@@ -228,6 +235,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "audio_rescan_title": "Rescan audio devices",
         "audio_open_device": "Connected device:",
         "audio_interface_fallback": "Audio Interface",
+        "btn_usb_eject": "Eject USB drive",
+        "confirm_usb_eject": "Eject the USB drive now?",
+        "alert_usb_eject_success": "The USB drive can now be removed.",
+        "alert_usb_eject_failed": "The USB drive could not be ejected.",
+        "alert_usb_eject_busy": "A copy is still in progress - please wait.",
 
         # Soundcheck card
         "soundcheck_title": "Virtual Soundcheck",
@@ -306,6 +318,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "alert_usb_copy_success": "Copied to the USB drive.",
         "alert_usb_copy_already_exists": "Was already on the USB drive.",
         "alert_usb_copy_failed": "Copying to the USB drive failed.",
+        "alert_usb_copy_busy": "A copy is already in progress - please wait.",
+        "alert_usb_copy_no_usb": "No USB drive connected.",
 
         # Music library modal
         "modal_music_title": "Music Library",

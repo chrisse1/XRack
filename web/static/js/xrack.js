@@ -45,6 +45,7 @@ async function updateStatus() {
     updateSystemStats(data);
     updateAudioStatus(data);
     updateAudioDeviceSelectState(data);
+    updateUsbEjectButton(data);
     updateRecorder(data);
     updateMusicPlayer(data);
     updateBluetooth(data);
@@ -81,6 +82,27 @@ function updateAudioDeviceSelectState(data) {
 
     const rescanButton = document.getElementById("audio-rescan");
     if (rescanButton) rescanButton.disabled = isAudioBusy(data);
+}
+
+function updateUsbEjectButton(data) {
+    const button = document.getElementById("btn-usb-eject");
+    if (button) button.classList.toggle("d-none", !data.usb_connected);
+}
+
+document.getElementById("btn-usb-eject").addEventListener("click", ejectUsb);
+
+async function ejectUsb() {
+    if (!confirm(I18N.confirm_usb_eject)) return;
+
+    const response = await fetch("/api/usb/eject", { method: "POST" });
+    const result = await response.json();
+
+    if (!result.success) {
+        alert(result.message === "busy" ? I18N.alert_usb_eject_busy : I18N.alert_usb_eject_failed);
+        return;
+    }
+
+    alert(I18N.alert_usb_eject_success);
 }
 
 // ============================================================
@@ -667,6 +689,8 @@ async function handleRecordingAction(event) {
     }
 }
 
+let usbCopyPollTimer = null;
+
 async function copyRecordingToUsb(filename) {
     const response = await fetch("/api/recordings/copy_to_usb", {
         method: "POST",
@@ -676,11 +700,68 @@ async function copyRecordingToUsb(filename) {
     const result = await response.json();
 
     if (!result.success) {
-        alert(I18N.alert_usb_copy_failed);
+        switch (result.status) {
+            case "busy":
+                alert(I18N.alert_usb_copy_busy);
+                break;
+            case "no_usb":
+                alert(I18N.alert_usb_copy_no_usb);
+                break;
+            default:
+                alert(I18N.alert_usb_copy_failed);
+        }
         return;
     }
 
-    alert(result.already_exists ? I18N.alert_usb_copy_already_exists : I18N.alert_usb_copy_success);
+    showUsbCopyProgress(filename);
+    pollUsbCopyProgress();
+}
+
+function showUsbCopyProgress(filename) {
+    document.getElementById("usbCopyProgressLabel").textContent = filename;
+    document.getElementById("usbCopyProgressPercent").textContent = "0%";
+    document.getElementById("usbCopyProgressBar").style.width = "0%";
+    document.getElementById("usbCopyProgress").classList.remove("d-none");
+}
+
+function hideUsbCopyProgress() {
+    document.getElementById("usbCopyProgress").classList.add("d-none");
+}
+
+function pollUsbCopyProgress() {
+    if (usbCopyPollTimer) clearInterval(usbCopyPollTimer);
+
+    usbCopyPollTimer = setInterval(async () => {
+        let data;
+
+        try {
+            const response = await fetch("/api/usb/copy_status");
+            data = await response.json();
+        } catch (error) {
+            clearInterval(usbCopyPollTimer);
+            usbCopyPollTimer = null;
+            hideUsbCopyProgress();
+            return;
+        }
+
+        const percent = data.total > 0 ? Math.round((data.copied / data.total) * 100) : 0;
+        document.getElementById("usbCopyProgressPercent").textContent = `${percent}%`;
+        document.getElementById("usbCopyProgressBar").style.width = `${percent}%`;
+
+        if (data.active) return;
+
+        clearInterval(usbCopyPollTimer);
+        usbCopyPollTimer = null;
+        hideUsbCopyProgress();
+
+        if (!data.success) {
+            alert(I18N.alert_usb_copy_failed);
+        } else if (data.already_exists) {
+            alert(I18N.alert_usb_copy_already_exists);
+        } else {
+            alert(I18N.alert_usb_copy_success);
+        }
+    }, 300);
 }
 
 async function chooseRecordingForPlayback(filename) {

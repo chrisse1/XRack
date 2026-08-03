@@ -24,6 +24,7 @@ from core.pin import hash_pin, verify_pin
 import platform
 import psutil
 import re
+import threading
 import time
 
 class Application:
@@ -95,6 +96,17 @@ class Application:
         self.bluetooth_control = BluetoothControl()
 
         self.usb_storage = UsbStorage()
+
+        self._usb_copy_lock = threading.Lock()
+
+        self.usb_copy_state = {
+            "active": False,
+            "filename": "",
+            "copied": 0,
+            "total": 0,
+            "success": None,
+            "already_exists": False,
+        }
 
         self.bluetooth_player = BluetoothPlayer(
             AudioPlaybackBackend(),
@@ -292,6 +304,8 @@ class Application:
             self.status.audio_connected
             and self.status.audio_core_open
         )
+
+        self.status.usb_connected = self.usb_storage.connected
         
         self.status.recordings = (
             self.recorder.recordings
@@ -432,18 +446,80 @@ class Application:
 
         self.player.stop()
 
-    def copy_recording_to_usb(self, filename: str) -> tuple[bool, bool]:
+    def start_usb_copy(self, filename: str) -> tuple[bool, str]:
         """
-        Kopiert eine Aufnahme ins Wurzelverzeichnis des automatisch
-        eingehängten USB-Sticks. Liefert (erfolgreich, bereits_vorhanden).
+        Startet das Kopieren einer Aufnahme ins Wurzelverzeichnis des
+        USB-Sticks im Hintergrund (läuft sonst blockierend und ohne
+        Fortschrittsanzeige). Der Fortschritt lässt sich über
+        get_usb_copy_status() abfragen. Es läuft immer nur ein
+        Kopiervorgang gleichzeitig.
         """
 
         recording = self.recorder.writer.directory / filename
 
         if not recording.exists():
-            return False, False
+            return False, "not_found"
 
-        return self.usb_storage.copy_file(recording)
+        if not self.usb_storage.connected:
+            return False, "no_usb"
+
+        with self._usb_copy_lock:
+
+            if self.usb_copy_state["active"]:
+                return False, "busy"
+
+            self.usb_copy_state = {
+                "active": True,
+                "filename": filename,
+                "copied": 0,
+                "total": recording.stat().st_size,
+                "success": None,
+                "already_exists": False,
+            }
+
+        thread = threading.Thread(
+            target=self._run_usb_copy,
+            args=(recording,),
+            daemon=True,
+        )
+        thread.start()
+
+        return True, "started"
+
+    def _run_usb_copy(self, recording: Path) -> None:
+
+        def on_progress(copied: int, total: int) -> None:
+            with self._usb_copy_lock:
+                self.usb_copy_state["copied"] = copied
+                self.usb_copy_state["total"] = total
+
+        success, already_exists = self.usb_storage.copy_file(
+            recording,
+            on_progress,
+        )
+
+        with self._usb_copy_lock:
+            self.usb_copy_state["active"] = False
+            self.usb_copy_state["success"] = success
+            self.usb_copy_state["already_exists"] = already_exists
+
+    def get_usb_copy_status(self) -> dict:
+        """Liefert den aktuellen Fortschritt des USB-Kopiervorgangs."""
+
+        with self._usb_copy_lock:
+            return dict(self.usb_copy_state)
+
+    def eject_usb(self) -> tuple[bool, str]:
+        """
+        Hängt den USB-Stick sicher aus. Lehnt ab, solange noch ein
+        Kopiervorgang läuft.
+        """
+
+        with self._usb_copy_lock:
+            if self.usb_copy_state["active"]:
+                return False, "busy"
+
+        return self.usb_storage.eject()
 
     def play_music_folder(
         self,

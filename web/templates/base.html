@@ -69,6 +69,21 @@
 
             <div class="modal-body">
 
+              <div id="usbCopyProgress" class="mb-3 d-none">
+                  <div class="d-flex justify-content-between small mb-1">
+                      <span id="usbCopyProgressLabel"></span>
+                      <span id="usbCopyProgressPercent">0%</span>
+                  </div>
+                  <div class="progress" style="height: 6px;">
+                      <div
+                          id="usbCopyProgressBar"
+                          class="progress-bar"
+                          role="progressbar"
+                          style="width: 0%"
+                      ></div>
+                  </div>
+              </div>
+
               <div
                   id="recordingsList"
                   class="list-group"

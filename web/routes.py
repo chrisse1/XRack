@@ -965,11 +965,32 @@ async def copy_recording_to_usb(
 
     application = request.app.state.application
 
-    success, already_exists = application.copy_recording_to_usb(
+    success, status = application.start_usb_copy(
         selection.filename
     )
 
     return {
         "success": success,
-        "already_exists": already_exists,
+        "status": status,
+    }
+
+
+@router.get("/api/usb/copy_status")
+async def usb_copy_status(request: Request):
+
+    application = request.app.state.application
+
+    return application.get_usb_copy_status()
+
+
+@router.post("/api/usb/eject")
+async def eject_usb(request: Request):
+
+    application = request.app.state.application
+
+    success, message = application.eject_usb()
+
+    return {
+        "success": success,
+        "message": message,
     }
