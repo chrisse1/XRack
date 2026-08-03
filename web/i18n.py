@@ -82,6 +82,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Herunterfahren fehlgeschlagen. Ist die sudo-Berechtigung "
             "eingerichtet (install.sh)?"
         ),
+        "connection_lost_title": "Verbindung unterbrochen",
+        "connection_lost_message": (
+            "Keine Verbindung zu XRack - versuche automatisch erneut "
+            "zu verbinden..."
+        ),
 
         # Aufnahmen-Modal
         "modal_recordings_title": "Aufnahmen",
@@ -300,6 +305,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "shutdown_failed": (
             "Shutdown failed. Is the sudo permission set up "
             "(install.sh)?"
+        ),
+        "connection_lost_title": "Connection lost",
+        "connection_lost_message": (
+            "No connection to XRack - trying to reconnect "
+            "automatically..."
         ),
 
         # Recordings modal

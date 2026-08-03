@@ -26,6 +26,14 @@ function isAudioBusy(data) {
 
 let lastStatusData = {};
 
+// Verbindungsüberwachung: Ein Modal poppt auf, sobald das Statuspoll
+// (alle 1s) für mindestens CONNECTION_LOST_THRESHOLD_MS am Stück
+// fehlschlägt, und verschwindet automatisch beim nächsten Erfolg.
+const CONNECTION_LOST_THRESHOLD_MS = 5000;
+const STATUS_FETCH_TIMEOUT_MS = 3000;
+let lastSuccessfulUpdate = Date.now();
+let connectionLostModalShown = false;
+
 // ============================================================
 // 2. CORE UI UPDATES
 // ============================================================
@@ -35,20 +43,56 @@ async function refreshDashboard() {
 }
 
 async function updateStatus() {
-    const response = await fetch("/api/status");
-    const data = await response.json();
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), STATUS_FETCH_TIMEOUT_MS);
 
-    lastStatusData = data;
+        let response;
+        try {
+            response = await fetch("/api/status", { signal: controller.signal });
+        } finally {
+            clearTimeout(timeoutId);
+        }
 
-    selectedAudioDevice = data.selected_audio_device;
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-    updateSystemStats(data);
-    updateAudioStatus(data);
-    updateAudioDeviceSelectState(data);
-    updateUsbEjectButton(data);
-    updateRecorder(data);
-    updateMusicPlayer(data);
-    updateBluetooth(data);
+        const data = await response.json();
+
+        lastSuccessfulUpdate = Date.now();
+        hideConnectionLostModal();
+
+        lastStatusData = data;
+
+        selectedAudioDevice = data.selected_audio_device;
+
+        updateSystemStats(data);
+        updateAudioStatus(data);
+        updateAudioDeviceSelectState(data);
+        updateUsbEjectButton(data);
+        updateRecorder(data);
+        updateMusicPlayer(data);
+        updateBluetooth(data);
+    } catch (error) {
+        if (Date.now() - lastSuccessfulUpdate >= CONNECTION_LOST_THRESHOLD_MS) {
+            showConnectionLostModal();
+        }
+    }
+}
+
+function showConnectionLostModal() {
+    if (connectionLostModalShown) return;
+    connectionLostModalShown = true;
+
+    const modalElement = document.getElementById("connectionLostModal");
+    bootstrap.Modal.getOrCreateInstance(modalElement).show();
+}
+
+function hideConnectionLostModal() {
+    if (!connectionLostModalShown) return;
+    connectionLostModalShown = false;
+
+    const modalElement = document.getElementById("connectionLostModal");
+    bootstrap.Modal.getOrCreateInstance(modalElement).hide();
 }
 
 function updateSystemStats(data) {
