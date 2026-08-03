@@ -346,23 +346,29 @@ configure_wifi() {
                     echo "  $((i + 1))) ${WIFI_INTERFACES[$i]}"
                 done
 
-                echo ""
-                read -r -p "Welches Interface soll sich mit deinem Heimnetz verbinden (Nummer)? " CLIENT_INDEX || true
-                read -r -p "Welches Interface soll den Access Point aufspannen (Nummer)? " AP_INDEX || true
-
                 CLIENT_IFACE=""
                 AP_IFACE=""
 
-                if valid_wifi_index "${CLIENT_INDEX}" "${#WIFI_INTERFACES[@]}" \
-                    && valid_wifi_index "${AP_INDEX}" "${#WIFI_INTERFACES[@]}" \
-                    && [ "${CLIENT_INDEX}" != "${AP_INDEX}" ]; then
+                for attempt in 1 2 3; do
 
-                    CLIENT_IFACE="${WIFI_INTERFACES[$((CLIENT_INDEX - 1))]}"
-                    AP_IFACE="${WIFI_INTERFACES[$((AP_INDEX - 1))]}"
-                fi
+                    echo ""
+                    read -r -p "Welches Interface soll sich mit deinem Heimnetz verbinden (Nummer 1-${#WIFI_INTERFACES[@]})? " CLIENT_INDEX || true
+                    read -r -p "Welches Interface soll den Access Point aufspannen (Nummer 1-${#WIFI_INTERFACES[@]})? " AP_INDEX || true
+
+                    if valid_wifi_index "${CLIENT_INDEX}" "${#WIFI_INTERFACES[@]}" \
+                        && valid_wifi_index "${AP_INDEX}" "${#WIFI_INTERFACES[@]}" \
+                        && [ "${CLIENT_INDEX}" != "${AP_INDEX}" ]; then
+
+                        CLIENT_IFACE="${WIFI_INTERFACES[$((CLIENT_INDEX - 1))]}"
+                        AP_IFACE="${WIFI_INTERFACES[$((AP_INDEX - 1))]}"
+                        break
+                    fi
+
+                    echo "Ungültige oder gleiche Auswahl (gültig: 1-${#WIFI_INTERFACES[@]}, beide unterschiedlich) - bitte erneut eingeben."
+                done
 
                 if [ -z "${CLIENT_IFACE}" ] || [ -z "${AP_IFACE}" ]; then
-                    echo "Ungültige oder gleiche Auswahl - WLAN-Setup übersprungen."
+                    echo "Zu viele Fehlversuche - WLAN-Setup wird übersprungen."
                 else
 
                     echo ""
