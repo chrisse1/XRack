@@ -90,6 +90,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "confirm_delete_multi": "{count} Aufnahme(n) wirklich löschen?",
         "alert_recording_delete_failed": "Aufnahme konnte nicht gelöscht werden.",
         "alert_recordings_delete_failed": "Aufnahmen konnten nicht gelöscht werden.",
+        "title_copy_to_usb": "Auf USB-Stick kopieren",
+        "alert_usb_copy_success": "Auf den USB-Stick kopiert.",
+        "alert_usb_copy_already_exists": "War schon auf dem USB-Stick vorhanden.",
+        "alert_usb_copy_failed": "Kopieren auf den USB-Stick fehlgeschlagen.",
 
         # Musikbibliothek-Modal
         "modal_music_title": "Musikbibliothek",
@@ -298,6 +302,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "confirm_delete_multi": "Really delete {count} recording(s)?",
         "alert_recording_delete_failed": "The recording could not be deleted.",
         "alert_recordings_delete_failed": "The recordings could not be deleted.",
+        "title_copy_to_usb": "Copy to USB drive",
+        "alert_usb_copy_success": "Copied to the USB drive.",
+        "alert_usb_copy_already_exists": "Was already on the USB drive.",
+        "alert_usb_copy_failed": "Copying to the USB drive failed.",
 
         # Music library modal
         "modal_music_title": "Music Library",

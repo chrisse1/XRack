@@ -30,6 +30,9 @@ the Pi itself.
   restart, since Bluetooth is only partially suited for live use.
 - Level meter, a settings dialog (language/port/Wi-Fi/bridge), optional
   Wi-Fi client + access point setup, installable as a PWA.
+- **Copy to USB drive**: plug in a USB stick and a button appears next
+  to each recording to copy it straight to the stick's root folder -
+  no folder picker, no re-copying a file that's already there.
 
 ### Requirements
 
@@ -57,7 +60,9 @@ web interface's language, port, hostname, and a 4-digit PIN that
 protects the settings dialog from unauthorized changes (can be changed
 later in the settings dialog itself), and optionally sets up Wi-Fi
 (home network + access point) and Bluetooth audio - the prompts
-explain each step as you go.
+explain each step as you go. It also sets up automatic USB drive
+mounting, so plugging in a stick is enough for the "copy to USB
+drive" button to work - no extra configuration needed.
 
 Afterwards the web interface is reachable at
 `https://<hostname>.local:<port>` (default: `https://xrack.local:8080`).
@@ -106,6 +111,10 @@ am Pi nötig.
 - Pegelmesser, Einstellungsdialog (Sprache/Port/WLAN/Bridge),
   optionale WLAN-Client- und Access-Point-Einrichtung, als PWA
   installierbar.
+- **Auf USB-Stick kopieren**: USB-Stick anschließen, schon erscheint
+  neben jeder Aufnahme ein Button, der sie direkt ins Wurzelverzeichnis
+  des Sticks kopiert - keine Ordnerauswahl, kein doppeltes Kopieren
+  einer bereits vorhandenen Datei.
 
 ### Voraussetzungen
 
@@ -134,6 +143,9 @@ sowie einer 4-stelligen PIN, die das Einstellungen-Menü vor unbefugten
 Änderungen schützt (später im Einstellungen-Menü selbst änderbar), und
 richtet optional WLAN (Heimnetz + Access Point) sowie Bluetooth-Audio
 ein - die Abfragen dazu erklären sich beim Durchlaufen von selbst.
+Außerdem wird das automatische Einhängen von USB-Sticks eingerichtet,
+damit der "Auf USB-Stick kopieren"-Button ohne weitere Einrichtung
+funktioniert, sobald ein Stick angeschlossen wird.
 
 Danach ist das Webinterface unter `https://<hostname>.local:<port>`
 erreichbar (Standard: `https://xrack.local:8080`). Das Zertifikat ist

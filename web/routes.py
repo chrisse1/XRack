@@ -71,6 +71,9 @@ class PinChangeSelection(BaseModel):
     current_pin: str
     new_pin: str
 
+class UsbCopySelection(BaseModel):
+    filename: str
+
 class RecordingPrefixSelection(BaseModel):
     prefix: str
 
@@ -941,4 +944,32 @@ async def delete_recordings(
     return {
         "deleted": deleted,
         "count": len(deleted),
+    }
+
+
+@router.get("/api/usb/status")
+async def usb_status(request: Request):
+
+    application = request.app.state.application
+
+    return {
+        "connected": application.usb_storage.connected
+    }
+
+
+@router.post("/api/recordings/copy_to_usb")
+async def copy_recording_to_usb(
+    selection: UsbCopySelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, already_exists = application.copy_recording_to_usb(
+        selection.filename
+    )
+
+    return {
+        "success": success,
+        "already_exists": already_exists,
     }

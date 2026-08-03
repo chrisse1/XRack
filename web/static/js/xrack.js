@@ -13,6 +13,8 @@ let musicCurrentPath = "";
 let musicSeekDragging = false;
 const selectedMusicFiles = new Set();
 
+let usbConnected = false;
+
 let recorderMonitoring = false;
 
 // Gerät/Kanäle dürfen während keiner laufenden Aufnahme,
@@ -559,6 +561,17 @@ async function loadRecordings()
 
         updateDeleteSelectedButton();
 
+        try
+        {
+            const usbResponse = await fetch("/api/usb/status");
+            const usbData = await usbResponse.json();
+            usbConnected = Boolean(usbData.connected);
+        }
+        catch (error)
+        {
+            usbConnected = false;
+        }
+
         renderRecordings(recordings);
     }
     catch (error)
@@ -608,6 +621,11 @@ function createRecordingCard(recording) {
                 <button class="btn btn-outline-primary btn-sm" title="${I18N.title_download}" data-action="download" data-filename="${recording.filename}">
                     <i class="bi bi-download"></i>
                 </button>
+                ${usbConnected ? `
+                <button class="btn btn-outline-secondary btn-sm" title="${I18N.title_copy_to_usb}" data-action="copy-usb" data-filename="${recording.filename}">
+                    <i class="bi bi-usb-drive"></i>
+                </button>
+                ` : ''}
                 <button class="btn btn-outline-danger btn-sm" title="${I18N.title_delete}" data-action="delete" data-filename="${recording.filename}">
                     <i class="bi bi-trash"></i>
                 </button>
@@ -643,7 +661,26 @@ async function handleRecordingAction(event) {
         case "choose":
             await chooseRecordingForPlayback(filename);
             break;
+        case "copy-usb":
+            await copyRecordingToUsb(filename);
+            break;
     }
+}
+
+async function copyRecordingToUsb(filename) {
+    const response = await fetch("/api/recordings/copy_to_usb", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename })
+    });
+    const result = await response.json();
+
+    if (!result.success) {
+        alert(I18N.alert_usb_copy_failed);
+        return;
+    }
+
+    alert(result.already_exists ? I18N.alert_usb_copy_already_exists : I18N.alert_usb_copy_success);
 }
 
 async function chooseRecordingForPlayback(filename) {

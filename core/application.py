@@ -18,6 +18,7 @@ from player.bluetooth_player import BluetoothPlayer
 from core.system_control import SystemControl
 from core.wlan_control import WlanControl
 from core.bluetooth_control import BluetoothControl
+from core.usb_storage import UsbStorage
 from core.state_store import StateStore
 from core.pin import hash_pin, verify_pin
 import platform
@@ -92,6 +93,8 @@ class Application:
         self.wlan_control = WlanControl()
 
         self.bluetooth_control = BluetoothControl()
+
+        self.usb_storage = UsbStorage()
 
         self.bluetooth_player = BluetoothPlayer(
             AudioPlaybackBackend(),
@@ -428,6 +431,19 @@ class Application:
         """
 
         self.player.stop()
+
+    def copy_recording_to_usb(self, filename: str) -> tuple[bool, bool]:
+        """
+        Kopiert eine Aufnahme ins Wurzelverzeichnis des automatisch
+        eingehängten USB-Sticks. Liefert (erfolgreich, bereits_vorhanden).
+        """
+
+        recording = self.recorder.writer.directory / filename
+
+        if not recording.exists():
+            return False, False
+
+        return self.usb_storage.copy_file(recording)
 
     def play_music_folder(
         self,

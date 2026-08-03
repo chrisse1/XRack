@@ -178,7 +178,9 @@ install_system_dependencies() {
         bluez-alsa-utils \
         python3-dbus \
         python3-gi \
-        openssl > /dev/null
+        openssl \
+        exfatprogs \
+        ntfs-3g > /dev/null
 
     echo "$(L "XRack: Python-Umgebung wird eingerichtet..." "XRack: Setting up Python environment...")"
 
@@ -651,6 +653,58 @@ EOF
 }
 
 #
+# USB-Stick automatisch einhängen (fürs "Auf USB-Stick kopieren" im
+# Aufnahmen-Modal).
+#
+# Eine udev-Regel löst bei jeder neu erkannten Partition einen
+# systemd-Dienst aus, der sie - falls es sich um einen echten
+# Wechseldatenträger handelt - unter einem festen Pfad einhängt
+# (scripts/xrack-usb-mount.sh); beim Entfernen wird entsprechend
+# wieder ausgehängt. Unterstützt genau einen angeschlossenen Stick
+# gleichzeitig, ganz ohne Verzeichnisauswahl im Webinterface.
+#
+configure_usb_automount() {
+
+    echo "$(L "XRack: USB-Stick-Automount wird eingerichtet..." "XRack: Setting up USB drive automount...")"
+
+    chmod +x \
+        "${INSTALL_DIR}/scripts/xrack-usb-mount.sh" \
+        "${INSTALL_DIR}/scripts/xrack-usb-unmount.sh"
+
+    SERVICE_UID="$(id -u)"
+    SERVICE_GID="$(id -g)"
+
+    sudo tee "/etc/systemd/system/xrack-usb-mount@.service" > /dev/null <<EOF
+[Unit]
+Description=XRack: USB-Stick automatisch einhängen (%i)
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=${INSTALL_DIR}/scripts/xrack-usb-mount.sh %i ${SERVICE_UID} ${SERVICE_GID}
+EOF
+
+    sudo tee "/etc/systemd/system/xrack-usb-unmount.service" > /dev/null <<EOF
+[Unit]
+Description=XRack: USB-Stick aushängen
+
+[Service]
+Type=oneshot
+ExecStart=${INSTALL_DIR}/scripts/xrack-usb-unmount.sh
+EOF
+
+    sudo tee "/etc/udev/rules.d/99-xrack-usb.rules" > /dev/null <<'EOF'
+ACTION=="add", SUBSYSTEM=="block", KERNEL=="sd*[0-9]", TAG+="systemd", ENV{SYSTEMD_WANTS}+="xrack-usb-mount@%k.service"
+ACTION=="remove", SUBSYSTEM=="block", KERNEL=="sd*[0-9]", RUN+="/usr/bin/systemctl --no-block start xrack-usb-unmount.service"
+EOF
+
+    sudo systemctl daemon-reload
+
+    sudo udevadm control --reload-rules
+    sudo udevadm trigger --subsystem-match=block >/dev/null 2>&1 || true
+}
+
+#
 # sudo-Berechtigung für Herunterfahren, Dienst-Neustart und die
 # WLAN-Einstellungen (Webinterface -> Einstellungen) einrichten.
 #
@@ -829,6 +883,7 @@ generate_tls_certificate
 configure_firewall
 configure_wifi
 configure_bluetooth
+configure_usb_automount
 configure_sudoers
 configure_systemd_service
 print_summary
