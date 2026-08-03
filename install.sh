@@ -24,7 +24,8 @@ sudo apt-get install -y \
     bluez \
     bluez-alsa-utils \
     python3-dbus \
-    python3-gi
+    python3-gi \
+    openssl
 
 echo "XRack: Python-Umgebung einrichten..."
 
@@ -71,7 +72,7 @@ if [ -t 0 ]; then
     fi
 
     echo ""
-    read -r -p "Hostname (Standard: xrack, erreichbar als http://<hostname>.local): " XRACK_HOSTNAME_INPUT || true
+    read -r -p "Hostname (Standard: xrack, erreichbar als https://<hostname>.local): " XRACK_HOSTNAME_INPUT || true
 
     if [ -n "${XRACK_HOSTNAME_INPUT}" ]; then
         if [[ "${XRACK_HOSTNAME_INPUT}" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]]; then
@@ -95,7 +96,7 @@ EOF
 
 #
 # Hostname setzen, damit der Pi im lokalen Netz per mDNS (Avahi)
-# unter http://<hostname>.local erreichbar ist. Avahi kündigt den
+# unter https://<hostname>.local erreichbar ist. Avahi kündigt den
 # aktuellen System-Hostnamen automatisch an - hier wird nur der
 # Hostname gesetzt und Avahi neu gestartet, damit er den neuen Namen
 # sofort übernimmt (ohne Reboot).
@@ -117,6 +118,35 @@ if command -v avahi-daemon >/dev/null 2>&1; then
 else
     echo "Hinweis: avahi-daemon nicht gefunden - '${XRACK_HOSTNAME}.local' wird im Netzwerk nicht auffindbar sein."
 fi
+
+#
+# Selbstsigniertes TLS-Zertifikat erzeugen, damit das Webinterface
+# über HTTPS läuft. Ein "echtes", von Browsern automatisch akzeptiertes
+# Zertifikat (Let's Encrypt) funktioniert hier nicht - dafür bräuchte
+# es eine öffentliche, per DNS auflösbare Domain, XRack läuft aber oft
+# komplett offline über einen eigenen Access Point. Browser zeigen beim
+# ersten Aufruf deshalb einmalig eine Sicherheitswarnung
+# ("Verbindung ist nicht privat" o.ä.) - "Erweitert" -> "Trotzdem
+# fortfahren" reicht, danach merkt sich der Browser die Ausnahme für
+# dieses Gerät. Zehn Jahre Gültigkeit, damit das nicht regelmäßig
+# erneut bestätigt werden muss. Wird bei jedem install.sh-Lauf neu
+# erzeugt (falls sich der Hostname geändert hat), eine bereits erteilte
+# Browser-Ausnahme muss dann einmalig erneut bestätigt werden.
+#
+
+echo "XRack: Selbstsigniertes TLS-Zertifikat wird erzeugt..."
+
+mkdir -p "${INSTALL_DIR}/certs"
+
+openssl req -x509 -nodes -newkey rsa:2048 \
+    -keyout "${INSTALL_DIR}/certs/xrack.key" \
+    -out "${INSTALL_DIR}/certs/xrack.crt" \
+    -days 3650 \
+    -subj "/CN=${XRACK_HOSTNAME}" \
+    -addext "subjectAltName=DNS:${XRACK_HOSTNAME},DNS:${XRACK_HOSTNAME}.local,DNS:localhost,IP:127.0.0.1" \
+    >/dev/null 2>&1
+
+chmod 600 "${INSTALL_DIR}/certs/xrack.key"
 
 #
 # Falls eine Firewall (ufw) aktiv ist, Freigaben für mDNS und das
@@ -512,11 +542,15 @@ echo "Fertig."
 echo ""
 echo "XRack startet ab jetzt automatisch beim Booten (systemd-Dienst 'xrack')."
 echo ""
-echo "Webinterface:             http://${XRACK_HOSTNAME}.local:${XRACK_PORT}"
-echo "                          (alternativ per IP: http://<ip-des-pi>:${XRACK_PORT})"
+echo "Webinterface:             https://${XRACK_HOSTNAME}.local:${XRACK_PORT}"
+echo "                          (alternativ per IP: https://<ip-des-pi>:${XRACK_PORT})"
 echo "Jetzt manuell starten:    sudo systemctl start xrack"
 echo "Status ansehen:           sudo systemctl status xrack"
 echo "Live-Logs ansehen:        journalctl -u xrack -f"
+echo ""
+echo "Hinweis: Das TLS-Zertifikat ist selbstsigniert - beim ersten"
+echo "Aufruf zeigt der Browser eine Sicherheitswarnung ('Erweitert' ->"
+echo "'Trotzdem fortfahren'), danach nicht mehr."
 echo ""
 echo "Achtung: Wenn der Dienst laeuft, blockiert er Port ${XRACK_PORT} -"
 echo "dann NICHT zusaetzlich manuell 'python main.py' starten."

@@ -28,6 +28,9 @@ music/
 # Config
 config/local.yaml
 
+# Selbstsigniertes TLS-Zertifikat (von install.sh erzeugt)
+certs/
+
 # Gespeicherter Zustand (letztes Geraet/Kanaele)
 config/state.json
 

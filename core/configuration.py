@@ -20,6 +20,8 @@ class ApplicationConfig(BaseModel):
 class ServerConfig(BaseModel):
     host: str
     port: int
+    ssl_certfile: str
+    ssl_keyfile: str
 
 
 class RecordingConfig(BaseModel):

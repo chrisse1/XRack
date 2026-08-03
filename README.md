@@ -58,7 +58,12 @@ Wi-Fi (home network + access point) and Bluetooth audio - the prompts
 explain each step as you go.
 
 Afterwards the web interface is reachable at
-`http://<hostname>.local:<port>` (default: `http://xrack.local:8080`).
+`https://<hostname>.local:<port>` (default: `https://xrack.local:8080`).
+The certificate is self-signed (a real, browser-trusted certificate
+isn't possible for a device that's often fully offline on its own
+access point) - your browser will show a one-time security warning on
+first visit ("Advanced" -> "Proceed anyway"), then remembers the
+exception for that device.
 
 Start/check manually:
 
@@ -126,8 +131,14 @@ fragt interaktiv nach Sprache, Port und Hostname des Webinterfaces und
 richtet optional WLAN (Heimnetz + Access Point) sowie Bluetooth-Audio
 ein - die Abfragen dazu erklären sich beim Durchlaufen von selbst.
 
-Danach ist das Webinterface unter `http://<hostname>.local:<port>`
-erreichbar (Standard: `http://xrack.local:8080`).
+Danach ist das Webinterface unter `https://<hostname>.local:<port>`
+erreichbar (Standard: `https://xrack.local:8080`). Das Zertifikat ist
+selbstsigniert (ein "echtes", vom Browser automatisch akzeptiertes
+Zertifikat ist für ein Gerät, das oft komplett offline über den
+eigenen Access Point läuft, nicht möglich) - der Browser zeigt beim
+ersten Aufruf einmalig eine Sicherheitswarnung ("Erweitert" ->
+"Trotzdem fortfahren"), merkt sich die Ausnahme danach für dieses
+Gerät.
 
 Manuell starten/prüfen:
 

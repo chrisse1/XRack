@@ -8,6 +8,11 @@ application:
 server:
   host: "0.0.0.0"
   port: 8080
+  # Selbstsigniertes Zertifikat, von install.sh erzeugt. Existieren
+  # beide Dateien nicht (z.B. vor dem ersten install.sh-Lauf), läuft
+  # main.py automatisch unverschlüsselt über HTTP weiter.
+  ssl_certfile: "certs/xrack.crt"
+  ssl_keyfile: "certs/xrack.key"
 
 recording:
   directory: "./recordings"
