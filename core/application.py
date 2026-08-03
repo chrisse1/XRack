@@ -19,8 +19,10 @@ from core.system_control import SystemControl
 from core.wlan_control import WlanControl
 from core.bluetooth_control import BluetoothControl
 from core.state_store import StateStore
+from core.pin import hash_pin, verify_pin
 import platform
 import psutil
+import re
 import time
 
 class Application:
@@ -672,6 +674,47 @@ class Application:
         self.config.data.server.port = port
 
         return True
+
+    def pin_protection_enabled(self) -> bool:
+        """
+        Ist eine PIN zum Schutz des Einstellungen-Modals gesetzt?
+        """
+
+        return bool(self.config.data.security.pin_hash)
+
+    def verify_settings_pin(self, pin: str) -> bool:
+        """
+        Prüft eine eingegebene PIN. Ist keine PIN gesetzt (z.B. vor
+        dem ersten install.sh-Lauf mit dieser Funktion), gilt jede
+        Eingabe als gültig - die Einstellungen sind dann ungeschützt.
+        """
+
+        pin_hash = self.config.data.security.pin_hash
+
+        if not pin_hash:
+            return True
+
+        return verify_pin(pin, pin_hash)
+
+    def set_settings_pin(self, current_pin: str, new_pin: str) -> tuple[bool, str]:
+        """
+        Ändert die PIN fürs Einstellungen-Modal. War noch keine PIN
+        gesetzt, wird current_pin nicht geprüft (Erstvergabe).
+        """
+
+        if not re.fullmatch(r"\d{4}", new_pin):
+            return False, "Neue PIN muss aus genau 4 Ziffern bestehen."
+
+        if not self.verify_settings_pin(current_pin):
+            return False, "Aktuelle PIN ist falsch."
+
+        pin_hash = hash_pin(new_pin)
+
+        self.config.set_override("security", "pin_hash", pin_hash)
+
+        self.config.data.security.pin_hash = pin_hash
+
+        return True, "PIN geändert."
 
     def get_wlan_status(self) -> dict:
         """

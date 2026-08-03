@@ -24,6 +24,11 @@ class ServerConfig(BaseModel):
     ssl_keyfile: str
 
 
+class SecurityConfig(BaseModel):
+    # Gehashte 4-stellige PIN (core/pin.py). Leer = kein Schutz aktiv.
+    pin_hash: str
+
+
 class RecordingConfig(BaseModel):
     directory: str
 
@@ -41,6 +46,7 @@ class AppConfig(BaseModel):
 
     application: ApplicationConfig
     server: ServerConfig
+    security: SecurityConfig
     recording: RecordingConfig
     music: MusicConfig
     logging: LoggingConfig

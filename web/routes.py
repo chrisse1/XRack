@@ -64,6 +64,13 @@ class WifiCredentials(BaseModel):
 class BridgeSelection(BaseModel):
     enabled: bool
 
+class PinVerifySelection(BaseModel):
+    pin: str
+
+class PinChangeSelection(BaseModel):
+    current_pin: str
+    new_pin: str
+
 class RecordingPrefixSelection(BaseModel):
     prefix: str
 
@@ -476,6 +483,51 @@ async def get_settings(request: Request):
         "port": application.config.data.server.port,
         "record_name_prefix": application.record_name_prefix,
         "wlan": wlan,
+        "pin_protected": application.pin_protection_enabled(),
+    }
+
+
+@router.get("/api/settings/pin/status")
+async def get_settings_pin_status(request: Request):
+
+    application = request.app.state.application
+
+    return {
+        "protected": application.pin_protection_enabled()
+    }
+
+
+@router.post("/api/settings/pin/verify")
+async def verify_settings_pin(
+    selection: PinVerifySelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success = application.verify_settings_pin(selection.pin)
+
+    return {
+        "success": success
+    }
+
+
+@router.post("/api/settings/pin/change")
+async def change_settings_pin(
+    selection: PinChangeSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.set_settings_pin(
+        selection.current_pin,
+        selection.new_pin,
+    )
+
+    return {
+        "success": success,
+        "message": message,
     }
 
 

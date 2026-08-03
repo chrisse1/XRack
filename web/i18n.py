@@ -176,6 +176,24 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "alert_settings_change_failed": "Änderung fehlgeschlagen: {message}",
         "alert_change_failed": "Änderung fehlgeschlagen.",
 
+        # PIN-Schutz fürs Einstellungen-Modal
+        "modal_settings_pin_title": "PIN erforderlich",
+        "settings_pin_prompt_label": (
+            "Bitte PIN eingeben, um die Einstellungen zu öffnen:"
+        ),
+        "settings_pin_wrong": "Falsche PIN.",
+        "btn_confirm": "Bestätigen",
+        "settings_pin_label": "Einstellungen-PIN",
+        "settings_pin_current_placeholder": "Aktuelle PIN",
+        "settings_pin_new_placeholder": "Neue PIN",
+        "settings_pin_new_confirm_placeholder": "Neue PIN (Wiederholung)",
+        "settings_pin_hint": (
+            "4-stellige PIN, schützt das Einstellungen-Modal vor "
+            "unbefugtem Zugriff."
+        ),
+        "alert_settings_pin_invalid": "PIN muss aus genau 4 Ziffern bestehen.",
+        "alert_settings_pin_mismatch": "Die beiden PINs stimmen nicht überein.",
+
         # Bluetooth-Karte
         "bluetooth_title": "Bluetooth",
         "bluetooth_channels_label": "Zielkanäle:",
@@ -364,6 +382,22 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "alert_settings_change_failed": "Change failed: {message}",
         "alert_change_failed": "Change failed.",
+
+        # PIN protection for the settings modal
+        "modal_settings_pin_title": "PIN required",
+        "settings_pin_prompt_label": "Enter PIN to open settings:",
+        "settings_pin_wrong": "Incorrect PIN.",
+        "btn_confirm": "Confirm",
+        "settings_pin_label": "Settings PIN",
+        "settings_pin_current_placeholder": "Current PIN",
+        "settings_pin_new_placeholder": "New PIN",
+        "settings_pin_new_confirm_placeholder": "New PIN (repeat)",
+        "settings_pin_hint": (
+            "4-digit PIN, protects the settings modal from unauthorized "
+            "access."
+        ),
+        "alert_settings_pin_invalid": "PIN must be exactly 4 digits.",
+        "alert_settings_pin_mismatch": "The two PINs don't match.",
 
         # Bluetooth card
         "bluetooth_title": "Bluetooth",

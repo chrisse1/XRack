@@ -14,6 +14,13 @@ server:
   ssl_certfile: "certs/xrack.crt"
   ssl_keyfile: "certs/xrack.key"
 
+security:
+  # Gehashte 4-stellige PIN zum Schutz des Einstellungen-Modals. Leer
+  # = kein Schutz aktiv (z.B. vor dem ersten install.sh-Lauf mit
+  # dieser Funktion). install.sh fragt die PIN bei der Installation
+  # ab; sie lässt sich im Einstellungen-Modal jederzeit ändern.
+  pin_hash: ""
+
 recording:
   directory: "./recordings"
 

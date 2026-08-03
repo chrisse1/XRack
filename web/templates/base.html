@@ -306,6 +306,57 @@
 
                 <hr>
 
+                <!-- PIN --------------------------------------------->
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">
+                        {{ t.settings_pin_label }}
+                    </label>
+                    <div id="settings-pin-current-field" class="mb-2 d-none">
+                        <input
+                            type="password"
+                            id="settings-pin-current"
+                            class="form-control form-control-sm pin-input"
+                            style="width: 8rem;"
+                            inputmode="numeric"
+                            pattern="[0-9]*"
+                            maxlength="4"
+                            autocomplete="off"
+                            placeholder="{{ t.settings_pin_current_placeholder }}"
+                        >
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <input
+                            type="password"
+                            id="settings-pin-new"
+                            class="form-control form-control-sm pin-input"
+                            style="width: 8rem;"
+                            inputmode="numeric"
+                            pattern="[0-9]*"
+                            maxlength="4"
+                            autocomplete="off"
+                            placeholder="{{ t.settings_pin_new_placeholder }}"
+                        >
+                        <input
+                            type="password"
+                            id="settings-pin-new-confirm"
+                            class="form-control form-control-sm pin-input"
+                            style="width: 8rem;"
+                            inputmode="numeric"
+                            pattern="[0-9]*"
+                            maxlength="4"
+                            autocomplete="off"
+                            placeholder="{{ t.settings_pin_new_confirm_placeholder }}"
+                        >
+                        <button id="btn-settings-pin-save" class="btn btn-primary btn-sm">
+                            {{ t.btn_save }}
+                        </button>
+                    </div>
+                    <small class="text-body-secondary">{{ t.settings_pin_hint }}</small>
+                </div>
+
+                <hr>
+
                 <!-- WLAN --------------------------------------------->
 
                 <div id="settings-wlan-unavailable" class="text-muted d-none">
@@ -504,6 +555,71 @@
                   class="list-group"
               >
               </div>
+
+            </div>
+
+            <div class="modal-footer">
+                <button
+                    class="btn btn-secondary"
+                    data-bs-dismiss="modal"
+                >
+                    {{ t.btn_close }}
+                </button>
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
+<div
+    class="modal fade"
+    id="settingsPinModal"
+    tabindex="-1"
+    aria-hidden="true"
+>
+    <div class="modal-dialog">
+
+        <div class="modal-content">
+
+            <div class="modal-header">
+
+                <h5 class="modal-title">
+                    {{ t.modal_settings_pin_title }}
+                </h5>
+
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="modal"
+                ></button>
+
+            </div>
+
+            <div class="modal-body">
+
+                <label class="form-label fw-semibold">
+                    {{ t.settings_pin_prompt_label }}
+                </label>
+                <div class="d-flex gap-2">
+                    <input
+                        type="password"
+                        id="settings-pin-input"
+                        class="form-control form-control-sm pin-input"
+                        style="width: 8rem;"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        maxlength="4"
+                        autocomplete="off"
+                        autofocus
+                    >
+                    <button id="btn-settings-pin-confirm" class="btn btn-primary btn-sm">
+                        {{ t.btn_confirm }}
+                    </button>
+                </div>
+                <small id="settings-pin-error" class="text-danger d-none">
+                    {{ t.settings_pin_wrong }}
+                </small>
 
             </div>
 

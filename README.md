@@ -53,8 +53,10 @@ cd XRack
 
 `install.sh` installs all dependencies and sets up a systemd service
 that starts XRack automatically on boot. It interactively asks for the
-web interface's language, port, and hostname, and optionally sets up
-Wi-Fi (home network + access point) and Bluetooth audio - the prompts
+web interface's language, port, hostname, and a 4-digit PIN that
+protects the settings dialog from unauthorized changes (can be changed
+later in the settings dialog itself), and optionally sets up Wi-Fi
+(home network + access point) and Bluetooth audio - the prompts
 explain each step as you go.
 
 Afterwards the web interface is reachable at
@@ -127,7 +129,9 @@ cd XRack
 
 `install.sh` installiert alle Abhängigkeiten und richtet einen
 systemd-Dienst ein, der XRack automatisch beim Booten startet. Es
-fragt interaktiv nach Sprache, Port und Hostname des Webinterfaces und
+fragt interaktiv nach Sprache, Port und Hostname des Webinterfaces
+sowie einer 4-stelligen PIN, die das Einstellungen-Menü vor unbefugten
+Änderungen schützt (später im Einstellungen-Menü selbst änderbar), und
 richtet optional WLAN (Heimnetz + Access Point) sowie Bluetooth-Audio
 ein - die Abfragen dazu erklären sich beim Durchlaufen von selbst.
 

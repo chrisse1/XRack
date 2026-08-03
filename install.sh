@@ -10,6 +10,60 @@ set -e
 
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+#
+# Fragt ein Passwort/eine PIN doppelt ab und wiederholt die Eingabe
+# bei Tippfehlern (falsche Wiederholung, zu kurz oder falsches
+# Format), statt stillschweigend weiterzulaufen und den betroffenen
+# Schritt später unbemerkt zu überspringen. Leer/leer gilt als
+# bewusstes Überspringen. Nach 3 Fehlversuchen wird abgebrochen.
+#
+read_confirmed_secret() {
+    local prompt="$1"
+    local min_length="$2"
+    local -n out_var="$3"
+    local pattern="${4:-}"
+    local value
+    local confirm
+    local attempt
+
+    for attempt in 1 2 3; do
+
+        read -r -s -p "${prompt}: " value || true
+        echo ""
+        read -r -s -p "${prompt} (Wiederholung): " confirm || true
+        echo ""
+
+        # Leer/leer = bewusst übersprungen (z.B. dieses optionale
+        # WLAN-Profil oder die PIN nicht einrichten) - kein Fehlversuch.
+        if [ -z "${value}" ] && [ -z "${confirm}" ]; then
+            out_var=""
+            return 0
+        fi
+
+        if [ "${value}" != "${confirm}" ]; then
+            echo "Die beiden Eingaben stimmen nicht überein - bitte erneut eingeben."
+            continue
+        fi
+
+        if [ "${#value}" -lt "${min_length}" ]; then
+            echo "Eingabe zu kurz (mind. ${min_length} Zeichen) - bitte erneut eingeben."
+            continue
+        fi
+
+        if [ -n "${pattern}" ] && ! [[ "${value}" =~ ${pattern} ]]; then
+            echo "Ungültiges Format - bitte erneut eingeben."
+            continue
+        fi
+
+        out_var="${value}"
+        return 0
+    done
+
+    echo "Zu viele Fehlversuche - dieser Schritt wird übersprungen."
+    out_var=""
+    return 1
+}
+
 echo "XRack: Systemabhängigkeiten installieren..."
 
 sudo apt-get update
@@ -51,6 +105,7 @@ deactivate
 XRACK_LANGUAGE="de"
 XRACK_PORT="8080"
 XRACK_HOSTNAME="xrack"
+XRACK_PIN=""
 XRACK_WLAN_CLIENT_SSID=""
 XRACK_WLAN_AP_SSID=""
 XRACK_WLAN_BRIDGE=""
@@ -82,6 +137,29 @@ if [ -t 0 ]; then
         fi
     fi
 
+    echo ""
+    echo "Eine 4-stellige PIN schützt das Einstellungen-Menü (Zahnrad-Symbol) vor unbefugtem Zugriff, z.B. durch Bandmitglieder oder Gäste. Sie lässt sich später jederzeit im Einstellungen-Menü selbst ändern."
+    read_confirmed_secret "PIN fürs Einstellungen-Menü (4 Ziffern, leer = kein Schutz)" 4 XRACK_PIN "^[0-9]{4}$"
+
+    if [ -z "${XRACK_PIN}" ]; then
+        echo "Kein PIN-Schutz eingerichtet - die Einstellungen sind ungeschützt (später im Einstellungen-Menü nachholbar)."
+    fi
+
+fi
+
+XRACK_PIN_HASH=""
+
+if [ -n "${XRACK_PIN}" ]; then
+    XRACK_PIN_HASH="$(XRACK_PIN="${XRACK_PIN}" python3 -c "
+import os
+import sys
+
+sys.path.insert(0, '.')
+
+from core.pin import hash_pin
+
+print(hash_pin(os.environ['XRACK_PIN']))
+")"
 fi
 
 echo "XRack: Konfiguration wird geschrieben (Sprache: ${XRACK_LANGUAGE}, Port: ${XRACK_PORT})..."
@@ -92,6 +170,9 @@ application:
 
 server:
   port: ${XRACK_PORT}
+
+security:
+  pin_hash: "${XRACK_PIN_HASH}"
 EOF
 
 #
@@ -243,28 +324,12 @@ if [ -t 0 ] && command -v nmcli >/dev/null 2>&1; then
 
                 echo ""
                 read -r -p "Heimnetz-SSID: " HOME_SSID || true
-                read -r -s -p "Heimnetz-Passwort: " HOME_PASSWORD || true
-                echo ""
-                read -r -s -p "Heimnetz-Passwort (Wiederholung): " HOME_PASSWORD_CONFIRM || true
-                echo ""
+                read_confirmed_secret "Heimnetz-Passwort (mind. 8 Zeichen)" 8 HOME_PASSWORD
 
                 echo ""
                 read -r -p "Name des Access Points (Standard: XRack): " AP_SSID_INPUT || true
                 AP_SSID="${AP_SSID_INPUT:-XRack}"
-                read -r -s -p "Passwort für den Access Point (mind. 8 Zeichen): " AP_PASSWORD || true
-                echo ""
-                read -r -s -p "Passwort für den Access Point (Wiederholung): " AP_PASSWORD_CONFIRM || true
-                echo ""
-
-                if [ "${HOME_PASSWORD}" != "${HOME_PASSWORD_CONFIRM}" ]; then
-                    echo "Die beiden Heimnetz-Passwörter stimmen nicht überein - Heimnetz-Verbindung wird übersprungen."
-                    HOME_PASSWORD=""
-                fi
-
-                if [ "${AP_PASSWORD}" != "${AP_PASSWORD_CONFIRM}" ]; then
-                    echo "Die beiden Access-Point-Passwörter stimmen nicht überein - Access Point wird übersprungen."
-                    AP_PASSWORD=""
-                fi
+                read_confirmed_secret "Passwort für den Access Point (mind. 8 Zeichen)" 8 AP_PASSWORD
 
                 if [ -z "${HOME_SSID}" ] || [ "${#HOME_PASSWORD}" -lt 8 ]; then
                     echo "Heimnetz-SSID fehlt oder Passwort fehlt/zu kurz (mind. 8 Zeichen) - Heimnetz-Verbindung übersprungen."
@@ -551,6 +616,13 @@ echo ""
 echo "Hinweis: Das TLS-Zertifikat ist selbstsigniert - beim ersten"
 echo "Aufruf zeigt der Browser eine Sicherheitswarnung ('Erweitert' ->"
 echo "'Trotzdem fortfahren'), danach nicht mehr."
+echo ""
+
+if [ -n "${XRACK_PIN_HASH}" ]; then
+    echo "Einstellungen-Menü:       durch PIN geschützt (im Menü selbst änderbar)"
+else
+    echo "Einstellungen-Menü:       kein PIN-Schutz (im Menü selbst einrichtbar)"
+fi
 echo ""
 echo "Achtung: Wenn der Dienst laeuft, blockiert er Port ${XRACK_PORT} -"
 echo "dann NICHT zusaetzlich manuell 'python main.py' starten."

@@ -1381,10 +1381,118 @@ async function loadSettings() {
         document.getElementById("settings-port").value = data.port;
         document.getElementById("settings-recording-prefix").value = data.record_name_prefix;
 
+        document.getElementById("settings-pin-current-field")
+            .classList.toggle("d-none", !data.pin_protected);
+        document.getElementById("settings-pin-current").value = "";
+        document.getElementById("settings-pin-new").value = "";
+        document.getElementById("settings-pin-new-confirm").value = "";
+
         applyWlanSettings(data.wlan);
     } catch (error) {
         console.error("Fehler beim Laden der Einstellungen:", error);
     }
+}
+
+document.querySelectorAll(".pin-input").forEach((input) => {
+    input.addEventListener("input", () => {
+        input.value = input.value.replace(/\D/g, "").slice(0, 4);
+    });
+});
+
+// ------------------------------------------------------------
+// PIN-Schutz: Abfrage vor dem Öffnen, Ändern im Modal selbst
+// ------------------------------------------------------------
+
+const btnSettings = document.getElementById("btn-settings");
+const settingsPinModalEl = document.getElementById("settingsPinModal");
+const settingsPinModal = bootstrap.Modal.getOrCreateInstance(settingsPinModalEl);
+let pinVerifiedPendingOpen = false;
+
+btnSettings.addEventListener("click", openSettingsGate);
+
+async function openSettingsGate() {
+    let protectedByPin = false;
+
+    try {
+        const response = await fetch("/api/settings/pin/status");
+        const data = await response.json();
+        protectedByPin = Boolean(data.protected);
+    } catch (error) {
+        console.error("Fehler beim Prüfen des PIN-Schutzes:", error);
+    }
+
+    if (protectedByPin) {
+        document.getElementById("settings-pin-input").value = "";
+        document.getElementById("settings-pin-error").classList.add("d-none");
+        settingsPinModal.show();
+    } else {
+        bootstrap.Modal.getOrCreateInstance(settingsModal).show();
+    }
+}
+
+settingsPinModalEl.addEventListener("hidden.bs.modal", () => {
+    if (pinVerifiedPendingOpen) {
+        pinVerifiedPendingOpen = false;
+        bootstrap.Modal.getOrCreateInstance(settingsModal).show();
+    }
+});
+
+document.getElementById("btn-settings-pin-confirm").addEventListener("click", confirmSettingsPin);
+document.getElementById("settings-pin-input").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") confirmSettingsPin();
+});
+
+async function confirmSettingsPin() {
+    const pin = document.getElementById("settings-pin-input").value;
+
+    const response = await fetch("/api/settings/pin/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin })
+    });
+    const result = await response.json();
+
+    if (!result.success) {
+        document.getElementById("settings-pin-error").classList.remove("d-none");
+        return;
+    }
+
+    pinVerifiedPendingOpen = true;
+    settingsPinModal.hide();
+}
+
+document.getElementById("btn-settings-pin-save").addEventListener("click", saveSettingsPin);
+
+async function saveSettingsPin() {
+    const currentPin = document.getElementById("settings-pin-current").value;
+    const newPin = document.getElementById("settings-pin-new").value;
+    const newPinConfirm = document.getElementById("settings-pin-new-confirm").value;
+
+    if (!/^\d{4}$/.test(newPin)) {
+        alert(I18N.alert_settings_pin_invalid);
+        return;
+    }
+
+    if (newPin !== newPinConfirm) {
+        alert(I18N.alert_settings_pin_mismatch);
+        return;
+    }
+
+    const response = await fetch("/api/settings/pin/change", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ current_pin: currentPin, new_pin: newPin })
+    });
+    const result = await response.json();
+
+    if (!result.success) {
+        alert(I18N.alert_settings_change_failed.replace("{message}", result.message || ""));
+        return;
+    }
+
+    alert(I18N.settings_saved);
+
+    await loadSettings();
 }
 
 function applyWlanSettings(wlan) {
