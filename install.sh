@@ -15,6 +15,17 @@ set -e
 
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+#
+# Der eigentliche Zielbenutzer für Dienst und Dateibesitz (systemd
+# "User=", USB-Automount-UID/GID, sudoers-Regel). Läuft install.sh wie
+# vorgesehen als normaler Benutzer (./install.sh, mit sudo nur für
+# einzelne Befehle), liefert whoami/id den richtigen Nutzer. Wurde es
+# stattdessen versehentlich komplett per "sudo ./install.sh" gestartet,
+# liefern whoami/id sonst "root" statt des echten Pi-Nutzers - SUDO_USER
+# ist in dem Fall aber gesetzt und wird deshalb bevorzugt ausgewertet.
+#
+XRACK_TARGET_USER="${SUDO_USER:-$(whoami)}"
+
 lower() {
     printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
 }
@@ -671,8 +682,8 @@ configure_usb_automount() {
         "${INSTALL_DIR}/scripts/xrack-usb-mount.sh" \
         "${INSTALL_DIR}/scripts/xrack-usb-unmount.sh"
 
-    SERVICE_UID="$(id -u)"
-    SERVICE_GID="$(id -g)"
+    SERVICE_UID="$(id -u "${XRACK_TARGET_USER}")"
+    SERVICE_GID="$(id -g "${XRACK_TARGET_USER}")"
 
     sudo tee "/etc/systemd/system/xrack-usb-mount@.service" > /dev/null <<EOF
 [Unit]
@@ -721,7 +732,7 @@ configure_sudoers() {
 
     echo "$(L "XRack: sudo-Berechtigung fürs Herunterfahren/Neustarten/WLAN einrichten..." "XRack: Setting up sudo permission for shutdown/restart/Wi-Fi...")"
 
-    SERVICE_USER="$(whoami)"
+    SERVICE_USER="${XRACK_TARGET_USER}"
 
     chmod +x \
         "${INSTALL_DIR}/scripts/xrack-restart.sh" \
