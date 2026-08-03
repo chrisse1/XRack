@@ -7,31 +7,89 @@
 #
 # Aufbau: Jeder Installationsschritt ist eine eigene Funktion. Der
 # eigentliche Ablauf steht ganz am Ende der Datei (Abschnitt "Ablauf").
+# Ab der Sprachwahl (choose_language) laufen alle weiteren Meldungen
+# über den Helper L() in der gewählten Sprache (Deutsch/Englisch).
 #
 
 set -e
 
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+lower() {
+    printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+#
+# Gibt je nach gewählter Sprache (XRACK_LANGUAGE) den deutschen oder
+# englischen Text zurück - Aufruf: "$(L "Deutscher Text" "English text")".
+# Vor der Sprachwahl (choose_language) ist XRACK_LANGUAGE leer, dann
+# liefert L() immer den deutschen Text.
+#
+L() {
+    if [ "${XRACK_LANGUAGE}" = "en" ]; then
+        printf '%s' "$2"
+    else
+        printf '%s' "$1"
+    fi
+}
+
+#
+# Prüft, ob eine Ja/Nein-Antwort eine Zustimmung ist - deutsch "j",
+# englisch "y" (je nach XRACK_LANGUAGE), unabhängig von Groß-/
+# Kleinschreibung.
+#
+confirm_yes() {
+    local answer
+    answer="$(lower "$1")"
+
+    if [ "${XRACK_LANGUAGE}" = "en" ]; then
+        [ "${answer}" = "y" ]
+    else
+        [ "${answer}" = "j" ]
+    fi
+}
+
 #
 # Begrüßung + Bestätigung, bevor irgendetwas am System verändert
-# wird. Nur bei interaktivem Lauf - per "curl | bash" geht es
-# stillschweigend weiter.
+# wird. Läuft vor der Sprachwahl, deshalb fest auf Englisch. Nur bei
+# interaktivem Lauf - per "curl | bash" geht es stillschweigend weiter.
 #
 confirm_start() {
 
     if [ -t 0 ]; then
 
-        echo "XRack-Setup"
+        echo "XRack Setup"
         echo ""
-        echo "Dieser Installer installiert XRack auf diesem System"
-        echo "(Systempakete, Python-Umgebung, systemd-Dienst)."
+        echo "This installer will install XRack on this system"
+        echo "(system packages, Python environment, systemd service)."
         echo ""
-        read -r -p "Fortfahren? [J/n]: " XRACK_CONFIRM_START || true
+        read -r -p "Continue? [Y/n]: " XRACK_CONFIRM_START || true
 
-        if [ "${XRACK_CONFIRM_START}" = "n" ] || [ "${XRACK_CONFIRM_START}" = "N" ]; then
-            echo "Abgebrochen - es wurde nichts verändert."
+        if [ "$(lower "${XRACK_CONFIRM_START}")" = "n" ]; then
+            echo "Aborted - nothing was changed."
             exit 0
+        fi
+    fi
+}
+
+#
+# Sprache wählen - passiert ganz am Anfang (vor allen anderen
+# Schritten), damit alle nachfolgenden Meldungen (Abhängigkeiten,
+# WLAN, Bluetooth, Zusammenfassung, ...) in der gewählten Sprache
+# erscheinen. Läuft das Skript nicht interaktiv, bleibt es bei
+# Deutsch als Standard.
+#
+choose_language() {
+
+    XRACK_LANGUAGE="de"
+
+    if [ -t 0 ]; then
+
+        echo ""
+        read -r -p "Sprache / Language [de/en] (Standard/default: de): " XRACK_LANGUAGE_INPUT || true
+
+        if [ "$(lower "${XRACK_LANGUAGE_INPUT}")" = "en" ]; then
+            XRACK_LANGUAGE="en"
         fi
     fi
 }
@@ -48,15 +106,18 @@ read_confirmed_secret() {
     local min_length="$2"
     local -n out_var="$3"
     local pattern="${4:-}"
+    local repeat_label
     local value
     local confirm
     local attempt
+
+    repeat_label="$(L "Wiederholung" "repeat")"
 
     for attempt in 1 2 3; do
 
         read -r -s -p "${prompt}: " value || true
         echo ""
-        read -r -s -p "${prompt} (Wiederholung): " confirm || true
+        read -r -s -p "${prompt} (${repeat_label}): " confirm || true
         echo ""
 
         # Leer/leer = bewusst übersprungen (z.B. dieses optionale
@@ -67,17 +128,17 @@ read_confirmed_secret() {
         fi
 
         if [ "${value}" != "${confirm}" ]; then
-            echo "Die beiden Eingaben stimmen nicht überein - bitte erneut eingeben."
+            echo "$(L "Die beiden Eingaben stimmen nicht überein - bitte erneut eingeben." "The two entries don't match - please try again.")"
             continue
         fi
 
         if [ "${#value}" -lt "${min_length}" ]; then
-            echo "Eingabe zu kurz (mind. ${min_length} Zeichen) - bitte erneut eingeben."
+            echo "$(L "Eingabe zu kurz (mind. ${min_length} Zeichen) - bitte erneut eingeben." "Input too short (min. ${min_length} characters) - please try again.")"
             continue
         fi
 
         if [ -n "${pattern}" ] && ! [[ "${value}" =~ ${pattern} ]]; then
-            echo "Ungültiges Format - bitte erneut eingeben."
+            echo "$(L "Ungültiges Format - bitte erneut eingeben." "Invalid format - please try again.")"
             continue
         fi
 
@@ -85,7 +146,7 @@ read_confirmed_secret() {
         return 0
     done
 
-    echo "Zu viele Fehlversuche - dieser Schritt wird übersprungen."
+    echo "$(L "Zu viele Fehlversuche - dieser Schritt wird übersprungen." "Too many failed attempts - this step will be skipped.")"
     out_var=""
     return 1
 }
@@ -102,7 +163,7 @@ valid_wifi_index() {
 #
 install_system_dependencies() {
 
-    echo "XRack: Systemabhängigkeiten werden installiert (ohne Ausgabe, kann etwas dauern)..."
+    echo "$(L "XRack: Systemabhängigkeiten werden installiert (ohne Ausgabe, kann etwas dauern)..." "XRack: Installing system dependencies (no output, this may take a while)...")"
 
     sudo apt-get update -qq
 
@@ -119,7 +180,7 @@ install_system_dependencies() {
         python3-gi \
         openssl > /dev/null
 
-    echo "XRack: Python-Umgebung wird eingerichtet..."
+    echo "$(L "XRack: Python-Umgebung wird eingerichtet..." "XRack: Setting up Python environment...")"
 
     python3 -m venv .venv
 
@@ -133,16 +194,15 @@ install_system_dependencies() {
 }
 
 #
-# Sprache, Port, Hostname und PIN abfragen und nach config/local.yaml
-# schreiben.
+# Port, Hostname und PIN abfragen und nach config/local.yaml
+# schreiben (die Sprache wurde bereits von choose_language() gesetzt).
 #
 # Läuft das Skript nicht interaktiv (z.B. per "curl | bash"), werden
-# stillschweigend die Standardwerte (Deutsch, Port 8080, Hostname
-# "xrack", kein PIN-Schutz) verwendet.
+# stillschweigend die Standardwerte (Port 8080, Hostname "xrack",
+# kein PIN-Schutz) verwendet.
 #
 configure_basic_settings() {
 
-    XRACK_LANGUAGE="de"
     XRACK_PORT="8080"
     XRACK_HOSTNAME="xrack"
     XRACK_PIN=""
@@ -150,36 +210,29 @@ configure_basic_settings() {
     if [ -t 0 ]; then
 
         echo ""
-        read -r -p "Sprache / Language [de/en] (Standard/default: de): " XRACK_LANGUAGE_INPUT || true
-
-        if [ "${XRACK_LANGUAGE_INPUT}" = "en" ]; then
-            XRACK_LANGUAGE="en"
-        fi
-
-        echo ""
-        read -r -p "Port fürs Webinterface / Port for the web interface (Standard/default: 8080): " XRACK_PORT_INPUT || true
+        read -r -p "$(L "Port fürs Webinterface (Standard: 8080): " "Port for the web interface (default: 8080): ")" XRACK_PORT_INPUT || true
 
         if [ -n "${XRACK_PORT_INPUT}" ] && [ "${XRACK_PORT_INPUT}" -eq "${XRACK_PORT_INPUT}" ] 2>/dev/null; then
             XRACK_PORT="${XRACK_PORT_INPUT}"
         fi
 
         echo ""
-        read -r -p "Hostname (Standard: xrack, erreichbar als https://<hostname>.local): " XRACK_HOSTNAME_INPUT || true
+        read -r -p "$(L "Hostname (Standard: xrack, erreichbar als https://<hostname>.local): " "Hostname (default: xrack, reachable as https://<hostname>.local): ")" XRACK_HOSTNAME_INPUT || true
 
         if [ -n "${XRACK_HOSTNAME_INPUT}" ]; then
             if [[ "${XRACK_HOSTNAME_INPUT}" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]]; then
                 XRACK_HOSTNAME="${XRACK_HOSTNAME_INPUT}"
             else
-                echo "Ungültiger Hostname (nur Buchstaben, Ziffern, Bindestriche) - verwende 'xrack'."
+                echo "$(L "Ungültiger Hostname (nur Buchstaben, Ziffern, Bindestriche) - verwende 'xrack'." "Invalid hostname (letters, digits, hyphens only) - using 'xrack'.")"
             fi
         fi
 
         echo ""
-        echo "Eine 4-stellige PIN schützt das Einstellungen-Menü (Zahnrad-Symbol) vor unbefugtem Zugriff, z.B. durch Bandmitglieder oder Gäste. Sie lässt sich später jederzeit im Einstellungen-Menü selbst ändern."
-        read_confirmed_secret "PIN fürs Einstellungen-Menü (4 Ziffern, leer = kein Schutz)" 4 XRACK_PIN "^[0-9]{4}$"
+        echo "$(L "Eine 4-stellige PIN schützt das Einstellungen-Menü (Zahnrad-Symbol) vor unbefugtem Zugriff, z.B. durch Bandmitglieder oder Gäste. Sie lässt sich später jederzeit im Einstellungen-Menü selbst ändern." "A 4-digit PIN protects the settings menu (gear icon) from unauthorized access, e.g. by band members or guests. You can change it any time later in the settings menu itself.")"
+        read_confirmed_secret "$(L "PIN fürs Einstellungen-Menü (4 Ziffern, leer = kein Schutz)" "PIN for the settings menu (4 digits, empty = no protection)")" 4 XRACK_PIN "^[0-9]{4}$"
 
         if [ -z "${XRACK_PIN}" ]; then
-            echo "Kein PIN-Schutz eingerichtet - die Einstellungen sind ungeschützt (später im Einstellungen-Menü nachholbar)."
+            echo "$(L "Kein PIN-Schutz eingerichtet - die Einstellungen sind ungeschützt (später im Einstellungen-Menü nachholbar)." "No PIN protection set up - the settings are unprotected (can be added later in the settings menu).")"
         fi
 
     fi
@@ -199,7 +252,7 @@ print(hash_pin(os.environ['XRACK_PIN']))
 ")"
     fi
 
-    echo "XRack: Konfiguration wird geschrieben (Sprache: ${XRACK_LANGUAGE}, Port: ${XRACK_PORT})..."
+    echo "$(L "XRack: Konfiguration wird geschrieben (Sprache: ${XRACK_LANGUAGE}, Port: ${XRACK_PORT})..." "XRack: Writing configuration (language: ${XRACK_LANGUAGE}, port: ${XRACK_PORT})...")"
 
     cat > config/local.yaml <<EOF
 application:
@@ -222,7 +275,7 @@ EOF
 #
 configure_hostname_and_avahi() {
 
-    echo "XRack: Hostname wird gesetzt (${XRACK_HOSTNAME})..."
+    echo "$(L "XRack: Hostname wird gesetzt (${XRACK_HOSTNAME})..." "XRack: Setting hostname (${XRACK_HOSTNAME})...")"
 
     sudo hostnamectl set-hostname "${XRACK_HOSTNAME}"
 
@@ -236,7 +289,7 @@ configure_hostname_and_avahi() {
         sudo systemctl enable avahi-daemon >/dev/null 2>&1 || true
         sudo systemctl restart avahi-daemon
     else
-        echo "Hinweis: avahi-daemon nicht gefunden - '${XRACK_HOSTNAME}.local' wird im Netzwerk nicht auffindbar sein."
+        echo "$(L "Hinweis: avahi-daemon nicht gefunden - '${XRACK_HOSTNAME}.local' wird im Netzwerk nicht auffindbar sein." "Note: avahi-daemon not found - '${XRACK_HOSTNAME}.local' won't be discoverable on the network.")"
     fi
 }
 
@@ -256,7 +309,7 @@ configure_hostname_and_avahi() {
 #
 generate_tls_certificate() {
 
-    echo "XRack: Selbstsigniertes TLS-Zertifikat wird erzeugt..."
+    echo "$(L "XRack: Selbstsigniertes TLS-Zertifikat wird erzeugt..." "XRack: Generating self-signed TLS certificate...")"
 
     mkdir -p "${INSTALL_DIR}/certs"
 
@@ -280,7 +333,7 @@ generate_tls_certificate() {
 configure_firewall() {
 
     if command -v ufw >/dev/null 2>&1 && sudo ufw status | grep -q "^Status: active"; then
-        echo "XRack: ufw ist aktiv - Firewall-Regeln werden ergänzt..."
+        echo "$(L "XRack: ufw ist aktiv - Firewall-Regeln werden ergänzt..." "XRack: ufw is active - adding firewall rules...")"
         sudo ufw allow 5353/udp comment 'XRack mDNS (Avahi)'
         sudo ufw allow "${XRACK_PORT}/tcp" comment 'XRack Webinterface'
     fi
@@ -304,44 +357,63 @@ configure_wifi() {
     if [ -t 0 ] && command -v nmcli >/dev/null 2>&1; then
 
         echo ""
-        read -r -p "WLAN einrichten - Heimnetz-Verbindung + eigener Access Point? [j/N]: " XRACK_WLAN_SETUP || true
+        read -r -p "$(L "WLAN einrichten - Heimnetz-Verbindung + eigener Access Point? [j/N]: " "Set up Wi-Fi - home network connection + your own access point? [y/N]: ")" XRACK_WLAN_SETUP || true
 
-        if [ "${XRACK_WLAN_SETUP}" = "j" ] || [ "${XRACK_WLAN_SETUP}" = "J" ]; then
+        if confirm_yes "${XRACK_WLAN_SETUP}"; then
 
             #
             # WLAN-Land setzen. Ohne gesetztes Regulierungsgebiet bleibt
             # WLAN auf frisch aufgesetzten Raspberry Pis oft per rfkill
             # soft-blockiert (Geräte existieren, sind aber "nicht
-            # verfügbar") - das kostet sonst viel Fehlersuche.
+            # verfügbar") - das kostet sonst viel Fehlersuche. Ungültige
+            # Eingaben werden bis zu 3x erneut abgefragt, leer gilt als
+            # bewusstes Überspringen.
             #
 
-            echo ""
-            read -r -p "WLAN-Land (2-stelliger ISO-Code, z.B. DE/AT/CH/US/GB) - nötig, damit WLAN nicht per rfkill blockiert bleibt: " XRACK_WLAN_COUNTRY_INPUT || true
-            XRACK_WLAN_COUNTRY="$(echo "${XRACK_WLAN_COUNTRY_INPUT}" | tr '[:lower:]' '[:upper:]')"
+            XRACK_WLAN_COUNTRY=""
 
-            if [[ "${XRACK_WLAN_COUNTRY}" =~ ^[A-Z]{2}$ ]]; then
+            for attempt in 1 2 3; do
 
-                echo "XRack: WLAN-Land wird gesetzt (${XRACK_WLAN_COUNTRY})..."
+                echo ""
+                read -r -p "$(L "WLAN-Land (2-stelliger ISO-Code, z.B. DE/AT/CH/US/GB, leer = überspringen) - nötig, damit WLAN nicht per rfkill blockiert bleibt: " "Wi-Fi country (2-letter ISO code, e.g. DE/AT/CH/US/GB, empty = skip) - needed so Wi-Fi doesn't stay blocked by rfkill: ")" XRACK_WLAN_COUNTRY_INPUT || true
+
+                if [ -z "${XRACK_WLAN_COUNTRY_INPUT}" ]; then
+                    break
+                fi
+
+                XRACK_WLAN_COUNTRY="$(printf '%s' "${XRACK_WLAN_COUNTRY_INPUT}" | tr '[:lower:]' '[:upper:]')"
+
+                if [[ "${XRACK_WLAN_COUNTRY}" =~ ^[A-Z]{2}$ ]]; then
+                    break
+                fi
+
+                echo "$(L "Ungültiger Ländercode (genau 2 Buchstaben) - bitte erneut eingeben." "Invalid country code (exactly 2 letters) - please try again.")"
+                XRACK_WLAN_COUNTRY=""
+            done
+
+            if [ -n "${XRACK_WLAN_COUNTRY}" ]; then
+
+                echo "$(L "XRack: WLAN-Land wird gesetzt (${XRACK_WLAN_COUNTRY})..." "XRack: Setting Wi-Fi country (${XRACK_WLAN_COUNTRY})...")"
 
                 if command -v raspi-config >/dev/null 2>&1; then
                     sudo raspi-config nonint do_wifi_country "${XRACK_WLAN_COUNTRY}"
                 else
                     sudo rfkill unblock wifi
                     sudo iw reg set "${XRACK_WLAN_COUNTRY}" || true
-                    echo "Hinweis: raspi-config nicht gefunden - WLAN-Land ist damit ggf. nicht dauerhaft gesetzt (nach einem Neustart mit 'rfkill list' prüfen)."
+                    echo "$(L "Hinweis: raspi-config nicht gefunden - WLAN-Land ist damit ggf. nicht dauerhaft gesetzt (nach einem Neustart mit 'rfkill list' prüfen)." "Note: raspi-config not found - the Wi-Fi country may not be set persistently (check with 'rfkill list' after a reboot).")"
                 fi
             else
-                echo "Ungültiger oder leerer Ländercode - WLAN-Land wird übersprungen (WLAN kann per rfkill blockiert bleiben, siehe 'rfkill list')."
+                echo "$(L "WLAN-Land wird übersprungen (WLAN kann per rfkill blockiert bleiben, siehe 'rfkill list')." "Wi-Fi country setup skipped (Wi-Fi may stay blocked by rfkill, see 'rfkill list').")"
             fi
 
             mapfile -t WIFI_INTERFACES < <(nmcli -t -f DEVICE,TYPE device status | awk -F: '$2=="wifi"{print $1}')
 
             if [ "${#WIFI_INTERFACES[@]}" -lt 2 ]; then
-                echo "Es wurden nur ${#WIFI_INTERFACES[@]} WLAN-Interface(s) gefunden - für Client + Access Point werden zwei benötigt. WLAN-Setup übersprungen."
+                echo "$(L "Es wurden nur ${#WIFI_INTERFACES[@]} WLAN-Interface(s) gefunden - für Client + Access Point werden zwei benötigt. WLAN-Setup übersprungen." "Only ${#WIFI_INTERFACES[@]} Wi-Fi interface(s) found - two are needed for client + access point. Wi-Fi setup skipped.")"
             else
 
                 echo ""
-                echo "Gefundene WLAN-Interfaces:"
+                echo "$(L "Gefundene WLAN-Interfaces:" "Found Wi-Fi interfaces:")"
                 for i in "${!WIFI_INTERFACES[@]}"; do
                     echo "  $((i + 1))) ${WIFI_INTERFACES[$i]}"
                 done
@@ -352,8 +424,8 @@ configure_wifi() {
                 for attempt in 1 2 3; do
 
                     echo ""
-                    read -r -p "Welches Interface soll sich mit deinem Heimnetz verbinden (Nummer 1-${#WIFI_INTERFACES[@]})? " CLIENT_INDEX || true
-                    read -r -p "Welches Interface soll den Access Point aufspannen (Nummer 1-${#WIFI_INTERFACES[@]})? " AP_INDEX || true
+                    read -r -p "$(L "Welches Interface soll sich mit deinem Heimnetz verbinden (Nummer 1-${#WIFI_INTERFACES[@]})? " "Which interface should connect to your home network (number 1-${#WIFI_INTERFACES[@]})? ")" CLIENT_INDEX || true
+                    read -r -p "$(L "Welches Interface soll den Access Point aufspannen (Nummer 1-${#WIFI_INTERFACES[@]})? " "Which interface should run the access point (number 1-${#WIFI_INTERFACES[@]})? ")" AP_INDEX || true
 
                     if valid_wifi_index "${CLIENT_INDEX}" "${#WIFI_INTERFACES[@]}" \
                         && valid_wifi_index "${AP_INDEX}" "${#WIFI_INTERFACES[@]}" \
@@ -364,28 +436,28 @@ configure_wifi() {
                         break
                     fi
 
-                    echo "Ungültige oder gleiche Auswahl (gültig: 1-${#WIFI_INTERFACES[@]}, beide unterschiedlich) - bitte erneut eingeben."
+                    echo "$(L "Ungültige oder gleiche Auswahl (gültig: 1-${#WIFI_INTERFACES[@]}, beide unterschiedlich) - bitte erneut eingeben." "Invalid or identical selection (valid: 1-${#WIFI_INTERFACES[@]}, must be different) - please try again.")"
                 done
 
                 if [ -z "${CLIENT_IFACE}" ] || [ -z "${AP_IFACE}" ]; then
-                    echo "Zu viele Fehlversuche - WLAN-Setup wird übersprungen."
+                    echo "$(L "Zu viele Fehlversuche - WLAN-Setup wird übersprungen." "Too many failed attempts - Wi-Fi setup will be skipped.")"
                 else
 
                     echo ""
-                    read -r -p "Heimnetz-SSID: " HOME_SSID || true
-                    read_confirmed_secret "Heimnetz-Passwort (mind. 8 Zeichen)" 8 HOME_PASSWORD
+                    read -r -p "$(L "Heimnetz-SSID: " "Home network SSID: ")" HOME_SSID || true
+                    read_confirmed_secret "$(L "Heimnetz-Passwort (mind. 8 Zeichen)" "Home network password (min. 8 characters)")" 8 HOME_PASSWORD
 
                     echo ""
-                    read -r -p "Name des Access Points (Standard: XRack): " AP_SSID_INPUT || true
+                    read -r -p "$(L "Name des Access Points (Standard: XRack): " "Access point name (default: XRack): ")" AP_SSID_INPUT || true
                     AP_SSID="${AP_SSID_INPUT:-XRack}"
-                    read_confirmed_secret "Passwort für den Access Point (mind. 8 Zeichen)" 8 AP_PASSWORD
+                    read_confirmed_secret "$(L "Passwort für den Access Point (mind. 8 Zeichen)" "Access point password (min. 8 characters)")" 8 AP_PASSWORD
 
                     if [ -z "${HOME_SSID}" ] || [ "${#HOME_PASSWORD}" -lt 8 ]; then
-                        echo "Heimnetz-SSID fehlt oder Passwort fehlt/zu kurz (mind. 8 Zeichen) - Heimnetz-Verbindung übersprungen."
+                        echo "$(L "Heimnetz-SSID fehlt oder Passwort fehlt/zu kurz (mind. 8 Zeichen) - Heimnetz-Verbindung übersprungen." "Home network SSID missing, or password missing/too short (min. 8 characters) - home network connection skipped.")"
                     else
 
-                        echo "XRack: Verbinde ${CLIENT_IFACE} mit '${HOME_SSID}'..."
-                        echo "Hinweis: Falls du gerade über dieses Interface per WLAN verbunden bist, kann die Verbindung kurz unterbrochen werden."
+                        echo "$(L "XRack: Verbinde ${CLIENT_IFACE} mit '${HOME_SSID}'..." "XRack: Connecting ${CLIENT_IFACE} to '${HOME_SSID}'...")"
+                        echo "$(L "Hinweis: Falls du gerade über dieses Interface per WLAN verbunden bist, kann die Verbindung kurz unterbrochen werden." "Note: if you're currently connected over this interface, the connection may briefly drop.")"
 
                         sudo nmcli connection delete "XRack-Home" >/dev/null 2>&1 || true
 
@@ -396,17 +468,17 @@ configure_wifi() {
                             XRACK_WLAN_CLIENT_SSID="${HOME_SSID}"
 
                             sudo nmcli connection up "XRack-Home" ifname "${CLIENT_IFACE}" \
-                                || echo "Warnung: Verbindung zu '${HOME_SSID}' konnte nicht sofort hergestellt werden (SSID/Passwort prüfen)."
+                                || echo "$(L "Warnung: Verbindung zu '${HOME_SSID}' konnte nicht sofort hergestellt werden (SSID/Passwort prüfen)." "Warning: could not connect to '${HOME_SSID}' immediately (check SSID/password).")"
                         else
-                            echo "Warnung: WLAN-Client-Profil konnte nicht angelegt werden."
+                            echo "$(L "Warnung: WLAN-Client-Profil konnte nicht angelegt werden." "Warning: could not create the Wi-Fi client profile.")"
                         fi
                     fi
 
                     if [ "${#AP_PASSWORD}" -lt 8 ]; then
-                        echo "Access-Point-Passwort fehlt/zu kurz (mind. 8 Zeichen) - Access Point übersprungen."
+                        echo "$(L "Access-Point-Passwort fehlt/zu kurz (mind. 8 Zeichen) - Access Point übersprungen." "Access point password missing/too short (min. 8 characters) - access point skipped.")"
                     else
 
-                        echo "XRack: Access Point '${AP_SSID}' wird auf ${AP_IFACE} eingerichtet..."
+                        echo "$(L "XRack: Access Point '${AP_SSID}' wird auf ${AP_IFACE} eingerichtet..." "XRack: Setting up access point '${AP_SSID}' on ${AP_IFACE}...")"
 
                         sudo nmcli connection delete "XRack-AP" >/dev/null 2>&1 || true
 
@@ -424,7 +496,7 @@ configure_wifi() {
                             XRACK_WLAN_AP_SSID="${AP_SSID}"
 
                             sudo nmcli connection up "XRack-AP" ifname "${AP_IFACE}" \
-                                || echo "Warnung: Access Point konnte nicht gestartet werden."
+                                || echo "$(L "Warnung: Access Point konnte nicht gestartet werden." "Warning: the access point could not be started.")"
 
                             #
                             # Optional: Ethernet-Interface (z.B. das per Kabel
@@ -436,15 +508,15 @@ configure_wifi() {
                             #
 
                             echo ""
-                            read -r -p "Ethernet-Interface (z.B. Mischpult an eth0) mit dem Access Point bridgen, damit Apps es finden? [J/n]: " XRACK_BRIDGE_SETUP || true
+                            read -r -p "$(L "Ethernet-Interface (z.B. Mischpult an eth0) mit dem Access Point bridgen, damit Apps es finden? [J/n]: " "Bridge an Ethernet interface (e.g. mixing console on eth0) with the access point, so apps can find it? [Y/n]: ")" XRACK_BRIDGE_SETUP || true
 
-                            if [ "${XRACK_BRIDGE_SETUP}" != "n" ] && [ "${XRACK_BRIDGE_SETUP}" != "N" ]; then
+                            if [ "$(lower "${XRACK_BRIDGE_SETUP}")" != "n" ]; then
 
-                                echo "XRack: Bridge aus eth0 und ${AP_IFACE} wird vorbereitet..."
-                                echo "Hinweis: Wird jetzt nur angelegt, nicht sofort aktiviert - viele"
-                                echo "konfigurieren den Pi anfangs per SSH über eth0, das würde sonst"
-                                echo "genau jetzt abbrechen. Aktiv wird die Bridge erst nach einem"
-                                echo "Neustart (Abfrage dazu kommt ganz am Ende)."
+                                echo "$(L "XRack: Bridge aus eth0 und ${AP_IFACE} wird vorbereitet..." "XRack: Preparing a bridge from eth0 and ${AP_IFACE}...")"
+                                echo "$(L "Hinweis: Wird jetzt nur angelegt, nicht sofort aktiviert - viele" "Note: this is only set up now, not activated immediately - many")"
+                                echo "$(L "konfigurieren den Pi anfangs per SSH über eth0, das würde sonst" "people configure the Pi over SSH via eth0 initially, which would")"
+                                echo "$(L "genau jetzt abbrechen. Aktiv wird die Bridge erst nach einem" "otherwise drop right now. The bridge only becomes active after a")"
+                                echo "$(L "Neustart (Abfrage dazu kommt ganz am Ende)." "restart (you'll be asked about that at the very end).")"
 
                                 #
                                 # Das bisherige eth0-Profil wird nur deaktiviert (nicht
@@ -482,11 +554,11 @@ configure_wifi() {
 
                                     XRACK_WLAN_BRIDGE="ja"
                                 else
-                                    echo "Warnung: Bridge konnte nicht eingerichtet werden."
+                                    echo "$(L "Warnung: Bridge konnte nicht eingerichtet werden." "Warning: the bridge could not be set up.")"
                                 fi
                             fi
                         else
-                            echo "Warnung: Access-Point-Profil konnte nicht angelegt werden."
+                            echo "$(L "Warnung: Access-Point-Profil konnte nicht angelegt werden." "Warning: could not create the access point profile.")"
                         fi
                     fi
 
@@ -497,7 +569,7 @@ configure_wifi() {
 
     elif [ -t 0 ]; then
         echo ""
-        echo "Hinweis: nmcli (NetworkManager) nicht gefunden - WLAN-Setup (Heimnetz + Access Point) übersprungen."
+        echo "$(L "Hinweis: nmcli (NetworkManager) nicht gefunden - WLAN-Setup (Heimnetz + Access Point) übersprungen." "Note: nmcli (NetworkManager) not found - Wi-Fi setup (home network + access point) skipped.")"
     fi
 }
 
@@ -524,7 +596,7 @@ configure_bluetooth() {
 
     if command -v bluetoothctl >/dev/null 2>&1; then
 
-        echo "XRack: Bluetooth-Audio (bluealsa) wird eingerichtet..."
+        echo "$(L "XRack: Bluetooth-Audio (bluealsa) wird eingerichtet..." "XRack: Setting up Bluetooth audio (bluealsa)...")"
 
         sudo mkdir -p /etc/systemd/system/bluealsa.service.d
 
@@ -574,7 +646,7 @@ EOF
 
     else
         echo ""
-        echo "Hinweis: bluetoothctl (BlueZ) nicht gefunden - Bluetooth-Audio nicht verfügbar."
+        echo "$(L "Hinweis: bluetoothctl (BlueZ) nicht gefunden - Bluetooth-Audio nicht verfügbar." "Note: bluetoothctl (BlueZ) not found - Bluetooth audio not available.")"
     fi
 }
 
@@ -593,7 +665,7 @@ EOF
 #
 configure_sudoers() {
 
-    echo "XRack: sudo-Berechtigung fürs Herunterfahren/Neustarten/WLAN einrichten..."
+    echo "$(L "XRack: sudo-Berechtigung fürs Herunterfahren/Neustarten/WLAN einrichten..." "XRack: Setting up sudo permission for shutdown/restart/Wi-Fi...")"
 
     SERVICE_USER="$(whoami)"
 
@@ -634,7 +706,7 @@ ${INSTALL_DIR}/scripts/xrack-bt-disconnect.sh *" \
 #
 configure_systemd_service() {
 
-    echo "XRack: systemd-Dienst einrichten..."
+    echo "$(L "XRack: systemd-Dienst einrichten..." "XRack: Setting up systemd service...")"
 
     sudo tee /etc/systemd/system/xrack.service > /dev/null <<EOF
 [Unit]
@@ -664,51 +736,51 @@ EOF
 print_summary() {
 
     echo ""
-    echo "Fertig."
+    echo "$(L "Fertig." "Done.")"
     echo ""
-    echo "XRack startet ab jetzt automatisch beim Booten (systemd-Dienst 'xrack')."
+    echo "$(L "XRack startet ab jetzt automatisch beim Booten (systemd-Dienst 'xrack')." "XRack will now start automatically on boot (systemd service 'xrack').")"
     echo ""
-    echo "Webinterface:             https://${XRACK_HOSTNAME}.local:${XRACK_PORT}"
-    echo "                          (alternativ per IP: https://<ip-des-pi>:${XRACK_PORT})"
-    echo "Jetzt manuell starten:    sudo systemctl start xrack"
-    echo "Status ansehen:           sudo systemctl status xrack"
-    echo "Live-Logs ansehen:        journalctl -u xrack -f"
+    echo "$(L "Webinterface:             https://${XRACK_HOSTNAME}.local:${XRACK_PORT}" "Web interface:            https://${XRACK_HOSTNAME}.local:${XRACK_PORT}")"
+    echo "$(L "                          (alternativ per IP: https://<ip-des-pi>:${XRACK_PORT})" "                          (or by IP: https://<pi-ip>:${XRACK_PORT})")"
+    echo "$(L "Jetzt manuell starten:    sudo systemctl start xrack" "Start manually now:       sudo systemctl start xrack")"
+    echo "$(L "Status ansehen:           sudo systemctl status xrack" "Check status:             sudo systemctl status xrack")"
+    echo "$(L "Live-Logs ansehen:        journalctl -u xrack -f" "View live logs:           journalctl -u xrack -f")"
     echo ""
-    echo "Hinweis: Das TLS-Zertifikat ist selbstsigniert - beim ersten"
-    echo "Aufruf zeigt der Browser eine Sicherheitswarnung ('Erweitert' ->"
-    echo "'Trotzdem fortfahren'), danach nicht mehr."
+    echo "$(L "Hinweis: Das TLS-Zertifikat ist selbstsigniert - beim ersten" "Note: the TLS certificate is self-signed - on the first visit")"
+    echo "$(L "Aufruf zeigt der Browser eine Sicherheitswarnung ('Erweitert' ->" "your browser will show a security warning ('Advanced' ->")"
+    echo "$(L "'Trotzdem fortfahren'), danach nicht mehr." "'Proceed anyway'), never again after that.")"
     echo ""
 
     if [ -n "${XRACK_PIN_HASH}" ]; then
-        echo "Einstellungen-Menü:       durch PIN geschützt (im Menü selbst änderbar)"
+        echo "$(L "Einstellungen-Menü:       durch PIN geschützt (im Menü selbst änderbar)" "Settings menu:            PIN-protected (changeable in the menu itself)")"
     else
-        echo "Einstellungen-Menü:       kein PIN-Schutz (im Menü selbst einrichtbar)"
+        echo "$(L "Einstellungen-Menü:       kein PIN-Schutz (im Menü selbst einrichtbar)" "Settings menu:            no PIN protection (can be set up in the menu itself)")"
     fi
     echo ""
-    echo "Achtung: Wenn der Dienst laeuft, blockiert er Port ${XRACK_PORT} -"
-    echo "dann NICHT zusaetzlich manuell 'python main.py' starten."
+    echo "$(L "Achtung: Wenn der Dienst laeuft, blockiert er Port ${XRACK_PORT} -" "Note: while the service is running it occupies port ${XRACK_PORT} -")"
+    echo "$(L "dann NICHT zusaetzlich manuell 'python main.py' starten." "don't additionally start 'python main.py' manually.")"
     echo ""
-    echo "Sprache/Port spaeter aendern: config/local.yaml bearbeiten und"
-    echo "den Dienst neu starten (sudo systemctl restart xrack)."
-    echo "Hostname spaeter aendern:     sudo hostnamectl set-hostname <name>"
-    echo "                              und /etc/hosts entsprechend anpassen."
+    echo "$(L "Sprache/Port spaeter aendern: config/local.yaml bearbeiten und" "To change language/port later: edit config/local.yaml and")"
+    echo "$(L "den Dienst neu starten (sudo systemctl restart xrack)." "restart the service (sudo systemctl restart xrack).")"
+    echo "$(L "Hostname spaeter aendern:     sudo hostnamectl set-hostname <name>" "To change hostname later:    sudo hostnamectl set-hostname <name>")"
+    echo "$(L "                              und /etc/hosts entsprechend anpassen." "                             and adjust /etc/hosts accordingly.")"
 
     if [ -n "${XRACK_WLAN_CLIENT_SSID}" ]; then
         echo ""
-        echo "WLAN-Heimnetz:            '${XRACK_WLAN_CLIENT_SSID}' (Profil 'XRack-Home')"
+        echo "$(L "WLAN-Heimnetz:            '${XRACK_WLAN_CLIENT_SSID}' (Profil 'XRack-Home')" "Wi-Fi home network:       '${XRACK_WLAN_CLIENT_SSID}' (profile 'XRack-Home')")"
     fi
 
     if [ -n "${XRACK_WLAN_AP_SSID}" ]; then
-        echo "WLAN-Access-Point:        '${XRACK_WLAN_AP_SSID}'"
+        echo "$(L "WLAN-Access-Point:        '${XRACK_WLAN_AP_SSID}'" "Wi-Fi access point:       '${XRACK_WLAN_AP_SSID}'")"
     fi
 
     if [ "${XRACK_WLAN_BRIDGE}" = "ja" ]; then
-        echo "Ethernet+AP gebridged:    eth0 (Mischpult) und Access Point im selben Netz (br0)"
-        echo "                          (wird erst nach einem Neustart aktiv, siehe unten)"
+        echo "$(L "Ethernet+AP gebridged:    eth0 (Mischpult) und Access Point im selben Netz (br0)" "Ethernet+AP bridged:      eth0 (mixing console) and access point on the same network (br0)")"
+        echo "$(L "                          (wird erst nach einem Neustart aktiv, siehe unten)" "                          (only active after a restart, see below)")"
     fi
 
     if [ -n "${XRACK_WLAN_CLIENT_SSID}" ] || [ -n "${XRACK_WLAN_AP_SSID}" ]; then
-        echo "WLAN-Status pruefen:      nmcli connection show"
+        echo "$(L "WLAN-Status pruefen:      nmcli connection show" "Check Wi-Fi status:       nmcli connection show")"
     fi
 }
 
@@ -723,23 +795,23 @@ offer_reboot_for_bridge() {
     if [ "${XRACK_WLAN_BRIDGE}" = "ja" ]; then
 
         echo ""
-        echo "Die Ethernet+AP-Bridge wird erst nach einem Neustart aktiv"
-        echo "(damit eine laufende SSH-Verbindung über eth0 nicht mitten in"
-        echo "der Installation abbricht)."
+        echo "$(L "Die Ethernet+AP-Bridge wird erst nach einem Neustart aktiv" "The Ethernet+AP bridge only becomes active after a restart")"
+        echo "$(L "(damit eine laufende SSH-Verbindung über eth0 nicht mitten in" "(so a running SSH connection over eth0 doesn't drop in the")"
+        echo "$(L "der Installation abbricht)." "middle of the installation).")"
 
         if [ -t 0 ]; then
 
             echo ""
-            read -r -p "Jetzt neu starten? [j/N]: " XRACK_REBOOT_NOW || true
+            read -r -p "$(L "Jetzt neu starten? [j/N]: " "Restart now? [y/N]: ")" XRACK_REBOOT_NOW || true
 
-            if [ "${XRACK_REBOOT_NOW}" = "j" ] || [ "${XRACK_REBOOT_NOW}" = "J" ]; then
-                echo "XRack: Neustart..."
+            if confirm_yes "${XRACK_REBOOT_NOW}"; then
+                echo "$(L "XRack: Neustart..." "XRack: Restarting...")"
                 sudo reboot
             else
-                echo "Bitte bei Gelegenheit manuell neu starten: sudo reboot"
+                echo "$(L "Bitte bei Gelegenheit manuell neu starten: sudo reboot" "Please restart manually when convenient: sudo reboot")"
             fi
         else
-            echo "Bitte manuell neu starten, sobald es passt: sudo reboot"
+            echo "$(L "Bitte manuell neu starten, sobald es passt: sudo reboot" "Please restart manually whenever it suits you: sudo reboot")"
         fi
     fi
 }
@@ -749,6 +821,7 @@ offer_reboot_for_bridge() {
 #
 
 confirm_start
+choose_language
 install_system_dependencies
 configure_basic_settings
 configure_hostname_and_avahi
