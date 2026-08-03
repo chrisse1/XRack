@@ -674,6 +674,15 @@ EOF
 # wieder ausgehängt. Unterstützt genau einen angeschlossenen Stick
 # gleichzeitig, ganz ohne Verzeichnisauswahl im Webinterface.
 #
+# RemainAfterExit=yes ist bei xrack-usb-mount@.service nötig, weil
+# FUSE-Dateisysteme (NTFS über ntfs-3g) einen Hintergrundprozess
+# starten, der die Einhängung am Leben hält. Ohne RemainAfterExit
+# räumt systemd nach Ende des (Type=oneshot-)Skripts sofort die
+# komplette Prozessgruppe auf und beendet dabei diesen Hintergrund-
+# prozess gleich mit - der Stick wird dann im selben Moment wieder
+# ausgehängt. Kernel-Dateisysteme (vfat/ext4) brauchen keinen
+# Hintergrundprozess und sind davon nicht betroffen.
+#
 configure_usb_automount() {
 
     echo "$(L "XRack: USB-Stick-Automount wird eingerichtet..." "XRack: Setting up USB drive automount...")"
@@ -692,6 +701,7 @@ After=local-fs.target
 
 [Service]
 Type=oneshot
+RemainAfterExit=yes
 ExecStart=${INSTALL_DIR}/scripts/xrack-usb-mount.sh %i ${SERVICE_UID} ${SERVICE_GID}
 EOF
 
