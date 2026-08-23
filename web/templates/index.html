@@ -42,10 +42,16 @@
                             </strong>
                         </div>
 
-                        <div class="text-nowrap text-secondary small" id="audio-info">
+                        <div
+                            class="text-nowrap small {{ 'text-warning' if status.sample_rate_mismatch else 'text-secondary' }}"
+                            id="audio-info"
+                        >
                             {% if status.audio_connected %}
                                 {{ status.audio_channels }} Ch •
-                                {{ (status.audio_sample_rate / 1000)|int }} kHz •
+                                {{ (status.audio_sample_rate / 1000)|int }} kHz
+                                {%- if status.sample_rate_measured %}
+                                    ({{ t.audio_info_measured_rate_label }}: {{ "%.1f"|format(status.sample_rate_measured / 1000) }} kHz)
+                                {%- endif %} •
                                 {{ status.audio_sample_bits }} Bit •
                                 {{ status.audio_formats | join(", ") }}
                             {% else %}

@@ -154,10 +154,17 @@ function updateAudioStatus(data) {
         : `<i class="bi bi-x-circle-fill text-danger"></i> ${data.audio_device}`;
 
     const audioInfo = document.getElementById("audio-info");
+    audioInfo.classList.remove("text-secondary", "text-warning");
+    audioInfo.classList.add(data.sample_rate_mismatch ? "text-warning" : "text-secondary");
     if (data.audio_connected) {
+        let measuredPart = "";
+        if (data.sample_rate_measured) {
+            const measuredKhz = (data.sample_rate_measured / 1000).toFixed(1);
+            measuredPart = ` (${I18N.audio_info_measured_rate_label}: ${measuredKhz} kHz)`;
+        }
         audioInfo.textContent =
             `${data.audio_channels} Ch • ` +
-            `${data.audio_sample_rate / 1000} kHz • ` +
+            `${data.audio_sample_rate / 1000} kHz${measuredPart} • ` +
             `${data.audio_sample_bits} Bit • ` +
             data.audio_formats.join(", ");
     } else {
