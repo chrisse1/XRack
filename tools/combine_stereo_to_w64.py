@@ -13,11 +13,21 @@ Beispiel (3 Stereo-Dateien -> Kanal 1-6):
 Datei 1 landet auf Kanal 1+2, Datei 2 auf Kanal 3+4, Datei 3 auf
 Kanal 5+6 usw. - beliebig viele Dateien möglich, nicht nur drei.
 
+Haben die Eingabedateien nicht alle dieselbe Samplerate, oder soll
+das Ergebnis eine andere Samplerate haben als die Quellen (z.B.
+Quellen mit 44,1 kHz, Ziel 48 kHz für die Konsole), per
+"-r 48000"/"--samplerate 48000" angeben - abweichende Dateien werden
+dann automatisch per ffmpeg umgerechnet (echtes Resampling, nicht nur
+ein anderer Header-Eintrag). Ohne diese Option müssen alle
+Eingabedateien bereits dieselbe Samplerate haben.
+
 Das Skript ist bewusst eigenständig (keine Abhängigkeit vom
-restlichen XRack-Code, nur Python-Standardbibliothek) und lässt sich
-sowohl direkt auf dem Raspberry Pi als auch auf einem beliebigen
-anderen Rechner ausführen. Läuft es nicht auf dem Pi, lässt sich die
-erzeugte .w64-Datei anschließend über den "Hochladen"-Knopf im
+restlichen XRack-Code, nur Python-Standardbibliothek + ffmpeg als
+externer Prozess fürs Resampling) und lässt sich sowohl direkt auf
+dem Raspberry Pi als auch auf einem beliebigen anderen Rechner
+ausführen (ffmpeg ist ohnehin bereits Voraussetzung für XRack selbst,
+siehe player/track_decoder.py). Läuft es nicht auf dem Pi, lässt sich
+die erzeugte .w64-Datei anschließend über den "Hochladen"-Knopf im
 Aufnahmen-Modal auf XRack übertragen.
 
 Format-Hinweis: XRacks eigenes .w64-Format speichert Samples
@@ -28,9 +38,11 @@ Zusammenführen automatisch dorthin umgerechnet.
 """
 
 import argparse
+import shutil
+import subprocess
+import tempfile
 import struct
 import sys
-import wave
 from pathlib import Path
 from uuid import UUID
 
@@ -130,6 +142,112 @@ def pack_int24(value: int) -> bytes:
 SILENCE_SAMPLE = pack_int24(0)
 
 
+class WavFile:
+    """
+    Minimaler, eigenständiger WAV-Header-Parser.
+
+    Python's eingebautes wave-Modul kann nur klassisches PCM
+    (Format-Tag 1) lesen und scheitert an WAVE_FORMAT_EXTENSIBLE
+    (Format-Tag 0xFFFE) mit "unknown format: 65534" - genau das
+    Format, das viele DAWs für 24-Bit-Exporte verwenden UND das
+    ffmpeg beim Resampling auf pcm_s24le selbst erzeugt. Dieser
+    Parser versteht beide Varianten.
+    """
+
+    def __init__(self, path: Path):
+        self.path = path
+        self.file = open(path, "rb")
+
+        if self.file.read(4) != b"RIFF":
+            raise ValueError(f"{path.name}: keine gültige WAV-Datei.")
+
+        self.file.read(4)  # Dateigröße - wird nicht gebraucht
+
+        if self.file.read(4) != b"WAVE":
+            raise ValueError(f"{path.name}: keine gültige WAV-Datei.")
+
+        self.channels = 0
+        self.sample_rate = 0
+        self.container_width = 0  # Bytes pro Sample/Kanal
+        self.data_offset: int | None = None
+        self.data_size = 0
+
+        fmt_seen = False
+
+        while True:
+            header = self.file.read(8)
+            if len(header) < 8:
+                break
+
+            chunk_id = header[0:4]
+            chunk_size = struct.unpack("<I", header[4:8])[0]
+            chunk_start = self.file.tell()
+
+            if chunk_id == b"fmt ":
+                self._read_fmt_chunk(chunk_size)
+                fmt_seen = True
+            elif chunk_id == b"data":
+                self.data_offset = chunk_start
+                self.data_size = chunk_size
+                if fmt_seen:
+                    break
+
+            # RIFF-Chunks sind auf gerade Länge gepolstert.
+            self.file.seek(chunk_start + chunk_size + (chunk_size % 2))
+
+        if not fmt_seen or self.data_offset is None:
+            raise ValueError(f"{path.name}: fmt- oder data-Chunk fehlt.")
+
+        self.file.seek(self.data_offset)
+
+    def _read_fmt_chunk(self, chunk_size: int) -> None:
+
+        (
+            format_tag,
+            self.channels,
+            self.sample_rate,
+            _avg_bytes_per_sec,
+            _block_align,
+            bits_per_sample,
+        ) = struct.unpack("<HHIIHH", self.file.read(16))
+
+        effective_tag = format_tag
+        valid_bits = bits_per_sample
+
+        if format_tag == 0xFFFE and chunk_size >= 40:
+            cb_size = struct.unpack("<H", self.file.read(2))[0]
+            if cb_size >= 22:
+                valid_bits_raw = struct.unpack("<H", self.file.read(2))[0]
+                if valid_bits_raw:
+                    valid_bits = valid_bits_raw
+                self.file.read(4)  # ChannelMask
+                subformat = self.file.read(16)
+                effective_tag = struct.unpack("<H", subformat[0:2])[0]
+
+        if effective_tag != 1:
+            raise ValueError(
+                f"{self.path.name}: nicht unterstütztes WAV-Format - "
+                "nur PCM wird unterstützt (keine Fließkomma-/"
+                "komprimierten Dateien)."
+            )
+
+        self.container_width = bits_per_sample // 8
+        self.bits_per_sample = valid_bits
+
+        if self.container_width not in (1, 2, 3, 4):
+            raise ValueError(
+                f"{self.path.name}: nicht unterstützte Bittiefe "
+                f"({bits_per_sample} Bit)."
+            )
+
+    def read_raw(self, n_bytes: int) -> bytes:
+        remaining = self.data_offset + self.data_size - self.file.tell()
+        return self.file.read(min(n_bytes, max(remaining, 0)))
+
+    def close(self) -> None:
+        self.file.close()
+
+
 class StereoSource:
     """
     Liest eine Stereo-WAV-Datei blockweise und liefert für jeden
@@ -141,31 +259,19 @@ class StereoSource:
 
     def __init__(self, path: Path):
         self.path = path
-        self.wav = wave.open(str(path), "rb")
+        self.wav = WavFile(path)
 
-        if self.wav.getnchannels() != 2:
+        if self.wav.channels != 2:
             raise ValueError(
-                f"{path.name}: hat {self.wav.getnchannels()} Kanäle, "
+                f"{path.name}: hat {self.wav.channels} Kanäle, "
                 "erwartet werden genau 2 (Stereo)."
             )
 
-        if self.wav.getcomptype() != "NONE":
-            raise ValueError(
-                f"{path.name}: nur unkomprimiertes PCM-WAV wird "
-                "unterstützt (z.B. per Audacity als \"WAV PCM\" "
-                "exportieren)."
-            )
+        self.width = self.wav.container_width
+        self.sample_rate = self.wav.sample_rate
 
-        self.width = self.wav.getsampwidth()
-
-        if self.width not in (1, 2, 3, 4):
-            raise ValueError(
-                f"{path.name}: nicht unterstützte Bittiefe "
-                f"({self.width * 8} Bit)."
-            )
-
-        self.sample_rate = self.wav.getframerate()
-        self.total_frames = self.wav.getnframes()
+        frame_size = 2 * self.width
+        self.total_frames = self.wav.data_size // frame_size
         self._exhausted = False
 
     def read_block(self, n_frames: int) -> list[bytes]:
@@ -178,8 +284,8 @@ class StereoSource:
         pairs = []
 
         if not self._exhausted:
-            raw = self.wav.readframes(n_frames)
             frame_size = 2 * self.width
+            raw = self.wav.read_raw(n_frames * frame_size)
             frames_read = len(raw) // frame_size
 
             if frames_read < n_frames:
@@ -203,21 +309,88 @@ class StereoSource:
         self.wav.close()
 
 
-def combine(input_paths: list[Path], output_path: Path) -> None:
+def resample_wav(path: Path, target_rate: int, tmp_dir: Path) -> Path:
+    """
+    Wandelt eine WAV-Datei per ffmpeg auf eine andere Samplerate um
+    (echtes Resampling, nicht nur ein geänderter Header-Eintrag) -
+    das Ergebnis landet als neue Datei in tmp_dir.
+    """
+
+    if shutil.which("ffmpeg") is None:
+        raise ValueError(
+            "ffmpeg wird benötigt, um unterschiedliche Sampleraten "
+            "anzugleichen, ist aber nicht installiert "
+            "(sudo apt install ffmpeg)."
+        )
+
+    output_path = tmp_dir / f"{path.stem}__{target_rate}Hz.wav"
+
+    result = subprocess.run(
+        [
+            "ffmpeg", "-v", "error", "-nostdin", "-y",
+            "-i", str(path),
+            "-ar", str(target_rate),
+            "-c:a", "pcm_s24le",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0 or not output_path.exists():
+        raise ValueError(
+            f"{path.name}: Umwandlung auf {target_rate} Hz per ffmpeg "
+            f"fehlgeschlagen: {result.stderr.strip()}"
+        )
+
+    return output_path
+
+
+def combine(
+    input_paths: list[Path],
+    output_path: Path,
+    target_rate: int | None = None,
+) -> None:
 
     sources = [StereoSource(path) for path in input_paths]
+    tmp_dir_handle: tempfile.TemporaryDirectory | None = None
 
     try:
-        sample_rate = sources[0].sample_rate
+        sample_rate = target_rate if target_rate is not None else sources[0].sample_rate
 
-        for source in sources[1:]:
-            if source.sample_rate != sample_rate:
+        for index, source in enumerate(sources):
+
+            if source.sample_rate == sample_rate:
+                continue
+
+            if target_rate is None:
                 raise ValueError(
                     f"{source.path.name} hat {source.sample_rate} Hz, "
                     f"{input_paths[0].name} hat {sample_rate} Hz - alle "
-                    "Dateien müssen dieselbe Samplerate haben (z.B. per "
-                    "Audacity vorher angleichen)."
+                    "Dateien müssen dieselbe Samplerate haben, oder gib "
+                    "mit -r/--samplerate eine Zielrate an, auf die "
+                    "unterschiedliche Dateien automatisch umgerechnet "
+                    "werden."
                 )
+
+            if tmp_dir_handle is None:
+                tmp_dir_handle = tempfile.TemporaryDirectory(
+                    prefix="xrack_resample_"
+                )
+
+            print(
+                f"  {source.path.name}: {source.sample_rate} Hz -> "
+                f"{sample_rate} Hz (ffmpeg) ..."
+            )
+
+            resampled_path = resample_wav(
+                source.path,
+                sample_rate,
+                Path(tmp_dir_handle.name),
+            )
+
+            source.close()
+            sources[index] = StereoSource(resampled_path)
 
         channels = len(sources) * 2
         longest = max(source.total_frames for source in sources)
@@ -273,6 +446,9 @@ def combine(input_paths: list[Path], output_path: Path) -> None:
         for source in sources:
             source.close()
 
+        if tmp_dir_handle is not None:
+            tmp_dir_handle.cleanup()
+
 
 def main() -> int:
 
@@ -294,6 +470,17 @@ def main() -> int:
         required=True,
         help="Ziel-.w64-Datei (z.B. recordings/Mix-1.w64).",
     )
+    parser.add_argument(
+        "-r", "--samplerate",
+        type=int,
+        default=None,
+        help=(
+            "Ziel-Samplerate in Hz (z.B. 48000). Ohne Angabe müssen "
+            "alle Eingabedateien bereits dieselbe Samplerate haben; "
+            "mit Angabe werden abweichende Dateien per ffmpeg "
+            "automatisch umgerechnet (echtes Resampling)."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -303,8 +490,8 @@ def main() -> int:
             return 1
 
     try:
-        combine(args.inputs, args.output)
-    except (ValueError, wave.Error) as exc:
+        combine(args.inputs, args.output, target_rate=args.samplerate)
+    except ValueError as exc:
         print(f"Fehler: {exc}", file=sys.stderr)
         return 1
 
