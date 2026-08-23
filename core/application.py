@@ -448,6 +448,14 @@ class Application:
         if self.recorder.monitoring or self.recorder.recording:
             return
 
+        #
+        # Ohne dies würde ein Messfenster von einer früheren Prüfung
+        # (z.B. beim Start) mit der inzwischen vergangenen Zeit
+        # vermischt und kurzzeitig einen völlig falschen Messwert
+        # liefern - siehe AudioBackend.restart_rate_measurement().
+        #
+        self.audio_core.restart_sample_rate_measurement()
+
         if not self.recorder.start_monitoring():
             return
 

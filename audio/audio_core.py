@@ -96,6 +96,13 @@ class AudioCore:
     def suggested_sample_rate(self) -> int:
         return self.backend.suggested_rate
 
+    def restart_sample_rate_measurement(self) -> None:
+        """
+        Siehe AudioBackend.restart_rate_measurement().
+        """
+
+        self.backend.restart_rate_measurement()
+
 
     @property
     def sample_bits(self) -> int:

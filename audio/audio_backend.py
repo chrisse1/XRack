@@ -190,6 +190,24 @@ class AudioBackend:
 
             return False
 
+    def restart_rate_measurement(self) -> None:
+        """
+        Startet ein neues Messfenster für die Ist-Samplerate, ohne
+        das Gerät neu zu öffnen (siehe
+        Application.check_sample_rate(), z.B. über den
+        "Aktualisieren"-Knopf ausgelöst). Ohne das würde ein noch
+        unfertiges Messfenster von einer früheren, länger
+        zurückliegenden Prüfung mit der aktuellen Zeit vermischt und
+        kurzzeitig einen völlig falschen Messwert liefern (Frames aus
+        Sekunden vor einer Pause, geteilt durch die inzwischen
+        vergangene reale Zeit).
+        """
+
+        if self._pcm is None:
+            return
+
+        self._rate_monitor.reset(self._rate)
+
     def close(self) -> None:
         """
         Schließt das Audiogerät.

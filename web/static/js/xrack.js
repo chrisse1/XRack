@@ -20,6 +20,12 @@ let recorderMonitoring = false;
 let sampleRateMismatchDismissed = false;
 let sampleRateMismatchSuggestion = 0;
 
+// Muss zur Backend-Messdauer passen (SampleRateMonitor.WINDOW_SECONDS
+// [5s] + Timer-Puffer [2s] in Application.check_sample_rate()) - der
+// "Aktualisieren"-Knopf bleibt so lange sichtbar im Messzustand,
+// damit klar ist, dass das Ergebnis nicht sofort da ist.
+const SAMPLE_RATE_CHECK_DURATION_MS = 7500;
+
 // Gerät/Kanäle dürfen während keiner laufenden Aufnahme,
 // Pegelprüfung oder Wiedergabe (Soundcheck oder Musik) geändert
 // werden.
@@ -421,7 +427,15 @@ async function loadAudioDevices() {
 
 async function rescanAudioDevices() {
     const button = document.getElementById("audio-rescan");
+    const icon = document.getElementById("audio-rescan-icon");
     button.disabled = true;
+
+    //
+    // Eine zuvor weggeklickte Mismatch-Warnung soll bei einer erneut
+    // angestoßenen Prüfung wieder erscheinen können, auch wenn die
+    // Abweichung unverändert fortbesteht.
+    //
+    sampleRateMismatchDismissed = false;
 
     const response = await fetch("/api/audio/rescan", { method: "POST" });
     const result = await response.json();
@@ -429,7 +443,22 @@ async function rescanAudioDevices() {
 
     await loadAudioDevices();
     await refreshDashboard();
-    button.disabled = false;
+
+    //
+    // Die Samplerate-Messung läuft im Hintergrund noch einige
+    // Sekunden weiter (siehe Application.check_sample_rate()) - der
+    // Knopf bleibt so lange im Mess-Zustand, statt sofort wieder
+    // normal nutzbar zu wirken, während im Hintergrund noch kein
+    // Ergebnis vorliegt.
+    //
+    icon.className = "spinner-border spinner-border-sm";
+    button.title = I18N.audio_rescan_measuring_title;
+
+    setTimeout(() => {
+        icon.className = "bi bi-arrow-clockwise";
+        button.title = button.dataset.defaultTitle;
+        button.disabled = false;
+    }, SAMPLE_RATE_CHECK_DURATION_MS);
 }
 
 // ============================================================
