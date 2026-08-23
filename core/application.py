@@ -988,6 +988,22 @@ class Application:
 
         return success, message
 
+    def refresh_port_forward(self) -> None:
+        """
+        Baut die Portweiterleitung (falls aktiv) mit der aktuell
+        erkannten Konsolen-IP neu auf - z.B. vom "Aktualisieren"-
+        Knopf aufgerufen, falls sich die IP durch einen Neustart der
+        Bridge/Freigabe geändert hat (siehe set_port_forward()).
+        """
+
+        if not self.port_forward_enabled:
+            return
+
+        console_ip = self.wlan_control.get_status().get("console_ip")
+
+        if console_ip:
+            self.wlan_control.set_port_forward(True, console_ip)
+
     def get_bluetooth_status(self) -> dict:
         """
         Liefert den aktuellen Bluetooth-Status fürs Webinterface.

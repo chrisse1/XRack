@@ -125,6 +125,8 @@ async def rescan_audio_devices(
 
     application.check_sample_rate()
 
+    application.refresh_port_forward()
+
     return {
         "success": True
     }

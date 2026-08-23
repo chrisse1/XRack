@@ -495,11 +495,20 @@ configure_wifi() {
                             # Aktivierung später im Einstellungen-Modal;
                             # schließt sich dort mit der Ethernet+AP-Bridge aus.
                             #
+                            # Feste eigene Adressrange (statt NetworkManager
+                            # "ipv4.method shared" die Range frei wählen zu
+                            # lassen) - sonst kann sich das Subnetz je nach
+                            # Reihenfolge/Zustand anderer "shared"-Verbindungen
+                            # (z.B. Access Point) zwischen 10.42.0.0/24 und
+                            # 10.42.1.0/24 verschieben, was die Portweiterleitung
+                            # (scripts/xrack-port-forward.sh) auf eine veraltete
+                            # Konsolen-IP zeigen lässt.
+                            #
 
                             sudo nmcli connection delete "XRack-Share-eth0" >/dev/null 2>&1 || true
 
                             if sudo nmcli connection add type ethernet ifname eth0 con-name "XRack-Share-eth0" \
-                                ipv4.method shared connection.autoconnect no >/dev/null; then
+                                ipv4.method shared ipv4.addresses 10.77.0.1/24 connection.autoconnect no >/dev/null; then
                                 XRACK_WLAN_SHARE_READY="ja"
                             else
                                 echo "$(L "Warnung: Profil für die Ethernet+Heimnetz-Freigabe konnte nicht angelegt werden." "Warning: could not create the Ethernet+home network sharing profile.")"
