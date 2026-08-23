@@ -40,13 +40,20 @@ PORTS="10023 10024"
 
 ensure_chains() {
 
+    #
+    # Sprung in die eigene Chain jeweils an Position 1 einfügen (nicht
+    # anhängen) - sonst würde eine bereits vorhandene, weiter vorne
+    # stehende DROP/REJECT-Regel (z.B. von NetworkManagers eigenem
+    # "shared"-Modus) unsere Regeln nie erreichen lassen.
+    #
+
     iptables -t nat -N "${CHAIN_NAT}" 2>/dev/null || true
     iptables -t nat -C PREROUTING -j "${CHAIN_NAT}" 2>/dev/null \
-        || iptables -t nat -A PREROUTING -j "${CHAIN_NAT}"
+        || iptables -t nat -I PREROUTING 1 -j "${CHAIN_NAT}"
 
     iptables -N "${CHAIN_FWD}" 2>/dev/null || true
     iptables -C FORWARD -j "${CHAIN_FWD}" 2>/dev/null \
-        || iptables -A FORWARD -j "${CHAIN_FWD}"
+        || iptables -I FORWARD 1 -j "${CHAIN_FWD}"
 }
 
 if [ "${MODE}" = "on" ]; then
@@ -69,6 +76,16 @@ if [ "${MODE}" = "on" ]; then
         iptables -A "${CHAIN_FWD}" -p udp -d "${CONSOLE_IP}" --dport "${PORT}" \
             -j ACCEPT
     done
+
+    #
+    # Ohne diese Regel würde nur die Anfrage zur Konsole durchgelassen,
+    # nicht aber deren Antwort zurück zum anfragenden Gerät - die App
+    # würde dann nie etwas empfangen. Erlaubt alle bereits etablierten/
+    # zugehörigen Pakete VON der Konsole (Rückrichtung der obigen
+    # Weiterleitung).
+    #
+    iptables -A "${CHAIN_FWD}" -s "${CONSOLE_IP}" \
+        -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
 elif [ "${MODE}" = "off" ]; then
 
