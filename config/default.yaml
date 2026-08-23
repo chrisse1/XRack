@@ -21,6 +21,14 @@ security:
   # ab; sie lässt sich im Einstellungen-Modal jederzeit ändern.
   pin_hash: ""
 
+audio:
+  # Tatsächliche Samplerate des angeschlossenen Interfaces (z.B.
+  # 44100 oder 48000). Mischpulte wie die X32/XAir-Serie melden über
+  # USB immer beide als "unterstützt", schalten ihre Clock aber nicht
+  # selbst um - dieser Wert muss darum am Mischpult geprüft und hier
+  # (bzw. im Einstellungen-Modal) passend gesetzt werden.
+  sample_rate: 48000
+
 recording:
   directory: "./recordings"
 

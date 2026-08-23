@@ -72,6 +72,7 @@ class AudioBackend:
         self,
         device: AudioDevice,
         channels: int | None = None,
+        rate: int | None = None,
     ) -> bool:
         """
         Öffnet das Audiogerät.
@@ -87,11 +88,17 @@ class AudioBackend:
         Die gewünschte (kleinere) Kanalzahl wird stattdessen erst
         beim Lesen in Software aus dem Datenstrom herausgeschnitten,
         siehe `audio.channel_extractor.ChannelExtractor`.
+
+        `rate` ist die vom Nutzer erklärte, tatsächlich am Interface
+        eingestellte Samplerate (siehe
+        `Application.set_mixer_sample_rate()`) - `device.sample_rate`
+        selbst ist nur der von ALSA gemeldete Wertebereich und kein
+        verlässlicher Hinweis auf die tatsächlich aktive Clock.
         """
 
         self.device = device
 
-        self._rate = device.sample_rate
+        self._rate = rate if rate is not None else device.sample_rate
         self._native_channels = device.channels
         self._channels = (
             channels
@@ -119,9 +126,17 @@ class AudioBackend:
 
             )
 
-            self._pcm.setrate(
+            actual_rate = self._pcm.setrate(
                 self._rate
             )
+
+            if actual_rate and actual_rate != self._rate:
+                self.logger.warning(
+                    "ALSA hat eine andere Samplerate akzeptiert als "
+                    "angefordert: gefordert %d Hz, gemeldet %d Hz.",
+                    self._rate,
+                    actual_rate,
+                )
 
             self._pcm.setchannels(
                 self._native_channels

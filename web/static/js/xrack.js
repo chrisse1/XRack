@@ -1540,6 +1540,7 @@ async function loadSettings() {
         const data = await response.json();
 
         document.getElementById("settings-language").value = data.language;
+        document.getElementById("settings-sample-rate").value = data.sample_rate;
         document.getElementById("settings-port").value = data.port;
         document.getElementById("settings-recording-prefix").value = data.record_name_prefix;
 
@@ -1726,6 +1727,30 @@ async function saveLanguage() {
     }
 
     window.location.reload();
+}
+
+// ------------------------------------------------------------
+// Mischpult-Samplerate
+// ------------------------------------------------------------
+
+document.getElementById("btn-settings-sample-rate-save").addEventListener("click", saveSampleRate);
+
+async function saveSampleRate() {
+    const sample_rate = Number(document.getElementById("settings-sample-rate").value);
+
+    const response = await fetch("/api/settings/sample_rate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sample_rate })
+    });
+    const result = await response.json();
+
+    if (!result.success) {
+        alert(I18N.alert_change_failed);
+        return;
+    }
+
+    alert(I18N.settings_saved);
 }
 
 // ------------------------------------------------------------

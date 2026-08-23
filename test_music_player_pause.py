@@ -59,6 +59,7 @@ class FakeBackend:
 
     def open(self, device, channels, rate, start_channel=0, sample_format=None):
         self.opened = True
+        self.rate = rate
         return True
 
     def write(self, data):
@@ -102,7 +103,7 @@ try:
     player = MusicPlayer(FakeBackend(), library)
     player.decoder = FakeDecoder()
 
-    assert player.play_file(device, with_dir / "song.mp3", start_channel=0)
+    assert player.play_file(device, with_dir / "song.mp3", start_channel=0, rate=48000)
     time.sleep(0.1)
     assert player.playing
     assert not player.paused
@@ -136,7 +137,7 @@ try:
     player2 = MusicPlayer(FakeBackend(), library)
     player2.decoder = FakeDecoder()
 
-    assert player2.play_file(device, with_dir / "song.mp3", start_channel=0)
+    assert player2.play_file(device, with_dir / "song.mp3", start_channel=0, rate=48000)
     time.sleep(0.1)
     player2.pause()
     assert player2.paused
@@ -154,7 +155,7 @@ try:
     player3 = MusicPlayer(FakeBackend(), library)
     player3.decoder = FakeDecoder()
 
-    assert player3.play_folder(device, with_dir, start_channel=0)
+    assert player3.play_folder(device, with_dir, start_channel=0, rate=48000)
     time.sleep(0.1)
 
     first_track = player3.current_track
@@ -172,6 +173,30 @@ try:
     print("OK: skip() während Pause hängt nicht und hebt die Pause auf")
 
     run_with_timeout(player3.stop, label="stop() nach skip()")
+
+    # ------------------------------------------------------------
+    # 4. Die übergebene Samplerate wird tatsächlich verwendet (kein
+    #    hartcodierter Wert mehr, siehe Regression-Fix für die
+    #    "Musik läuft zu langsam bei 44,1 kHz"-Meldung)
+    # ------------------------------------------------------------
+
+    backend44 = FakeBackend()
+    decoder44 = FakeDecoder()
+
+    player4 = MusicPlayer(backend44, library)
+    player4.decoder = decoder44
+
+    assert player4.play_file(device, with_dir / "song.mp3", start_channel=0, rate=44100)
+    time.sleep(0.05)
+
+    assert backend44.rate == 44100, (
+        "AudioPlaybackBackend wurde nicht mit der übergebenen Rate "
+        "geöffnet - MusicPlayer verwendet noch einen fest "
+        "einprogrammierten Wert."
+    )
+
+    run_with_timeout(player4.stop, label="stop() nach Raten-Test")
+    print("OK: Übergebene Samplerate wird verwendet, nicht hartcodiert")
 
 finally:
     import shutil

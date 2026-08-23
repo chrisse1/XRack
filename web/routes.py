@@ -57,6 +57,9 @@ class LanguageSelection(BaseModel):
 class PortSelection(BaseModel):
     port: int
 
+class SampleRateSelection(BaseModel):
+    sample_rate: int
+
 class WifiCredentials(BaseModel):
     ssid: str
     password: str
@@ -483,6 +486,7 @@ async def get_settings(request: Request):
 
     return {
         "language": application.config.data.application.language,
+        "sample_rate": application.mixer_sample_rate,
         "port": application.config.data.server.port,
         "record_name_prefix": application.record_name_prefix,
         "wlan": wlan,
@@ -558,6 +562,21 @@ async def set_language(
     application = request.app.state.application
 
     success = application.set_language(selection.language)
+
+    return {
+        "success": success
+    }
+
+
+@router.post("/api/settings/sample_rate")
+async def set_sample_rate(
+    selection: SampleRateSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success = application.set_mixer_sample_rate(selection.sample_rate)
 
     return {
         "success": success

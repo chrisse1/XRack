@@ -70,7 +70,7 @@ class MusicPlayer:
 
         self._channels = CHANNELS
         self._start_channel = 0
-        self._rate = 48000
+        self._rate = 0
 
     @property
     def playing(self) -> bool:
@@ -130,6 +130,7 @@ class MusicPlayer:
         device: AudioDevice,
         folder: Path,
         start_channel: int,
+        rate: int,
     ) -> bool:
         """
         Spielt alle Musikdateien eines Ordners in zufälliger
@@ -150,6 +151,7 @@ class MusicPlayer:
             playlist,
             folder_mode=True,
             start_channel=start_channel,
+            rate=rate,
         )
 
     def play_file(
@@ -157,6 +159,7 @@ class MusicPlayer:
         device: AudioDevice,
         path: Path,
         start_channel: int,
+        rate: int,
     ) -> bool:
         """
         Spielt eine einzelne Datei einmalig ab. Löst eine bereits
@@ -174,6 +177,7 @@ class MusicPlayer:
             [path],
             folder_mode=False,
             start_channel=start_channel,
+            rate=rate,
         )
 
     def stop(self) -> None:
@@ -276,6 +280,7 @@ class MusicPlayer:
         playlist: list[Path],
         folder_mode: bool,
         start_channel: int,
+        rate: int,
     ) -> bool:
 
         self._playlist = playlist
@@ -283,6 +288,7 @@ class MusicPlayer:
         self._folder_mode = folder_mode
         self._channels = CHANNELS
         self._start_channel = start_channel
+        self._rate = rate
 
         self._paused = False
         self._pause_event.set()

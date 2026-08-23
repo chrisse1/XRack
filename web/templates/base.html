@@ -279,6 +279,28 @@
 
                 <div class="mb-3">
                     <label class="form-label fw-semibold">
+                        {{ t.settings_sample_rate_label }}
+                    </label>
+                    <div class="d-flex gap-2">
+                        <select id="settings-sample-rate" class="form-select form-select-sm w-auto">
+                            <option value="44100">44.1 kHz</option>
+                            <option value="48000">48 kHz</option>
+                            <option value="88200">88.2 kHz</option>
+                            <option value="96000">96 kHz</option>
+                            <option value="176400">176.4 kHz</option>
+                            <option value="192000">192 kHz</option>
+                        </select>
+                        <button id="btn-settings-sample-rate-save" class="btn btn-primary btn-sm">
+                            {{ t.btn_save }}
+                        </button>
+                    </div>
+                    <small class="text-body-secondary">{{ t.settings_sample_rate_hint }}</small>
+                </div>
+
+                <hr>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">
                         {{ t.settings_port_label }}
                     </label>
                     <div class="d-flex gap-2 align-items-center flex-wrap">

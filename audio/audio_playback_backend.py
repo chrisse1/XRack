@@ -86,9 +86,17 @@ class AudioPlaybackBackend:
 
             )
 
-            self._pcm.setrate(
+            actual_rate = self._pcm.setrate(
                 self._rate
             )
+
+            if actual_rate and actual_rate != self._rate:
+                self.logger.warning(
+                    "ALSA hat eine andere Samplerate akzeptiert als "
+                    "angefordert: gefordert %d Hz, gemeldet %d Hz.",
+                    self._rate,
+                    actual_rate,
+                )
 
             self._pcm.setchannels(
                 self._native_channels

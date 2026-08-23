@@ -41,6 +41,20 @@ class LoggingConfig(BaseModel):
     level: str
 
 
+# Vom Nutzer erklärte, tatsächlich am angeschlossenen Interface
+# eingestellte Samplerate. Digitalmischpulte wie die X32/XAir-Serie
+# melden über USB immer den vollen unterstützten Wertebereich, nicht
+# ihre live konfigurierte Clock - eine zuverlässige Auto-Erkennung ist
+# darum nicht möglich (siehe Application.set_mixer_sample_rate()). Die
+# Liste deckt bewusst mehr als nur 44,1/48 kHz ab, damit XRack auch mit
+# künftigen Interfaces (z.B. bis 192 kHz) ohne erneuten Umbau läuft.
+ALLOWED_SAMPLE_RATES = (44100, 48000, 88200, 96000, 176400, 192000)
+
+
+class AudioConfig(BaseModel):
+    sample_rate: int = 48000
+
+
 class AppConfig(BaseModel):
     """Complete application configuration."""
 
@@ -50,6 +64,7 @@ class AppConfig(BaseModel):
     recording: RecordingConfig
     music: MusicConfig
     logging: LoggingConfig
+    audio: AudioConfig = AudioConfig()
 
 
 def _deep_merge(base: dict, override: dict) -> dict:

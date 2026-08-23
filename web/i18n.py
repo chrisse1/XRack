@@ -133,6 +133,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_icon_title": "Einstellungen",
         "modal_settings_title": "Einstellungen",
         "settings_language_label": "Sprache",
+        "settings_sample_rate_label": "Mischpult-Samplerate",
+        "settings_sample_rate_hint": (
+            "Die tatsächlich am Mischpult/Interface eingestellte "
+            "Samplerate - XRack kann sie nicht automatisch erkennen. "
+            "Falsch eingestellt klingt Musik/Aufnahme zu schnell oder "
+            "zu langsam."
+        ),
         "settings_port_label": "Port",
         "settings_port_hint": "Wird erst nach einem Neustart wirksam.",
         "settings_recording_label": "Aufnahmename",
@@ -357,6 +364,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_icon_title": "Settings",
         "modal_settings_title": "Settings",
         "settings_language_label": "Language",
+        "settings_sample_rate_label": "Mixer sample rate",
+        "settings_sample_rate_hint": (
+            "The sample rate actually set on the console/interface - "
+            "XRack cannot detect it automatically. If set wrong, "
+            "music/recordings will sound too fast or too slow."
+        ),
         "settings_port_label": "Port",
         "settings_port_hint": "Takes effect after a restart.",
         "settings_recording_label": "Recording name",

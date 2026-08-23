@@ -64,12 +64,16 @@ class AudioCore:
 
     @property
     def sample_rate(self) -> int:
-        """Abtastrate."""
+        """
+        Tatsächlich beim Öffnen verwendete Abtastrate (vom Nutzer
+        erklärt, siehe Application.set_mixer_sample_rate()) - nicht
+        der von ALSA gemeldete Wertebereich (device.sample_rate).
+        """
 
         if self.device is None:
             return 0
 
-        return self.device.sample_rate
+        return self.backend.rate
 
 
     @property
@@ -95,11 +99,13 @@ class AudioCore:
         self,
         device: AudioDevice,
         channels: int | None = None,
+        rate: int | None = None,
     ) -> bool:
 
         if not self.backend.open(
             device,
             channels,
+            rate,
         ):
             return False
 

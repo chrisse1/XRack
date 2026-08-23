@@ -4,7 +4,7 @@ XRack application.
 
 from pathlib import Path
 
-from core.configuration import Configuration
+from core.configuration import Configuration, ALLOWED_SAMPLE_RATES
 from core.log import create_logger
 from core.status import SystemStatus, RecorderState
 from audio.audio_manager import AudioManager
@@ -168,7 +168,7 @@ class Application:
             self.status.selected_audio_device = device.id
             self.status.audio_connected = True
             self.status.audio_channels = device.channels
-            self.status.audio_sample_rate = device.sample_rate
+            self.status.audio_sample_rate = self.mixer_sample_rate
             self.status.audio_sample_bits = device.sample_bits
             self.status.audio_formats = device.formats
             self.status.audio_core_open = self.audio_core.opened
@@ -350,6 +350,7 @@ class Application:
         self.audio_core.open(
             self.selected_audio_device,
             self.record_channels,
+            self.mixer_sample_rate,
         )
 
         self.state_store.set(
@@ -358,7 +359,45 @@ class Application:
         )
 
         return True
-    
+
+    @property
+    def mixer_sample_rate(self) -> int:
+        """
+        Vom Nutzer erklärte Samplerate des angeschlossenen Interfaces
+        (siehe set_mixer_sample_rate()).
+        """
+
+        return self.config.data.audio.sample_rate
+
+    def set_mixer_sample_rate(self, rate: int) -> bool:
+        """
+        Setzt die tatsächlich am Interface eingestellte Samplerate.
+        XRack kann sie nicht automatisch erkennen (Mischpulte wie die
+        X32/XAir-Serie melden über USB immer den vollen unterstützten
+        Wertebereich, nicht ihre live konfigurierte Clock) - der
+        Nutzer muss sie darum passend zur Hardware auswählen. Wirkt
+        sofort, ohne Neustart.
+        """
+
+        if rate not in ALLOWED_SAMPLE_RATES:
+            return False
+
+        self.config.set_override("audio", "sample_rate", rate)
+
+        self.config.data.audio.sample_rate = rate
+
+        if self.selected_audio_device is not None:
+
+            self.audio_core.close()
+
+            self.audio_core.open(
+                self.selected_audio_device,
+                self.record_channels,
+                rate,
+            )
+
+        return True
+
     def select_audio_device(self, device_id: str) -> bool:
         """
         Wählt ein Audiogerät aus.
@@ -549,6 +588,7 @@ class Application:
             self.selected_audio_device,
             folder,
             start_channel=start_channel - 1,
+            rate=self.mixer_sample_rate,
         )
 
     def play_music_file(
@@ -577,6 +617,7 @@ class Application:
             self.selected_audio_device,
             path,
             start_channel=start_channel - 1,
+            rate=self.mixer_sample_rate,
         )
 
     def set_music_channel_preference(self, start_channel: int) -> bool:
@@ -875,7 +916,7 @@ class Application:
         self.bluetooth_player.start(
             self.selected_audio_device,
             self.bluetooth_channel_preference - 1,
-            self.selected_audio_device.sample_rate,
+            self.mixer_sample_rate,
         )
 
     def set_bluetooth_power(self, enabled: bool) -> tuple[bool, str]:
