@@ -1756,8 +1756,9 @@ function applyWlanSettings(wlan) {
 
     const consoleIpField = document.getElementById("settings-console-ip-field");
 
-    if (wlan.console_ip) {
-        document.getElementById("settings-console-ip-value").textContent = wlan.console_ip;
+    if (wlan.bridge_enabled || wlan.share_enabled) {
+        document.getElementById("settings-console-ip-value").textContent =
+            wlan.console_ip || I18N.settings_console_ip_not_found;
         consoleIpField.classList.remove("d-none");
     } else {
         consoleIpField.classList.add("d-none");

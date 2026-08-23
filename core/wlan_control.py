@@ -136,6 +136,23 @@ class WlanControl:
 
         return None
 
+    def get_dhcp_lease_ip(self, interface: str) -> str | None:
+        """
+        Liefert die zuletzt von NetworkManagers eingebautem dnsmasq
+        (Modus "ipv4.method shared") auf `interface` vergebene
+        DHCP-Lease-IP - zuverlässiger als get_connected_client_ip(),
+        da sie sofort bei der Vergabe feststeht und nicht erst
+        späteren IP-Verkehr voraussetzt. Die Lease-Datei liegt unter
+        /var/lib/NetworkManager/ und ist nur für root lesbar, daher
+        über das feste sudo-Skript.
+        """
+
+        output = self._run_script_read(
+            "xrack-dhcp-lease.sh", interface
+        )
+
+        return output or None
+
     def get_status(self) -> dict:
         """
         Liefert den aktuellen (nicht-geheimen) WLAN-Status fürs
@@ -163,9 +180,15 @@ class WlanControl:
         console_ip = None
 
         if bridge_enabled:
-            console_ip = self.get_connected_client_ip("br0")
+            console_ip = (
+                self.get_dhcp_lease_ip("br0")
+                or self.get_connected_client_ip("br0")
+            )
         elif share_enabled:
-            console_ip = self.get_connected_client_ip("eth0")
+            console_ip = (
+                self.get_dhcp_lease_ip("eth0")
+                or self.get_connected_client_ip("eth0")
+            )
 
         return {
             "available": True,
@@ -231,6 +254,34 @@ class WlanControl:
             )
 
             return False, str(exc)
+
+    def _run_script_read(self, name: str, *args: str) -> str | None:
+        """
+        Wie _run_script(), aber für rein lesende Skripte, die einen
+        Wert auf stdout ausgeben - liefert die getrimmte
+        Standardausgabe bei Erfolg, sonst None (kein Logging bei
+        Fehlschlag - eine leere/fehlende Lease-Datei ist normal,
+        solange nichts angeschlossen ist).
+        """
+
+        script = Path("scripts") / name
+
+        try:
+
+            result = subprocess.run(
+                ["sudo", "-n", str(script.resolve()), *args],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+
+        except Exception:
+            return None
+
+        if result.returncode != 0:
+            return None
+
+        return result.stdout.strip() or None
 
     def set_home_wifi(self, ssid: str, password: str) -> tuple[bool, str]:
         """

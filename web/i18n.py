@@ -185,6 +185,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "schließt sich mit der Ethernet+AP-Bridge aus)."
         ),
         "settings_console_ip_title": "Aktuelle IP der angeschlossenen Konsole",
+        "settings_console_ip_not_found": "Noch nicht erkannt.",
         "settings_wifi_hint": (
             "SSID und Passwort werden beim Speichern immer beide neu "
             "gesetzt."
@@ -437,6 +438,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "mutually exclusive with the Ethernet+AP bridge)."
         ),
         "settings_console_ip_title": "Current IP of the connected console",
+        "settings_console_ip_not_found": "Not detected yet.",
         "settings_wifi_hint": (
             "SSID and password are always both set anew when saving."
         ),

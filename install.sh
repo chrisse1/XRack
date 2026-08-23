@@ -771,6 +771,7 @@ configure_sudoers() {
         "${INSTALL_DIR}/scripts/xrack-net-ap.sh" \
         "${INSTALL_DIR}/scripts/xrack-bridge-toggle.sh" \
         "${INSTALL_DIR}/scripts/xrack-share-toggle.sh" \
+        "${INSTALL_DIR}/scripts/xrack-dhcp-lease.sh" \
         "${INSTALL_DIR}/scripts/xrack-bt-power.sh" \
         "${INSTALL_DIR}/scripts/xrack-bt-pair.sh" \
         "${INSTALL_DIR}/scripts/xrack-bt-forget.sh" \
@@ -787,6 +788,7 @@ ${INSTALL_DIR}/scripts/xrack-net-home.sh *, \
 ${INSTALL_DIR}/scripts/xrack-net-ap.sh *, \
 ${INSTALL_DIR}/scripts/xrack-bridge-toggle.sh *, \
 ${INSTALL_DIR}/scripts/xrack-share-toggle.sh *, \
+${INSTALL_DIR}/scripts/xrack-dhcp-lease.sh *, \
 ${INSTALL_DIR}/scripts/xrack-bt-power.sh *, \
 ${INSTALL_DIR}/scripts/xrack-bt-pair.sh, \
 ${INSTALL_DIR}/scripts/xrack-bt-forget.sh *, \
