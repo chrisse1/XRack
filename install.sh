@@ -191,7 +191,8 @@ install_system_dependencies() {
         python3-gi \
         openssl \
         exfatprogs \
-        ntfs-3g > /dev/null
+        ntfs-3g \
+        iptables > /dev/null
 
     echo "$(L "XRack: Python-Umgebung wird eingerichtet..." "XRack: Setting up Python environment...")"
 
