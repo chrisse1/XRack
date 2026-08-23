@@ -10,6 +10,7 @@ import alsaaudio
 
 from audio.channel_extractor import ChannelExtractor
 from audio.models import AudioDevice, DiagnosticItem
+from audio.sample_rate_monitor import SampleRateMonitor
 
 
 class AudioBackend:
@@ -29,6 +30,7 @@ class AudioBackend:
         self._period_size = 0
         self._format = None
         self._extractor: ChannelExtractor | None = None
+        self._rate_monitor = SampleRateMonitor()
 
     # ---------------------------------------------------------
     # Properties
@@ -54,6 +56,22 @@ class AudioBackend:
     @property
     def sample_format(self):
         return self._format
+
+    @property
+    def rate_mismatch(self) -> bool:
+        """
+        True, wenn die gemessene Ist-Rate signifikant von der
+        konfigurierten Samplerate abweicht (siehe SampleRateMonitor).
+        """
+        return self._rate_monitor.mismatch
+
+    @property
+    def measured_rate(self) -> int:
+        return self._rate_monitor.measured_rate
+
+    @property
+    def suggested_rate(self) -> int:
+        return self._rate_monitor.suggested_rate
 
     @property
     def alsa_name(self) -> str:
@@ -99,6 +117,7 @@ class AudioBackend:
         self.device = device
 
         self._rate = rate if rate is not None else device.sample_rate
+        self._rate_monitor.reset(self._rate)
         self._native_channels = device.channels
         self._channels = (
             channels
@@ -182,6 +201,8 @@ class AudioBackend:
 
             self._pcm = None
 
+        self._rate_monitor.reset(0)
+
         self.device = None
 
         self.logger.info(
@@ -204,6 +225,8 @@ class AudioBackend:
 
         if length <= 0:
             return None
+
+        self._rate_monitor.record(length)
 
         return self._extractor.extract(data)
 

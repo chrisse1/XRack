@@ -5,6 +5,7 @@ XRack application.
 from pathlib import Path
 
 from core.configuration import Configuration, ALLOWED_SAMPLE_RATES
+from audio.sample_rate_monitor import SampleRateMonitor
 from core.log import create_logger
 from core.status import SystemStatus, RecorderState
 from audio.audio_manager import AudioManager
@@ -158,6 +159,8 @@ class Application:
         if self.bluetooth_control.available:
             self.bluetooth_control.set_power(False)
 
+        self.check_sample_rate()
+
     def update_status(self) -> None:
         """Aktualisiert den aktuellen Systemstatus."""
         
@@ -169,6 +172,9 @@ class Application:
             self.status.audio_connected = True
             self.status.audio_channels = device.channels
             self.status.audio_sample_rate = self.mixer_sample_rate
+            self.status.sample_rate_mismatch = self.audio_core.sample_rate_mismatch
+            self.status.sample_rate_measured = self.audio_core.measured_sample_rate
+            self.status.sample_rate_suggested = self.audio_core.suggested_sample_rate
             self.status.audio_sample_bits = device.sample_bits
             self.status.audio_formats = device.formats
             self.status.audio_core_open = self.audio_core.opened
@@ -178,6 +184,9 @@ class Application:
             self.status.selected_audio_device = ""
             self.status.audio_channels = 0
             self.status.audio_sample_rate = 0
+            self.status.sample_rate_mismatch = False
+            self.status.sample_rate_measured = 0
+            self.status.sample_rate_suggested = 0
             self.status.audio_sample_bits = 0
             self.status.audio_formats = []
             self.status.audio_core_open = self.audio_core.opened
@@ -397,6 +406,28 @@ class Application:
             )
 
         return True
+
+    def check_sample_rate(self) -> None:
+        """
+        Löst eine kurze, einmalige Samplerate-Prüfung aus (beim Start
+        von XRack und über den "Aktualisieren"-Knopf) - läuft bereits
+        eine Pegelprüfung/Aufnahme, wird nichts unternommen, die
+        laufende Session liefert ohnehin gerade frische Messdaten.
+        """
+
+        if self.selected_audio_device is None:
+            return
+
+        if self.recorder.monitoring or self.recorder.recording:
+            return
+
+        if not self.recorder.start_monitoring():
+            return
+
+        threading.Timer(
+            SampleRateMonitor.WINDOW_SECONDS + 2.0,
+            self.recorder.stop_monitoring,
+        ).start()
 
     def select_audio_device(self, device_id: str) -> bool:
         """

@@ -140,6 +140,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Falsch eingestellt klingt Musik/Aufnahme zu schnell oder "
             "zu langsam."
         ),
+        "sample_rate_mismatch_message": (
+            "Das Interface scheint tatsächlich mit ca. {measured} Hz "
+            "zu laufen, konfiguriert sind aber {configured} Hz. "
+            "Vorschlag: {suggested} Hz."
+        ),
+        "sample_rate_mismatch_apply_btn": "Vorschlag übernehmen",
         "settings_port_label": "Port",
         "settings_port_hint": "Wird erst nach einem Neustart wirksam.",
         "settings_recording_label": "Aufnahmename",
@@ -370,6 +376,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "XRack cannot detect it automatically. If set wrong, "
             "music/recordings will sound too fast or too slow."
         ),
+        "sample_rate_mismatch_message": (
+            "The interface appears to actually be running at approx. "
+            "{measured} Hz, but {configured} Hz is configured. "
+            "Suggestion: {suggested} Hz."
+        ),
+        "sample_rate_mismatch_apply_btn": "Apply suggestion",
         "settings_port_label": "Port",
         "settings_port_hint": "Takes effect after a restart.",
         "settings_recording_label": "Recording name",

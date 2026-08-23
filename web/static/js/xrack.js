@@ -17,6 +17,9 @@ let usbConnected = false;
 
 let recorderMonitoring = false;
 
+let sampleRateMismatchDismissed = false;
+let sampleRateMismatchSuggestion = 0;
+
 // Gerät/Kanäle dürfen während keiner laufenden Aufnahme,
 // Pegelprüfung oder Wiedergabe (Soundcheck oder Musik) geändert
 // werden.
@@ -72,6 +75,7 @@ async function updateStatus() {
         updateRecorder(data);
         updateMusicPlayer(data);
         updateBluetooth(data);
+        updateSampleRateMismatchBanner(data);
     } catch (error) {
         if (Date.now() - lastSuccessfulUpdate >= CONNECTION_LOST_THRESHOLD_MS) {
             showConnectionLostModal();
@@ -94,6 +98,47 @@ function hideConnectionLostModal() {
     const modalElement = document.getElementById("connectionLostModal");
     bootstrap.Modal.getOrCreateInstance(modalElement).hide();
 }
+
+function updateSampleRateMismatchBanner(data) {
+    const banner = document.getElementById("sample-rate-mismatch-banner");
+    if (!banner) return;
+
+    if (!data.sample_rate_mismatch) {
+        sampleRateMismatchDismissed = false;
+        banner.classList.add("d-none");
+        return;
+    }
+
+    sampleRateMismatchSuggestion = data.sample_rate_suggested;
+
+    if (sampleRateMismatchDismissed) return;
+
+    document.getElementById("sample-rate-mismatch-text").textContent =
+        I18N.sample_rate_mismatch_message
+            .replace("{configured}", data.audio_sample_rate)
+            .replace("{measured}", data.sample_rate_measured)
+            .replace("{suggested}", data.sample_rate_suggested);
+
+    banner.classList.remove("d-none");
+}
+
+document.getElementById("btn-sample-rate-mismatch-dismiss").addEventListener("click", () => {
+    sampleRateMismatchDismissed = true;
+    document.getElementById("sample-rate-mismatch-banner").classList.add("d-none");
+});
+
+document.getElementById("btn-sample-rate-apply-suggestion").addEventListener("click", async () => {
+    if (!sampleRateMismatchSuggestion) return;
+
+    await fetch("/api/settings/sample_rate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sample_rate: sampleRateMismatchSuggestion })
+    });
+
+    sampleRateMismatchDismissed = true;
+    document.getElementById("sample-rate-mismatch-banner").classList.add("d-none");
+});
 
 function updateSystemStats(data) {
     document.getElementById("hostname").textContent = data.hostname;

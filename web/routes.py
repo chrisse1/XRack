@@ -117,6 +117,8 @@ async def rescan_audio_devices(
 
     application.audio_manager.scan()
 
+    application.check_sample_rate()
+
     return {
         "success": True
     }

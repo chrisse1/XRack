@@ -59,6 +59,25 @@
 
         </div>
 
+        <div class="col-12">
+            <div
+                id="sample-rate-mismatch-banner"
+                class="alert alert-warning d-flex flex-wrap align-items-center justify-content-between gap-2 mb-0 d-none"
+                role="alert"
+            >
+                <div>
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                    <span id="sample-rate-mismatch-text"></span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button id="btn-sample-rate-apply-suggestion" class="btn btn-warning btn-sm">
+                        {{ t.sample_rate_mismatch_apply_btn }}
+                    </button>
+                    <button type="button" class="btn-close" id="btn-sample-rate-mismatch-dismiss"></button>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <div class="row g-4">
