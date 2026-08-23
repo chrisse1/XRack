@@ -5,7 +5,6 @@ XRack application.
 from pathlib import Path
 
 from core.configuration import Configuration, ALLOWED_SAMPLE_RATES
-from audio.sample_rate_monitor import SampleRateMonitor
 from core.log import create_logger
 from core.status import SystemStatus, RecorderState
 from audio.audio_manager import AudioManager
@@ -164,8 +163,6 @@ class Application:
         if self.bluetooth_control.available:
             self.bluetooth_control.set_power(False)
 
-        self.check_sample_rate()
-
         #
         # War die Portweiterleitung vor einem Neustart aktiv, wird sie
         # hier wiederhergestellt (iptables-Regeln überleben einen
@@ -199,9 +196,6 @@ class Application:
             self.status.audio_connected = True
             self.status.audio_channels = device.channels
             self.status.audio_sample_rate = self.mixer_sample_rate
-            self.status.sample_rate_mismatch = self.audio_core.sample_rate_mismatch
-            self.status.sample_rate_measured = self.audio_core.measured_sample_rate
-            self.status.sample_rate_suggested = self.audio_core.suggested_sample_rate
             self.status.audio_sample_bits = device.sample_bits
             self.status.audio_formats = device.formats
             self.status.audio_core_open = self.audio_core.opened
@@ -211,9 +205,6 @@ class Application:
             self.status.selected_audio_device = ""
             self.status.audio_channels = 0
             self.status.audio_sample_rate = 0
-            self.status.sample_rate_mismatch = False
-            self.status.sample_rate_measured = 0
-            self.status.sample_rate_suggested = 0
             self.status.audio_sample_bits = 0
             self.status.audio_formats = []
             self.status.audio_core_open = self.audio_core.opened
@@ -434,86 +425,22 @@ class Application:
 
         return True
 
-    def check_sample_rate(self) -> bool:
-        """
-        Löst eine kurze, einmalige Samplerate-Prüfung aus (beim Start
-        von XRack und über den "Aktualisieren"-Knopf) - läuft bereits
-        eine Pegelprüfung/Aufnahme, wird nichts unternommen, die
-        laufende Session liefert ohnehin gerade frische Messdaten.
-
-        Gibt zurück, ob dieser Aufruf tatsächlich eine neue Prüfung
-        gestartet hat (siehe rescan_audio_devices()).
-        """
-
-        if self.selected_audio_device is None:
-            return False
-
-        if self.recorder.monitoring or self.recorder.recording:
-            return False
-
-        #
-        # Ohne dies würde ein Messfenster von einer früheren Prüfung
-        # (z.B. beim Start) mit der inzwischen vergangenen Zeit
-        # vermischt und kurzzeitig einen völlig falschen Messwert
-        # liefern - siehe AudioBackend.restart_rate_measurement().
-        #
-        self.audio_core.restart_sample_rate_measurement()
-
-        if not self.recorder.start_monitoring():
-            return False
-
-        threading.Timer(
-            SampleRateMonitor.WINDOW_SECONDS + 2.0,
-            self.recorder.stop_monitoring,
-        ).start()
-
-        return True
-
     def rescan_audio_devices(self) -> None:
         """
         Wird vom "Aktualisieren"-Knopf ausgelöst - erkennt neu
-        angeschlossene Audiogeräte (audio_manager.scan()) UND prüft
-        kurz die Samplerate (check_sample_rate()), aber zeitlich
-        sauber GETRENNT statt gleichzeitig.
-
-        Live-Diagnose auf echter Hardware hat gezeigt: Ein
-        arecord-Aufruf (durch scan(), auch nur die reine Listen-
-        Abfrage ohne Hardware-Parameter-Probe) reicht bei manchen
-        USB-Audiointerfaces aus, um den parallel aktiv lesenden ALSA-
-        Handle mit "No such device" abstürzen zu lassen - auch wenn
-        das gerade aktive Gerät dabei gar nicht selbst per
-        --dump-hw-params abgefragt wird (siehe AudioManager.scan()s
-        skip_probe_id). Der Gerätescan läuft deshalb entweder sofort
-        (wenn gerade keine Prüfung läuft), oder erst NACHDEM eine
-        gerade gestartete Prüfung ihr Messfenster wieder vollständig
-        beendet hat.
+        angeschlossene Audiogeräte. Fragt das gerade aktiv geöffnete
+        Gerät dabei nicht per arecord erneut ab (seine Eigenschaften
+        ändern sich ohnehin nicht, solange es angeschlossen bleibt) -
+        siehe AudioManager.scan()s skip_probe_id.
         """
 
-        started_check = self.check_sample_rate()
-
-        def run_scan() -> None:
-            self.audio_manager.scan(
-                skip_probe_id=(
-                    self.selected_audio_device.id
-                    if self.selected_audio_device is not None
-                    else None
-                )
+        self.audio_manager.scan(
+            skip_probe_id=(
+                self.selected_audio_device.id
+                if self.selected_audio_device is not None
+                else None
             )
-
-        if started_check:
-            threading.Timer(
-                SampleRateMonitor.WINDOW_SECONDS + 2.5,
-                run_scan,
-            ).start()
-        elif not self.recorder.monitoring and not self.recorder.recording:
-            run_scan()
-        #
-        # Läuft bereits eine FREMDE Aufnahme/Pegelprüfung (nicht von
-        # diesem Aufruf gestartet), wird währenddessen gar nicht
-        # gescannt, um sie nicht zu gefährden - ihre Dauer ist
-        # unbekannt, ein zeitversetzter Scan könnte also ebenso gut
-        # noch mitten hineinlaufen.
-        #
+        )
 
     def select_audio_device(self, device_id: str) -> bool:
         """

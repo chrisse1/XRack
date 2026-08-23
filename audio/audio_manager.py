@@ -30,12 +30,11 @@ class AudioManager:
         dieses eine Gerät und übernimmt stattdessen seine zuvor
         bekannten Eigenschaften unverändert. Wird für das gerade
         aktiv geöffnete Gerät genutzt (siehe
-        Application.check_sample_rate() / web/routes.py rescan) - bei
-        manchen USB-Audiointerfaces bringt eine gleichzeitige externe
-        Abfrage per arecord den ALREADY offenen, exklusiven ALSA-
-        Handle kurzzeitig durcheinander ("No such device"), während
-        gerade eine Aufnahme/Pegelprüfung/Samplerate-Messung darüber
-        liest.
+        Application.rescan_audio_devices()) - bei manchen USB-
+        Audiointerfaces kann eine gleichzeitige externe Abfrage per
+        arecord den bereits offenen, exklusiven ALSA-Handle
+        kurzzeitig durcheinanderbringen ("No such device"), während
+        gerade eine Aufnahme/Pegelprüfung darüber liest.
         """
 
         previous_devices = {

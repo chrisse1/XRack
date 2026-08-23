@@ -24,10 +24,9 @@
                             <button
                                 id="audio-rescan"
                                 class="btn btn-outline-secondary btn-sm"
-                                title="{{ t.audio_rescan_title }}"
-                                data-default-title="{{ t.audio_rescan_title }}">
+                                title="{{ t.audio_rescan_title }}">
 
-                                <i id="audio-rescan-icon" class="bi bi-arrow-clockwise"></i>
+                                <i class="bi bi-arrow-clockwise"></i>
 
                             </button>
                         </div>
@@ -43,16 +42,10 @@
                             </strong>
                         </div>
 
-                        <div
-                            class="text-nowrap small {{ 'text-warning' if status.sample_rate_mismatch else 'text-secondary' }}"
-                            id="audio-info"
-                        >
+                        <div class="text-nowrap text-secondary small" id="audio-info">
                             {% if status.audio_connected %}
                                 {{ status.audio_channels }} Ch •
-                                {{ (status.audio_sample_rate / 1000)|int }} kHz
-                                {%- if status.sample_rate_measured %}
-                                    ({{ t.audio_info_measured_rate_label }}: {{ "%.1f"|format(status.sample_rate_measured / 1000) }} kHz)
-                                {%- endif %} •
+                                {{ (status.audio_sample_rate / 1000)|int }} kHz •
                                 {{ status.audio_sample_bits }} Bit •
                                 {{ status.audio_formats | join(", ") }}
                             {% else %}
@@ -64,25 +57,6 @@
                 </div>
             </div>
 
-        </div>
-
-        <div class="col-12">
-            <div
-                id="sample-rate-mismatch-banner"
-                class="alert alert-warning d-flex flex-wrap align-items-center justify-content-between gap-2 mb-0 d-none"
-                role="alert"
-            >
-                <div>
-                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
-                    <span id="sample-rate-mismatch-text"></span>
-                </div>
-                <div class="d-flex align-items-center gap-2">
-                    <button id="btn-sample-rate-apply-suggestion" class="btn btn-warning btn-sm">
-                        {{ t.sample_rate_mismatch_apply_btn }}
-                    </button>
-                    <button type="button" class="btn-close" id="btn-sample-rate-mismatch-dismiss"></button>
-                </div>
-            </div>
         </div>
 
     </div>

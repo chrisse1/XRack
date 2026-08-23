@@ -17,20 +17,6 @@ let usbConnected = false;
 
 let recorderMonitoring = false;
 
-let sampleRateMismatchDismissed = false;
-let sampleRateMismatchSuggestion = 0;
-
-// Muss zur Backend-Zeitplanung passen (Application.rescan_audio_devices():
-// SampleRateMonitor.WINDOW_SECONDS [5s] + Timer-Puffer bis
-// stop_monitoring() [2s] + weiterer Versatz, bevor der eigentliche
-// Gerätescan erst NACH der Samplerate-Messung läuft [2,5s], plus
-// etwas Puffer für den arecord-Unterprozess selbst) - der
-// "Aktualisieren"-Knopf bleibt so lange sichtbar im Messzustand,
-// und die Geräteliste wird erst danach neu geladen, damit ein
-// inzwischen neu erkanntes Gerät auch tatsächlich schon in der
-// Auswahl auftaucht.
-const SAMPLE_RATE_CHECK_DURATION_MS = 8500;
-
 // Gerät/Kanäle dürfen während keiner laufenden Aufnahme,
 // Pegelprüfung oder Wiedergabe (Soundcheck oder Musik) geändert
 // werden.
@@ -86,7 +72,6 @@ async function updateStatus() {
         updateRecorder(data);
         updateMusicPlayer(data);
         updateBluetooth(data);
-        updateSampleRateMismatchBanner(data);
     } catch (error) {
         if (Date.now() - lastSuccessfulUpdate >= CONNECTION_LOST_THRESHOLD_MS) {
             showConnectionLostModal();
@@ -110,47 +95,6 @@ function hideConnectionLostModal() {
     bootstrap.Modal.getOrCreateInstance(modalElement).hide();
 }
 
-function updateSampleRateMismatchBanner(data) {
-    const banner = document.getElementById("sample-rate-mismatch-banner");
-    if (!banner) return;
-
-    if (!data.sample_rate_mismatch) {
-        sampleRateMismatchDismissed = false;
-        banner.classList.add("d-none");
-        return;
-    }
-
-    sampleRateMismatchSuggestion = data.sample_rate_suggested;
-
-    if (sampleRateMismatchDismissed) return;
-
-    document.getElementById("sample-rate-mismatch-text").textContent =
-        I18N.sample_rate_mismatch_message
-            .replace("{configured}", data.audio_sample_rate)
-            .replace("{measured}", data.sample_rate_measured)
-            .replace("{suggested}", data.sample_rate_suggested);
-
-    banner.classList.remove("d-none");
-}
-
-document.getElementById("btn-sample-rate-mismatch-dismiss").addEventListener("click", () => {
-    sampleRateMismatchDismissed = true;
-    document.getElementById("sample-rate-mismatch-banner").classList.add("d-none");
-});
-
-document.getElementById("btn-sample-rate-apply-suggestion").addEventListener("click", async () => {
-    if (!sampleRateMismatchSuggestion) return;
-
-    await fetch("/api/settings/sample_rate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sample_rate: sampleRateMismatchSuggestion })
-    });
-
-    sampleRateMismatchDismissed = true;
-    document.getElementById("sample-rate-mismatch-banner").classList.add("d-none");
-});
-
 function updateSystemStats(data) {
     document.getElementById("hostname").textContent = data.hostname;
     document.getElementById("cpu").textContent = data.cpu + " %";
@@ -165,17 +109,10 @@ function updateAudioStatus(data) {
         : `<i class="bi bi-x-circle-fill text-danger"></i> ${data.audio_device}`;
 
     const audioInfo = document.getElementById("audio-info");
-    audioInfo.classList.remove("text-secondary", "text-warning");
-    audioInfo.classList.add(data.sample_rate_mismatch ? "text-warning" : "text-secondary");
     if (data.audio_connected) {
-        let measuredPart = "";
-        if (data.sample_rate_measured) {
-            const measuredKhz = (data.sample_rate_measured / 1000).toFixed(1);
-            measuredPart = ` (${I18N.audio_info_measured_rate_label}: ${measuredKhz} kHz)`;
-        }
         audioInfo.textContent =
             `${data.audio_channels} Ch • ` +
-            `${data.audio_sample_rate / 1000} kHz${measuredPart} • ` +
+            `${data.audio_sample_rate / 1000} kHz • ` +
             `${data.audio_sample_bits} Bit • ` +
             data.audio_formats.join(", ");
     } else {
@@ -432,15 +369,7 @@ async function loadAudioDevices() {
 
 async function rescanAudioDevices() {
     const button = document.getElementById("audio-rescan");
-    const icon = document.getElementById("audio-rescan-icon");
     button.disabled = true;
-
-    //
-    // Eine zuvor weggeklickte Mismatch-Warnung soll bei einer erneut
-    // angestoßenen Prüfung wieder erscheinen können, auch wenn die
-    // Abweichung unverändert fortbesteht.
-    //
-    sampleRateMismatchDismissed = false;
 
     const response = await fetch("/api/audio/rescan", { method: "POST" });
     const result = await response.json();
@@ -448,29 +377,7 @@ async function rescanAudioDevices() {
 
     await loadAudioDevices();
     await refreshDashboard();
-
-    //
-    // Die Samplerate-Messung läuft im Hintergrund noch einige
-    // Sekunden weiter (siehe Application.check_sample_rate()) - der
-    // Knopf bleibt so lange im Mess-Zustand, statt sofort wieder
-    // normal nutzbar zu wirken, während im Hintergrund noch kein
-    // Ergebnis vorliegt.
-    //
-    icon.className = "spinner-border spinner-border-sm";
-    button.title = I18N.audio_rescan_measuring_title;
-
-    setTimeout(async () => {
-        //
-        // Der eigentliche Gerätescan lief serverseitig erst zeitversetzt
-        // NACH der Samplerate-Messung (siehe Application.rescan_audio_
-        // devices()) - jetzt ist er fertig, die Auswahlliste kann ein
-        // inzwischen neu angeschlossenes Gerät enthalten.
-        //
-        await loadAudioDevices();
-        icon.className = "bi bi-arrow-clockwise";
-        button.title = button.dataset.defaultTitle;
-        button.disabled = false;
-    }, SAMPLE_RATE_CHECK_DURATION_MS);
+    button.disabled = false;
 }
 
 // ============================================================

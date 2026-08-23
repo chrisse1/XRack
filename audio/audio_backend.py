@@ -10,7 +10,6 @@ import alsaaudio
 
 from audio.channel_extractor import ChannelExtractor
 from audio.models import AudioDevice, DiagnosticItem
-from audio.sample_rate_monitor import SampleRateMonitor
 
 
 class AudioBackend:
@@ -30,7 +29,6 @@ class AudioBackend:
         self._period_size = 0
         self._format = None
         self._extractor: ChannelExtractor | None = None
-        self._rate_monitor = SampleRateMonitor()
 
     # ---------------------------------------------------------
     # Properties
@@ -56,22 +54,6 @@ class AudioBackend:
     @property
     def sample_format(self):
         return self._format
-
-    @property
-    def rate_mismatch(self) -> bool:
-        """
-        True, wenn die gemessene Ist-Rate signifikant von der
-        konfigurierten Samplerate abweicht (siehe SampleRateMonitor).
-        """
-        return self._rate_monitor.mismatch
-
-    @property
-    def measured_rate(self) -> int:
-        return self._rate_monitor.measured_rate
-
-    @property
-    def suggested_rate(self) -> int:
-        return self._rate_monitor.suggested_rate
 
     @property
     def alsa_name(self) -> str:
@@ -117,7 +99,6 @@ class AudioBackend:
         self.device = device
 
         self._rate = rate if rate is not None else device.sample_rate
-        self._rate_monitor.reset(self._rate)
         self._native_channels = device.channels
         self._channels = (
             channels
@@ -190,24 +171,6 @@ class AudioBackend:
 
             return False
 
-    def restart_rate_measurement(self) -> None:
-        """
-        Startet ein neues Messfenster für die Ist-Samplerate, ohne
-        das Gerät neu zu öffnen (siehe
-        Application.check_sample_rate(), z.B. über den
-        "Aktualisieren"-Knopf ausgelöst). Ohne das würde ein noch
-        unfertiges Messfenster von einer früheren, länger
-        zurückliegenden Prüfung mit der aktuellen Zeit vermischt und
-        kurzzeitig einen völlig falschen Messwert liefern (Frames aus
-        Sekunden vor einer Pause, geteilt durch die inzwischen
-        vergangene reale Zeit).
-        """
-
-        if self._pcm is None:
-            return
-
-        self._rate_monitor.reset(self._rate)
-
     def close(self) -> None:
         """
         Schließt das Audiogerät.
@@ -218,8 +181,6 @@ class AudioBackend:
             self._pcm.close()
 
             self._pcm = None
-
-        self._rate_monitor.reset(0)
 
         self.device = None
 
@@ -243,8 +204,6 @@ class AudioBackend:
 
         if length <= 0:
             return None
-
-        self._rate_monitor.record(length)
 
         return self._extractor.extract(data)
 

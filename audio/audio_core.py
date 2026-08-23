@@ -76,35 +76,6 @@ class AudioCore:
         return self.backend.rate
 
     @property
-    def sample_rate_mismatch(self) -> bool:
-        """
-        True, wenn eine kurze Messung (siehe
-        Application.check_sample_rate()) eine signifikante Abweichung
-        von der konfigurierten Samplerate ergeben hat.
-        """
-
-        if not self.opened:
-            return False
-
-        return self.backend.rate_mismatch
-
-    @property
-    def measured_sample_rate(self) -> int:
-        return self.backend.measured_rate
-
-    @property
-    def suggested_sample_rate(self) -> int:
-        return self.backend.suggested_rate
-
-    def restart_sample_rate_measurement(self) -> None:
-        """
-        Siehe AudioBackend.restart_rate_measurement().
-        """
-
-        self.backend.restart_rate_measurement()
-
-
-    @property
     def sample_bits(self) -> int:
         """Bitauflösung."""
 

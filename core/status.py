@@ -39,9 +39,6 @@ class SystemStatus(BaseModel):
     audio_connected: bool = False
     audio_channels: int = 0
     audio_sample_rate: int = 0
-    sample_rate_mismatch: bool = False
-    sample_rate_measured: int = 0
-    sample_rate_suggested: int = 0
     audio_sample_bits: int = 0
     audio_formats: list[str] = []
     audio_core_open: bool = False

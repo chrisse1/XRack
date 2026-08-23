@@ -16,8 +16,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "audio_rescan_title": "Audiogeräte neu suchen",
         "audio_open_device": "Geöffnetes Gerät:",
         "audio_interface_fallback": "Audio Interface",
-        "audio_info_measured_rate_label": "erkannt",
-        "audio_rescan_measuring_title": "Prüfe Samplerate - bitte einige Sekunden warten...",
         "btn_usb_eject": "USB-Stick auswerfen",
         "confirm_usb_eject": "USB-Stick jetzt auswerfen?",
         "alert_usb_eject_success": "USB-Stick kann jetzt entfernt werden.",
@@ -142,12 +140,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Falsch eingestellt klingt Musik/Aufnahme zu schnell oder "
             "zu langsam."
         ),
-        "sample_rate_mismatch_message": (
-            "Das Interface scheint tatsächlich mit ca. {measured} Hz "
-            "zu laufen, konfiguriert sind aber {configured} Hz. "
-            "Vorschlag: {suggested} Hz."
-        ),
-        "sample_rate_mismatch_apply_btn": "Vorschlag übernehmen",
         "settings_port_label": "Port",
         "settings_port_hint": "Wird erst nach einem Neustart wirksam.",
         "settings_recording_label": "Aufnahmename",
@@ -285,8 +277,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "audio_rescan_title": "Rescan audio devices",
         "audio_open_device": "Connected device:",
         "audio_interface_fallback": "Audio Interface",
-        "audio_info_measured_rate_label": "detected",
-        "audio_rescan_measuring_title": "Checking sample rate - please wait a few seconds...",
         "btn_usb_eject": "Eject USB drive",
         "confirm_usb_eject": "Eject the USB drive now?",
         "alert_usb_eject_success": "The USB drive can now be removed.",
@@ -410,12 +400,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "XRack cannot detect it automatically. If set wrong, "
             "music/recordings will sound too fast or too slow."
         ),
-        "sample_rate_mismatch_message": (
-            "The interface appears to actually be running at approx. "
-            "{measured} Hz, but {configured} Hz is configured. "
-            "Suggestion: {suggested} Hz."
-        ),
-        "sample_rate_mismatch_apply_btn": "Apply suggestion",
         "settings_port_label": "Port",
         "settings_port_hint": "Takes effect after a restart.",
         "settings_recording_label": "Recording name",
