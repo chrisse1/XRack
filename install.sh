@@ -366,6 +366,7 @@ configure_wifi() {
     XRACK_WLAN_CLIENT_SSID=""
     XRACK_WLAN_AP_SSID=""
     XRACK_WLAN_BRIDGE=""
+    XRACK_WLAN_SHARE_READY=""
 
     if [ -t 0 ] && command -v nmcli >/dev/null 2>&1; then
 
@@ -482,6 +483,26 @@ configure_wifi() {
 
                             sudo nmcli connection up "XRack-Home" ifname "${CLIENT_IFACE}" \
                                 || echo "$(L "Warnung: Verbindung zu '${HOME_SSID}' konnte nicht sofort hergestellt werden (SSID/Passwort prüfen)." "Warning: could not connect to '${HOME_SSID}' immediately (check SSID/password).")"
+
+                            #
+                            # Zusätzliche, standardmäßig inaktive Möglichkeit:
+                            # Ethernet-Port über die Heimnetz-Verbindung per NAT
+                            # freigeben, statt zu bridgen - eine echte Bridge über
+                            # eine WLAN-Client-Verbindung funktioniert bei den
+                            # meisten Heim-Routern nicht zuverlässig (kein
+                            # 4-Adress-WDS), siehe scripts/xrack-share-toggle.sh.
+                            # Aktivierung später im Einstellungen-Modal;
+                            # schließt sich dort mit der Ethernet+AP-Bridge aus.
+                            #
+
+                            sudo nmcli connection delete "XRack-Share-eth0" >/dev/null 2>&1 || true
+
+                            if sudo nmcli connection add type ethernet ifname eth0 con-name "XRack-Share-eth0" \
+                                ipv4.method shared connection.autoconnect no >/dev/null; then
+                                XRACK_WLAN_SHARE_READY="ja"
+                            else
+                                echo "$(L "Warnung: Profil für die Ethernet+Heimnetz-Freigabe konnte nicht angelegt werden." "Warning: could not create the Ethernet+home network sharing profile.")"
+                            fi
                         else
                             echo "$(L "Warnung: WLAN-Client-Profil konnte nicht angelegt werden." "Warning: could not create the Wi-Fi client profile.")"
                         fi
@@ -749,6 +770,7 @@ configure_sudoers() {
         "${INSTALL_DIR}/scripts/xrack-net-home.sh" \
         "${INSTALL_DIR}/scripts/xrack-net-ap.sh" \
         "${INSTALL_DIR}/scripts/xrack-bridge-toggle.sh" \
+        "${INSTALL_DIR}/scripts/xrack-share-toggle.sh" \
         "${INSTALL_DIR}/scripts/xrack-bt-power.sh" \
         "${INSTALL_DIR}/scripts/xrack-bt-pair.sh" \
         "${INSTALL_DIR}/scripts/xrack-bt-forget.sh" \
@@ -764,6 +786,7 @@ ${INSTALL_DIR}/scripts/xrack-restart.sh, \
 ${INSTALL_DIR}/scripts/xrack-net-home.sh *, \
 ${INSTALL_DIR}/scripts/xrack-net-ap.sh *, \
 ${INSTALL_DIR}/scripts/xrack-bridge-toggle.sh *, \
+${INSTALL_DIR}/scripts/xrack-share-toggle.sh *, \
 ${INSTALL_DIR}/scripts/xrack-bt-power.sh *, \
 ${INSTALL_DIR}/scripts/xrack-bt-pair.sh, \
 ${INSTALL_DIR}/scripts/xrack-bt-forget.sh *, \
@@ -854,6 +877,10 @@ print_summary() {
     if [ "${XRACK_WLAN_BRIDGE}" = "ja" ]; then
         echo "$(L "Ethernet+AP gebridged:    eth0 (Mischpult) und Access Point im selben Netz (br0)" "Ethernet+AP bridged:      eth0 (mixing console) and access point on the same network (br0)")"
         echo "$(L "                          (wird erst nach einem Neustart aktiv, siehe unten)" "                          (only active after a restart, see below)")"
+    fi
+
+    if [ "${XRACK_WLAN_SHARE_READY}" = "ja" ]; then
+        echo "$(L "Ethernet+Heimnetz-Freigabe verfügbar (im Einstellungen-Modal aktivierbar, aktuell aus)." "Ethernet+home network sharing available (enable it in the Settings modal, currently off).")"
     fi
 
     if [ -n "${XRACK_WLAN_CLIENT_SSID}" ] || [ -n "${XRACK_WLAN_AP_SSID}" ]; then

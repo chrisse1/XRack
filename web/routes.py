@@ -67,6 +67,9 @@ class WifiCredentials(BaseModel):
 class BridgeSelection(BaseModel):
     enabled: bool
 
+class ShareSelection(BaseModel):
+    enabled: bool
+
 class PinVerifySelection(BaseModel):
     pin: str
 
@@ -647,6 +650,24 @@ async def set_bridge(
     application = request.app.state.application
 
     success, message = application.set_bridge(
+        selection.enabled
+    )
+
+    return {
+        "success": success,
+        "message": message,
+    }
+
+
+@router.post("/api/settings/share")
+async def set_share(
+    selection: ShareSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.set_share(
         selection.enabled
     )
 

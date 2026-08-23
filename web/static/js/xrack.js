@@ -1741,6 +1741,27 @@ function applyWlanSettings(wlan) {
         bridgeNotConfigured.classList.remove("d-none");
         bridgeField.classList.add("d-none");
     }
+
+    const shareNotConfigured = document.getElementById("settings-share-not-configured");
+    const shareField = document.getElementById("settings-share-field");
+
+    if (wlan.share_configured) {
+        shareNotConfigured.classList.add("d-none");
+        shareField.classList.remove("d-none");
+        document.getElementById("settings-share-toggle").checked = wlan.share_enabled;
+    } else {
+        shareNotConfigured.classList.remove("d-none");
+        shareField.classList.add("d-none");
+    }
+
+    const consoleIpField = document.getElementById("settings-console-ip-field");
+
+    if (wlan.console_ip) {
+        document.getElementById("settings-console-ip-value").textContent = wlan.console_ip;
+        consoleIpField.classList.remove("d-none");
+    } else {
+        consoleIpField.classList.add("d-none");
+    }
 }
 
 function toggleConfiguredSection(prefix, configured) {
@@ -1874,6 +1895,7 @@ async function saveRecordingPrefix() {
 document.getElementById("btn-settings-home-save").addEventListener("click", saveHomeWifi);
 document.getElementById("btn-settings-ap-save").addEventListener("click", saveApWifi);
 document.getElementById("settings-bridge-toggle").addEventListener("change", toggleBridge);
+document.getElementById("settings-share-toggle").addEventListener("change", toggleShare);
 
 document.querySelectorAll(".settings-password-toggle").forEach((button) => {
     button.addEventListener("click", () => togglePasswordVisibility(button));
@@ -1964,6 +1986,37 @@ async function toggleBridge(event) {
     }
 
     alert(I18N.settings_saved);
+    // Schließt sich mit der Heimnetz-Freigabe aus - deren Schalter
+    // kann sich dabei im Hintergrund mit geändert haben.
+    await loadSettings();
+}
+
+async function toggleShare(event) {
+    const enabled = event.target.checked;
+    const confirmText = enabled ? I18N.confirm_share_on : I18N.confirm_share_off;
+
+    if (!confirm(confirmText)) {
+        event.target.checked = !enabled;
+        return;
+    }
+
+    const response = await fetch("/api/settings/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled })
+    });
+    const result = await response.json();
+
+    if (!result.success) {
+        alert(I18N.alert_settings_change_failed.replace("{message}", result.message || ""));
+        event.target.checked = !enabled;
+        return;
+    }
+
+    alert(I18N.settings_saved);
+    // Schließt sich mit der Ethernet+AP-Bridge aus - deren Schalter
+    // kann sich dabei im Hintergrund mit geändert haben.
+    await loadSettings();
 }
 
 // ============================================================

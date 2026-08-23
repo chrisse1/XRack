@@ -177,6 +177,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Verbindet ein per Kabel angeschlossenes Mischpult mit dem "
             "Access Point, damit Apps es finden."
         ),
+        "settings_share_title": "Ethernet+Heimnetz-Freigabe",
+        "settings_share_hint": (
+            "Gibt Geräten am Ethernet-Port über eine eigene IP-Adresse "
+            "Zugriff auf das, was über die Heimnetz-Verbindung "
+            "erreichbar ist (Internetfreigabe, keine echte Bridge - "
+            "schließt sich mit der Ethernet+AP-Bridge aus)."
+        ),
+        "settings_console_ip_title": "Aktuelle IP der angeschlossenen Konsole",
         "settings_wifi_hint": (
             "SSID und Passwort werden beim Speichern immer beide neu "
             "gesetzt."
@@ -200,6 +208,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "confirm_bridge_off": (
             "Bridge ausschalten? Die Verbindung kann dabei kurz "
+            "unterbrochen werden."
+        ),
+        "confirm_share_on": (
+            "Freigabe einschalten? Die Verbindung kann dabei kurz "
+            "unterbrochen werden."
+        ),
+        "confirm_share_off": (
+            "Freigabe ausschalten? Die Verbindung kann dabei kurz "
             "unterbrochen werden."
         ),
         "alert_settings_change_failed": "Änderung fehlgeschlagen: {message}",
@@ -413,6 +429,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Connects a mixing console plugged in via Ethernet with the "
             "access point, so apps can find it."
         ),
+        "settings_share_title": "Ethernet+home network sharing",
+        "settings_share_hint": (
+            "Gives devices on the Ethernet port their own IP address "
+            "with access to whatever is reachable via the home network "
+            "connection (internet sharing, not a real bridge - "
+            "mutually exclusive with the Ethernet+AP bridge)."
+        ),
+        "settings_console_ip_title": "Current IP of the connected console",
         "settings_wifi_hint": (
             "SSID and password are always both set anew when saving."
         ),
@@ -435,6 +459,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "confirm_bridge_off": (
             "Turn the bridge off? The connection may briefly drop while "
+            "this happens."
+        ),
+        "confirm_share_on": (
+            "Turn sharing on? The connection may briefly drop while "
+            "this happens."
+        ),
+        "confirm_share_off": (
+            "Turn sharing off? The connection may briefly drop while "
             "this happens."
         ),
         "alert_settings_change_failed": "Change failed: {message}",

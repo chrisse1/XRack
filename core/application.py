@@ -921,6 +921,13 @@ class Application:
 
         return self.wlan_control.set_bridge(enabled)
 
+    def set_share(self, enabled: bool) -> tuple[bool, str]:
+        """
+        Schaltet die Ethernet+Heimnetz-Freigabe an oder aus.
+        """
+
+        return self.wlan_control.set_share(enabled)
+
     def get_bluetooth_status(self) -> dict:
         """
         Liefert den aktuellen Bluetooth-Status fürs Webinterface.

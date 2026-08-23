@@ -95,6 +95,47 @@ class WlanControl:
 
         return output.strip() or None
 
+    def get_connected_client_ip(self, interface: str) -> str | None:
+        """
+        Liefert die IP-Adresse des zuletzt über `interface`
+        erreichbaren Geräts (z.B. das per Ethernet angeschlossene
+        Mischpult) aus der Nachbartabelle (ARP) - ein normaler,
+        unprivilegierter Befehl, kein sudo nötig.
+        """
+
+        try:
+
+            result = subprocess.run(
+                ["ip", "-4", "neigh", "show", "dev", interface],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+        except Exception:
+            return None
+
+        if result.returncode != 0:
+            return None
+
+        #
+        # Format je Zeile: "<ip> dev <iface> lladdr <mac> <state>".
+        # Nur Zustände mit einer tatsächlich (noch) gültigen Zuordnung
+        # zählen - FAILED/INCOMPLETE bedeuten "aktuell nicht
+        # erreichbar" und werden ignoriert.
+        #
+        for line in result.stdout.splitlines():
+
+            parts = line.split()
+
+            if not parts:
+                continue
+
+            if parts[-1] in ("REACHABLE", "STALE", "DELAY", "PROBE", "PERMANENT"):
+                return parts[0]
+
+        return None
+
     def get_status(self) -> dict:
         """
         Liefert den aktuellen (nicht-geheimen) WLAN-Status fürs
@@ -108,10 +149,23 @@ class WlanControl:
                 "ap_ssid": None,
                 "bridge_configured": False,
                 "bridge_enabled": False,
+                "share_configured": False,
+                "share_enabled": False,
+                "console_ip": None,
             }
 
         names = self.connection_names()
         active = self.active_connection_names()
+
+        bridge_enabled = "XRack-Bridge" in active
+        share_enabled = "XRack-Share-eth0" in active
+
+        console_ip = None
+
+        if bridge_enabled:
+            console_ip = self.get_connected_client_ip("br0")
+        elif share_enabled:
+            console_ip = self.get_connected_client_ip("eth0")
 
         return {
             "available": True,
@@ -126,7 +180,10 @@ class WlanControl:
                 else None
             ),
             "bridge_configured": "XRack-Bridge" in names,
-            "bridge_enabled": "XRack-Bridge" in active,
+            "bridge_enabled": bridge_enabled,
+            "share_configured": "XRack-Share-eth0" in names,
+            "share_enabled": share_enabled,
+            "console_ip": console_ip,
         }
 
     def _run_script(self, name: str, *args: str) -> tuple[bool, str]:
@@ -191,10 +248,27 @@ class WlanControl:
 
     def set_bridge(self, enabled: bool) -> tuple[bool, str]:
         """
-        Schaltet die Ethernet+Access-Point-Bridge an oder aus.
+        Schaltet die Ethernet+Access-Point-Bridge an oder aus. Schließt
+        sich mit der Ethernet+Heimnetz-Freigabe (set_share()) aus -
+        beide beanspruchen dasselbe Ethernet-Interface, das
+        Umschalt-Skript deaktiviert die jeweils andere Betriebsart
+        automatisch mit.
         """
 
         return self._run_script(
             "xrack-bridge-toggle.sh",
+            "on" if enabled else "off",
+        )
+
+    def set_share(self, enabled: bool) -> tuple[bool, str]:
+        """
+        Schaltet die Ethernet+Heimnetz-Freigabe an oder aus (NAT statt
+        echter Bridge - siehe scripts/xrack-share-toggle.sh für die
+        Begründung). Schließt sich mit der Ethernet+Access-Point-
+        Bridge (set_bridge()) aus.
+        """
+
+        return self._run_script(
+            "xrack-share-toggle.sh",
             "on" if enabled else "off",
         )

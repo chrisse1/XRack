@@ -4,6 +4,10 @@
 # install.sh) an oder aus. Setzt voraus, dass sie schon einmal per
 # install.sh eingerichtet wurde - baut sie nicht neu auf.
 #
+# Schließt sich mit der Ethernet+Heimnetz-Freigabe aus (beide
+# beanspruchen eth0) - deshalb wird hier die Freigabe mit
+# abgeschaltet, falls aktiv.
+#
 # Wird ausschließlich per sudo durch XRack selbst aufgerufen (siehe
 # core/wlan_control.py), nie interaktiv. $1 = "on" oder "off".
 #
@@ -31,6 +35,16 @@ if [ "${MODE}" = "on" ]; then
         echo "XRack-Bridge ist nicht eingerichtet (install.sh mit WLAN+Bridge-Setup ausführen)." >&2
         exit 1
     fi
+
+    #
+    # Exklusiv zur Ethernet+Heimnetz-Freigabe - beide wollen eth0 für
+    # sich.
+    #
+    if nmcli -t -f NAME connection show --active | grep -qx "XRack-Share-eth0"; then
+        nmcli connection down "XRack-Share-eth0" >/dev/null 2>&1 || true
+    fi
+
+    nmcli connection modify "XRack-Share-eth0" connection.autoconnect no 2>/dev/null || true
 
     ETH0_CON="$(nmcli -t -f NAME,DEVICE connection show | awk -F: '$2=="eth0"{print $1; exit}')"
 
