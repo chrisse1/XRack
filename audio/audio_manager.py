@@ -21,10 +21,26 @@ class AudioManager:
     def __init__(self):
         self.devices: list[AudioDevice] = []
 
-    def scan(self) -> None:
+    def scan(self, skip_probe_id: str | None = None) -> None:
         """
         Scan the system for available audio devices.
+
+        `skip_probe_id` (Geräte-ID, z.B. "hw:0,0") überspringt die
+        Hardware-Abfrage per "arecord --dump-hw-params" für genau
+        dieses eine Gerät und übernimmt stattdessen seine zuvor
+        bekannten Eigenschaften unverändert. Wird für das gerade
+        aktiv geöffnete Gerät genutzt (siehe
+        Application.check_sample_rate() / web/routes.py rescan) - bei
+        manchen USB-Audiointerfaces bringt eine gleichzeitige externe
+        Abfrage per arecord den ALREADY offenen, exklusiven ALSA-
+        Handle kurzzeitig durcheinander ("No such device"), während
+        gerade eine Aufnahme/Pegelprüfung/Samplerate-Messung darüber
+        liest.
         """
+
+        previous_devices = {
+            device.id: device for device in self.devices
+        }
 
         self.devices.clear()
 
@@ -47,7 +63,16 @@ class AudioManager:
                 name=match.group(2),
             )
 
-            self.probe_device(device)
+            previous = previous_devices.get(device.id)
+
+            if device.id == skip_probe_id and previous is not None:
+                device.channels = previous.channels
+                device.sample_rate = previous.sample_rate
+                device.formats = previous.formats
+                device.sample_bits = previous.sample_bits
+                device.properties = previous.properties
+            else:
+                self.probe_device(device)
 
             self.devices.append(device)
             

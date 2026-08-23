@@ -225,7 +225,31 @@ class Recorder:
 
         while self._active:
 
-            data = self.backend.read()
+            try:
+                data = self.backend.read()
+            except Exception as exc:
+                #
+                # Ohne diesen Fang würde eine unerwartete ALSA-
+                # Ausnahme (z.B. ein kurzer "No such device"-Aussetzer,
+                # wie er durch eine gleichzeitige Geräteabfrage per
+                # arecord bei manchen USB-Interfaces auftreten kann)
+                # den Thread abstürzen lassen, OHNE self._active auf
+                # False zurückzusetzen - monitoring/recording blieben
+                # dann für immer "True" hängen und blockierten jede
+                # weitere Aufnahme/Pegelprüfung/Samplerate-Prüfung bis
+                # zum nächsten Neustart von XRack.
+                #
+                self.logger.error(
+                    "Recorder-Thread: Lesefehler vom Audio-Interface, "
+                    "wird beendet: %s",
+                    exc,
+                )
+                self._active = False
+                self._write_to_file = False
+                self.meter = None
+                if self.writer is not None:
+                    self.writer.close()
+                break
 
             if data is None:
 

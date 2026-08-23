@@ -121,7 +121,13 @@ async def rescan_audio_devices(
 
     application = request.app.state.application
 
-    application.audio_manager.scan()
+    application.audio_manager.scan(
+        skip_probe_id=(
+            application.selected_audio_device.id
+            if application.selected_audio_device is not None
+            else None
+        )
+    )
 
     application.check_sample_rate()
 
