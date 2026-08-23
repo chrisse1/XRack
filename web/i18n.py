@@ -186,6 +186,17 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "settings_console_ip_title": "Aktuelle IP der angeschlossenen Konsole",
         "settings_console_ip_not_found": "Noch nicht erkannt.",
+        "settings_port_forward_title": "Konsole aus dem Heimnetz erreichbar machen",
+        "settings_port_forward_hint": (
+            "Leitet UDP 10023 (X32-Edit) und UDP 10024 (X-AIR-Edit/"
+            "Mixing Station) von XRacks eigener IP im Heimnetz zur "
+            "Konsole durch - in der Steuerungs-App also die IP von "
+            "XRack eintragen, nicht die der Konsole."
+        ),
+        "settings_port_forward_unavailable": (
+            "Erst Bridge oder Freigabe aktivieren und Konsole per "
+            "Kabel anschließen."
+        ),
         "settings_wifi_hint": (
             "SSID und Passwort werden beim Speichern immer beide neu "
             "gesetzt."
@@ -219,6 +230,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Freigabe ausschalten? Die Verbindung kann dabei kurz "
             "unterbrochen werden."
         ),
+        "confirm_port_forward_on": "Portweiterleitung einschalten?",
+        "confirm_port_forward_off": "Portweiterleitung ausschalten?",
         "alert_settings_change_failed": "Änderung fehlgeschlagen: {message}",
         "alert_change_failed": "Änderung fehlgeschlagen.",
 
@@ -439,6 +452,17 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "settings_console_ip_title": "Current IP of the connected console",
         "settings_console_ip_not_found": "Not detected yet.",
+        "settings_port_forward_title": "Make console reachable from home network",
+        "settings_port_forward_hint": (
+            "Forwards UDP 10023 (X32-Edit) and UDP 10024 (X-AIR-Edit/"
+            "Mixing Station) from XRack's own home network IP to the "
+            "console - point your control app at XRack's IP, not the "
+            "console's."
+        ),
+        "settings_port_forward_unavailable": (
+            "Enable Bridge or Sharing first, and connect the console "
+            "via cable."
+        ),
         "settings_wifi_hint": (
             "SSID and password are always both set anew when saving."
         ),
@@ -471,6 +495,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Turn sharing off? The connection may briefly drop while "
             "this happens."
         ),
+        "confirm_port_forward_on": "Turn on port forwarding?",
+        "confirm_port_forward_off": "Turn off port forwarding?",
         "alert_settings_change_failed": "Change failed: {message}",
         "alert_change_failed": "Change failed.",
 

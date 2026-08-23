@@ -73,6 +73,11 @@ class Application:
             1,
         )
 
+        self.port_forward_enabled = self.state_store.get(
+            "port_forward_enabled",
+            False,
+        )
+
         self.recorder = Recorder(
             self.audio_core.backend
         )
@@ -160,6 +165,28 @@ class Application:
             self.bluetooth_control.set_power(False)
 
         self.check_sample_rate()
+
+        #
+        # War die Portweiterleitung vor einem Neustart aktiv, wird sie
+        # hier wiederhergestellt (iptables-Regeln überleben einen
+        # Neustart nicht). Ist die Konsolen-IP gerade noch nicht
+        # bekannt (z.B. Lease noch nicht erneuert), bleibt es beim
+        # gemerkten "an" - ein erneuter Versuch über den
+        # "Aktualisieren"-Knopf oder Neu-Speichern der Einstellung
+        # holt es nach.
+        #
+        if self.port_forward_enabled:
+
+            console_ip = self.wlan_control.get_status().get("console_ip")
+
+            if console_ip:
+                self.wlan_control.set_port_forward(True, console_ip)
+            else:
+                self.logger.warning(
+                    "Portweiterleitung war aktiv, aber aktuell keine "
+                    "Konsolen-IP bekannt - wird beim nächsten Erkennen "
+                    "nicht automatisch nachgeholt."
+                )
 
     def update_status(self) -> None:
         """Aktualisiert den aktuellen Systemstatus."""
@@ -886,7 +913,11 @@ class Application:
         fürs Einstellungs-Modal.
         """
 
-        return self.wlan_control.get_status()
+        status = self.wlan_control.get_status()
+
+        status["port_forward_enabled"] = self.port_forward_enabled
+
+        return status
 
     def set_home_wifi(self, ssid: str, password: str) -> tuple[bool, str]:
         """
@@ -927,6 +958,35 @@ class Application:
         """
 
         return self.wlan_control.set_share(enabled)
+
+    def set_port_forward(self, enabled: bool) -> tuple[bool, str]:
+        """
+        Schaltet die Portweiterleitung (macht die per Bridge/Freigabe
+        angeschlossene Konsole aus dem Heimnetz erreichbar) an oder
+        aus.
+        """
+
+        console_ip = None
+
+        if enabled:
+
+            console_ip = self.wlan_control.get_status().get("console_ip")
+
+            if not console_ip:
+                return False, (
+                    "Keine Konsolen-IP bekannt - Bridge/Freigabe "
+                    "aktiv und Konsole per Kabel angeschlossen?"
+                )
+
+        success, message = self.wlan_control.set_port_forward(
+            enabled, console_ip
+        )
+
+        if success:
+            self.port_forward_enabled = enabled
+            self.state_store.set("port_forward_enabled", enabled)
+
+        return success, message
 
     def get_bluetooth_status(self) -> dict:
         """

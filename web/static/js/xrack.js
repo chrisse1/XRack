@@ -1763,6 +1763,18 @@ function applyWlanSettings(wlan) {
     } else {
         consoleIpField.classList.add("d-none");
     }
+
+    const portForwardNotAvailable = document.getElementById("settings-port-forward-not-configured");
+    const portForwardField = document.getElementById("settings-port-forward-field");
+
+    if (wlan.console_ip || wlan.port_forward_enabled) {
+        portForwardNotAvailable.classList.add("d-none");
+        portForwardField.classList.remove("d-none");
+        document.getElementById("settings-port-forward-toggle").checked = wlan.port_forward_enabled;
+    } else {
+        portForwardNotAvailable.classList.remove("d-none");
+        portForwardField.classList.add("d-none");
+    }
 }
 
 function toggleConfiguredSection(prefix, configured) {
@@ -1897,6 +1909,7 @@ document.getElementById("btn-settings-home-save").addEventListener("click", save
 document.getElementById("btn-settings-ap-save").addEventListener("click", saveApWifi);
 document.getElementById("settings-bridge-toggle").addEventListener("change", toggleBridge);
 document.getElementById("settings-share-toggle").addEventListener("change", toggleShare);
+document.getElementById("settings-port-forward-toggle").addEventListener("change", togglePortForward);
 
 document.querySelectorAll(".settings-password-toggle").forEach((button) => {
     button.addEventListener("click", () => togglePasswordVisibility(button));
@@ -2018,6 +2031,31 @@ async function toggleShare(event) {
     // Schließt sich mit der Ethernet+AP-Bridge aus - deren Schalter
     // kann sich dabei im Hintergrund mit geändert haben.
     await loadSettings();
+}
+
+async function togglePortForward(event) {
+    const enabled = event.target.checked;
+    const confirmText = enabled ? I18N.confirm_port_forward_on : I18N.confirm_port_forward_off;
+
+    if (!confirm(confirmText)) {
+        event.target.checked = !enabled;
+        return;
+    }
+
+    const response = await fetch("/api/settings/port_forward", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled })
+    });
+    const result = await response.json();
+
+    if (!result.success) {
+        alert(I18N.alert_settings_change_failed.replace("{message}", result.message || ""));
+        event.target.checked = !enabled;
+        return;
+    }
+
+    alert(I18N.settings_saved);
 }
 
 // ============================================================

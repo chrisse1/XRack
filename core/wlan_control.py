@@ -323,3 +323,26 @@ class WlanControl:
             "xrack-share-toggle.sh",
             "on" if enabled else "off",
         )
+
+    def set_port_forward(
+        self,
+        enabled: bool,
+        console_ip: str | None,
+    ) -> tuple[bool, str]:
+        """
+        Schaltet die Portweiterleitung (macht die per Bridge/Freigabe
+        angeschlossene Konsole über UDP 10023/10024 aus dem Heimnetz
+        erreichbar) an oder aus. `console_ip` ist beim Einschalten
+        Pflicht (siehe get_status()["console_ip"]).
+        """
+
+        if enabled:
+
+            if not console_ip:
+                return False, "Keine Konsolen-IP bekannt."
+
+            return self._run_script(
+                "xrack-port-forward.sh", "on", console_ip
+            )
+
+        return self._run_script("xrack-port-forward.sh", "off")

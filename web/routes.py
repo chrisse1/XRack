@@ -70,6 +70,9 @@ class BridgeSelection(BaseModel):
 class ShareSelection(BaseModel):
     enabled: bool
 
+class PortForwardSelection(BaseModel):
+    enabled: bool
+
 class PinVerifySelection(BaseModel):
     pin: str
 
@@ -668,6 +671,24 @@ async def set_share(
     application = request.app.state.application
 
     success, message = application.set_share(
+        selection.enabled
+    )
+
+    return {
+        "success": success,
+        "message": message,
+    }
+
+
+@router.post("/api/settings/port_forward")
+async def set_port_forward(
+    selection: PortForwardSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.set_port_forward(
         selection.enabled
     )
 

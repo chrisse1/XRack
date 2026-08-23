@@ -578,6 +578,27 @@
                         </div>
                     </div>
 
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">
+                            {{ t.settings_port_forward_title }}
+                        </label>
+                        <div id="settings-port-forward-not-configured" class="text-muted small d-none">
+                            {{ t.settings_port_forward_unavailable }}
+                        </div>
+                        <div id="settings-port-forward-field" class="form-check form-switch">
+                            <input
+                                type="checkbox"
+                                role="switch"
+                                id="settings-port-forward-toggle"
+                                class="form-check-input"
+                            >
+                            <label class="form-check-label" for="settings-port-forward-toggle">
+                                {{ t.settings_port_forward_title }}
+                            </label>
+                        </div>
+                        <small class="text-body-secondary">{{ t.settings_port_forward_hint }}</small>
+                    </div>
+
                 </div>
 
             </div>
