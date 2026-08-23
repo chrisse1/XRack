@@ -1,4 +1,5 @@
 import json
+import shutil
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
@@ -901,9 +902,21 @@ async def recordings(request: Request):
         application.recorder.writer.directory.glob("*.w64"),
         reverse=True,
     ):
-        items.append(
-            get_recording_info(recording)
-        )
+        #
+        # Eine einzelne beschädigte/keine echte Wave64-Datei (z.B.
+        # durch einen fehlgeschlagenen Upload oder eine abgebrochene
+        # Aufnahme) darf nicht die gesamte Liste zum Absturz bringen.
+        #
+        try:
+            items.append(
+                get_recording_info(recording)
+            )
+        except Exception as exc:
+            application.logger.warning(
+                "Aufnahme %s übersprungen (keine gültige Wave64-Datei): %s",
+                recording.name,
+                exc,
+            )
 
     return items
     
@@ -1007,6 +1020,68 @@ async def delete_recordings(
     return {
         "deleted": deleted,
         "count": len(deleted),
+    }
+
+
+@router.post("/api/recordings/upload")
+async def upload_recordings(
+    request: Request,
+    files: list[UploadFile] = File(...),
+):
+    """
+    Lädt .w64-Aufnahmen ins Aufnahmeverzeichnis hoch - z.B. um eine
+    zuvor gesicherte Aufnahme wieder verfügbar zu machen. Andere
+    Formate werden abgelehnt, da die Aufnahmen-Karte (Liste,
+    Soundcheck-Wiedergabe) ausschließlich XRacks eigenes Wave64-
+    Format versteht (siehe reader/w64_reader.py).
+    """
+
+    application = request.app.state.application
+
+    directory = application.recorder.writer.directory
+
+    directory.mkdir(parents=True, exist_ok=True)
+
+    uploaded = []
+
+    for upload in files:
+
+        #
+        # Nur den reinen Dateinamen übernehmen (kein Pfad aus dem
+        # Upload verwenden) - wie bei /api/music/upload.
+        #
+        filename = Path(upload.filename).name
+
+        if not filename or Path(filename).suffix.lower() != ".w64":
+            continue
+
+        destination = directory / filename
+
+        with destination.open("wb") as target:
+            shutil.copyfileobj(upload.file, target)
+
+        #
+        # Header sofort prüfen, statt eine kaputte/keine echte
+        # Wave64-Datei stillschweigend im Verzeichnis liegen zu
+        # lassen, wo sie erst später (z.B. beim Laden der Liste)
+        # auffallen würde.
+        #
+        try:
+            AudioFile(destination).open()
+        except Exception as exc:
+            application.logger.warning(
+                "Hochgeladene Datei %s ist keine gültige Wave64-Datei, "
+                "wird verworfen: %s",
+                filename,
+                exc,
+            )
+            destination.unlink()
+            continue
+
+        uploaded.append(filename)
+
+    return {
+        "uploaded": uploaded,
     }
 
 

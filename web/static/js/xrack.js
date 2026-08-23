@@ -904,6 +904,92 @@ async function deleteSelectedRecordings() {
     await refreshDashboard();
 }
 
+// ------------------------------------------------------------
+// Aufnahmen hochladen (.w64)
+// ------------------------------------------------------------
+
+document.getElementById("recording-upload-input").addEventListener("change", uploadRecordingFiles);
+
+function uploadRecordingsWithProgress(formData) {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/recordings/upload");
+
+        xhr.upload.addEventListener("progress", (event) => {
+            if (event.lengthComputable) {
+                updateRecordingUploadProgress(event.loaded, event.total);
+            }
+        });
+
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    resolve(JSON.parse(xhr.responseText));
+                } catch (error) {
+                    reject(error);
+                }
+            } else {
+                reject(new Error(`Upload fehlgeschlagen (${xhr.status})`));
+            }
+        };
+
+        xhr.onerror = () => reject(new Error("Netzwerkfehler beim Upload"));
+
+        xhr.send(formData);
+    });
+}
+
+function updateRecordingUploadProgress(loaded, total) {
+    const wrapper = document.getElementById("recordingUploadProgressWrapper");
+    const bar = document.getElementById("recordingUploadProgressBar");
+    const label = document.getElementById("recordingUploadProgressLabel");
+    if (!wrapper || !bar) return;
+
+    wrapper.classList.remove("d-none");
+
+    const percent = total > 0 ? Math.round((loaded / total) * 100) : 0;
+    bar.style.width = percent + "%";
+
+    if (label) {
+        label.textContent = `${formatFileSize(loaded)} / ${formatFileSize(total)} (${percent}%)`;
+    }
+}
+
+function hideRecordingUploadProgress() {
+    const wrapper = document.getElementById("recordingUploadProgressWrapper");
+    if (wrapper) wrapper.classList.add("d-none");
+}
+
+async function uploadRecordingFiles(event) {
+    const input = event.target;
+    const files = input.files;
+    if (!files || files.length === 0) return;
+
+    const formData = new FormData();
+    for (const file of files) {
+        formData.append("files", file);
+    }
+
+    updateRecordingUploadProgress(0, 1);
+
+    try {
+        const result = await uploadRecordingsWithProgress(formData);
+        console.log(result);
+
+        if (result.uploaded.length === 0) {
+            alert(I18N.alert_no_files_uploaded);
+        }
+    } catch (error) {
+        console.error("Upload fehlgeschlagen:", error);
+        alert(I18N.alert_upload_failed);
+    } finally {
+        input.value = "";
+        hideRecordingUploadProgress();
+        await loadRecordings();
+        await refreshDashboard();
+    }
+}
+
 // ============================================================
 // 11. UTILITY FUNCTIONS
 // ============================================================
