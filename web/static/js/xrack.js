@@ -20,11 +20,16 @@ let recorderMonitoring = false;
 let sampleRateMismatchDismissed = false;
 let sampleRateMismatchSuggestion = 0;
 
-// Muss zur Backend-Messdauer passen (SampleRateMonitor.WINDOW_SECONDS
-// [5s] + Timer-Puffer [2s] in Application.check_sample_rate()) - der
+// Muss zur Backend-Zeitplanung passen (Application.rescan_audio_devices():
+// SampleRateMonitor.WINDOW_SECONDS [5s] + Timer-Puffer bis
+// stop_monitoring() [2s] + weiterer Versatz, bevor der eigentliche
+// Gerätescan erst NACH der Samplerate-Messung läuft [2,5s], plus
+// etwas Puffer für den arecord-Unterprozess selbst) - der
 // "Aktualisieren"-Knopf bleibt so lange sichtbar im Messzustand,
-// damit klar ist, dass das Ergebnis nicht sofort da ist.
-const SAMPLE_RATE_CHECK_DURATION_MS = 7500;
+// und die Geräteliste wird erst danach neu geladen, damit ein
+// inzwischen neu erkanntes Gerät auch tatsächlich schon in der
+// Auswahl auftaucht.
+const SAMPLE_RATE_CHECK_DURATION_MS = 8500;
 
 // Gerät/Kanäle dürfen während keiner laufenden Aufnahme,
 // Pegelprüfung oder Wiedergabe (Soundcheck oder Musik) geändert
@@ -454,7 +459,14 @@ async function rescanAudioDevices() {
     icon.className = "spinner-border spinner-border-sm";
     button.title = I18N.audio_rescan_measuring_title;
 
-    setTimeout(() => {
+    setTimeout(async () => {
+        //
+        // Der eigentliche Gerätescan lief serverseitig erst zeitversetzt
+        // NACH der Samplerate-Messung (siehe Application.rescan_audio_
+        // devices()) - jetzt ist er fertig, die Auswahlliste kann ein
+        // inzwischen neu angeschlossenes Gerät enthalten.
+        //
+        await loadAudioDevices();
         icon.className = "bi bi-arrow-clockwise";
         button.title = button.dataset.defaultTitle;
         button.disabled = false;

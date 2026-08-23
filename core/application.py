@@ -434,19 +434,22 @@ class Application:
 
         return True
 
-    def check_sample_rate(self) -> None:
+    def check_sample_rate(self) -> bool:
         """
         Löst eine kurze, einmalige Samplerate-Prüfung aus (beim Start
         von XRack und über den "Aktualisieren"-Knopf) - läuft bereits
         eine Pegelprüfung/Aufnahme, wird nichts unternommen, die
         laufende Session liefert ohnehin gerade frische Messdaten.
+
+        Gibt zurück, ob dieser Aufruf tatsächlich eine neue Prüfung
+        gestartet hat (siehe rescan_audio_devices()).
         """
 
         if self.selected_audio_device is None:
-            return
+            return False
 
         if self.recorder.monitoring or self.recorder.recording:
-            return
+            return False
 
         #
         # Ohne dies würde ein Messfenster von einer früheren Prüfung
@@ -457,12 +460,60 @@ class Application:
         self.audio_core.restart_sample_rate_measurement()
 
         if not self.recorder.start_monitoring():
-            return
+            return False
 
         threading.Timer(
             SampleRateMonitor.WINDOW_SECONDS + 2.0,
             self.recorder.stop_monitoring,
         ).start()
+
+        return True
+
+    def rescan_audio_devices(self) -> None:
+        """
+        Wird vom "Aktualisieren"-Knopf ausgelöst - erkennt neu
+        angeschlossene Audiogeräte (audio_manager.scan()) UND prüft
+        kurz die Samplerate (check_sample_rate()), aber zeitlich
+        sauber GETRENNT statt gleichzeitig.
+
+        Live-Diagnose auf echter Hardware hat gezeigt: Ein
+        arecord-Aufruf (durch scan(), auch nur die reine Listen-
+        Abfrage ohne Hardware-Parameter-Probe) reicht bei manchen
+        USB-Audiointerfaces aus, um den parallel aktiv lesenden ALSA-
+        Handle mit "No such device" abstürzen zu lassen - auch wenn
+        das gerade aktive Gerät dabei gar nicht selbst per
+        --dump-hw-params abgefragt wird (siehe AudioManager.scan()s
+        skip_probe_id). Der Gerätescan läuft deshalb entweder sofort
+        (wenn gerade keine Prüfung läuft), oder erst NACHDEM eine
+        gerade gestartete Prüfung ihr Messfenster wieder vollständig
+        beendet hat.
+        """
+
+        started_check = self.check_sample_rate()
+
+        def run_scan() -> None:
+            self.audio_manager.scan(
+                skip_probe_id=(
+                    self.selected_audio_device.id
+                    if self.selected_audio_device is not None
+                    else None
+                )
+            )
+
+        if started_check:
+            threading.Timer(
+                SampleRateMonitor.WINDOW_SECONDS + 2.5,
+                run_scan,
+            ).start()
+        elif not self.recorder.monitoring and not self.recorder.recording:
+            run_scan()
+        #
+        # Läuft bereits eine FREMDE Aufnahme/Pegelprüfung (nicht von
+        # diesem Aufruf gestartet), wird währenddessen gar nicht
+        # gescannt, um sie nicht zu gefährden - ihre Dauer ist
+        # unbekannt, ein zeitversetzter Scan könnte also ebenso gut
+        # noch mitten hineinlaufen.
+        #
 
     def select_audio_device(self, device_id: str) -> bool:
         """
