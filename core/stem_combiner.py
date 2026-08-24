@@ -12,9 +12,18 @@ Ergebnis ist dadurch garantiert mit reader/w64_reader.py kompatibel,
 im Gegensatz zu extern (z.B. per ffmpeg-Remux) erzeugten .w64-
 Dateien, die XRacks eigener, auf die selbstgeschriebene Struktur
 festgelegter Reader nicht zuverlässig lesen kann.
+
+Zum Sample-Format: XRacks Dateien enthalten real volle S32_LE-Samples.
+audio/audio_backend.py fordert zwar PCM_FORMAT_S24_LE an, wertet den
+Rückgabewert von setformat() aber nicht aus - die X-Serie bietet dieses
+Format über USB offenbar nicht an, sodass ALSA S32_LE liefert. Da
+Aufnahme und Wiedergabe dasselbe anfordern und dasselbe bekommen, hebt
+sich das im Betrieb auf und fällt nicht auf. ffmpeg liefert ebenfalls
+S32_LE, hier ist also gar keine Umrechnung nötig - die Rohblöcke werden
+direkt interleaved. (Eine Umrechnung auf 24 Bit war der Grund, warum
+frühere Übungsmixe rund 48 dB zu leise waren.)
 """
 
-import struct
 from pathlib import Path
 
 from player.track_decoder import TrackDecoder, probe_duration
@@ -30,55 +39,6 @@ class StemCombineError(Exception):
     Fehler während combine_stems() - die Nachricht ist für die
     Anzeige im Frontend gedacht.
     """
-
-
-def _s32_to_s24_container(raw: bytes) -> bytes:
-    """
-    Wandelt einen Block roher S32_LE-Samples (von TrackDecoder/ffmpeg)
-    in XRacks eigenes Format um: 24 Bit gültig in einem 4-Byte-
-    Container, siehe writer/w64_writer.py.
-
-    Wichtig: Der Wert wird als *vorzeichenbehafteter* 32-Bit-Wert
-    gepackt, das oberste Byte also vorzeichenrichtig gefüllt (0x00 bei
-    positiven, 0xFF bei negativen Samples) - genau so, wie ALSA es beim
-    Aufnehmen liefert (PCM_FORMAT_S24_LE, siehe audio/audio_backend.py)
-    und wie recorder/recorder.py es unverändert in die Datei schreibt.
-
-    Das oberste Byte einfach zu nullen wäre falsch: der Header
-    deklariert wBitsPerSample = 32 (nur ValidBitsPerSample ist 24),
-    weshalb DAWs und der ALSA-Wiedergabeweg das 4-Byte-Wort als
-    vorzeichenbehaftete 32-Bit-Zahl lesen. Ein genulltes oberstes Byte
-    macht daraus bei jedem negativen Sample eine große positive Zahl -
-    jede negative Halbwelle klappt um und das Ergebnis klingt stark
-    verzerrt, obwohl Tempo und Tonhöhe stimmen.
-
-    XRacks eigene Lesewege sind davon unabhängig, weil sie ohnehin mit
-    & 0xFFFFFF maskieren (siehe recorder/level_meter.py) - die unteren
-    drei Bytes sind in beiden Varianten identisch.
-    """
-
-    count = len(raw) // BYTES_PER_SAMPLE
-
-    out = bytearray(len(raw))
-
-    for i in range(count):
-
-        value = struct.unpack_from("<i", raw, i * BYTES_PER_SAMPLE)[0]
-
-        #
-        # Arithmetischer Shift -> Bereich [-2^23, 2^23-1]; "<i" zieht
-        # das Vorzeichen beim Packen auf das oberste Byte durch.
-        #
-        value24 = value >> 8
-
-        struct.pack_into(
-            "<i",
-            out,
-            i * BYTES_PER_SAMPLE,
-            value24,
-        )
-
-    return bytes(out)
 
 
 def combine_stems(
@@ -179,9 +139,13 @@ def combine_stems(
                     #
                     raw += bytes(block_bytes - len(raw))
 
-                per_source_blocks.append(
-                    _s32_to_s24_container(raw)
-                )
+                #
+                # Keine Umrechnung nötig: TrackDecoder/ffmpeg liefert
+                # bereits S32_LE - genau das Format, das auch beim
+                # Aufnehmen von ALSA kommt und unverändert in die Datei
+                # geschrieben wird (siehe Modul-Docstring oben).
+                #
+                per_source_blocks.append(raw)
 
             out_chunk = bytearray(
                 block_frames * channels * BYTES_PER_SAMPLE
