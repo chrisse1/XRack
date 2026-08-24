@@ -27,10 +27,38 @@ def sample_from_container(raw: bytes, offset: int) -> int:
     return value
 
 
+def expected_samples(frames: int, base_value: int) -> list[tuple[int, int]]:
+    """
+    Die erwarteten 24-Bit-Werte (links, rechts) je Frame - bewusst mit
+    *beiden Vorzeichen* und nahe Vollausschlag, damit ein falsch
+    gefülltes oberstes Container-Byte auffällt (siehe unten).
+    """
+
+    result = []
+
+    for i in range(frames):
+
+        magnitude = base_value + i
+
+        #
+        # Jedes zweite Frame negativ, und der rechte Kanal jeweils
+        # entgegengesetzt zum linken - so enthält jeder Kanal beide
+        # Vorzeichen.
+        #
+        sign = 1 if i % 2 == 0 else -1
+
+        left = sign * magnitude
+        right = -sign * (magnitude + 1000)
+
+        result.append((left, right))
+
+    return result
+
+
 def write_stereo_wav(path: Path, frames: int, base_value: int) -> None:
     """
     Erzeugt eine synthetische Stereo-WAV (32-Bit) mit vorhersagbaren
-    Werten - niedrigstes Byte bewusst 0, damit die S32->S24-Container-
+    Werten - die unteren 8 Bit bewusst 0, damit die S32->S24-Container-
     Konvertierung (`value >> 8`) verlustfrei rückgängig gemacht werden
     kann (kein Runden/Abschneiden bei der Prüfung nötig).
     """
@@ -43,12 +71,9 @@ def write_stereo_wav(path: Path, frames: int, base_value: int) -> None:
 
         data = bytearray()
 
-        for i in range(frames):
+        for left, right in expected_samples(frames, base_value):
 
-            left = (base_value + i) << 8
-            right = (base_value + i + 1000) << 8
-
-            data += struct.pack("<ii", left, right)
+            data += struct.pack("<ii", left << 8, right << 8)
 
         wav_file.writeframes(bytes(data))
 
@@ -58,6 +83,13 @@ def write_stereo_wav(path: Path, frames: int, base_value: int) -> None:
 # ----------------------------------------------------------------
 
 SCRATCH_DIR.mkdir(exist_ok=True)
+
+#
+# Erzeugte Ausgabedateien mitschreiben, damit sie auch dann wieder
+# aufgeräumt werden, wenn der Test unterwegs fehlschlägt - sonst
+# bleiben sie in recordings/ liegen und tauchen in der App auf.
+#
+created_files: list[Path] = []
 
 try:
 
@@ -77,6 +109,8 @@ try:
     )
 
     output_path = Path("recordings") / filename
+
+    created_files.append(output_path)
 
     assert output_path.exists(), "Ausgabedatei wurde nicht angelegt."
 
@@ -104,6 +138,9 @@ try:
         f"bekommen {frame_count}"
     )
 
+    expected_long = expected_samples(long_frames, base_value=100)
+    expected_short = expected_samples(short_frames, base_value=5000)
+
     mismatches = 0
 
     for i in range(frame_count):
@@ -115,11 +152,11 @@ try:
         ch3 = sample_from_container(raw, frame_offset + 8)
         ch4 = sample_from_container(raw, frame_offset + 12)
 
-        if ch1 != 100 + i or ch2 != 100 + i + 1000:
+        if (ch1, ch2) != expected_long[i]:
             mismatches += 1
 
         if i < short_frames:
-            if ch3 != 5000 + i or ch4 != 5000 + i + 1000:
+            if (ch3, ch4) != expected_short[i]:
                 mismatches += 1
         else:
             if ch3 != 0 or ch4 != 0:
@@ -129,7 +166,70 @@ try:
 
     print("OK: Zwei Stems korrekt zu 4-Kanal-.w64 kombiniert, kürzerer Stem mit Stille aufgefüllt")
 
-    output_path.unlink()
+    # ----------------------------------------------------------------
+    # 1b. Oberstes Container-Byte muss vorzeichenrichtig gefüllt sein
+    #
+    # XRacks eigener Reader maskiert das oberste Byte weg (& 0xFFFFFF),
+    # die Prüfung oben würde einen Fehler dort also gar nicht sehen.
+    # DAWs und der ALSA-Wiedergabeweg lesen das 4-Byte-Wort aber als
+    # vorzeichenbehaftete 32-Bit-Zahl (der Header deklariert
+    # wBitsPerSample = 32) - ein genulltes oberstes Byte macht daraus
+    # bei negativen Samples eine große positive Zahl und die Wiedergabe
+    # klingt stark verzerrt. Genau das war der Fehler in der ersten
+    # Fassung, darum hier explizit auf Byte-Ebene prüfen.
+    # ----------------------------------------------------------------
+
+    negative_seen = 0
+    byte_mismatches = 0
+    signed_mismatches = 0
+
+    for i in range(frame_count):
+
+        frame_offset = i * bytes_per_frame
+
+        for channel in range(4):
+
+            offset = frame_offset + channel * 4
+
+            value24 = sample_from_container(raw, offset)
+
+            top_byte = raw[offset + 3]
+
+            expected_top = 0xFF if value24 < 0 else 0x00
+
+            if top_byte != expected_top:
+                byte_mismatches += 1
+
+            #
+            # Gegenprobe: so, wie DAW und ALSA das Wort lesen.
+            #
+            as_signed_32 = struct.unpack_from("<i", raw, offset)[0]
+
+            if as_signed_32 != value24:
+                signed_mismatches += 1
+
+            if value24 < 0:
+                negative_seen += 1
+
+    assert negative_seen > 0, (
+        "Testdaten enthalten keine negativen Samples - die "
+        "Vorzeichenprüfung wäre wirkungslos."
+    )
+
+    assert byte_mismatches == 0, (
+        f"{byte_mismatches} Sample(s) mit falsch gefülltem obersten "
+        f"Container-Byte."
+    )
+
+    assert signed_mismatches == 0, (
+        f"{signed_mismatches} Sample(s) werden als vorzeichenbehaftete "
+        f"32-Bit-Zahl falsch gelesen (so lesen DAWs und ALSA die Datei)."
+    )
+
+    print(
+        f"OK: Oberstes Container-Byte vorzeichenrichtig gefüllt "
+        f"({negative_seen} negative Samples geprüft)"
+    )
 
     # ----------------------------------------------------------------
     # 2. Zu wenige Dateien
@@ -158,3 +258,6 @@ try:
 finally:
 
     shutil.rmtree(SCRATCH_DIR, ignore_errors=True)
+
+    for path in created_files:
+        path.unlink(missing_ok=True)

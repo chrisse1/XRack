@@ -36,7 +36,25 @@ def _s32_to_s24_container(raw: bytes) -> bytes:
     """
     Wandelt einen Block roher S32_LE-Samples (von TrackDecoder/ffmpeg)
     in XRacks eigenes Format um: 24 Bit gültig in einem 4-Byte-
-    Container (oberstes Byte 0), siehe writer/w64_writer.py.
+    Container, siehe writer/w64_writer.py.
+
+    Wichtig: Der Wert wird als *vorzeichenbehafteter* 32-Bit-Wert
+    gepackt, das oberste Byte also vorzeichenrichtig gefüllt (0x00 bei
+    positiven, 0xFF bei negativen Samples) - genau so, wie ALSA es beim
+    Aufnehmen liefert (PCM_FORMAT_S24_LE, siehe audio/audio_backend.py)
+    und wie recorder/recorder.py es unverändert in die Datei schreibt.
+
+    Das oberste Byte einfach zu nullen wäre falsch: der Header
+    deklariert wBitsPerSample = 32 (nur ValidBitsPerSample ist 24),
+    weshalb DAWs und der ALSA-Wiedergabeweg das 4-Byte-Wort als
+    vorzeichenbehaftete 32-Bit-Zahl lesen. Ein genulltes oberstes Byte
+    macht daraus bei jedem negativen Sample eine große positive Zahl -
+    jede negative Halbwelle klappt um und das Ergebnis klingt stark
+    verzerrt, obwohl Tempo und Tonhöhe stimmen.
+
+    XRacks eigene Lesewege sind davon unabhängig, weil sie ohnehin mit
+    & 0xFFFFFF maskieren (siehe recorder/level_meter.py) - die unteren
+    drei Bytes sind in beiden Varianten identisch.
     """
 
     count = len(raw) // BYTES_PER_SAMPLE
@@ -47,13 +65,17 @@ def _s32_to_s24_container(raw: bytes) -> bytes:
 
         value = struct.unpack_from("<i", raw, i * BYTES_PER_SAMPLE)[0]
 
+        #
+        # Arithmetischer Shift -> Bereich [-2^23, 2^23-1]; "<i" zieht
+        # das Vorzeichen beim Packen auf das oberste Byte durch.
+        #
         value24 = value >> 8
 
         struct.pack_into(
-            "<I",
+            "<i",
             out,
             i * BYTES_PER_SAMPLE,
-            value24 & 0xFFFFFF,
+            value24,
         )
 
     return bytes(out)
