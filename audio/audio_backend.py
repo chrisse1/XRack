@@ -142,9 +142,19 @@ class AudioBackend:
                 self._native_channels
             )
 
-            self._pcm.setformat(
+            actual_format = self._pcm.setformat(
                 self._format
             )
+
+            if actual_format is not None and actual_format != self._format:
+                self.logger.warning(
+                    "ALSA hat ein anderes Sampleformat akzeptiert als "
+                    "angefordert: gefordert %s, gemeldet %s. Die Daten "
+                    "liegen dann auf einer anderen Skala - siehe "
+                    "recorder/level_meter.py und core/stem_combiner.py.",
+                    self._format,
+                    actual_format,
+                )
 
             self._pcm.setperiodsize(
                 self._period_size

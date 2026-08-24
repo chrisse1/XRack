@@ -102,9 +102,17 @@ class AudioPlaybackBackend:
                 self._native_channels
             )
 
-            self._pcm.setformat(
+            actual_format = self._pcm.setformat(
                 self._format
             )
+
+            if actual_format is not None and actual_format != self._format:
+                self.logger.warning(
+                    "ALSA hat ein anderes Sampleformat akzeptiert als "
+                    "angefordert: gefordert %s, gemeldet %s.",
+                    self._format,
+                    actual_format,
+                )
 
             self._pcm.setperiodsize(1024)
 

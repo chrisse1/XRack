@@ -7,21 +7,29 @@ import struct
 
 class LevelMeter:
     """
-    Berechnet Peak-Pegel je Kanal aus S24_LE-Rohdaten
-    (24 Bit in einem 4-Byte-Container, siehe AudioBackend).
+    Berechnet Peak-Pegel je Kanal aus S32_LE-Rohdaten
+    (volle 32 Bit pro Sample, siehe AudioBackend).
 
     Die Anzahl der Kanäle ergibt sich aus der aktuell gewählten
     Aufnahmekanalzahl - die Anzeige passt sich also automatisch an,
     egal ob am Interface 18 (XR18) oder z.B. 32 Kanäle (X32)
     gewählt wurden.
+
+    Hinweis zum Format: AudioBackend fordert PCM_FORMAT_S24_LE an,
+    wertet den Rückgabewert von setformat() aber nicht aus - die
+    X-Serie bietet dieses Format über USB offenbar nicht an, sodass
+    ALSA tatsächlich S32_LE liefert. Diese Anzeige rechnete früher
+    mit 24-Bit-Vollausschlag und maskierte auf die unteren 24 Bit;
+    bei 32-Bit-Daten sind das die untersten, quasi zufälligen Bits,
+    weshalb die Anzeige schon bei leisem Signal fast voll ausschlug.
     """
 
     BYTES_PER_SAMPLE = 4
 
     #
-    # 24-Bit-Vollausschlag (2^23 - 1)
+    # 32-Bit-Vollausschlag (2^31 - 1)
     #
-    FULL_SCALE = 8388607
+    FULL_SCALE = 2147483647
 
     def __init__(self, channels: int, decay: float = 0.7):
 
@@ -62,13 +70,12 @@ class LevelMeter:
         sample_count = frame_count * self.channels
 
         #
-        # Alle Samples in einem Rutsch als unsigned 32-Bit-Werte
-        # lesen (schneller als Byte-für-Byte in Python) - erst
-        # danach je Sample auf die tatsächlichen 24 Bit maskieren
-        # und vorzeichenrichtig interpretieren.
+        # Alle Samples in einem Rutsch als vorzeichenbehaftete
+        # 32-Bit-Werte lesen (schneller als Byte-für-Byte in Python) -
+        # struct erledigt die Vorzeichenbehandlung dabei selbst.
         #
         values = struct.unpack(
-            f"<{sample_count}I",
+            f"<{sample_count}i",
             data[:sample_count * self.BYTES_PER_SAMPLE],
         )
 
@@ -80,12 +87,9 @@ class LevelMeter:
 
             for channel in range(self.channels):
 
-                raw = values[index] & 0xFFFFFF
+                value = values[index]
 
-                if raw & 0x800000:
-                    raw -= 0x1000000
-
-                magnitude = raw if raw >= 0 else -raw
+                magnitude = value if value >= 0 else -value
 
                 if magnitude > peaks[channel]:
                     peaks[channel] = magnitude

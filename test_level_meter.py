@@ -1,31 +1,26 @@
 """
-Prüft LevelMeter: korrekte Vorzeichenbehandlung von 24-Bit-Werten
-in einem 4-Byte-Container, Mehrkanal-Interleaving und Abklingen.
+Prüft LevelMeter: korrekte Vorzeichenbehandlung von S32_LE-Samples,
+Mehrkanal-Interleaving und Abklingen.
+
+Hinweis: Die Anzeige rechnete früher mit 24-Bit-Vollausschlag und
+maskierte auf die unteren 24 Bit. AudioBackend fordert zwar
+PCM_FORMAT_S24_LE an, bekommt von ALSA aber tatsächlich S32_LE
+geliefert - dadurch wertete die Anzeige die untersten, quasi
+zufälligen Bits aus und schlug schon bei leisem Signal fast voll aus.
 """
+
+import struct
 
 from recorder.level_meter import LevelMeter
 
 
-def make_sample(value: int, junk_top_byte: int = 0x00) -> bytes:
-    """
-    Baut ein einzelnes 4-Byte-Sample aus einem 24-Bit-Zweierkomplement-
-    Wert. `junk_top_byte` simuliert, dass das oberste (vierte) Byte
-    laut ALSA-Spezifikation undefiniert ist - es darf das Ergebnis
-    nicht beeinflussen.
-    """
+def make_sample(value: int) -> bytes:
+    """Baut ein einzelnes S32_LE-Sample."""
 
-    if value < 0:
-        value += 0x1000000
-
-    return bytes([
-        value & 0xFF,
-        (value >> 8) & 0xFF,
-        (value >> 16) & 0xFF,
-        junk_top_byte,
-    ])
+    return struct.pack("<i", value)
 
 
-FULL_SCALE = 8388607  # 2^23 - 1
+FULL_SCALE = 2147483647  # 2^31 - 1
 
 # ----------------------------------------------------------------
 # 1. Grundwerte: 0, positiver/negativer Vollausschlag, halber Pegel
@@ -43,30 +38,34 @@ assert abs(levels[0] - 1.0) < 1e-9, f"Positiver Vollausschlag sollte 1.0 ergeben
 print("OK: Positiver Vollausschlag -> Pegel 1.0")
 
 meter = LevelMeter(channels=1, decay=0.0)
-levels = meter.update(make_sample(-8388608))
+levels = meter.update(make_sample(-2147483648))
 assert levels[0] > 1.0, f"Negativer Vollausschlag sollte >1.0 ergeben, nicht {levels[0]}"
 print(f"OK: Negativer Vollausschlag -> Pegel {levels[0]:.4f} (>1.0, wie erwartet)")
 
 meter = LevelMeter(channels=1, decay=0.0)
-levels = meter.update(make_sample(-4194304))
+levels = meter.update(make_sample(-1073741824))
 assert abs(levels[0] - 0.5) < 1e-6, f"Negativer Halbausschlag sollte ~0.5 ergeben, nicht {levels[0]}"
 print("OK: Negativer Halbausschlag -> Pegel ~0.5 (Vorzeichen korrekt erkannt)")
 
 # ----------------------------------------------------------------
-# 2. Das oberste (undefinierte) Byte darf keinen Einfluss haben
+# 2. Ein leises Signal darf NICHT fast voll ausschlagen
+#
+# Genau das war der Fehler: die Anzeige maskierte auf die unteren
+# 24 Bit und rechnete mit 24-Bit-Vollausschlag. Bei S32_LE-Daten
+# sind das die untersten, quasi zufälligen Bits - ein Signal bei
+# -48 dB schlug dadurch voll aus.
 # ----------------------------------------------------------------
 
-meter = LevelMeter(channels=1, decay=0.0)
-levels_clean = meter.update(make_sample(4194304, junk_top_byte=0x00))
+quiet_value = FULL_SCALE // 256  # rund -48 dB
 
 meter = LevelMeter(channels=1, decay=0.0)
-levels_junk = meter.update(make_sample(4194304, junk_top_byte=0xFF))
+levels = meter.update(make_sample(quiet_value))
 
-assert levels_clean == levels_junk, (
-    "Das oberste Byte beeinflusst das Ergebnis, sollte es aber nicht "
-    "(laut ALSA-Spezifikation undefiniert)."
+assert abs(levels[0] - 1.0 / 256) < 1e-4, (
+    f"Ein Signal bei rund -48 dB sollte einen Pegel um "
+    f"{1.0 / 256:.5f} ergeben, nicht {levels[0]:.5f}."
 )
-print("OK: Undefiniertes oberstes Byte wird korrekt ignoriert")
+print(f"OK: Leises Signal (-48 dB) -> Pegel {levels[0]:.5f} (schlägt nicht voll aus)")
 
 # ----------------------------------------------------------------
 # 3. Mehrkanal-Interleaving: Pegel pro Kanal bleiben getrennt
