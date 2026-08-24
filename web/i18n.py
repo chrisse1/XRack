@@ -187,31 +187,30 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "settings_home_wifi_title": "Heimnetz (Client)",
         "settings_ap_wifi_title": "Access Point",
-        "settings_bridge_title": "Ethernet+AP-Bridge",
+        "settings_ap_access_title": (
+            "Konsole über XRacks Access Point erreichbar machen"
+        ),
         "settings_bridge_hint": (
-            "Verbindet ein per Kabel angeschlossenes Mischpult mit dem "
-            "Access Point, damit Apps es finden."
+            "Verbindet ein per Kabel angeschlossenes Mischpult mit "
+            "XRacks eigenem Access Point - die Apps verbinden sich "
+            "dafür mit dem WLAN von XRack."
         ),
-        "settings_share_title": "Ethernet+Heimnetz-Freigabe",
-        "settings_share_hint": (
-            "Gibt Geräten am Ethernet-Port über eine eigene IP-Adresse "
-            "Zugriff auf das, was über die Heimnetz-Verbindung "
-            "erreichbar ist (Internetfreigabe, keine echte Bridge - "
-            "schließt sich mit der Ethernet+AP-Bridge aus)."
+        "settings_console_access_title": (
+            "Konsole aus dem Heimnetz erreichbar machen"
         ),
-        "settings_console_ip_title": "Aktuelle IP der angeschlossenen Konsole",
+        "settings_console_access_hint": (
+            "Die per Kabel angeschlossene Konsole wird über XRacks "
+            "eigene IP im Heimnetz ansprechbar (UDP 10023 für X32-Edit, "
+            "UDP 10024 für X-AIR-Edit/Mixing Station). Schließt sich "
+            "mit dem Access-Point-Weg darüber aus."
+        ),
+        "settings_console_access_waiting": (
+            "Warte auf die Konsole - ist sie per Kabel angeschlossen "
+            "und eingeschaltet?"
+        ),
+        "settings_app_ip_label": "In der Steuerungs-App eintragen:",
+        "settings_console_ip_label": "Konsole am Pi:",
         "settings_console_ip_not_found": "Noch nicht erkannt.",
-        "settings_port_forward_title": "Konsole aus dem Heimnetz erreichbar machen",
-        "settings_port_forward_hint": (
-            "Leitet UDP 10023 (X32-Edit) und UDP 10024 (X-AIR-Edit/"
-            "Mixing Station) von XRacks eigener IP im Heimnetz zur "
-            "Konsole durch - in der Steuerungs-App also die IP von "
-            "XRack eintragen, nicht die der Konsole."
-        ),
-        "settings_port_forward_unavailable": (
-            "Erst Bridge oder Freigabe aktivieren und Konsole per "
-            "Kabel anschließen."
-        ),
 
         # Update über USB-Stick
         "settings_update_title": "Update",
@@ -273,16 +272,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Bridge ausschalten? Die Verbindung kann dabei kurz "
             "unterbrochen werden."
         ),
-        "confirm_share_on": (
-            "Freigabe einschalten? Die Verbindung kann dabei kurz "
-            "unterbrochen werden."
+        "confirm_console_access_on": (
+            "Konsole aus dem Heimnetz erreichbar machen? Die Verbindung "
+            "kann dabei kurz unterbrochen werden."
         ),
-        "confirm_share_off": (
-            "Freigabe ausschalten? Die Verbindung kann dabei kurz "
-            "unterbrochen werden."
+        "confirm_console_access_off": (
+            "Konsole aus dem Heimnetz nicht mehr erreichbar machen? Die "
+            "Verbindung kann dabei kurz unterbrochen werden."
         ),
-        "confirm_port_forward_on": "Portweiterleitung einschalten?",
-        "confirm_port_forward_off": "Portweiterleitung ausschalten?",
         "alert_settings_change_failed": "Änderung fehlgeschlagen: {message}",
         "alert_change_failed": "Änderung fehlgeschlagen.",
 
@@ -504,31 +501,29 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "settings_home_wifi_title": "Home network (client)",
         "settings_ap_wifi_title": "Access Point",
-        "settings_bridge_title": "Ethernet+AP bridge",
+        "settings_ap_access_title": (
+            "Make console reachable via XRack's access point"
+        ),
         "settings_bridge_hint": (
-            "Connects a mixing console plugged in via Ethernet with the "
-            "access point, so apps can find it."
+            "Connects a mixing console plugged in via Ethernet with "
+            "XRack's own access point - apps connect to XRack's Wi-Fi "
+            "to reach it."
         ),
-        "settings_share_title": "Ethernet+home network sharing",
-        "settings_share_hint": (
-            "Gives devices on the Ethernet port their own IP address "
-            "with access to whatever is reachable via the home network "
-            "connection (internet sharing, not a real bridge - "
-            "mutually exclusive with the Ethernet+AP bridge)."
+        "settings_console_access_title": (
+            "Make console reachable from home network"
         ),
-        "settings_console_ip_title": "Current IP of the connected console",
+        "settings_console_access_hint": (
+            "The console plugged in via Ethernet becomes reachable "
+            "through XRack's own home network IP (UDP 10023 for "
+            "X32-Edit, UDP 10024 for X-AIR-Edit/Mixing Station). "
+            "Mutually exclusive with the access point route above."
+        ),
+        "settings_console_access_waiting": (
+            "Waiting for the console - is it plugged in and switched on?"
+        ),
+        "settings_app_ip_label": "Enter this in your control app:",
+        "settings_console_ip_label": "Console at the Pi:",
         "settings_console_ip_not_found": "Not detected yet.",
-        "settings_port_forward_title": "Make console reachable from home network",
-        "settings_port_forward_hint": (
-            "Forwards UDP 10023 (X32-Edit) and UDP 10024 (X-AIR-Edit/"
-            "Mixing Station) from XRack's own home network IP to the "
-            "console - point your control app at XRack's IP, not the "
-            "console's."
-        ),
-        "settings_port_forward_unavailable": (
-            "Enable Bridge or Sharing first, and connect the console "
-            "via cable."
-        ),
 
         # Update via USB stick
         "settings_update_title": "Update",
@@ -589,16 +584,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Turn the bridge off? The connection may briefly drop while "
             "this happens."
         ),
-        "confirm_share_on": (
-            "Turn sharing on? The connection may briefly drop while "
-            "this happens."
+        "confirm_console_access_on": (
+            "Make the console reachable from the home network? The "
+            "connection may briefly drop while this happens."
         ),
-        "confirm_share_off": (
-            "Turn sharing off? The connection may briefly drop while "
-            "this happens."
+        "confirm_console_access_off": (
+            "Stop making the console reachable from the home network? "
+            "The connection may briefly drop while this happens."
         ),
-        "confirm_port_forward_on": "Turn on port forwarding?",
-        "confirm_port_forward_off": "Turn off port forwarding?",
         "alert_settings_change_failed": "Change failed: {message}",
         "alert_change_failed": "Change failed.",
 

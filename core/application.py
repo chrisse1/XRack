@@ -16,7 +16,7 @@ from player.music_library import MusicLibrary
 from player.music_player import MusicPlayer
 from player.bluetooth_player import BluetoothPlayer
 from core.system_control import SystemControl
-from core.wlan_control import WlanControl
+from core.wlan_control import WlanControl, SHARE_CONNECTION
 from core.bluetooth_control import BluetoothControl
 from core.usb_storage import UsbStorage
 from core.updater import Updater
@@ -83,15 +83,18 @@ class Application:
             1,
         )
 
-        self.port_forward_enabled = self.state_store.get(
-            "port_forward_enabled",
-            False,
-        )
-
         #
-        # Die Konsolen-IP, für die zuletzt erfolgreich eine Regel
-        # gesetzt wurde - siehe _reconcile_port_forward(). None
-        # bedeutet "aktuell keine Regel gesetzt".
+        # Die Konsolen-IP, für die zuletzt erfolgreich eine
+        # Weiterleitungsregel gesetzt wurde - siehe
+        # _reconcile_port_forward(). None bedeutet "aktuell keine Regel
+        # gesetzt".
+        #
+        # Ob überhaupt weitergeleitet werden soll, wird bewusst nicht
+        # gemerkt, sondern aus dem Zustand des Freigabe-Profils
+        # abgeleitet - so können Anzeige und Wirklichkeit nicht
+        # auseinanderlaufen. Ein früher hier gespeicherter Schlüssel
+        # "port_forward_enabled" in config/state.json wird dadurch
+        # gegenstandslos und einfach ignoriert.
         #
         self._port_forward_applied_ip: str | None = None
 
@@ -1088,11 +1091,12 @@ class Application:
         fürs Einstellungs-Modal.
         """
 
-        status = self.wlan_control.get_status()
-
-        status["port_forward_enabled"] = self.port_forward_enabled
-
-        return status
+        #
+        # "console_access_enabled" kommt direkt aus dem tatsächlichen
+        # Zustand des Freigabe-Profils - hier ist nichts mehr
+        # nachzureichen.
+        #
+        return self.wlan_control.get_status()
 
     def set_home_wifi(self, ssid: str, password: str) -> tuple[bool, str]:
         """
@@ -1127,42 +1131,30 @@ class Application:
 
         return self.wlan_control.set_bridge(enabled)
 
-    def set_share(self, enabled: bool) -> tuple[bool, str]:
+    def set_console_access(self, enabled: bool) -> tuple[bool, str]:
         """
-        Schaltet die Ethernet+Heimnetz-Freigabe an oder aus.
-        """
+        Schaltet "Konsole aus dem Heimnetz erreichbar machen" an oder
+        aus - also die Ethernet-Freigabe zusammen mit der
+        Portweiterleitung.
 
-        return self.wlan_control.set_share(enabled)
-
-    def set_port_forward(self, enabled: bool) -> tuple[bool, str]:
+        Beim Einschalten wird die Weiterleitung hier bewusst *nicht*
+        gesetzt: Die Konsole hat über die gerade erst hochgefahrene
+        Freigabe noch keine DHCP-Lease, ihre IP ist also noch unbekannt.
+        _reconcile_port_forward() holt das nach, sobald die IP auftaucht
+        (genau der Fall, für den der Abgleich gebaut wurde).
         """
-        Schaltet die Portweiterleitung (macht die per Bridge/Freigabe
-        angeschlossene Konsole aus dem Heimnetz erreichbar) an oder
-        aus.
-        """
-
-        console_ip = None
 
         if enabled:
+            return self.wlan_control.set_share(True)
 
-            console_ip = self.wlan_control.get_status().get("console_ip")
+        #
+        # Beim Ausschalten zuerst die Regel entfernen, solange die
+        # Konsolen-IP noch bekannt ist, dann die Freigabe herunterfahren.
+        #
+        self.wlan_control.set_port_forward(False, None)
+        self._port_forward_applied_ip = None
 
-            if not console_ip:
-                return False, (
-                    "Keine Konsolen-IP bekannt - Bridge/Freigabe "
-                    "aktiv und Konsole per Kabel angeschlossen?"
-                )
-
-        success, message = self.wlan_control.set_port_forward(
-            enabled, console_ip
-        )
-
-        if success:
-            self.port_forward_enabled = enabled
-            self.state_store.set("port_forward_enabled", enabled)
-            self._port_forward_applied_ip = console_ip if enabled else None
-
-        return success, message
+        return self.wlan_control.set_share(False)
 
     def _port_forward_loop(self) -> None:
         """
@@ -1190,9 +1182,15 @@ class Application:
 
     def _reconcile_port_forward(self) -> None:
         """
-        Sorgt dafür, dass die tatsächlich gesetzte iptables-Regel zur
-        gemerkten Einstellung und zur aktuell erkannten Konsolen-IP
+        Sorgt dafür, dass die tatsächlich gesetzte iptables-Regel zum
+        Zustand der Freigabe und zur aktuell erkannten Konsolen-IP
         passt.
+
+        Ob die Weiterleitung stehen soll, wird nicht separat gemerkt,
+        sondern daraus abgeleitet, ob das Freigabe-Profil aktiv ist
+        (der Schalter "Konsole aus dem Heimnetz erreichbar machen"
+        schaltet genau dieses Profil). Dadurch können Anzeige und
+        Wirklichkeit nicht auseinanderlaufen.
 
         Setzt die Regel nur, wenn sich die IP gegenüber der zuletzt
         gesetzten geändert hat - sonst liefe alle paar Sekunden ein
@@ -1201,13 +1199,28 @@ class Application:
         eigenen Ketten, bevor es neue Regeln anlegt.
         """
 
-        if not self.port_forward_enabled:
-            #
-            # Aus heißt aus - hier bewusst ohne jeden Subprozess, damit
-            # der Abgleich für alle, die das Feature nicht nutzen,
-            # nichts kostet.
-            #
-            self._port_forward_applied_ip = None
+        #
+        # Billiger Vorabtest: ein einziger nmcli-Aufruf. Den vollen
+        # Status (mehrere nmcli- plus DHCP-Aufrufe) holen wir nur, wenn
+        # die Freigabe wirklich läuft - so kostet der Abgleich für alle,
+        # die das Feature nicht nutzen, so gut wie nichts.
+        #
+        active = self.wlan_control.active_connection_names()
+
+        if SHARE_CONNECTION not in active:
+
+            if self._port_forward_applied_ip is not None:
+                #
+                # Freigabe wurde ausgeschaltet (oder auf Bridge
+                # gewechselt) - die Regel räumt sich hier von selbst ab.
+                #
+                self.wlan_control.set_port_forward(False, None)
+                self._port_forward_applied_ip = None
+
+                self.logger.info(
+                    "Freigabe ist aus - Portweiterleitung entfernt."
+                )
+
             return
 
         console_ip = self.wlan_control.get_status().get("console_ip")

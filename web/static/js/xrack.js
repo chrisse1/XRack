@@ -2189,38 +2189,38 @@ function applyWlanSettings(wlan) {
         bridgeField.classList.add("d-none");
     }
 
-    const shareNotConfigured = document.getElementById("settings-share-not-configured");
-    const shareField = document.getElementById("settings-share-field");
+    const accessNotConfigured = document.getElementById("settings-console-access-not-configured");
+    const accessField = document.getElementById("settings-console-access-field");
 
-    if (wlan.share_configured) {
-        shareNotConfigured.classList.add("d-none");
-        shareField.classList.remove("d-none");
-        document.getElementById("settings-share-toggle").checked = wlan.share_enabled;
+    if (wlan.console_access_configured) {
+        accessNotConfigured.classList.add("d-none");
+        accessField.classList.remove("d-none");
+        document.getElementById("settings-console-access-toggle").checked =
+            wlan.console_access_enabled;
     } else {
-        shareNotConfigured.classList.remove("d-none");
-        shareField.classList.add("d-none");
+        accessNotConfigured.classList.remove("d-none");
+        accessField.classList.add("d-none");
     }
 
-    const consoleIpField = document.getElementById("settings-console-ip-field");
+    //
+    // Die beiden IPs zeigen wir nur, wenn der Weg übers Heimnetz aktiv
+    // ist - beim Access-Point-Weg trägt man in der App die Konsolen-IP
+    // direkt ein, da gibt es keine Weiterleitung.
+    //
+    const ipBox = document.getElementById("settings-console-access-ips");
+    const waitingBox = document.getElementById("settings-console-access-waiting");
 
-    if (wlan.bridge_enabled || wlan.share_enabled) {
-        document.getElementById("settings-console-ip-value").textContent =
-            wlan.console_ip || I18N.settings_console_ip_not_found;
-        consoleIpField.classList.remove("d-none");
-    } else {
-        consoleIpField.classList.add("d-none");
-    }
+    const ready = wlan.console_access_enabled && wlan.console_ip && wlan.home_ip;
 
-    const portForwardNotAvailable = document.getElementById("settings-port-forward-not-configured");
-    const portForwardField = document.getElementById("settings-port-forward-field");
+    ipBox.classList.toggle("d-none", !ready);
+    waitingBox.classList.toggle(
+        "d-none",
+        !(wlan.console_access_enabled && !ready)
+    );
 
-    if (wlan.console_ip || wlan.port_forward_enabled) {
-        portForwardNotAvailable.classList.add("d-none");
-        portForwardField.classList.remove("d-none");
-        document.getElementById("settings-port-forward-toggle").checked = wlan.port_forward_enabled;
-    } else {
-        portForwardNotAvailable.classList.remove("d-none");
-        portForwardField.classList.add("d-none");
+    if (ready) {
+        document.getElementById("settings-app-ip-value").textContent = wlan.home_ip;
+        document.getElementById("settings-console-ip-value").textContent = wlan.console_ip;
     }
 }
 
@@ -2355,8 +2355,8 @@ async function saveRecordingPrefix() {
 document.getElementById("btn-settings-home-save").addEventListener("click", saveHomeWifi);
 document.getElementById("btn-settings-ap-save").addEventListener("click", saveApWifi);
 document.getElementById("settings-bridge-toggle").addEventListener("change", toggleBridge);
-document.getElementById("settings-share-toggle").addEventListener("change", toggleShare);
-document.getElementById("settings-port-forward-toggle").addEventListener("change", togglePortForward);
+document.getElementById("settings-console-access-toggle")
+    .addEventListener("change", toggleConsoleAccess);
 
 document.querySelectorAll(".settings-password-toggle").forEach((button) => {
     button.addEventListener("click", () => togglePasswordVisibility(button));
@@ -2452,16 +2452,18 @@ async function toggleBridge(event) {
     await loadSettings();
 }
 
-async function toggleShare(event) {
+async function toggleConsoleAccess(event) {
     const enabled = event.target.checked;
-    const confirmText = enabled ? I18N.confirm_share_on : I18N.confirm_share_off;
+    const confirmText = enabled
+        ? I18N.confirm_console_access_on
+        : I18N.confirm_console_access_off;
 
     if (!confirm(confirmText)) {
         event.target.checked = !enabled;
         return;
     }
 
-    const response = await fetch("/api/settings/share", {
+    const response = await fetch("/api/settings/console_access", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabled })
@@ -2475,34 +2477,14 @@ async function toggleShare(event) {
     }
 
     alert(I18N.settings_saved);
-    // Schließt sich mit der Ethernet+AP-Bridge aus - deren Schalter
-    // kann sich dabei im Hintergrund mit geändert haben.
+
+    //
+    // Schließt sich mit dem Access-Point-Weg aus - dessen Schalter kann
+    // sich dabei im Hintergrund mit geändert haben. Außerdem braucht
+    // die Konsole einen Moment für ihre DHCP-Lease, die IPs erscheinen
+    // also erst beim nächsten Öffnen bzw. Nachladen.
+    //
     await loadSettings();
-}
-
-async function togglePortForward(event) {
-    const enabled = event.target.checked;
-    const confirmText = enabled ? I18N.confirm_port_forward_on : I18N.confirm_port_forward_off;
-
-    if (!confirm(confirmText)) {
-        event.target.checked = !enabled;
-        return;
-    }
-
-    const response = await fetch("/api/settings/port_forward", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled })
-    });
-    const result = await response.json();
-
-    if (!result.success) {
-        alert(I18N.alert_settings_change_failed.replace("{message}", result.message || ""));
-        event.target.checked = !enabled;
-        return;
-    }
-
-    alert(I18N.settings_saved);
 }
 
 // ============================================================

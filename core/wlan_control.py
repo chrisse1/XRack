@@ -14,6 +14,14 @@ import shutil
 import subprocess
 from pathlib import Path
 
+#
+# Name des NetworkManager-Profils hinter "Konsole aus dem Heimnetz
+# erreichbar machen". Wird auch von
+# Application._reconcile_port_forward() gebraucht, um abzuleiten, ob
+# die Portweiterleitung stehen soll - darum hier einmal zentral.
+#
+SHARE_CONNECTION = "XRack-Share-eth0"
+
 
 class WlanControl:
     """Kapselt privilegierte WLAN-/Netzwerkbefehle."""
@@ -153,6 +161,34 @@ class WlanControl:
 
         return output or None
 
+    def get_home_ip(self) -> str | None:
+        """
+        Liefert die IP, unter der XRack selbst im Heimnetz erreichbar
+        ist - genau die Adresse, die der Nutzer in seine Steuerungs-App
+        einträgt, wenn die Konsole aus dem Heimnetz erreichbar gemacht
+        wurde (die Weiterleitung läuft über XRacks eigene IP, nicht
+        über die der Konsole).
+
+        Liefert None, wenn die Heimnetz-Verbindung nicht aktiv ist.
+        """
+
+        output = self._nmcli(
+            "-g", "IP4.ADDRESS", "connection", "show", "XRack-Home"
+        )
+
+        if not output:
+            return None
+
+        #
+        # nmcli liefert die Adresse mit Präfixlänge ("192.168.1.22/24")
+        # und bei mehreren Adressen mehrere Zeilen - die erste genügt.
+        #
+        first = output.strip().splitlines()[0] if output.strip() else ""
+
+        address = first.split("/")[0].strip()
+
+        return address or None
+
     def get_status(self) -> dict:
         """
         Liefert den aktuellen (nicht-geheimen) WLAN-Status fürs
@@ -166,16 +202,26 @@ class WlanControl:
                 "ap_ssid": None,
                 "bridge_configured": False,
                 "bridge_enabled": False,
-                "share_configured": False,
-                "share_enabled": False,
+                "console_access_configured": False,
+                "console_access_enabled": False,
                 "console_ip": None,
+                "home_ip": None,
             }
 
         names = self.connection_names()
         active = self.active_connection_names()
 
         bridge_enabled = "XRack-Bridge" in active
-        share_enabled = "XRack-Share-eth0" in active
+
+        #
+        # "Konsole aus dem Heimnetz erreichbar machen" ist technisch die
+        # Ethernet-Freigabe (XRack-Share-eth0) plus die Portweiterleitung.
+        # Die Weiterleitung wird nicht separat gemerkt, sondern von
+        # Application._reconcile_port_forward() aus diesem Zustand
+        # abgeleitet - so können Anzeige und Wirklichkeit nicht
+        # auseinanderlaufen.
+        #
+        console_access_enabled = SHARE_CONNECTION in active
 
         console_ip = None
 
@@ -184,7 +230,7 @@ class WlanControl:
                 self.get_dhcp_lease_ip("br0")
                 or self.get_connected_client_ip("br0")
             )
-        elif share_enabled:
+        elif console_access_enabled:
             console_ip = (
                 self.get_dhcp_lease_ip("eth0")
                 or self.get_connected_client_ip("eth0")
@@ -204,9 +250,10 @@ class WlanControl:
             ),
             "bridge_configured": "XRack-Bridge" in names,
             "bridge_enabled": bridge_enabled,
-            "share_configured": "XRack-Share-eth0" in names,
-            "share_enabled": share_enabled,
+            "console_access_configured": SHARE_CONNECTION in names,
+            "console_access_enabled": console_access_enabled,
             "console_ip": console_ip,
+            "home_ip": self.get_home_ip(),
         }
 
     def _run_script(self, name: str, *args: str) -> tuple[bool, str]:

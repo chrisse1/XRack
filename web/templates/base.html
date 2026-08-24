@@ -657,7 +657,7 @@
 
                     <div class="mb-3">
                         <label class="form-label fw-semibold">
-                            {{ t.settings_bridge_title }}
+                            {{ t.settings_ap_access_title }}
                         </label>
                         <div id="settings-bridge-not-configured" class="text-muted small d-none">
                             {{ t.settings_not_configured }}
@@ -670,7 +670,7 @@
                                 class="form-check-input"
                             >
                             <label class="form-check-label" for="settings-bridge-toggle">
-                                {{ t.settings_bridge_title }}
+                                {{ t.settings_ap_access_title }}
                             </label>
                         </div>
                         <small class="text-body-secondary">{{ t.settings_bridge_hint }}</small>
@@ -680,53 +680,38 @@
 
                     <div class="mb-3">
                         <label class="form-label fw-semibold">
-                            {{ t.settings_share_title }}
+                            {{ t.settings_console_access_title }}
                         </label>
-                        <div id="settings-share-not-configured" class="text-muted small d-none">
+                        <div id="settings-console-access-not-configured" class="text-muted small d-none">
                             {{ t.settings_not_configured }}
                         </div>
-                        <div id="settings-share-field" class="form-check form-switch">
+                        <div id="settings-console-access-field" class="form-check form-switch">
                             <input
                                 type="checkbox"
                                 role="switch"
-                                id="settings-share-toggle"
+                                id="settings-console-access-toggle"
                                 class="form-check-input"
                             >
-                            <label class="form-check-label" for="settings-share-toggle">
-                                {{ t.settings_share_title }}
+                            <label class="form-check-label" for="settings-console-access-toggle">
+                                {{ t.settings_console_access_title }}
                             </label>
                         </div>
-                        <small class="text-body-secondary">{{ t.settings_share_hint }}</small>
-                    </div>
+                        <small class="text-body-secondary">{{ t.settings_console_access_hint }}</small>
 
-                    <div id="settings-console-ip-field" class="mb-3 d-none">
-                        <label class="form-label fw-semibold">
-                            {{ t.settings_console_ip_title }}
-                        </label>
-                        <div>
-                            <code id="settings-console-ip-value"></code>
+                        <div id="settings-console-access-ips" class="mt-3 d-none">
+                            <div>
+                                {{ t.settings_app_ip_label }}
+                                <code id="settings-app-ip-value" class="fs-6"></code>
+                            </div>
+                            <small class="text-body-secondary">
+                                {{ t.settings_console_ip_label }}
+                                <code id="settings-console-ip-value"></code>
+                            </small>
                         </div>
-                    </div>
 
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">
-                            {{ t.settings_port_forward_title }}
-                        </label>
-                        <div id="settings-port-forward-not-configured" class="text-muted small d-none">
-                            {{ t.settings_port_forward_unavailable }}
+                        <div id="settings-console-access-waiting" class="text-body-secondary small mt-3 d-none">
+                            {{ t.settings_console_access_waiting }}
                         </div>
-                        <div id="settings-port-forward-field" class="form-check form-switch">
-                            <input
-                                type="checkbox"
-                                role="switch"
-                                id="settings-port-forward-toggle"
-                                class="form-check-input"
-                            >
-                            <label class="form-check-label" for="settings-port-forward-toggle">
-                                {{ t.settings_port_forward_title }}
-                            </label>
-                        </div>
-                        <small class="text-body-secondary">{{ t.settings_port_forward_hint }}</small>
                     </div>
 
                 </div>

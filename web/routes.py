@@ -70,10 +70,7 @@ class WifiCredentials(BaseModel):
 class BridgeSelection(BaseModel):
     enabled: bool
 
-class ShareSelection(BaseModel):
-    enabled: bool
-
-class PortForwardSelection(BaseModel):
+class ConsoleAccessSelection(BaseModel):
     enabled: bool
 
 class PinVerifySelection(BaseModel):
@@ -663,33 +660,21 @@ async def set_bridge(
     }
 
 
-@router.post("/api/settings/share")
-async def set_share(
-    selection: ShareSelection,
+@router.post("/api/settings/console_access")
+async def set_console_access(
+    selection: ConsoleAccessSelection,
     request: Request,
 ):
+    """
+    Schaltet "Konsole aus dem Heimnetz erreichbar machen" - also die
+    Ethernet-Freigabe samt Portweiterleitung. Ersetzt die früher
+    getrennten Endpunkte /api/settings/share und
+    /api/settings/port_forward.
+    """
 
     application = request.app.state.application
 
-    success, message = application.set_share(
-        selection.enabled
-    )
-
-    return {
-        "success": success,
-        "message": message,
-    }
-
-
-@router.post("/api/settings/port_forward")
-async def set_port_forward(
-    selection: PortForwardSelection,
-    request: Request,
-):
-
-    application = request.app.state.application
-
-    success, message = application.set_port_forward(
+    success, message = application.set_console_access(
         selection.enabled
     )
 

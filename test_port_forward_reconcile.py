@@ -40,19 +40,27 @@ fake_alsaaudio.PCM = type("FakePCM", (), {"__init__": lambda self, *a, **k: None
 sys.modules["alsaaudio"] = fake_alsaaudio
 
 from core.application import Application
+from core.wlan_control import SHARE_CONNECTION
 
 
 class FakeWlanControl:
     """
-    Ersetzt WlanControl: liefert eine steuerbare Konsolen-IP und
-    protokolliert, welche Regeln gesetzt wurden.
+    Ersetzt WlanControl: liefert eine steuerbare Konsolen-IP sowie den
+    Zustand des Freigabe-Profils und protokolliert, welche Regeln
+    gesetzt wurden.
     """
 
-    def __init__(self, console_ip=None):
+    def __init__(self, console_ip=None, share_active=True):
         self.console_ip = console_ip
+        self.share_active = share_active
         self.calls = []
         self.status_calls = 0
+        self.active_calls = 0
         self.succeed = True
+
+    def active_connection_names(self):
+        self.active_calls += 1
+        return [SHARE_CONNECTION] if self.share_active else ["XRack-Home"]
 
     def get_status(self):
         self.status_calls += 1
@@ -77,8 +85,7 @@ def make_application(console_ip=None, enabled=True) -> Application:
     application = Application.__new__(Application)
 
     application.logger = __import__("logging").getLogger("XRack")
-    application.wlan_control = FakeWlanControl(console_ip)
-    application.port_forward_enabled = enabled
+    application.wlan_control = FakeWlanControl(console_ip, share_active=enabled)
     application._port_forward_applied_ip = None
 
     return application
@@ -156,7 +163,7 @@ assert len(application.wlan_control.calls) == 3, (
 print("OK: Verschwindet die Konsole zwischenzeitlich, wird danach neu gesetzt")
 
 # ----------------------------------------------------------------
-# 5. Aus heißt aus - und kostet nichts
+# 5. Aus heißt aus - und kostet fast nichts
 # ----------------------------------------------------------------
 
 application = make_application(console_ip="192.168.4.10", enabled=False)
@@ -165,13 +172,49 @@ for _ in range(3):
     application._reconcile_port_forward()
 
 assert application.wlan_control.calls == [], (
-    "Bei ausgeschalteter Portweiterleitung darf nichts gesetzt werden."
+    "Ist die Freigabe aus, darf keine Regel gesetzt werden."
 )
 assert application.wlan_control.status_calls == 0, (
-    "Bei ausgeschalteter Portweiterleitung darf nicht einmal der "
-    "Status abgefragt werden (das startet Subprozesse)."
+    "Ist die Freigabe aus, darf der volle Status nicht abgefragt "
+    "werden - der startet mehrere Subprozesse."
 )
-print("OK: Ist die Weiterleitung aus, läuft kein einziger Subprozess")
+assert application.wlan_control.active_calls == 3, (
+    "Pro Durchlauf ist genau ein nmcli-Aufruf für den Vorabtest "
+    "erlaubt, nicht mehr."
+)
+print("OK: Ist die Freigabe aus, läuft nur der eine billige Vorabtest")
+
+# ----------------------------------------------------------------
+# 5b. Freigabe wird ausgeschaltet -> Regel wird abgeräumt
+#
+# Neu durch die Ableitung: Der Zustand wird nicht mehr separat
+# gemerkt, also muss der Abgleich eine übrig gebliebene Regel selbst
+# entfernen - auch beim Wechsel auf den Access-Point-Weg.
+# ----------------------------------------------------------------
+
+application = make_application(console_ip="192.168.4.10", enabled=True)
+
+application._reconcile_port_forward()
+assert application.wlan_control.calls == [(True, "192.168.4.10")]
+
+# Nutzer schaltet um (oder wechselt auf Bridge)
+application.wlan_control.share_active = False
+
+application._reconcile_port_forward()
+
+assert application.wlan_control.calls == [
+    (True, "192.168.4.10"),
+    (False, None),
+], f"Regel wurde nicht abgeräumt: {application.wlan_control.calls}"
+
+# ... und danach nicht immer wieder abgeräumt
+for _ in range(3):
+    application._reconcile_port_forward()
+
+assert len(application.wlan_control.calls) == 2, (
+    f"Abräumen wurde wiederholt: {application.wlan_control.calls}"
+)
+print("OK: Wird die Freigabe ausgeschaltet, räumt sich die Regel genau einmal ab")
 
 # ----------------------------------------------------------------
 # 6. Schlägt das Setzen fehl, wird es beim nächsten Mal erneut versucht
