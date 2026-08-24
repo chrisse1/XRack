@@ -500,6 +500,20 @@ class Application:
 
         return True
 
+    def start_recording(self) -> bool:
+        """
+        Startet eine Aufnahme. Lehnt ab, solange gerade eine
+        Soundcheck-Wiedergabe läuft - dieselbe Datei würde sonst
+        gleichzeitig gelesen und beschrieben, und während des
+        Kontrollhörens einer alten Aufnahme aus Versehen eine neue
+        zu starten ergibt ohnehin keinen Sinn.
+        """
+
+        if self.player.playing:
+            return False
+
+        return self.recorder.start(self.record_name_prefix)
+
     def start_soundcheck(self, filename: str) -> bool:
         """
         Spielt eine Aufnahme auf denselben Kanälen ab,

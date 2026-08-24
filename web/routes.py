@@ -168,9 +168,7 @@ async def recorder_start(request: Request):
 
     application = request.app.state.application
 
-    success = application.recorder.start(
-        application.record_name_prefix
-    )
+    success = application.start_recording()
 
     return {
         "success": success

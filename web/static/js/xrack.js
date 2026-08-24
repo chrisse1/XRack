@@ -177,10 +177,12 @@ function updateRecorderToggleButton(data) {
         button.innerHTML = `<i class="bi bi-stop-circle fs-3"></i><small>${I18N.btn_recording_stop}</small>`;
         button.classList.remove("btn-danger");
         button.classList.add("btn-secondary");
+        button.disabled = false;
     } else {
         button.innerHTML = `<i class="bi bi-record-circle fs-3"></i><small>${I18N.btn_recording_start}</small>`;
         button.classList.remove("btn-secondary");
         button.classList.add("btn-danger");
+        button.disabled = data.playback_active;
     }
 }
 
