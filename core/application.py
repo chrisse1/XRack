@@ -33,6 +33,14 @@ import time
 class Application:
     """Main XRack application."""
 
+    #
+    # Wie oft die Portweiterleitung abgeglichen wird (Sekunden) - siehe
+    # _reconcile_port_forward(). Schnell genug, dass die Konsole nach
+    # einem Neustart praktisch sofort erreichbar ist, und selten genug,
+    # dass die paar nmcli-/DHCP-Aufrufe nicht ins Gewicht fallen.
+    #
+    PORT_FORWARD_INTERVAL = 20.0
+
     def __init__(self) -> None:
         self.config = Configuration()
         self.config.load()
@@ -79,6 +87,13 @@ class Application:
             "port_forward_enabled",
             False,
         )
+
+        #
+        # Die Konsolen-IP, für die zuletzt erfolgreich eine Regel
+        # gesetzt wurde - siehe _reconcile_port_forward(). None
+        # bedeutet "aktuell keine Regel gesetzt".
+        #
+        self._port_forward_applied_ip: str | None = None
 
         self.recorder = Recorder(
             self.audio_core.backend
@@ -178,26 +193,20 @@ class Application:
             self.bluetooth_control.set_power(False)
 
         #
-        # War die Portweiterleitung vor einem Neustart aktiv, wird sie
-        # hier wiederhergestellt (iptables-Regeln überleben einen
-        # Neustart nicht). Ist die Konsolen-IP gerade noch nicht
-        # bekannt (z.B. Lease noch nicht erneuert), bleibt es beim
-        # gemerkten "an" - ein erneuter Versuch über den
-        # "Aktualisieren"-Knopf oder Neu-Speichern der Einstellung
-        # holt es nach.
+        # iptables-Regeln überleben keinen Neustart, die gemerkte
+        # Einstellung dagegen schon. Ein einmaliger Versuch beim Start
+        # reicht aber nicht: Die Konsole hat über die gerade erst
+        # hochgefahrene Freigabe noch keine DHCP-Lease, die Konsolen-IP
+        # ist also noch unbekannt. Darum gleicht ein Hintergrund-Thread
+        # den gewünschten mit dem tatsächlich gesetzten Zustand ab und
+        # holt die Regel nach, sobald die IP auftaucht - und erneuert
+        # sie, falls die Konsole später eine andere Adresse bekommt.
         #
-        if self.port_forward_enabled:
-
-            console_ip = self.wlan_control.get_status().get("console_ip")
-
-            if console_ip:
-                self.wlan_control.set_port_forward(True, console_ip)
-            else:
-                self.logger.warning(
-                    "Portweiterleitung war aktiv, aber aktuell keine "
-                    "Konsolen-IP bekannt - wird beim nächsten Erkennen "
-                    "nicht automatisch nachgeholt."
-                )
+        self._port_forward_thread = threading.Thread(
+            target=self._port_forward_loop,
+            daemon=True,
+        )
+        self._port_forward_thread.start()
 
     def update_status(self) -> None:
         """Aktualisiert den aktuellen Systemstatus."""
@@ -1151,8 +1160,88 @@ class Application:
         if success:
             self.port_forward_enabled = enabled
             self.state_store.set("port_forward_enabled", enabled)
+            self._port_forward_applied_ip = console_ip if enabled else None
 
         return success, message
+
+    def _port_forward_loop(self) -> None:
+        """
+        Gleicht die Portweiterleitung regelmäßig ab (siehe
+        _reconcile_port_forward()). Läuft als Daemon-Thread, damit ein
+        Beenden von XRack nicht darauf warten muss.
+        """
+
+        while True:
+
+            try:
+                self._reconcile_port_forward()
+            except Exception as exc:
+                #
+                # Ein Fehler hier darf den Thread nicht beenden, sonst
+                # bleibt die Weiterleitung bis zum nächsten Neustart
+                # ungesetzt.
+                #
+                self.logger.exception(
+                    "Abgleich der Portweiterleitung fehlgeschlagen: %s",
+                    exc,
+                )
+
+            time.sleep(self.PORT_FORWARD_INTERVAL)
+
+    def _reconcile_port_forward(self) -> None:
+        """
+        Sorgt dafür, dass die tatsächlich gesetzte iptables-Regel zur
+        gemerkten Einstellung und zur aktuell erkannten Konsolen-IP
+        passt.
+
+        Setzt die Regel nur, wenn sich die IP gegenüber der zuletzt
+        gesetzten geändert hat - sonst liefe alle paar Sekunden ein
+        iptables-Aufruf ohne jeden Nutzen. Das erneute Setzen selbst
+        ist gefahrlos: scripts/xrack-port-forward.sh leert seine
+        eigenen Ketten, bevor es neue Regeln anlegt.
+        """
+
+        if not self.port_forward_enabled:
+            #
+            # Aus heißt aus - hier bewusst ohne jeden Subprozess, damit
+            # der Abgleich für alle, die das Feature nicht nutzen,
+            # nichts kostet.
+            #
+            self._port_forward_applied_ip = None
+            return
+
+        console_ip = self.wlan_control.get_status().get("console_ip")
+
+        if not console_ip:
+            #
+            # Konsole (noch) nicht da - z.B. direkt nach dem Start,
+            # bevor sie ihre DHCP-Lease bekommen hat. Beim Auftauchen
+            # wird dann neu gesetzt.
+            #
+            self._port_forward_applied_ip = None
+            return
+
+        if console_ip == self._port_forward_applied_ip:
+            return
+
+        success, message = self.wlan_control.set_port_forward(True, console_ip)
+
+        if success:
+
+            self._port_forward_applied_ip = console_ip
+
+            self.logger.info(
+                "Portweiterleitung auf Konsole %s gesetzt.",
+                console_ip,
+            )
+
+        else:
+
+            self.logger.warning(
+                "Portweiterleitung auf %s konnte nicht gesetzt werden: %s",
+                console_ip,
+                message,
+            )
 
     def refresh_port_forward(self) -> None:
         """
@@ -1162,13 +1251,13 @@ class Application:
         Bridge/Freigabe geändert hat (siehe set_port_forward()).
         """
 
-        if not self.port_forward_enabled:
-            return
+        #
+        # Erzwingt ein Neusetzen, indem die gemerkte IP verworfen wird -
+        # danach übernimmt der normale Abgleich.
+        #
+        self._port_forward_applied_ip = None
 
-        console_ip = self.wlan_control.get_status().get("console_ip")
-
-        if console_ip:
-            self.wlan_control.set_port_forward(True, console_ip)
+        self._reconcile_port_forward()
 
     def get_bluetooth_status(self) -> dict:
         """
