@@ -21,6 +21,12 @@ the Pi itself.
 - **Virtual soundcheck**: record all channels straight from the
   console to Wave64 (.w64), then play them back on the exact same
   channels - lets the band soundcheck without playing live.
+- **Practice mix**: combine several stereo files - say a click track,
+  your own instrument and the rest of the band from a stem separation -
+  into one multichannel recording. File 1 lands on channels 1+2, file 2
+  on 3+4 and so on, so at the console you can dial in exactly what you
+  want to hear while practising, and fade your own part back in
+  whenever you need it.
 - **Music player**: shuffle-play a whole folder in a loop (e.g.
   walk-in/break music) or single files, on a freely selectable channel
   pair - shows title/artist from the file's metadata when available.
@@ -28,11 +34,26 @@ the Pi itself.
   route its audio stream onto a freely selectable channel pair, just
   like the music player. Deliberately optional and off after every
   restart, since Bluetooth is only partially suited for live use.
-- Level meter, a settings dialog (language/port/Wi-Fi/bridge), optional
-  Wi-Fi client + access point setup, installable as a PWA.
+- **Reach the console from your home network**: one switch, and the
+  console plugged into the Pi's Ethernet port becomes reachable from
+  your home network through XRack's own IP - so X32-Edit, X-AIR-Edit or
+  Mixing Station work without rewiring anything. The address to type
+  into the app is shown right below the switch.
+- Level meter, a settings dialog (language, port, Wi-Fi, console
+  access, mixer sample rate), optional Wi-Fi client + access point
+  setup, installable as a PWA.
 - **Copy to USB drive**: plug in a USB stick and a button appears next
   to each recording to copy it straight to the stick's root folder -
   no folder picker, no re-copying a file that's already there.
+- **Upload recordings**: add .w64 files to the recording list straight
+  from the web interface - handy for playing back a practice mix built
+  elsewhere. Recordings and practice mixes are labelled as such in the
+  list (and marked `_s` / `_p` in their file names), so it stays clear
+  what each file is for.
+- **Update from a USB stick**: put the release ZIP from GitHub in the
+  root folder of a stick, plug it in and press one button. Recordings,
+  music and every setting are kept - and if the web interface doesn't
+  come back afterwards, XRack restores the previous version on its own.
 
 ### Requirements
 
@@ -101,6 +122,12 @@ am Pi nötig.
 - **Virtueller Soundcheck**: Alle Kanäle direkt vom Pult in Wave64
   (.w64) aufnehmen, danach exakt auf denselben Kanälen wieder
   abspielen - die Band kann so soundchecken, ohne live zu spielen.
+- **Übungsmix**: Mehrere Stereo-Dateien - etwa Click, das eigene
+  Instrument und der Rest der Band aus einer Stem-Trennung - zu einer
+  Mehrkanal-Aufnahme zusammenfassen. Datei 1 landet auf Kanal 1+2,
+  Datei 2 auf 3+4 und so weiter. Am Pult stellt man sich damit genau
+  ein, was man beim Üben hören will, und dreht sich das eigene
+  Instrument bei Bedarf dazu.
 - **Musikplayer**: Ordner mit Zufallswiedergabe in Dauerschleife (z.B.
   Pausenmusik) oder einzelne Dateien, auf einem frei wählbaren
   Kanalpaar - zeigt Titel/Interpret aus den Metadaten, falls vorhanden.
@@ -108,13 +135,28 @@ am Pi nötig.
   und dessen Audiostream auf ein frei wählbares Kanalpaar legen, genau
   wie beim Musikplayer. Bewusst optional und nach jedem Neustart aus,
   da Bluetooth für den Live-Einsatz nur bedingt geeignet ist.
-- Pegelmesser, Einstellungsdialog (Sprache/Port/WLAN/Bridge),
-  optionale WLAN-Client- und Access-Point-Einrichtung, als PWA
-  installierbar.
+- **Konsole aus dem Heimnetz erreichbar machen**: Ein Schalter, und das
+  per Kabel angeschlossene Pult ist aus dem Heimnetz über XRacks eigene
+  IP ansprechbar - X32-Edit, X-AIR-Edit oder Mixing Station
+  funktionieren damit, ohne etwas umzustecken. Die Adresse, die in die
+  App gehört, steht direkt unter dem Schalter.
+- Pegelmesser, Einstellungsdialog (Sprache, Port, WLAN, Zugang zur
+  Konsole, Mischpult-Samplerate), optionale WLAN-Client- und
+  Access-Point-Einrichtung, als PWA installierbar.
 - **Auf USB-Stick kopieren**: USB-Stick anschließen, schon erscheint
   neben jeder Aufnahme ein Button, der sie direkt ins Wurzelverzeichnis
   des Sticks kopiert - keine Ordnerauswahl, kein doppeltes Kopieren
   einer bereits vorhandenen Datei.
+- **Aufnahmen hochladen**: .w64-Dateien direkt über die Weboberfläche
+  in die Aufnahmenliste laden - praktisch, um einen anderswo erzeugten
+  Übungsmix abzuspielen. Aufnahmen und Übungsmixe sind in der Liste als
+  solche gekennzeichnet (und im Dateinamen mit `_s` bzw. `_p`
+  markiert), damit klar bleibt, wofür eine Datei gedacht ist.
+- **Update über USB-Stick**: Release-ZIP von GitHub ins
+  Wurzelverzeichnis eines Sticks legen, anstecken, einen Knopf drücken.
+  Aufnahmen, Musik und sämtliche Einstellungen bleiben erhalten - und
+  falls die Weboberfläche danach nicht zurückkommt, stellt XRack den
+  vorherigen Stand selbsttätig wieder her.
 
 ### Voraussetzungen
 
