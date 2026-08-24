@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from pathlib import Path
 from core.audio_file import AudioFile
 from audio.models import RecordingInfo
+from core.recording_kind import kind_from_filename
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
 from fastapi import Response
@@ -834,6 +835,7 @@ def get_recording_info(
         size=recording.stat().st_size,
         sample_rate=audio.sample_rate,
         bits_per_sample=audio.bits_per_sample,
+        kind=kind_from_filename(recording.name),
     )
        
 @router.post("/api/recording/info")
@@ -887,6 +889,8 @@ async def recording_info(
         "bits_per_sample": audio.bits_per_sample,
 
         "duration": audio.duration,
+
+        "kind": kind_from_filename(recording.name),
 
     }
 

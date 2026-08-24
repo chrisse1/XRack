@@ -23,12 +23,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "alert_usb_eject_busy": "Es läuft noch ein Kopiervorgang - bitte warten.",
 
         # Soundcheck-Karte
-        "soundcheck_title": "Virtueller Soundcheck",
+        "soundcheck_title": "Soundcheck & Üben",
         "status_label": "Status:",
         "record_channels_label": "Aufnahmekanäle:",
         "btn_recording_start": "Aufnahme starten",
         "btn_recording_stop": "Aufnahme stoppen",
         "btn_soundcheck": "Soundcheck",
+        "btn_practice": "Üben",
+        "badge_kind_soundcheck": "Soundcheck",
+        "badge_kind_practice": "Übungsmix",
         "btn_stop": "Stop",
         "btn_level_check": "Pegel testen",
         "btn_level_check_stop": "Pegel testen (Stop)",
@@ -302,12 +305,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "alert_usb_eject_busy": "A copy is still in progress - please wait.",
 
         # Soundcheck card
-        "soundcheck_title": "Virtual Soundcheck",
+        "soundcheck_title": "Soundcheck & Practice",
         "status_label": "Status:",
         "record_channels_label": "Recording channels:",
         "btn_recording_start": "Start recording",
         "btn_recording_stop": "Stop recording",
         "btn_soundcheck": "Soundcheck",
+        "btn_practice": "Practice",
+        "badge_kind_soundcheck": "Soundcheck",
+        "badge_kind_practice": "Practice mix",
         "btn_stop": "Stop",
         "btn_level_check": "Check levels",
         "btn_level_check_stop": "Check levels (stop)",

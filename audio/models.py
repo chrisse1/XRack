@@ -77,3 +77,8 @@ class RecordingInfo:
     size: int
     sample_rate: int
     bits_per_sample: int
+
+    #
+    # "soundcheck" oder "practice" - siehe core/recording_kind.py
+    #
+    kind: str = "soundcheck"

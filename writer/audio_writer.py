@@ -5,6 +5,8 @@ Basisklasse für Audio-Dateischreiber.
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+from core.recording_kind import MARKER_SOUNDCHECK, strip_marker
+
 
 class AudioWriter(ABC):
     """
@@ -25,11 +27,13 @@ class AudioWriter(ABC):
         self,
         extension: str,
         prefix: str = "Soundcheck",
+        marker: str = MARKER_SOUNDCHECK,
     ) -> str:
         """
         Erstellt Dateiname und Verzeichnis. Der Dateiname besteht aus
-        `prefix` und einer fortlaufenden Nummer (z.B. "Soundcheck-1",
-        "Soundcheck-2", ...) - die nächste freie Nummer wird dabei
+        `prefix`, einer fortlaufenden Nummer und einem Kürzel für die
+        Art der Datei (z.B. "Soundcheck-1_s", "Bohemian Rhapsody-1_p") -
+        siehe core/recording_kind.py. Die nächste freie Nummer wird
         anhand der bereits vorhandenen Dateien mit demselben Präfix
         ermittelt, nicht separat gespeichert. Das übersteht Löschen
         einzelner Aufnahmen und Neustarts, und ein Präfixwechsel
@@ -44,7 +48,7 @@ class AudioWriter(ABC):
 
         index = self._next_index(safe_prefix, extension)
 
-        filename = f"{safe_prefix}-{index}"
+        filename = f"{safe_prefix}-{index}_{marker}"
 
         self.filename = str(
             self.directory / f"{filename}.{extension}"
@@ -56,9 +60,15 @@ class AudioWriter(ABC):
         """
         Ermittelt die nächste freie fortlaufende Nummer für `prefix`
         anhand der im Verzeichnis vorhandenen Dateien.
+
+        Berücksichtigt dabei sowohl Namen *mit* Kürzel
+        ("Soundcheck-1_s.w64") als auch ältere ohne
+        ("Soundcheck-1.w64") - sonst würde der Zähler nach der
+        Einführung des Kürzels wieder bei 1 anfangen und die
+        vorhandene Aufnahme beim Öffnen überschreiben.
         """
 
-        marker = f"{prefix}-"
+        start = f"{prefix}-"
         suffix = f".{extension}"
         highest = 0
 
@@ -66,10 +76,10 @@ class AudioWriter(ABC):
 
             name = path.name
 
-            if not name.startswith(marker) or not name.endswith(suffix):
+            if not name.startswith(start) or not name.endswith(suffix):
                 continue
 
-            number = name[len(marker):-len(suffix)]
+            number = strip_marker(name[len(start):-len(suffix)])
 
             if number.isdigit():
                 highest = max(highest, int(number))
@@ -83,9 +93,11 @@ class AudioWriter(ABC):
         sample_rate: int,
         bits_per_sample: int,
         name_prefix: str = "Soundcheck",
+        marker: str = MARKER_SOUNDCHECK,
     ):
         """
-        Öffnet die Ausgabedatei.
+        Öffnet die Ausgabedatei. `marker` kennzeichnet die Art der
+        Datei im Dateinamen, siehe core/recording_kind.py.
         """
         pass
 

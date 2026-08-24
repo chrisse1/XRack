@@ -26,6 +26,7 @@ frühere Übungsmixe rund 48 dB zu leise waren.)
 
 from pathlib import Path
 
+from core.recording_kind import MARKER_PRACTICE
 from player.track_decoder import TrackDecoder, probe_duration
 from writer.w64_writer import W64Writer
 
@@ -96,6 +97,7 @@ def combine_stems(
             sample_rate=target_rate,
             bits_per_sample=24,
             name_prefix=name_prefix,
+            marker=MARKER_PRACTICE,
         )
 
         exhausted = [False] * len(decoders)

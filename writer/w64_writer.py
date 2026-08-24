@@ -6,6 +6,7 @@ import logging
 import struct
 from uuid import UUID
 
+from core.recording_kind import MARKER_SOUNDCHECK
 from writer.audio_writer import AudioWriter
 
 
@@ -44,13 +45,18 @@ class W64Writer(AudioWriter):
         sample_rate: int,
         bits_per_sample: int,
         name_prefix: str = "Soundcheck",
+        marker: str = MARKER_SOUNDCHECK,
     ):
 
         self.channels = channels
         self.sample_rate = sample_rate
         self.bits_per_sample = bits_per_sample
 
-        filename = self.create_filename("w64", prefix=name_prefix)
+        filename = self.create_filename(
+            "w64",
+            prefix=name_prefix,
+            marker=marker,
+        )
 
         self.file = open(
             filename,

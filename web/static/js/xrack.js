@@ -276,9 +276,11 @@ function updateRecordingList(recordings) {
             item.classList.add("active");
         }
 
+        const badge = kindBadge(kindFromFilename(recording));
+
         item.innerHTML = recording === selectedRecording
-            ? `<i class="bi bi-check-circle-fill me-2"></i>${recording}`
-            : recording;
+            ? `<i class="bi bi-check-circle-fill me-2"></i>${recording} ${badge}`
+            : `${recording} ${badge}`;
 
         item.onclick = async () => {
             selectedRecording = recording;
@@ -289,6 +291,13 @@ function updateRecordingList(recordings) {
             if (button && !playbackActive) {
                 button.disabled = false;
             }
+
+            //
+            // Sofort auffrischen, damit die Beschriftung des
+            // Abspielbuttons ("Soundcheck"/"Üben") gleich zur neuen
+            // Auswahl passt und nicht erst beim nächsten Poll.
+            //
+            await refreshDashboard();
         };
 
         group.appendChild(item);
@@ -424,11 +433,23 @@ function updateSoundcheckButton(data) {
         button.classList.add("btn-warning");
         button.disabled = false;
     } else {
-        button.innerHTML = `<i class="bi bi-play-circle fs-3"></i><small>${I18N.btn_soundcheck}</small>`;
+        //
+        // Beschriftung richtet sich nach der ausgewählten Datei:
+        // "Soundcheck" für eine Aufnahme, "Üben" für einen Übungsmix.
+        // Die Aktion selbst bleibt identisch - der Player spielt jede
+        // Datei auf den Kanälen ab, auf denen sie liegt.
+        //
+        const label = selectedRecordingInfo && isPracticeMix(selectedRecordingInfo.kind)
+            ? I18N.btn_practice
+            : I18N.btn_soundcheck;
+
+        button.innerHTML = `<i class="bi bi-play-circle fs-3"></i><small>${label}</small>`;
         button.classList.remove("btn-warning");
         button.classList.add("btn-success");
         button.disabled = !selectedRecording || data.recording || data.music_playing;
     }
+
+    updateRecorderKindBadge();
 }
 
 async function toggleSoundcheck() {
@@ -594,8 +615,53 @@ async function loadRecordingInfo() {
     const result = await response.json();
     if (result.success) {
         selectedRecordingInfo = result;
+        updateRecorderKindBadge();
         console.log(result);
     }
+}
+
+// ------------------------------------------------------------
+// Art der Datei: Soundcheck-Aufnahme oder Übungsmix
+// (siehe core/recording_kind.py - das Kürzel steckt im Dateinamen)
+// ------------------------------------------------------------
+
+function isPracticeMix(kind) {
+    return kind === "practice";
+}
+
+//
+// Spiegelt kind_from_filename() aus core/recording_kind.py.
+//
+// Nötig, weil die Kurzliste auf der Karte aus dem Dashboard-Status
+// gespeist wird, der aus Performancegründen nur Dateinamen überträgt
+// (er wird im Sekundentakt abgerufen). Wird das Kürzel dort jemals
+// geändert, muss es hier mitgeändert werden.
+//
+function kindFromFilename(filename) {
+    const stem = filename.replace(/\.[^.]*$/, "");
+    return stem.endsWith("_p") ? "practice" : "soundcheck";
+}
+
+function kindLabel(kind) {
+    return isPracticeMix(kind)
+        ? I18N.badge_kind_practice
+        : I18N.badge_kind_soundcheck;
+}
+
+function kindBadge(kind) {
+    const style = isPracticeMix(kind) ? "text-bg-info" : "text-bg-secondary";
+    const icon = isPracticeMix(kind) ? "bi-people" : "bi-sliders";
+
+    return `<span class="badge ${style}"><i class="bi ${icon} me-1"></i>${kindLabel(kind)}</span>`;
+}
+
+function updateRecorderKindBadge() {
+    const element = document.getElementById("recorder-kind");
+    if (!element) return;
+
+    element.innerHTML = selectedRecording && selectedRecordingInfo
+        ? kindBadge(selectedRecordingInfo.kind)
+        : "";
 }
 
 // ============================================================
@@ -672,6 +738,7 @@ function createRecordingCard(recording) {
                 <h6 class="card-title mb-2">
                     <i class="bi bi-music-note-beamed me-2"></i>
                     ${recording.filename}
+                    <span class="ms-2">${kindBadge(recording.kind)}</span>
                     ${isSelected ? `<span class="badge text-bg-primary ms-2">${I18N.badge_selected_for_soundcheck}</span>` : ''}
                 </h6>
                 <small class="text-body-secondary">
