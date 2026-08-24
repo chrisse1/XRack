@@ -19,9 +19,11 @@ from core.system_control import SystemControl
 from core.wlan_control import WlanControl
 from core.bluetooth_control import BluetoothControl
 from core.usb_storage import UsbStorage
+from core.updater import Updater
 from core.state_store import StateStore
 from core.pin import hash_pin, verify_pin
 from core.stem_combiner import combine_stems, StemCombineError
+import getpass
 import platform
 import psutil
 import re
@@ -102,6 +104,8 @@ class Application:
         self.bluetooth_control = BluetoothControl()
 
         self.usb_storage = UsbStorage()
+
+        self.updater = Updater(self.usb_storage)
 
         self._usb_copy_lock = threading.Lock()
 
@@ -730,6 +734,43 @@ class Application:
 
         with self._stem_combine_lock:
             return dict(self.stem_combine_state)
+
+    def get_update_info(self) -> dict:
+        """
+        Beschreibt fürs Einstellungen-Modal, ob ein Update bereitliegt,
+        und liefert den Fortschritt eines laufenden Vorgangs gleich mit.
+        """
+
+        info = self.updater.get_available()
+
+        info["version"] = self.config.data.application.version
+        info["status"] = self.updater.get_status()
+
+        return info
+
+    def start_update(self) -> tuple[bool, str]:
+        """
+        Startet das Update von dem auf dem USB-Stick gefundenen Paket.
+        Läuft im Hintergrund weiter, auch über den Neustart des
+        Dienstes hinweg - der Fortschritt kommt über
+        get_update_status().
+        """
+
+        if self.recorder.recording:
+            return False, "Während einer Aufnahme kann nicht aktualisiert werden."
+
+        if self.player.playing or self.music_player.playing:
+            return False, "Während der Wiedergabe kann nicht aktualisiert werden."
+
+        return self.updater.start(
+            service_user=getpass.getuser(),
+            port=self.config.data.server.port,
+        )
+
+    def get_update_status(self) -> dict:
+        """Liefert den Fortschritt eines laufenden/letzten Updates."""
+
+        return self.updater.get_status()
 
     def eject_usb(self) -> tuple[bool, str]:
         """

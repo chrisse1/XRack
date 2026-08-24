@@ -805,6 +805,7 @@ ${INSTALL_DIR}/scripts/xrack-bt-power.sh *, \
 ${INSTALL_DIR}/scripts/xrack-bt-pair.sh, \
 ${INSTALL_DIR}/scripts/xrack-bt-forget.sh *, \
 ${INSTALL_DIR}/scripts/xrack-bt-disconnect.sh *, \
+${INSTALL_DIR}/scripts/xrack-update.py *, \
 ${INSTALL_DIR}/scripts/xrack-usb-unmount.sh" \
         > "${SUDOERS_TMP}"
 

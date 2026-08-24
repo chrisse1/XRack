@@ -212,6 +212,42 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Erst Bridge oder Freigabe aktivieren und Konsole per "
             "Kabel anschließen."
         ),
+
+        # Update über USB-Stick
+        "settings_update_title": "Update",
+        "settings_update_version_label": "Installierte Version:",
+        "settings_update_hint": (
+            "ZIP-Datei von GitHub herunterladen, ins Wurzelverzeichnis "
+            "eines USB-Sticks legen und den Stick anstecken. Aufnahmen, "
+            "Musik und alle Einstellungen bleiben erhalten. Falls "
+            "danach etwas nicht läuft, holt XRack den vorherigen Stand "
+            "automatisch zurück."
+        ),
+        "settings_update_no_usb": "Kein USB-Stick angeschlossen.",
+        "settings_update_no_package": (
+            "Keine ZIP-Datei im Wurzelverzeichnis des Sticks gefunden."
+        ),
+        "settings_update_found": "Gefunden: {name} ({size})",
+        "btn_settings_update": "Update starten",
+        "settings_update_confirm": (
+            "XRack jetzt aus \"{name}\" aktualisieren?\n\n"
+            "Der Dienst startet dabei neu, die Weboberfläche ist kurz "
+            "nicht erreichbar. Aufnahmen, Musik und Einstellungen "
+            "bleiben erhalten."
+        ),
+        "settings_update_running": "Update läuft - bitte nicht ausschalten!",
+        "settings_update_reconnecting": (
+            "Dienst startet neu - warte auf die Weboberfläche..."
+        ),
+        "settings_update_step_start": "Update wird vorbereitet...",
+        "settings_update_step_pruefen": "ZIP-Datei wird geprüft...",
+        "settings_update_step_sichern": "Aktueller Stand wird gesichert...",
+        "settings_update_step_uebertragen": "Neue Dateien werden übertragen...",
+        "settings_update_step_pakete": "Abhängigkeiten werden installiert...",
+        "settings_update_step_neustart": "Dienst wird neu gestartet...",
+        "settings_update_step_rueckfall": "Alter Stand wird zurückgeholt...",
+        "settings_update_failed": "Update fehlgeschlagen.",
+
         "settings_wifi_hint": (
             "SSID und Passwort werden beim Speichern immer beide neu "
             "gesetzt."
@@ -493,6 +529,42 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Enable Bridge or Sharing first, and connect the console "
             "via cable."
         ),
+
+        # Update via USB stick
+        "settings_update_title": "Update",
+        "settings_update_version_label": "Installed version:",
+        "settings_update_hint": (
+            "Download the ZIP from GitHub, put it in the root folder of "
+            "a USB stick and plug the stick in. Recordings, music and "
+            "all settings are kept. If something does not work "
+            "afterwards, XRack automatically restores the previous "
+            "version."
+        ),
+        "settings_update_no_usb": "No USB stick connected.",
+        "settings_update_no_package": (
+            "No ZIP file found in the root folder of the stick."
+        ),
+        "settings_update_found": "Found: {name} ({size})",
+        "btn_settings_update": "Start update",
+        "settings_update_confirm": (
+            "Update XRack from \"{name}\" now?\n\n"
+            "The service will restart, so the web interface will be "
+            "briefly unavailable. Recordings, music and settings are "
+            "kept."
+        ),
+        "settings_update_running": "Update running - do not power off!",
+        "settings_update_reconnecting": (
+            "Service is restarting - waiting for the web interface..."
+        ),
+        "settings_update_step_start": "Preparing update...",
+        "settings_update_step_pruefen": "Checking ZIP file...",
+        "settings_update_step_sichern": "Backing up current version...",
+        "settings_update_step_uebertragen": "Copying new files...",
+        "settings_update_step_pakete": "Installing dependencies...",
+        "settings_update_step_neustart": "Restarting service...",
+        "settings_update_step_rueckfall": "Restoring previous version...",
+        "settings_update_failed": "Update failed.",
+
         "settings_wifi_hint": (
             "SSID and password are always both set anew when saving."
         ),

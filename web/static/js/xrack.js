@@ -1871,6 +1871,181 @@ async function loadSettings() {
     } catch (error) {
         console.error("Fehler beim Laden der Einstellungen:", error);
     }
+
+    await loadUpdateInfo();
+}
+
+// ------------------------------------------------------------
+// Update über USB-Stick
+// ------------------------------------------------------------
+
+let updatePollTimer = null;
+let updatePackageName = "";
+
+async function loadUpdateInfo() {
+    const packageBox = document.getElementById("settings-update-package");
+    const button = document.getElementById("btn-settings-update");
+    if (!packageBox || !button) return;
+
+    try {
+        const response = await fetch("/api/update/info");
+        const data = await response.json();
+
+        document.getElementById("settings-update-version").textContent = data.version || "-";
+        updatePackageName = data.package || "";
+
+        if (data.package) {
+            packageBox.className = "small mb-2 text-success";
+            packageBox.textContent = I18N.settings_update_found
+                .replace("{name}", data.package)
+                .replace("{size}", formatFileSize(data.size));
+            button.disabled = false;
+        } else {
+            packageBox.className = "small mb-2 text-body-secondary";
+            packageBox.textContent = data.usb_connected
+                ? I18N.settings_update_no_package
+                : I18N.settings_update_no_usb;
+            button.disabled = true;
+        }
+
+        //
+        // Ein Update, das beim letzten Öffnen lief, kann inzwischen
+        // durch sein - Ergebnis anzeigen statt es zu verschlucken.
+        //
+        if (data.status && data.status.state !== "idle") {
+            showUpdateResult(data.status);
+        }
+    } catch (error) {
+        console.error("Fehler beim Laden der Update-Informationen:", error);
+    }
+}
+
+function updateStepLabel(status) {
+    if (status.state === "rolling_back") {
+        return I18N.settings_update_step_rueckfall;
+    }
+
+    const key = "settings_update_step_" + (status.step || "start")
+        .replace(/ü/g, "ue")
+        .replace(/ä/g, "ae")
+        .replace(/ö/g, "oe");
+
+    return I18N[key] || I18N.settings_update_running;
+}
+
+function showUpdateResult(status) {
+    const box = document.getElementById("settings-update-result");
+    if (!box) return;
+
+    if (status.state === "running" || status.state === "rolling_back") {
+        box.classList.add("d-none");
+        return;
+    }
+
+    const style = {
+        success: "alert-success",
+        rolled_back: "alert-warning",
+        failed: "alert-danger",
+    }[status.state];
+
+    if (!style) {
+        box.classList.add("d-none");
+        return;
+    }
+
+    box.className = `alert ${style} py-2 px-3 small mt-3`;
+    box.textContent = status.message || I18N.settings_update_failed;
+    box.classList.remove("d-none");
+}
+
+document.getElementById("btn-settings-update").addEventListener("click", startUpdate);
+
+async function startUpdate() {
+    if (!updatePackageName) return;
+
+    if (!confirm(I18N.settings_update_confirm.replace("{name}", updatePackageName))) return;
+
+    const button = document.getElementById("btn-settings-update");
+    const result = document.getElementById("settings-update-result");
+
+    button.disabled = true;
+    result.classList.add("d-none");
+
+    let response;
+    try {
+        response = await (await fetch("/api/update/start", { method: "POST" })).json();
+    } catch (error) {
+        console.error("Update konnte nicht gestartet werden:", error);
+        button.disabled = false;
+        showUpdateResult({ state: "failed", message: I18N.settings_update_failed });
+        return;
+    }
+
+    if (!response.success) {
+        button.disabled = false;
+        showUpdateResult({ state: "failed", message: response.message });
+        return;
+    }
+
+    showUpdateProgress(I18N.settings_update_step_start);
+    pollUpdateStatus();
+}
+
+function showUpdateProgress(label) {
+    const wrapper = document.getElementById("settings-update-progress");
+    const text = document.getElementById("settings-update-progress-label");
+
+    if (text) text.textContent = label;
+    if (wrapper) wrapper.classList.remove("d-none");
+}
+
+function hideUpdateProgress() {
+    const wrapper = document.getElementById("settings-update-progress");
+    if (wrapper) wrapper.classList.add("d-none");
+}
+
+function pollUpdateStatus() {
+    if (updatePollTimer) clearInterval(updatePollTimer);
+
+    //
+    // Der Dienst startet sich mitten im Update selbst neu. Abgerissene
+    // Anfragen sind hier also der Normalfall und kein Fehler - einfach
+    // weiterfragen, bis er wieder antwortet. Deshalb steht hier auch
+    // kein Abbruch nach n Fehlversuchen: aufzugeben, während der Pi
+    // gerade neu startet, wäre genau das Falsche.
+    //
+    updatePollTimer = setInterval(async () => {
+        let status;
+
+        try {
+            status = await (await fetch("/api/update/status")).json();
+        } catch (error) {
+            showUpdateProgress(I18N.settings_update_reconnecting);
+            return;
+        }
+
+        if (status.state === "running" || status.state === "rolling_back") {
+            showUpdateProgress(updateStepLabel(status));
+            return;
+        }
+
+        clearInterval(updatePollTimer);
+        updatePollTimer = null;
+
+        hideUpdateProgress();
+        showUpdateResult(status);
+
+        //
+        // Nach einem erfolgreichen Update läuft eine neue Fassung -
+        // die Seite muss neu geladen werden, damit JavaScript und
+        // Übersetzungen dazu passen.
+        //
+        if (status.state === "success") {
+            setTimeout(() => window.location.reload(), 4000);
+        } else {
+            document.getElementById("btn-settings-update").disabled = false;
+        }
+    }, 1500);
 }
 
 document.querySelectorAll(".pin-input").forEach((input) => {

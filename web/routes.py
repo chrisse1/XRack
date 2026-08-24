@@ -1143,6 +1143,46 @@ async def combine_recordings_status(request: Request):
     return application.get_stem_combine_status()
 
 
+@router.get("/api/update/info")
+async def update_info(request: Request):
+    """
+    Liefert die laufende Version, ob eine ZIP auf dem USB-Stick liegt,
+    und den Fortschritt eines laufenden Updates.
+    """
+
+    application = request.app.state.application
+
+    return application.get_update_info()
+
+
+@router.post("/api/update/start")
+async def update_start(request: Request):
+    """
+    Startet das Update aus der ZIP-Datei auf dem USB-Stick.
+
+    Der Dienst startet sich dabei selbst neu - die Antwort kommt also
+    noch, bevor das Update durch ist. Den Ausgang liefert
+    GET /api/update/status, dessen Statusdatei den Neustart übersteht.
+    """
+
+    application = request.app.state.application
+
+    success, message = application.start_update()
+
+    return {
+        "success": success,
+        "message": message,
+    }
+
+
+@router.get("/api/update/status")
+async def update_status(request: Request):
+
+    application = request.app.state.application
+
+    return application.get_update_status()
+
+
 @router.get("/api/usb/status")
 async def usb_status(request: Request):
 
