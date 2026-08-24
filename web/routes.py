@@ -1,5 +1,6 @@
 import json
 import shutil
+import tempfile
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
@@ -1081,6 +1082,61 @@ async def upload_recordings(
     return {
         "uploaded": uploaded,
     }
+
+
+@router.post("/api/recordings/combine")
+async def combine_recordings(
+    request: Request,
+    name: str = Form(...),
+    files: list[UploadFile] = File(...),
+):
+    """
+    Übungsmix: kombiniert mehrere hochgeladene Stereo-Stems (siehe
+    core/stem_combiner.py) - Reihenfolge der Uploads bestimmt die
+    Kanalzuordnung (Datei 1 -> Kanal 1+2, ...). Kopiert die Uploads
+    zunächst in ein Scratch-Verzeichnis, die eigentliche Arbeit läuft
+    danach im Hintergrund (siehe Application.start_stem_combine()) -
+    Fortschritt über GET /api/recordings/combine/status abfragbar.
+    """
+
+    application = request.app.state.application
+
+    scratch_dir = Path(tempfile.mkdtemp(prefix="xrack_stem_combine_"))
+
+    file_paths = []
+
+    for index, upload in enumerate(files):
+
+        suffix = Path(upload.filename or "").suffix or ".wav"
+
+        destination = scratch_dir / f"stem_{index}{suffix}"
+
+        with destination.open("wb") as target:
+            shutil.copyfileobj(upload.file, target)
+
+        file_paths.append(destination)
+
+    success, message = application.start_stem_combine(name, file_paths)
+
+    if not success:
+
+        for path in file_paths:
+            path.unlink(missing_ok=True)
+
+        scratch_dir.rmdir()
+
+    return {
+        "success": success,
+        "message": message,
+    }
+
+
+@router.get("/api/recordings/combine/status")
+async def combine_recordings_status(request: Request):
+
+    application = request.app.state.application
+
+    return application.get_stem_combine_status()
 
 
 @router.get("/api/usb/status")

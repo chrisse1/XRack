@@ -21,6 +21,7 @@ from core.bluetooth_control import BluetoothControl
 from core.usb_storage import UsbStorage
 from core.state_store import StateStore
 from core.pin import hash_pin, verify_pin
+from core.stem_combiner import combine_stems, StemCombineError
 import platform
 import psutil
 import re
@@ -111,6 +112,15 @@ class Application:
             "total": 0,
             "success": None,
             "already_exists": False,
+        }
+
+        self._stem_combine_lock = threading.Lock()
+
+        self.stem_combine_state = {
+            "active": False,
+            "success": None,
+            "error": "",
+            "filename": "",
         }
 
         self.bluetooth_player = BluetoothPlayer(
@@ -605,6 +615,121 @@ class Application:
 
         with self._usb_copy_lock:
             return dict(self.usb_copy_state)
+
+    def start_stem_combine(
+        self,
+        name: str,
+        file_paths: list[Path],
+    ) -> tuple[bool, str]:
+        """
+        Startet die Zusammenführung mehrerer Stereo-Stems (z.B. Click,
+        eigenes Instrument, Rest der Band aus Moises) zu einem
+        "Übungsmix" im Hintergrund (siehe core/stem_combiner.py) -
+        `file_paths` zeigen auf bereits von der Route in ein Scratch-
+        Verzeichnis kopierte Uploads, die nach Abschluss gelöscht
+        werden. Reihenfolge der Liste = Kanalzuordnung (Datei 1 ->
+        Kanal 1+2, ...).
+        """
+
+        name = name.strip()
+
+        if (
+            not name
+            or len(name) > 40
+            or "/" in name
+            or "\\" in name
+            or name in (".", "..")
+        ):
+            return False, "Ungültiger Name."
+
+        if not 2 <= len(file_paths) <= 8:
+            return False, "Es werden 2 bis 8 Dateien benötigt."
+
+        if self.selected_audio_device is not None:
+
+            max_channels = self.selected_audio_device.channels
+
+            if len(file_paths) * 2 > max_channels:
+                return False, (
+                    f"Zu viele Dateien für das Interface "
+                    f"({max_channels} Kanäle verfügbar)."
+                )
+
+        with self._stem_combine_lock:
+
+            if self.stem_combine_state["active"]:
+                return False, "Es läuft bereits eine Zusammenführung."
+
+            self.stem_combine_state = {
+                "active": True,
+                "success": None,
+                "error": "",
+                "filename": "",
+            }
+
+        thread = threading.Thread(
+            target=self._run_stem_combine,
+            args=(name, file_paths),
+            daemon=True,
+        )
+        thread.start()
+
+        return True, "started"
+
+    def _run_stem_combine(
+        self,
+        name: str,
+        file_paths: list[Path],
+    ) -> None:
+
+        try:
+
+            filename = combine_stems(
+                file_paths,
+                self.mixer_sample_rate,
+                name,
+            )
+
+            with self._stem_combine_lock:
+                self.stem_combine_state["success"] = True
+                self.stem_combine_state["filename"] = filename
+
+        except StemCombineError as exc:
+
+            with self._stem_combine_lock:
+                self.stem_combine_state["success"] = False
+                self.stem_combine_state["error"] = str(exc)
+
+        except Exception as exc:
+
+            self.logger.exception(
+                "Übungsmix fehlgeschlagen: %s",
+                exc,
+            )
+
+            with self._stem_combine_lock:
+                self.stem_combine_state["success"] = False
+                self.stem_combine_state["error"] = "Unerwarteter Fehler."
+
+        finally:
+
+            with self._stem_combine_lock:
+                self.stem_combine_state["active"] = False
+
+            for path in file_paths:
+                path.unlink(missing_ok=True)
+
+            if file_paths:
+                try:
+                    file_paths[0].parent.rmdir()
+                except OSError:
+                    pass
+
+    def get_stem_combine_status(self) -> dict:
+        """Liefert den aktuellen Fortschritt der Übungsmix-Erstellung."""
+
+        with self._stem_combine_lock:
+            return dict(self.stem_combine_state)
 
     def eject_usb(self) -> tuple[bool, str]:
         """

@@ -992,6 +992,168 @@ async function uploadRecordingFiles(event) {
     }
 }
 
+// ------------------------------------------------------------
+// Übungsmix (mehrere Stems zu einer Mehrkanal-Aufnahme kombinieren)
+// ------------------------------------------------------------
+
+const STEM_COMBINE_MAX_FILES = 8;
+let stemCombineRowCount = 0;
+let stemCombinePollTimer = null;
+
+function addStemCombineRow() {
+    if (stemCombineRowCount >= STEM_COMBINE_MAX_FILES) return;
+
+    stemCombineRowCount++;
+    const a = stemCombineRowCount * 2 - 1;
+    const b = stemCombineRowCount * 2;
+
+    const row = document.createElement("div");
+    row.className = "mb-2";
+    row.innerHTML = `
+        <label class="form-label small mb-1">
+            ${I18N.stem_combine_channel_label.replace("{a}", a).replace("{b}", b)}
+        </label>
+        <input type="file" class="form-control form-control-sm stem-combine-file-input" accept=".wav,.w64">
+    `;
+
+    document.getElementById("stem-combine-files").appendChild(row);
+
+    const addButton = document.getElementById("btn-stem-combine-add-file");
+    if (addButton) addButton.disabled = stemCombineRowCount >= STEM_COMBINE_MAX_FILES;
+}
+
+function resetStemCombineModal() {
+    document.getElementById("stem-combine-name").value = "";
+    document.getElementById("stem-combine-files").innerHTML = "";
+    document.getElementById("stemCombineProgressWrapper").classList.add("d-none");
+    document.getElementById("stemCombineError").classList.add("d-none");
+
+    const submitButton = document.getElementById("btn-stem-combine-submit");
+    if (submitButton) submitButton.disabled = false;
+
+    const addButton = document.getElementById("btn-stem-combine-add-file");
+    if (addButton) addButton.disabled = false;
+
+    stemCombineRowCount = 0;
+    addStemCombineRow();
+    addStemCombineRow();
+}
+
+function showStemCombineError(message) {
+    const box = document.getElementById("stemCombineError");
+    box.textContent = message;
+    box.classList.remove("d-none");
+}
+
+document.getElementById("btn-stem-combine-add-file").addEventListener("click", addStemCombineRow);
+
+document.getElementById("btn-open-stem-combine").addEventListener("click", () => {
+    const recordingsModalElement = document.getElementById("recordingsModal");
+    bootstrap.Modal.getOrCreateInstance(recordingsModalElement).hide();
+
+    resetStemCombineModal();
+
+    const modalElement = document.getElementById("stemCombineModal");
+    bootstrap.Modal.getOrCreateInstance(modalElement).show();
+});
+
+document.getElementById("stemCombineModal").addEventListener("hidden.bs.modal", () => {
+    const recordingsModalElement = document.getElementById("recordingsModal");
+    bootstrap.Modal.getOrCreateInstance(recordingsModalElement).show();
+});
+
+document.getElementById("btn-stem-combine-submit").addEventListener("click", submitStemCombine);
+
+async function submitStemCombine() {
+    const name = document.getElementById("stem-combine-name").value.trim();
+    document.getElementById("stemCombineError").classList.add("d-none");
+
+    if (!name) {
+        showStemCombineError(I18N.stem_combine_name_required);
+        return;
+    }
+
+    const files = Array.from(
+        document.querySelectorAll("#stem-combine-files .stem-combine-file-input")
+    )
+        .map((input) => input.files[0])
+        .filter((file) => !!file);
+
+    if (files.length < 2) {
+        showStemCombineError(I18N.stem_combine_files_required);
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("name", name);
+    for (const file of files) {
+        formData.append("files", file);
+    }
+
+    document.getElementById("btn-stem-combine-submit").disabled = true;
+
+    let result;
+    try {
+        const response = await fetch("/api/recordings/combine", {
+            method: "POST",
+            body: formData,
+        });
+        result = await response.json();
+    } catch (error) {
+        console.error("Übungsmix-Upload fehlgeschlagen:", error);
+        document.getElementById("btn-stem-combine-submit").disabled = false;
+        showStemCombineError(I18N.stem_combine_failed);
+        return;
+    }
+
+    if (!result.success) {
+        document.getElementById("btn-stem-combine-submit").disabled = false;
+        showStemCombineError(result.message || I18N.stem_combine_failed);
+        return;
+    }
+
+    document.getElementById("stemCombineProgressWrapper").classList.remove("d-none");
+    pollStemCombineStatus();
+}
+
+function pollStemCombineStatus() {
+    if (stemCombinePollTimer) clearInterval(stemCombinePollTimer);
+
+    stemCombinePollTimer = setInterval(async () => {
+        let data;
+
+        try {
+            const response = await fetch("/api/recordings/combine/status");
+            data = await response.json();
+        } catch (error) {
+            clearInterval(stemCombinePollTimer);
+            stemCombinePollTimer = null;
+            document.getElementById("btn-stem-combine-submit").disabled = false;
+            document.getElementById("stemCombineProgressWrapper").classList.add("d-none");
+            showStemCombineError(I18N.stem_combine_failed);
+            return;
+        }
+
+        if (data.active) return;
+
+        clearInterval(stemCombinePollTimer);
+        stemCombinePollTimer = null;
+        document.getElementById("stemCombineProgressWrapper").classList.add("d-none");
+        document.getElementById("btn-stem-combine-submit").disabled = false;
+
+        if (!data.success) {
+            showStemCombineError(data.error || I18N.stem_combine_failed);
+            return;
+        }
+
+        const modalElement = document.getElementById("stemCombineModal");
+        bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+
+        await loadRecordings();
+        await refreshDashboard();
+    }, 300);
+}
+
 // ============================================================
 // 11. UTILITY FUNCTIONS
 // ============================================================

@@ -98,6 +98,24 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "title_delete": "Löschen",
         "confirm_delete_file": '"{name}" wirklich löschen?',
         "confirm_delete_multi": "{count} Aufnahme(n) wirklich löschen?",
+
+        # Übungsmix-Modal (mehrere Stereo-Stems zu einer Aufnahme kombinieren)
+        "btn_stem_combine_open": "Übungsmix erstellen",
+        "modal_stem_combine_title": "Übungsmix erstellen",
+        "stem_combine_hint": (
+            "Kombiniert mehrere Stereo-Dateien (z.B. Click, eigenes "
+            "Instrument, Rest der Band) zu einer Aufnahme - Datei 1 "
+            "landet auf Kanal 1+2, Datei 2 auf Kanal 3+4 usw."
+        ),
+        "stem_combine_name_label": "Name",
+        "stem_combine_name_placeholder": "z.B. Songtitel",
+        "stem_combine_channel_label": "Kanal {a}+{b}:",
+        "btn_stem_combine_add_file": "Weitere Datei",
+        "btn_stem_combine_create": "Übungsmix erstellen",
+        "stem_combine_in_progress": "Übungsmix wird erstellt...",
+        "stem_combine_name_required": "Bitte einen Namen eingeben.",
+        "stem_combine_files_required": "Bitte mindestens 2 Dateien auswählen.",
+        "stem_combine_failed": "Übungsmix konnte nicht erstellt werden.",
         "alert_recording_delete_failed": "Aufnahme konnte nicht gelöscht werden.",
         "alert_recordings_delete_failed": "Aufnahmen konnten nicht gelöscht werden.",
         "title_copy_to_usb": "Auf USB-Stick kopieren",
@@ -359,6 +377,24 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "title_delete": "Delete",
         "confirm_delete_file": 'Really delete "{name}"?',
         "confirm_delete_multi": "Really delete {count} recording(s)?",
+
+        # Stem combine modal (combine multiple stereo stems into one recording)
+        "btn_stem_combine_open": "Create practice mix",
+        "modal_stem_combine_title": "Create practice mix",
+        "stem_combine_hint": (
+            "Combines multiple stereo files (e.g. click, your own "
+            "instrument, rest of the band) into one recording - file 1 "
+            "lands on channel 1+2, file 2 on channel 3+4, and so on."
+        ),
+        "stem_combine_name_label": "Name",
+        "stem_combine_name_placeholder": "e.g. song title",
+        "stem_combine_channel_label": "Channel {a}+{b}:",
+        "btn_stem_combine_add_file": "Add another file",
+        "btn_stem_combine_create": "Create practice mix",
+        "stem_combine_in_progress": "Creating practice mix...",
+        "stem_combine_name_required": "Please enter a name.",
+        "stem_combine_files_required": "Please select at least 2 files.",
+        "stem_combine_failed": "Practice mix could not be created.",
         "alert_recording_delete_failed": "The recording could not be deleted.",
         "alert_recordings_delete_failed": "The recordings could not be deleted.",
         "title_copy_to_usb": "Copy to USB drive",
