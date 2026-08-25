@@ -2232,6 +2232,13 @@ document.getElementById("settings-diagnostics-toggle")
 let updatePollTimer = null;
 let updatePackageName = "";
 
+//
+// Steht auf true, sobald ein abgeschlossenes Update-Ergebnis im Modal
+// steht. Beim Schliessen wird es quittiert - sonst begruesst einen
+// "Update erfolgreich" noch Tage spaeter.
+//
+let updateResultShown = false;
+
 async function loadUpdateInfo() {
     const packageBox = document.getElementById("settings-update-package");
     const button = document.getElementById("btn-settings-update");
@@ -2306,33 +2313,98 @@ function showUpdateResult(status) {
     box.className = `alert ${style} py-2 px-3 small mt-3`;
     box.textContent = status.message || I18N.settings_update_failed;
     box.classList.remove("d-none");
+
+    updateResultShown = true;
 }
 
-document.getElementById("btn-settings-update").addEventListener("click", startUpdate);
+//
+// Beim Schliessen des Modals gilt das Ergebnis als gesehen. Der Server
+// merkt sich dazu den Zeitstempel; ein spaeteres Update hat einen
+// anderen und wird deshalb wieder angezeigt.
+//
+settingsModal.addEventListener("hidden.bs.modal", async () => {
+    if (!updateResultShown) return;
 
-async function startUpdate() {
-    if (!updatePackageName) return;
+    updateResultShown = false;
 
-    if (!confirm(I18N.settings_update_confirm.replace("{name}", updatePackageName))) return;
+    const box = document.getElementById("settings-update-result");
+    if (box) box.classList.add("d-none");
 
-    const button = document.getElementById("btn-settings-update");
+    try {
+        await fetch("/api/update/acknowledge", { method: "POST" });
+    } catch (error) {
+        console.error("Update-Ergebnis konnte nicht quittiert werden:", error);
+    }
+});
+
+document
+    .getElementById("btn-settings-update")
+    .addEventListener("click", () => startUpdate("usb"));
+
+//
+// Der Online-Knopf braucht keinen Stick und bleibt deshalb immer
+// bedienbar. Ob wirklich Internet da ist, laesst sich von hier aus
+// nicht sagen - der Versuch meldet im Zweifel selbst, dass die
+// Verbindung fehlt.
+//
+document
+    .getElementById("btn-settings-update-online")
+    .addEventListener("click", () => startUpdate("github"));
+
+//
+// Beide Knoepfe gehoeren zusammen: Waehrend ein Update laeuft, darf
+// keiner von beiden noch einmal ausloesen.
+//
+function setUpdateButtons(disabled) {
+    ["btn-settings-update", "btn-settings-update-online"].forEach((id) => {
+        const button = document.getElementById(id);
+        if (button) button.disabled = disabled;
+    });
+}
+
+//
+// Nach einem Fehlschlag darf der USB-Knopf nur zurueckkommen, wenn
+// ueberhaupt ein Paket auf dem Stick liegt - sonst laedt er zu einem
+// Klick ein, der nichts tun kann.
+//
+function restoreUpdateButtons() {
+    setUpdateButtons(false);
+
+    const usb = document.getElementById("btn-settings-update");
+    if (usb) usb.disabled = !updatePackageName;
+}
+
+async function startUpdate(source) {
+    if (source === "usb" && !updatePackageName) return;
+
+    const frage = source === "github"
+        ? I18N.settings_update_confirm_online
+        : I18N.settings_update_confirm.replace("{name}", updatePackageName);
+
+    if (!confirm(frage)) return;
+
     const result = document.getElementById("settings-update-result");
 
-    button.disabled = true;
+    setUpdateButtons(true);
     result.classList.add("d-none");
+    updateResultShown = false;
 
     let response;
     try {
-        response = await (await fetch("/api/update/start", { method: "POST" })).json();
+        response = await (await fetch("/api/update/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ source }),
+        })).json();
     } catch (error) {
         console.error("Update konnte nicht gestartet werden:", error);
-        button.disabled = false;
+        restoreUpdateButtons();
         showUpdateResult({ state: "failed", message: I18N.settings_update_failed });
         return;
     }
 
     if (!response.success) {
-        button.disabled = false;
+        restoreUpdateButtons();
         showUpdateResult({ state: "failed", message: response.message });
         return;
     }
@@ -2393,7 +2465,7 @@ function pollUpdateStatus() {
         if (status.state === "success") {
             setTimeout(() => window.location.reload(), 4000);
         } else {
-            document.getElementById("btn-settings-update").disabled = false;
+            restoreUpdateButtons();
         }
     }, 1500);
 }

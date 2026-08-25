@@ -76,6 +76,15 @@ class ConsoleAccessSelection(BaseModel):
 class DiagnosticsSelection(BaseModel):
     enabled: bool
 
+
+class UpdateSelection(BaseModel):
+    #
+    # "usb" (ZIP-Datei vom Stick) oder "github" (aus dem Internet).
+    # Voreinstellung ist der USB-Weg, damit ein aelteres Frontend, das
+    # noch gar keine Quelle mitschickt, weiter funktioniert.
+    #
+    source: str = "usb"
+
 class MuteSelection(BaseModel):
     channel: int
     muted: bool
@@ -1156,9 +1165,10 @@ async def update_info(request: Request):
 
 
 @router.post("/api/update/start")
-async def update_start(request: Request):
+async def update_start(request: Request, selection: UpdateSelection):
     """
-    Startet das Update aus der ZIP-Datei auf dem USB-Stick.
+    Startet das Update - aus dem Internet oder aus der ZIP-Datei auf
+    dem USB-Stick.
 
     Der Dienst startet sich dabei selbst neu - die Antwort kommt also
     noch, bevor das Update durch ist. Den Ausgang liefert
@@ -1167,7 +1177,7 @@ async def update_start(request: Request):
 
     application = request.app.state.application
 
-    success, message = application.start_update()
+    success, message = application.start_update(selection.source)
 
     return {
         "success": success,
@@ -1181,6 +1191,18 @@ async def update_status(request: Request):
     application = request.app.state.application
 
     return application.get_update_status()
+
+
+@router.post("/api/update/acknowledge")
+async def update_acknowledge(request: Request):
+    """
+    Quittiert das Ergebnis des letzten Updates - danach zeigt das
+    Einstellungen-Modal es nicht mehr an.
+    """
+
+    application = request.app.state.application
+
+    return {"success": application.acknowledge_update()}
 
 
 @router.get("/api/diagnostics/status")

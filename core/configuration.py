@@ -55,6 +55,19 @@ class AudioConfig(BaseModel):
     sample_rate: int = 48000
 
 
+class UpdateConfig(BaseModel):
+    """
+    Woher das Update aus dem Internet kommt.
+
+    Als Voreinstellung mit Standardwerten, damit eine bestehende
+    config/local.yaml ohne diesen Abschnitt weiterhin lädt - die Datei
+    überlebt ja jedes Update.
+    """
+
+    repository: str = "chrisse1/XRack"
+    branch: str = "main"
+
+
 class AppConfig(BaseModel):
     """Complete application configuration."""
 
@@ -65,6 +78,7 @@ class AppConfig(BaseModel):
     music: MusicConfig
     logging: LoggingConfig
     audio: AudioConfig = AudioConfig()
+    update: UpdateConfig = UpdateConfig()
 
 
 def _deep_merge(base: dict, override: dict) -> dict:

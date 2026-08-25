@@ -1,7 +1,13 @@
 """
-Update über USB-Stick: findet die von GitHub heruntergeladene
-ZIP-Datei im Wurzelverzeichnis des Sticks und stößt den eigentlichen
-Updater an (scripts/xrack-update.py, per sudo).
+Update auf zwei Wegen: aus dem Internet (direkt von GitHub) oder über
+einen USB-Stick, auf dessen Wurzelverzeichnis die von GitHub
+heruntergeladene ZIP-Datei liegt. Beide stoßen denselben Updater an
+(scripts/xrack-update.py, per sudo) und laufen dort durch denselben
+Ablauf - Erfolgsmeldung, Rückfall und der Hinweis auf install.sh
+gelten deshalb für beide gleichermaßen.
+
+Der USB-Weg bleibt der wichtigere: Er ist der einzige, der ohne
+Internet funktioniert, und genau dafür gibt es ihn.
 
 Die eigentliche Arbeit macht bewusst ein separates Skript in einem
 eigenständigen systemd-Task: XRack aktualisiert sich hier selbst und
@@ -75,17 +81,22 @@ class Updater:
             "size": package.stat().st_size,
         }
 
-    def start(self, service_user: str, port: int) -> tuple[bool, str]:
+    def start(
+        self,
+        service_user: str,
+        port: int,
+        source: str = "usb",
+        repository: str = "",
+        branch: str = "main",
+    ) -> tuple[bool, str]:
         """
         Startet das Update im Hintergrund. Liefert (Erfolg, Meldung) -
         "Erfolg" heißt hier nur, dass der Vorgang angestoßen wurde; das
         Ergebnis liefert get_status().
+
+        `source` ist "usb" (ZIP-Datei vom Stick) oder "github" (wird
+        vom Update-Skript selbst heruntergeladen).
         """
-
-        package = self.find_package()
-
-        if package is None:
-            return False, "Keine ZIP-Datei auf dem USB-Stick gefunden."
 
         status = self.get_status()
 
@@ -95,16 +106,36 @@ class Updater:
         if not UPDATE_SCRIPT.is_file():
             return False, "Update-Skript nicht gefunden."
 
+        if source == "github":
+
+            if not repository:
+                return False, "Kein GitHub-Verzeichnis eingestellt."
+
+            quelle = ["--repository", repository, "--branch", branch]
+
+            self.logger.info(
+                "Update wird gestartet: %s (%s)", repository, branch
+            )
+
+        else:
+
+            package = self.find_package()
+
+            if package is None:
+                return False, "Keine ZIP-Datei auf dem USB-Stick gefunden."
+
+            quelle = ["--zip", str(package)]
+
+            self.logger.info("Update wird gestartet: %s", package)
+
         command = [
             "sudo",
             str(UPDATE_SCRIPT),
-            str(package),
             str(INSTALL_DIR),
             service_user,
             str(port),
+            *quelle,
         ]
-
-        self.logger.info("Update wird gestartet: %s", package)
 
         try:
 
@@ -153,6 +184,7 @@ class Updater:
                 "message": "",
                 "needs_install_script": False,
                 "needs_dependencies": False,
+                "needs_git_reset": False,
             }
 
         try:
@@ -170,4 +202,5 @@ class Updater:
                 "message": "",
                 "needs_install_script": False,
                 "needs_dependencies": False,
+                "needs_git_reset": False,
             }

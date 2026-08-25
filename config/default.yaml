@@ -37,3 +37,10 @@ music:
 
 logging:
   level: "INFO"
+
+update:
+  # Quelle für das Update aus dem Internet. Der Weg über den USB-Stick
+  # braucht diese Angaben nicht - dort bringt der Nutzer die ZIP-Datei
+  # selbst mit.
+  repository: "chrisse1/XRack"
+  branch: "main"

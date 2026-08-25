@@ -225,6 +225,7 @@ try:
     updater.BACKUP_DIR = work / "backup"
     updater.EXTRACT_DIR = work / "new"
     updater.LOG_FILE = work / "update.log"
+    updater.DOWNLOAD_FILE = work / "download.zip"
 
     # Systemaufrufe und Netz durch Attrappen ersetzen
     updater.restart_service = lambda: True
@@ -363,6 +364,212 @@ try:
     )
 
     print("OK: Wenn auch der Rückfall scheitert, gibt es eine ehrliche Fehlermeldung")
+
+    # ----------------------------------------------------------------
+    # Hinweis auf die Git-Arbeitskopie
+    #
+    # Der Updater tauscht die Dateien direkt aus und laesst .git in
+    # Ruhe - HEAD zeigt danach weiter auf den alten Stand, und ein
+    # spaeteres "git pull" bricht ab. Das ist kein Schaden, aber es
+    # muss dabeistehen, sonst sucht man den Fehler an der falschen
+    # Stelle.
+    # ----------------------------------------------------------------
+
+    install = scratch / "install-git"
+    install.mkdir()
+    build_install(install)
+    (install / ".git").mkdir()
+
+    shutil.rmtree(work, ignore_errors=True)
+    updater.check_health = lambda port: True
+    updater.restart_service = lambda: True
+
+    assert updater.run_update(zip_path, install, "xrack", 8080) == 0
+
+    status = json.loads((work / "status.json").read_text(encoding="utf-8"))
+
+    assert status["needs_git_reset"] is True, status
+    assert "git" in status["message"], status["message"]
+
+    #
+    # .git muss dabei erhalten bleiben - sonst waere die Arbeitskopie
+    # nach dem ersten Update keine mehr.
+    #
+    assert (install / ".git").is_dir(), "Der Updater hat .git geloescht."
+
+    print("OK: Bei einer Git-Arbeitskopie weist die Erfolgsmeldung darauf hin")
+
+    #
+    # Ohne .git darf der Hinweis nicht erscheinen - sonst wuerde er
+    # jeden Nutzer verwirren, den er gar nicht betrifft.
+    #
+    install = scratch / "install-ohne-git"
+    install.mkdir()
+    build_install(install)
+
+    shutil.rmtree(work, ignore_errors=True)
+
+    assert updater.run_update(zip_path, install, "xrack", 8080) == 0
+
+    status = json.loads((work / "status.json").read_text(encoding="utf-8"))
+
+    assert status["needs_git_reset"] is False, status
+    assert "git" not in status["message"], status["message"]
+
+    print("OK: Ohne Git-Arbeitskopie bleibt der Hinweis weg")
+
+    # ----------------------------------------------------------------
+    # Download aus dem Internet
+    #
+    # Gegen einen eigenen HTTP-Server auf localhost - kein echtes Netz.
+    # ----------------------------------------------------------------
+
+    import http.server
+    import threading
+
+    inhalt = zip_path.read_bytes()
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+
+        def do_GET(self):
+
+            if self.path == "/chrisse1/XRack/main":
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(inhalt)))
+                self.end_headers()
+                self.wfile.write(inhalt)
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+
+    adresse = f"http://127.0.0.1:{server.server_port}"
+
+    original_url = updater.GITHUB_ZIP
+    updater.GITHUB_ZIP = adresse + "/{repository}/{branch}"
+
+    try:
+
+        geladen = updater.download_package("chrisse1/XRack", "main")
+
+        assert geladen is not None, "Der Download hat nichts geliefert."
+        assert geladen.read_bytes() == inhalt, (
+            "Die heruntergeladene Datei stimmt nicht mit der Vorlage überein."
+        )
+
+        print("OK: Update aus dem Internet wird heruntergeladen")
+
+        #
+        # Ein unbekanntes Verzeichnis darf nicht in einer halben Datei
+        # enden, sondern muss sauber None liefern - nur dann kann der
+        # Aufrufer eine ehrliche Fehlermeldung schreiben, statt eine
+        # kaputte ZIP zu entpacken.
+        #
+        assert updater.download_package("gibt/esnicht", "main") is None
+
+        print("OK: Fehlgeschlagener Download liefert None statt einer halben Datei")
+
+        #
+        # Der heruntergeladene Stand muss denselben Weg gehen wie eine
+        # ZIP vom Stick - genau das ist der Sinn der Sache: eine
+        # Mechanik, ein Rueckfall.
+        #
+        install = scratch / "install-online"
+        install.mkdir()
+        build_install(install)
+
+        shutil.rmtree(work, ignore_errors=True)
+
+        geladen = updater.download_package("chrisse1/XRack", "main")
+
+        assert updater.run_update(geladen, install, "xrack", 8080) == 0
+
+        assert (install / "main.py").read_text(encoding="utf-8").startswith("neu"), (
+            "Der heruntergeladene Stand wurde nicht eingespielt."
+        )
+
+        print("OK: Der heruntergeladene Stand laeuft durch denselben Ablauf")
+
+    finally:
+        updater.GITHUB_ZIP = original_url
+        server.shutdown()
+
+    # ----------------------------------------------------------------
+    # Quittieren: "Update erfolgreich" darf nicht ewig stehenbleiben
+    #
+    # Die Statusdatei liegt in /var/tmp und wird nie geloescht - ohne
+    # Quittung begruesst einen die Meldung noch Tage spaeter.
+    # ----------------------------------------------------------------
+
+    import types
+
+    from core.application import Application
+
+    class FakeStore:
+
+        def __init__(self):
+            self.werte = {}
+
+        def get(self, key, default=None):
+            return self.werte.get(key, default)
+
+        def set(self, key, value):
+            self.werte[key] = value
+
+    def stub(status):
+        return types.SimpleNamespace(
+            updater=types.SimpleNamespace(get_status=lambda: status),
+            state_store=FakeStore(),
+        )
+
+    erfolg = {
+        "state": "success",
+        "step": "fertig",
+        "message": "Update erfolgreich.",
+        "updated_at": "2026-08-24T21:15:00",
+    }
+
+    self = stub(erfolg)
+
+    assert Application.get_update_status(self)["state"] == "success", (
+        "Ein frisches Ergebnis muss angezeigt werden."
+    )
+
+    assert Application.acknowledge_update(self) is True
+
+    assert Application.get_update_status(self)["state"] == "idle", (
+        "Nach dem Quittieren darf das Ergebnis nicht mehr erscheinen."
+    )
+
+    print("OK: Ein quittiertes Update-Ergebnis verschwindet aus der Anzeige")
+
+    #
+    # Entscheidend: Das naechste Update hat einen anderen Zeitstempel
+    # und muss deshalb wieder auftauchen. Wuerde nur ein "gesehen"-Flag
+    # gesetzt, bliebe die Anzeige fuer immer stumm.
+    #
+    self.updater.get_status = lambda: dict(erfolg, updated_at="2026-08-25T09:00:00")
+
+    assert Application.get_update_status(self)["state"] == "success", (
+        "Ein neues Update muss trotz frueherer Quittung angezeigt werden."
+    )
+
+    print("OK: Ein spaeteres Update wird trotz frueherer Quittung wieder angezeigt")
+
+    #
+    # Ein laufendes Update laesst sich nicht quittieren - sonst waere
+    # das Ergebnis weg, bevor es ueberhaupt feststeht.
+    #
+    laeuft = stub({"state": "running", "step": "übertragen", "message": ""})
+
+    assert Application.acknowledge_update(laeuft) is False
+
+    print("OK: Ein laufendes Update laesst sich nicht vorab quittieren")
 
     print("Alle Tests erfolgreich.")
 

@@ -83,6 +83,24 @@ REQUIRED = [
 HEALTH_ATTEMPTS = 45
 HEALTH_INTERVAL = 2.0
 
+#
+# Quelle fuer das Update aus dem Internet. codeload liefert die ZIP
+# direkt aus; github.com/.../archive/... leitet nur dorthin weiter.
+#
+GITHUB_ZIP = "https://codeload.github.com/{repository}/zip/refs/heads/{branch}"
+
+DOWNLOAD_FILE = WORK_DIR / "download.zip"
+
+#
+# Eine ZIP mit dem Quelltext liegt bei XRack im niedrigen einstelligen
+# Megabyte-Bereich. Die Grenze faengt den Fall ab, dass hinter der
+# Adresse etwas voellig anderes steckt - heruntergeladen wird ohnehin
+# stueckweise, es landet also nie mehr davon im Speicher.
+#
+MAX_DOWNLOAD = 200 * 1024 * 1024
+
+DOWNLOAD_TIMEOUT = 60
+
 
 def log(message: str) -> None:
     WORK_DIR.mkdir(parents=True, exist_ok=True)
@@ -97,6 +115,7 @@ def write_status(
     message: str = "",
     needs_install_script: bool = False,
     needs_dependencies: bool = False,
+    needs_git_reset: bool = False,
 ) -> None:
     """
     Schreibt den Fortschritt für das Frontend. Bewusst außerhalb des
@@ -112,6 +131,7 @@ def write_status(
         "message": message,
         "needs_install_script": needs_install_script,
         "needs_dependencies": needs_dependencies,
+        "needs_git_reset": needs_git_reset,
         "updated_at": datetime.now().isoformat(timespec="seconds"),
     }
 
@@ -318,6 +338,67 @@ def rollback(reason: str, install_dir: Path, service_user: str, port: int) -> in
     return 1
 
 
+def download_package(repository: str, branch: str) -> Path | None:
+    """
+    Laedt den aktuellen Stand als ZIP von GitHub.
+
+    Danach geht es denselben Weg wie beim USB-Stick weiter: dieselbe
+    Pruefung, dieselbe Sicherung, derselbe Rueckfall. Ein zweiter,
+    eigener Update-Ablauf fuer den Online-Weg waere ein zweiter Ablauf,
+    der schiefgehen kann - und der zweite waere der, den seltener
+    jemand ausprobiert.
+
+    Bewusst kein "git pull": Der Rueckfall dieses Skripts beruht auf
+    einer Sicherungskopie und einem Dateitausch. Git haette einen
+    eigenen, voellig anderen Rueckfallweg - und bei lokal geaenderten
+    Dateien bliebe es ueberhaupt stehen.
+    """
+
+    url = GITHUB_ZIP.format(repository=repository, branch=branch)
+
+    log(f"Lade herunter: {url}")
+
+    WORK_DIR.mkdir(parents=True, exist_ok=True)
+    DOWNLOAD_FILE.unlink(missing_ok=True)
+
+    try:
+
+        with urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT) as response:
+
+            if response.status != 200:
+                log(f"Download fehlgeschlagen: HTTP {response.status}")
+                return None
+
+            geladen = 0
+
+            with DOWNLOAD_FILE.open("wb") as file:
+
+                while True:
+
+                    block = response.read(64 * 1024)
+
+                    if not block:
+                        break
+
+                    geladen += len(block)
+
+                    if geladen > MAX_DOWNLOAD:
+                        log("Download abgebrochen: unerwartet gross")
+                        DOWNLOAD_FILE.unlink(missing_ok=True)
+                        return None
+
+                    file.write(block)
+
+    except Exception as exc:
+        log(f"Download fehlgeschlagen: {exc}")
+        DOWNLOAD_FILE.unlink(missing_ok=True)
+        return None
+
+    log(f"Heruntergeladen: {geladen} Byte")
+
+    return DOWNLOAD_FILE
+
+
 def run_update(
     zip_file: Path,
     install_dir: Path,
@@ -510,6 +591,23 @@ def run_update(
 
     message = "Update erfolgreich."
 
+    #
+    # Ist das Installationsverzeichnis eine Git-Arbeitskopie, laeuft
+    # git jetzt hinterher: Der Updater tauscht die Dateien direkt aus
+    # und laesst .git bewusst unangetastet (siehe PRESERVE), HEAD zeigt
+    # also weiter auf den alten Stand. Ein spaeteres "git pull" bricht
+    # deshalb mit "local changes would be overwritten" ab. Das ist kein
+    # Schaden - nur unerwartet, wenn man es nicht weiss.
+    #
+    # Bewusst nur ein Hinweis und kein automatisches "git reset --hard":
+    # Das wuerde alles verwerfen, was auf dem Geraet von Hand geaendert
+    # wurde. Diese Entscheidung gehoert dem Nutzer, nicht dem Updater.
+    #
+    needs_git_reset = (install_dir / ".git").is_dir()
+
+    if needs_git_reset:
+        log("Installationsverzeichnis ist eine Git-Arbeitskopie")
+
     if needs_install_script:
         message += (
             " Achtung: install.sh hat sich geändert - bitte einmal manuell "
@@ -522,12 +620,21 @@ def run_update(
             "Internetverbindung nicht installiert werden konnten."
         )
 
+    if needs_git_reset:
+        message += (
+            " Hinweis: Das Verzeichnis ist eine Git-Arbeitskopie. XRack "
+            "tauscht die Dateien direkt aus, git weiß davon nichts - ein "
+            "späteres \"git pull\" schlägt deshalb fehl. Mit "
+            "\"git reset --hard\" zieht man git wieder nach."
+        )
+
     write_status(
         "success",
         "fertig",
         message,
         needs_install_script=needs_install_script,
         needs_dependencies=needs_dependencies,
+        needs_git_reset=needs_git_reset,
     )
 
     log("Update abgeschlossen")
@@ -537,16 +644,26 @@ def run_update(
 
 def main() -> int:
 
-    parser = argparse.ArgumentParser(description="XRack aus einer ZIP-Datei aktualisieren.")
-    parser.add_argument("zip_file")
+    parser = argparse.ArgumentParser(
+        description="XRack aus einer ZIP-Datei aktualisieren."
+    )
     parser.add_argument("install_dir")
     parser.add_argument("service_user")
     parser.add_argument("port", nargs="?", default="8080")
+
+    #
+    # Genau eine der beiden Quellen: eine ZIP-Datei (USB-Stick) oder
+    # ein GitHub-Verzeichnis (Internet). Ab da laufen beide Wege durch
+    # denselben Ablauf.
+    #
+    parser.add_argument("--zip", dest="zip_file", default="")
+    parser.add_argument("--repository", default="")
+    parser.add_argument("--branch", default="main")
+
     parser.add_argument("--detached", action="store_true", help=argparse.SUPPRESS)
 
     arguments = parser.parse_args()
 
-    zip_file = Path(arguments.zip_file)
     install_dir = Path(arguments.install_dir)
 
     try:
@@ -554,9 +671,26 @@ def main() -> int:
     except ValueError:
         port = 8080
 
+    if arguments.zip_file and arguments.repository:
+        print(
+            "--zip und --repository schließen sich aus: entweder die "
+            "ZIP-Datei vom Stick oder der Download von GitHub.",
+            file=sys.stderr,
+        )
+        return 3
+
+    if not arguments.zip_file and not arguments.repository:
+        print(
+            "Es fehlt die Quelle: --zip <Datei> oder --repository <Nutzer/Projekt>.",
+            file=sys.stderr,
+        )
+        return 3
+
+    zip_file = Path(arguments.zip_file) if arguments.zip_file else None
+
     if not arguments.detached:
 
-        if not zip_file.is_file():
+        if zip_file is not None and not zip_file.is_file():
             print(f"ZIP-Datei nicht gefunden: {zip_file}", file=sys.stderr)
             return 3
 
@@ -569,6 +703,13 @@ def main() -> int:
 
         write_status("running", "start", "Update wird vorbereitet...")
 
+        weitergabe = ["--zip", str(zip_file)] if zip_file is not None else [
+            "--repository",
+            arguments.repository,
+            "--branch",
+            arguments.branch,
+        ]
+
         #
         # An einen eigenständigen systemd-Task übergeben, damit der
         # Neustart des Dienstes den Updater nicht mit erschlägt.
@@ -580,10 +721,10 @@ def main() -> int:
                 "--collect",
                 sys.executable,
                 os.path.abspath(__file__),
-                str(zip_file),
                 str(install_dir),
                 arguments.service_user,
                 str(port),
+                *weitergabe,
                 "--detached",
             ],
             stdout=subprocess.DEVNULL,
@@ -591,6 +732,26 @@ def main() -> int:
         )
 
         return 0
+
+    #
+    # Ab hier läuft der eigenständige Task. Beim Online-Weg wird die
+    # ZIP erst jetzt geholt - der Download dauert und darf den
+    # aufrufenden Dienst nicht blockieren.
+    #
+    if zip_file is None:
+
+        write_status("running", "laden", "Update wird heruntergeladen...")
+
+        zip_file = download_package(arguments.repository, arguments.branch)
+
+        if zip_file is None:
+            write_status(
+                "failed",
+                "fehler",
+                "Der Download von GitHub ist fehlgeschlagen. "
+                "Besteht eine Internetverbindung?",
+            )
+            return 1
 
     return run_update(zip_file, install_dir, arguments.service_user, port)
 

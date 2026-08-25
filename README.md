@@ -50,10 +50,13 @@ the Pi itself.
   elsewhere. Recordings and practice mixes are labelled as such in the
   list (and marked `_s` / `_p` in their file names), so it stays clear
   what each file is for.
-- **Update from a USB stick**: put the release ZIP from GitHub in the
-  root folder of a stick, plug it in and press one button. Recordings,
-  music and every setting are kept - and if the web interface doesn't
-  come back afterwards, XRack restores the previous version on its own.
+- **Update, online or from a USB stick**: one button fetches the
+  current version from GitHub; the other installs a release ZIP you put
+  in the root folder of a plugged-in stick - the way that works without
+  internet. Both run through the same procedure, so the same
+  guarantees apply either way: recordings, music and every setting are
+  kept, and if the web interface doesn't come back afterwards, XRack
+  restores the previous version on its own.
 - **Diagnostic recording**: a switch in the settings that logs in the
   background how XRack and the network are doing, together with what
   XRack was doing at that moment. Meant for problems that only show up
@@ -157,11 +160,21 @@ am Pi nötig.
   Übungsmix abzuspielen. Aufnahmen und Übungsmixe sind in der Liste als
   solche gekennzeichnet (und im Dateinamen mit `_s` bzw. `_p`
   markiert), damit klar bleibt, wofür eine Datei gedacht ist.
-- **Update über USB-Stick**: Release-ZIP von GitHub ins
-  Wurzelverzeichnis eines Sticks legen, anstecken, einen Knopf drücken.
-  Aufnahmen, Musik und sämtliche Einstellungen bleiben erhalten - und
-  falls die Weboberfläche danach nicht zurückkommt, stellt XRack den
-  vorherigen Stand selbsttätig wieder her.
+- **Update aus dem Internet oder vom USB-Stick**: Der eine Knopf holt
+  den aktuellen Stand selbst von GitHub, der andere spielt eine
+  Release-ZIP vom angesteckten Stick ein - das ist der Weg, der ohne
+  Internet funktioniert. Beide laufen durch denselben Ablauf, es gelten
+  also dieselben Zusicherungen: Aufnahmen, Musik und sämtliche
+  Einstellungen bleiben erhalten, und falls die Weboberfläche danach
+  nicht zurückkommt, stellt XRack den vorherigen Stand selbsttätig
+  wieder her.
+
+  Ist das Installationsverzeichnis eine Git-Arbeitskopie, weist die
+  Erfolgsmeldung darauf hin: XRack tauscht die Dateien direkt aus und
+  lässt `.git` unangetastet, ein späteres `git pull` schlägt deshalb
+  fehl. Mit `git reset --hard` zieht man git wieder nach. Bewusst
+  automatisiert XRack das nicht - es würde alles verwerfen, was auf dem
+  Gerät von Hand geändert wurde.
 - **Diagnose-Aufzeichnung**: Ein Schalter in den Einstellungen, der im
   Hintergrund mitschreibt, wie es XRack und dem Netzwerk geht - und was
   XRack im selben Moment gerade tat. Gedacht für Fehler, die nur

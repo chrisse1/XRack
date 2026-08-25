@@ -212,16 +212,26 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_console_ip_label": "Konsole am Pi:",
         "settings_console_ip_not_found": "Noch nicht erkannt.",
 
-        # Update über USB-Stick
+        # Update aus dem Internet oder über USB-Stick
         "settings_update_title": "Update",
         "settings_update_version_label": "Installierte Version:",
         "settings_update_hint": (
-            "ZIP-Datei von GitHub herunterladen, ins Wurzelverzeichnis "
-            "eines USB-Sticks legen und den Stick anstecken. Aufnahmen, "
-            "Musik und alle Einstellungen bleiben erhalten. Falls "
-            "danach etwas nicht läuft, holt XRack den vorherigen Stand "
-            "automatisch zurück."
+            "Aus dem Internet holt XRack den aktuellen Stand selbst. "
+            "Ohne Internet: ZIP-Datei von GitHub herunterladen, ins "
+            "Wurzelverzeichnis eines USB-Sticks legen und den Stick "
+            "anstecken. In beiden Fällen bleiben Aufnahmen, Musik und "
+            "alle Einstellungen erhalten - und falls danach etwas nicht "
+            "läuft, holt XRack den vorherigen Stand automatisch zurück."
         ),
+        "btn_settings_update_online": "Aus dem Internet",
+        "settings_update_confirm_online": (
+            "XRack jetzt aus dem Internet aktualisieren?\n\n"
+            "Der aktuelle Stand wird von GitHub geladen. Der Dienst "
+            "startet dabei neu, die Weboberfläche ist kurz nicht "
+            "erreichbar. Aufnahmen, Musik und Einstellungen bleiben "
+            "erhalten."
+        ),
+        "settings_update_step_laden": "Update wird heruntergeladen...",
         "settings_update_no_usb": "Kein USB-Stick angeschlossen.",
         "settings_update_no_package": (
             "Keine ZIP-Datei im Wurzelverzeichnis des Sticks gefunden."
@@ -558,16 +568,25 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_console_ip_label": "Console at the Pi:",
         "settings_console_ip_not_found": "Not detected yet.",
 
-        # Update via USB stick
+        # Update from the internet or via USB stick
         "settings_update_title": "Update",
         "settings_update_version_label": "Installed version:",
         "settings_update_hint": (
-            "Download the ZIP from GitHub, put it in the root folder of "
-            "a USB stick and plug the stick in. Recordings, music and "
-            "all settings are kept. If something does not work "
-            "afterwards, XRack automatically restores the previous "
-            "version."
+            "From the internet, XRack fetches the current version "
+            "itself. Without internet: download the ZIP from GitHub, "
+            "put it in the root folder of a USB stick and plug the "
+            "stick in. Either way, recordings, music and all settings "
+            "are kept - and if something does not work afterwards, "
+            "XRack automatically restores the previous version."
         ),
+        "btn_settings_update_online": "From the internet",
+        "settings_update_confirm_online": (
+            "Update XRack from the internet now?\n\n"
+            "The current version will be downloaded from GitHub. The "
+            "service will restart, so the web interface will be briefly "
+            "unavailable. Recordings, music and settings are kept."
+        ),
+        "settings_update_step_laden": "Downloading update...",
         "settings_update_no_usb": "No USB stick connected.",
         "settings_update_no_package": (
             "No ZIP file found in the root folder of the stick."
