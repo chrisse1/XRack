@@ -247,6 +247,19 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_update_step_rueckfall": "Alter Stand wird zurückgeholt...",
         "settings_update_failed": "Update fehlgeschlagen.",
 
+        # Diagnose-Aufzeichnung
+        "settings_diagnostics_title": "Diagnose-Aufzeichnung",
+        "settings_diagnostics_label": "Aufzeichnung läuft mit",
+        "settings_diagnostics_hint": (
+            "Schreibt im Hintergrund mit, wie es XRack und dem Netzwerk "
+            "geht - gedacht für Fehler, die nur sporadisch auftreten. "
+            "Bleibt über einen Neustart hinweg eingeschaltet. Die Datei "
+            "wird automatisch begrenzt und überschreibt sich, wenn sie "
+            "zu groß wird."
+        ),
+        "btn_diagnostics_download": "Aufzeichnung herunterladen",
+        "settings_diagnostics_empty": "Noch nichts aufgezeichnet.",
+
         "settings_wifi_hint": (
             "SSID und Passwort werden beim Speichern immer beide neu "
             "gesetzt."
@@ -578,6 +591,18 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_update_step_neustart": "Restarting service...",
         "settings_update_step_rueckfall": "Restoring previous version...",
         "settings_update_failed": "Update failed.",
+
+        # Diagnostic recording
+        "settings_diagnostics_title": "Diagnostic recording",
+        "settings_diagnostics_label": "Recording is running",
+        "settings_diagnostics_hint": (
+            "Records in the background how XRack and the network are "
+            "doing - meant for problems that only show up now and then. "
+            "Stays on across a restart. The file size is capped and "
+            "older entries are overwritten once it gets too large."
+        ),
+        "btn_diagnostics_download": "Download recording",
+        "settings_diagnostics_empty": "Nothing recorded yet.",
 
         "settings_wifi_hint": (
             "SSID and password are always both set anew when saving."

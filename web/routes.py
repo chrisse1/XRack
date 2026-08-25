@@ -73,6 +73,9 @@ class BridgeSelection(BaseModel):
 class ConsoleAccessSelection(BaseModel):
     enabled: bool
 
+class DiagnosticsSelection(BaseModel):
+    enabled: bool
+
 class FaderSelection(BaseModel):
     channel: int
     #
@@ -1174,6 +1177,51 @@ async def update_status(request: Request):
     application = request.app.state.application
 
     return application.get_update_status()
+
+
+@router.get("/api/diagnostics/status")
+async def diagnostics_status(request: Request):
+
+    application = request.app.state.application
+
+    return application.get_diagnostics_status()
+
+
+@router.post("/api/diagnostics")
+async def set_diagnostics(
+    selection: DiagnosticsSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.set_diagnostics(selection.enabled)
+
+    return {
+        "success": success,
+        "message": message,
+    }
+
+
+@router.get("/api/diagnostics/download")
+async def download_diagnostics(request: Request):
+    """
+    Liefert die Aufzeichnung zum Herunterladen - damit man sie zur
+    Fehlersuche weitergeben kann, ohne sie per SSH holen zu müssen.
+    """
+
+    application = request.app.state.application
+
+    path = Path(application.get_diagnostics_status()["path"])
+
+    if not path.is_file():
+        return {"success": False}
+
+    return FileResponse(
+        path,
+        media_type="text/plain",
+        filename="xrack-diagnose.log",
+    )
 
 
 @router.get("/api/console/channels")

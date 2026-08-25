@@ -2111,7 +2111,64 @@ async function loadSettings() {
     }
 
     await loadUpdateInfo();
+    await loadDiagnosticsStatus();
 }
+
+// ------------------------------------------------------------
+// Diagnose-Aufzeichnung
+// ------------------------------------------------------------
+
+async function loadDiagnosticsStatus() {
+    const toggle = document.getElementById("settings-diagnostics-toggle");
+    const download = document.getElementById("btn-diagnostics-download");
+    const size = document.getElementById("settings-diagnostics-size");
+    if (!toggle || !download) return;
+
+    try {
+        const status = await (await fetch("/api/diagnostics/status")).json();
+
+        toggle.checked = status.enabled;
+
+        //
+        // Herunterladen nur anbieten, wenn auch etwas drinsteht - ein
+        // Knopf, der eine leere Datei liefert, verwirrt nur.
+        //
+        download.classList.toggle("disabled", status.size === 0);
+
+        if (size) {
+            size.textContent = status.size > 0
+                ? formatFileSize(status.size)
+                : I18N.settings_diagnostics_empty;
+        }
+    } catch (error) {
+        console.error("Diagnose-Status konnte nicht geladen werden:", error);
+    }
+}
+
+document.getElementById("settings-diagnostics-toggle")
+    .addEventListener("change", async (event) => {
+        const enabled = event.target.checked;
+
+        try {
+            const result = await (await fetch("/api/diagnostics", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ enabled }),
+            })).json();
+
+            if (!result.success) {
+                event.target.checked = !enabled;
+                alert(I18N.alert_change_failed);
+                return;
+            }
+        } catch (error) {
+            console.error("Diagnose konnte nicht umgeschaltet werden:", error);
+            event.target.checked = !enabled;
+            return;
+        }
+
+        await loadDiagnosticsStatus();
+    });
 
 // ------------------------------------------------------------
 // Update über USB-Stick

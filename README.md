@@ -54,6 +54,11 @@ the Pi itself.
   root folder of a stick, plug it in and press one button. Recordings,
   music and every setting are kept - and if the web interface doesn't
   come back afterwards, XRack restores the previous version on its own.
+- **Diagnostic recording**: a switch in the settings that logs in the
+  background how XRack and the network are doing, together with what
+  XRack was doing at that moment. Meant for problems that only show up
+  now and then - it stays on across restarts, and the log can be
+  downloaded straight from the settings dialog.
 
 ### Requirements
 
@@ -157,6 +162,12 @@ am Pi nötig.
   Aufnahmen, Musik und sämtliche Einstellungen bleiben erhalten - und
   falls die Weboberfläche danach nicht zurückkommt, stellt XRack den
   vorherigen Stand selbsttätig wieder her.
+- **Diagnose-Aufzeichnung**: Ein Schalter in den Einstellungen, der im
+  Hintergrund mitschreibt, wie es XRack und dem Netzwerk geht - und was
+  XRack im selben Moment gerade tat. Gedacht für Fehler, die nur
+  sporadisch auftreten: Der Schalter bleibt über einen Neustart hinweg
+  an, und die Aufzeichnung lässt sich direkt aus dem
+  Einstellungsdialog herunterladen.
 
 ### Voraussetzungen
 

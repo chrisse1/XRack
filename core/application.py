@@ -21,6 +21,7 @@ from core.bluetooth_control import BluetoothControl
 from core.usb_storage import UsbStorage
 from core.updater import Updater
 from core.console_control import ConsoleControl
+from core.diagnostics import Diagnostics
 from core.state_store import StateStore
 from core.pin import hash_pin, verify_pin
 from core.stem_combiner import combine_stems, StemCombineError
@@ -213,6 +214,18 @@ class Application:
             daemon=True,
         )
         self._port_forward_thread.start()
+
+        #
+        # Diagnose-Aufzeichnung. Erst hier angelegt, weil sie auf
+        # Recorder/Player zugreift, um deren Zustand mitzuschreiben.
+        # Der Schalter ist absichtlich persistiert: Der Fehler, für den
+        # sie gebaut wurde, tritt sporadisch auf - müsste man sie nach
+        # jedem Neustart neu einschalten, wäre sie nutzlos.
+        #
+        self.diagnostics = Diagnostics(self)
+
+        if self.state_store.get("diagnostics_enabled", False):
+            self.diagnostics.start()
 
     def update_status(self) -> None:
         """Aktualisiert den aktuellen Systemstatus."""
@@ -786,6 +799,26 @@ class Application:
         """Liefert den Fortschritt eines laufenden/letzten Updates."""
 
         return self.updater.get_status()
+
+    def get_diagnostics_status(self) -> dict:
+        """Zustand der Diagnose-Aufzeichnung fürs Einstellungen-Modal."""
+
+        return self.diagnostics.get_status()
+
+    def set_diagnostics(self, enabled: bool) -> tuple[bool, str]:
+        """
+        Schaltet die Diagnose-Aufzeichnung an oder aus und merkt sich
+        das über einen Neustart hinweg.
+        """
+
+        if enabled:
+            self.diagnostics.start()
+        else:
+            self.diagnostics.stop()
+
+        self.state_store.set("diagnostics_enabled", enabled)
+
+        return True, ""
 
     def _console_host_and_channels(self) -> tuple[str | None, int]:
         """
