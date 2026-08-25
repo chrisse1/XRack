@@ -751,7 +751,6 @@ function renderFaders(channels) {
                 <input
                     type="range"
                     class="form-range fader-input"
-                    orient="vertical"
                     min="${FADER_MIN_DB}"
                     max="${FADER_MAX_DB}"
                     step="0.5"

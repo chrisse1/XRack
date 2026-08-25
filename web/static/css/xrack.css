@@ -257,33 +257,64 @@ body {
     }
 
     /*
-       Senkrechte Regler sind der einzige Teil, den Browser
-       unterschiedlich gelöst haben - darum mehrgleisig:
-       writing-mode ist der heutige Standard, slider-vertical deckt
-       ältere WebKit-Stände ab, und im Markup steht zusätzlich
-       orient="vertical" (das stört waagerecht nicht).
+       Senkrechte Regler: NICHT ueber writing-mode oder
+       "appearance: slider-vertical", sondern als ganz normaler
+       waagerechter Regler, der gedreht dargestellt wird.
+
+       Der Grund ist der Griff. Waagerecht sitzt er nachweislich
+       mittig - auf dem Handy stimmt es. Stellt WebKit den Regler
+       dagegen selbst senkrecht, vertauscht es intern die Achsen, und
+       die Zentrierung des Griffs (ein Rand quer zur Bahn) greift ins
+       Leere: Er sitzt dann seitlich versetzt. Weder Bootstraps Wert
+       noch ein eigener half, weil gar nicht sicher ist, welche Achse
+       WebKit dabei als "quer" ansieht.
+
+       Die Drehung umgeht das ganze Thema: Es bleibt derselbe
+       waagerechte Regler, den beide Browser richtig zeichnen - nur
+       die Anzeige ist gekippt. -90 Grad heisst dabei, dass das untere
+       Ende das leise ist, hoch wird also lauter.
+
+       Der Platzbedarf im Layout dreht sich allerdings nicht mit: Die
+       Zelle wuerde weiter 12rem Breite und 1.75rem Hoehe reservieren.
+       Die Raender tauschen beides gegeneinander aus, damit die Zelle
+       die gedrehte Groesse belegt.
     */
     .fader-input {
+        --fader-laenge: 12rem;
+        --fader-breite: 1.75rem;
+
         flex: 0 0 auto;
-        writing-mode: vertical-lr;
-        direction: rtl;
-        appearance: slider-vertical;
-        -webkit-appearance: slider-vertical;
-        width: 1.5rem;
-        height: 12rem;
+        width: var(--fader-laenge);
+        height: var(--fader-breite);
+        transform: rotate(-90deg);
+
+        margin:
+            calc((var(--fader-laenge) - var(--fader-breite)) / 2)
+            calc((var(--fader-breite) - var(--fader-laenge)) / 2);
     }
 
     /*
-       Bootstrap zentriert den Griff auf der Bahn mit
-       "margin-top: -0.25rem" - die Haelfte der Differenz zwischen
-       1rem Griff und 0.5rem Bahn. Diese Rechnung gilt aber nur fuer
-       eine WAAGERECHTE Bahn. Stellt WebKit den Regler senkrecht,
-       vertauscht es die Achsen intern, und aus der Korrektur wird ein
-       seitlicher Versatz: Der Griff sitzt dann nicht mehr mittig im
-       Kanalzug. Auf 0 gesetzt zentriert WebKit selbst.
+       Griff um die Haelfte groesser als der Bootstrap-Standard von
+       1rem - mit dem Finger deutlich leichter zu treffen.
+
+       Der negative Rand zentriert ihn quer auf der Bahn: die halbe
+       Differenz zwischen 0.5rem Bahn und 1.5rem Griff. Dieselbe
+       Rechnung wie bei Bootstrap, nur mit dem groesseren Griff.
+       Waagerecht ist "quer" eindeutig oben/unten - genau deshalb
+       funktioniert sie hier wieder.
     */
     .fader-input::-webkit-slider-thumb {
-        margin-top: 0;
+        width: 1.5rem;
+        height: 1.5rem;
+        margin-top: -0.5rem;
+    }
+
+    /*
+       Firefox zentriert den Griff selbst, hier reicht die Groesse.
+    */
+    .fader-input::-moz-range-thumb {
+        width: 1.5rem;
+        height: 1.5rem;
     }
 
     .fader-db {
@@ -295,14 +326,20 @@ body {
     /*
        Senkrecht stehen die Regler nebeneinander - die Summe wird
        deshalb links abgetrennt statt oben.
+
+       Der Abstand zur Trennlinie kommt bewusst ueber margin und nicht
+       ueber padding: Ein Innenabstand nur auf einer Seite verschiebt
+       den Inhalt der Zelle - der Summenregler saesse dann um die
+       halbe Strecke neben der Mitte, waehrend alle anderen mittig
+       stehen. Nachgemessen waren das 4.5px.
     */
     .fader-cell.is-main {
         border-top: 0;
         border-left: 1px solid rgba(255, 255, 255, 0.15);
         margin-top: 0;
         padding-top: 0;
-        padding-left: 0.5rem;
-        margin-left: 0.25rem;
+        padding-left: 0;
+        margin-left: 0.5rem;
     }
 
 }
