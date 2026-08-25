@@ -57,10 +57,47 @@ print("OK: OSC-Nachricht entspricht der Spezifikation (Ausrichtung, Typ-Tag, Big
 #
 # Adressen unterschiedlicher Länge - die Auffüllung muss immer stimmen.
 #
-for address in ("/x", "/ab", "/abc", "/abcd", "/abcde", "/rtn/aux/mix/fader"):
-    assert len(encode(address, 0.5)) % 4 == 0, f"Auffüllung falsch bei {address}"
+# Wichtig: Ausrichtung allein reicht als Prüfung NICHT. Vier überzählige
+# Nullen halten die Nachricht ebenfalls ausgerichtet, schieben aber das
+# Typ-Tag um vier Byte nach hinten - der Empfänger liest dann eine
+# Nachricht ohne Argumente. Genau das passierte bei jeder Adresse, deren
+# Länge beim Teilen durch 4 den Rest 3 lässt (19, 23, 27 Zeichen ...).
+# Darum hier jede Restklasse durchgehen und das Argument auch wirklich
+# zurücklesen.
+#
+for length in range(1, 40):
 
-print("OK: Auffüllung stimmt bei Adressen jeder Länge")
+    address = "/" + "a" * (length - 1)
+
+    message = encode(address, 0.5)
+
+    assert len(message) % 4 == 0, (
+        f"Auffüllung falsch bei {length} Zeichen"
+    )
+
+    back_address, back_arguments = decode(message)
+
+    assert back_address == address, (
+        f"Adresse mit {length} Zeichen kam falsch zurück: {back_address!r}"
+    )
+    assert len(back_arguments) == 1, (
+        f"Argument ging verloren bei einer Adresse mit {length} Zeichen "
+        f"(Rest {length % 4} beim Teilen durch 4) - das Typ-Tag steht "
+        f"an der falschen Stelle."
+    )
+
+#
+# Byteweise: Adresse plus Nullabschluss, die schon ins Raster passt,
+# darf keine weiteren Nullen bekommen.
+#
+assert encode("/abc").startswith(b"/abc\x00\x00\x00\x00"), (
+    "Adresse mit 4 Zeichen wird falsch aufgefüllt."
+)
+assert len(encode("/ab" + "c" * 16)) == 24, (
+    "Eine 19 Zeichen lange Adresse darf nur auf 20 Byte aufgefüllt werden."
+)
+
+print("OK: Auffüllung stimmt bei Adressen jeder Länge (auch Rest 3)")
 
 # ----------------------------------------------------------------
 # 2. Rundlauf durch den eigenen Dekodierer
@@ -212,6 +249,59 @@ assert decode(encode("/x", False))[1] == [0]
 print("OK: Mute wird als Big-Endian-Integer kodiert (0 = stumm, 1 = an)")
 
 # ----------------------------------------------------------------
+# 4d. Gekoppelte Kanalpaare werden zu einem Regler
+# ----------------------------------------------------------------
+
+paired = channel_addresses(FAMILY_XAIR, 18, linked={1, 5})
+
+#
+# 16 Mono-Kanäle, davon zwei Paare gekoppelt -> 14 Regler,
+# dazu Aux-Rückweg und Summe.
+#
+assert len(paired) == 16, (
+    f"Zwei Kopplungen sollten 16 Regler ergeben, ergeben aber {len(paired)}"
+)
+
+assert paired[0] == ("/ch/01", "1+2", False), paired[0]
+assert paired[1] == ("/ch/03", "3", False), paired[1]
+assert paired[2] == ("/ch/04", "4", False), paired[2]
+assert paired[3] == ("/ch/05", "5+6", False), paired[3]
+assert paired[4] == ("/ch/07", "7", False), paired[4]
+
+#
+# Kanal 2 und 6 dürfen nicht mehr einzeln auftauchen - sie hängen am
+# Regler ihres Partners.
+#
+addresses = [spec.address for spec in paired]
+assert "/ch/02" not in addresses
+assert "/ch/06" not in addresses
+
+#
+# Aux-Rückweg und Summe bleiben, wo sie sind.
+#
+assert paired[-2] == ("/rtn/aux", "17+18", False)
+assert paired[-1].is_main is True
+
+print("OK: Gekoppelte Paare ergeben einen Regler (1+2), der Rest bleibt einzeln")
+
+#
+# Ohne Kopplung ändert sich nichts - das ist der Normalfall.
+#
+assert channel_addresses(FAMILY_XAIR, 18) == channel_addresses(
+    FAMILY_XAIR, 18, linked=set()
+)
+
+#
+# Auch beim X32, und eine Kopplung am oberen Ende darf nicht über den
+# letzten Kanal hinauslaufen.
+#
+x32_paired = channel_addresses(FAMILY_X32, 32, linked={31})
+assert len(x32_paired) == 32, f"31+32 gekoppelt -> 31 Regler + Summe, nicht {len(x32_paired)}"
+assert x32_paired[-2] == ("/ch/31", "31+32", False), x32_paired[-2]
+
+print("OK: Kopplung funktioniert auch beim X32 und läuft nicht über den letzten Kanal hinaus")
+
+# ----------------------------------------------------------------
 # 5. Attrappen-Pult: kompletter Austausch ohne Hardware
 # ----------------------------------------------------------------
 
@@ -233,6 +323,16 @@ class FakeConsole:
         self.names: dict[str, str] = {}
         self.on: dict[str, int] = {}
         self.received: list[tuple[str, list]] = []
+
+        #
+        # Gekoppelte Paare, Schluessel wie "1-2". Was hier nicht steht,
+        # beantwortet die Attrappe je nach answer_chlink entweder mit 0
+        # oder gar nicht - so laesst sich auch ein Pult nachstellen, das
+        # die Abfrage ueberhaupt nicht kennt.
+        #
+        self.chlink: dict[str, int] = {}
+        self.answer_chlink = True
+        self.fdrmute: int | None = None
 
         self._running = True
         self._thread = threading.Thread(target=self._serve, daemon=True)
@@ -276,6 +376,21 @@ class FakeConsole:
 
             elif address.endswith("/config/name"):
                 reply = encode(address, self.names.get(address, ""))
+
+            elif address.startswith("/config/chlink/"):
+
+                if not self.answer_chlink:
+                    continue
+
+                pair = address[len("/config/chlink/"):]
+                reply = encode(address, self.chlink.get(pair, 0))
+
+            elif address == "/config/linkcfg/fdrmute":
+
+                if self.fdrmute is None:
+                    continue
+
+                reply = encode(address, self.fdrmute)
 
             else:
                 continue
@@ -430,6 +545,102 @@ try:
     print("OK: Auch die Summe lässt sich stummschalten")
 
     assert control.set_mute("127.0.0.1", 18, 19, True) is False
+
+    # ----------------------------------------------------------------
+    # 5d. Gekoppelte Paare am Pult abfragen
+    # ----------------------------------------------------------------
+
+    console.chlink["1-2"] = 1
+    console.chlink["5-6"] = 1
+
+    channels = control.get_channels("127.0.0.1", 18)
+
+    assert len(channels) == 16, (
+        f"Zwei gekoppelte Paare sollten 16 Regler ergeben, es sind {len(channels)}"
+    )
+    assert channels[0]["label"] == "1+2", channels[0]
+    assert channels[3]["label"] == "5+6", channels[3]
+
+    #
+    # Der Name kommt vom ersten Kanal des Paars.
+    #
+    assert channels[0]["name"] == "Click"
+
+    print("OK: Gekoppelte Paare werden am Pult erkannt und zusammengefasst")
+
+    #
+    # Entscheidend: Ein Befehl auf den zusammengefassten Regler muss
+    # denselben Kanal treffen, den die Oberfläche anzeigt. Regler 4 ist
+    # jetzt "5+6" - der Befehl gehört auf /ch/05, nicht auf /ch/04.
+    #
+    console.faders.pop("/ch/05/mix/fader", None)
+
+    assert control.set_fader("127.0.0.1", 18, 4, 0.0) is True
+
+    time.sleep(0.1)
+
+    assert "/ch/05/mix/fader" in console.faders, (
+        f"Regler 5+6 hat den falschen Kanal getroffen: {sorted(console.faders)}"
+    )
+
+    print("OK: Der zusammengefasste Regler trifft den ersten Kanal des Paars")
+
+    #
+    # Sind Fader und Mute laut Pult NICHT an die Kopplung gebunden
+    # (das gibt es beim X32), darf nicht zusammengefasst werden - sonst
+    # bewegt sich sichtbar nur die Hälfte.
+    #
+    console.fdrmute = 0
+    control._fader_link = None
+
+    channels = control.get_channels("127.0.0.1", 18)
+
+    assert len(channels) == 18, (
+        f"Bei entkoppelten Fadern müssen alle 18 Regler einzeln bleiben, "
+        f"es sind {len(channels)}"
+    )
+
+    print("OK: Folgen die Fader der Kopplung nicht, bleibt jeder Kanal einzeln")
+
+    #
+    # Ein Pult, das die Abfrage gar nicht kennt: Es darf nicht bei jedem
+    # Auffrischen acht Zeitüberschreitungen kosten - nach dem ersten
+    # Fehlversuch wird nicht mehr gefragt.
+    #
+    console.fdrmute = None
+    console.answer_chlink = False
+
+    control._fader_link = None
+    control._link_supported = True
+
+    console.received.clear()
+
+    started = time.monotonic()
+    channels = control.get_channels("127.0.0.1", 18)
+    elapsed = time.monotonic() - started
+
+    probes = [a for a, _ in console.received if a.startswith("/config/chlink/")]
+
+    assert len(channels) == 18
+    assert len(probes) == 1, (
+        f"Nach dem ersten erfolglosen Versuch darf nicht weitergefragt "
+        f"werden, gefragt wurde aber {len(probes)}x"
+    )
+
+    #
+    # Zweiter Durchgang: jetzt gar keine Abfrage mehr.
+    #
+    console.received.clear()
+    control.get_channels("127.0.0.1", 18)
+
+    assert not [a for a, _ in console.received if a.startswith("/config/chlink/")], (
+        "Das Pult wird weiter nach Kopplungen gefragt, obwohl es sie nicht kennt."
+    )
+
+    print(
+        f"OK: Kennt das Pult die Kopplungs-Abfrage nicht, wird nur einmal "
+        f"gefragt ({elapsed:.2f}s)"
+    )
 
     # ----------------------------------------------------------------
     # 6. Familienerkennung

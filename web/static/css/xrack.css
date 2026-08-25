@@ -236,11 +236,19 @@ body {
         gap: 0.35rem;
     }
 
+    /*
+       Feste Hoehe ueber zwei Zeilen: Nummer/Beschriftung oben, Name
+       darunter. Ohne das steht ein Kanal ohne Namen - die Summe zum
+       Beispiel - nur einzeilig da, und sein Regler samt Mute-Knopf
+       rutscht gegenueber den Nachbarn nach oben.
+    */
     .fader-name {
         flex: 0 0 auto;
         width: 100%;
         text-align: center;
         font-size: 0.7rem;
+        line-height: 1.25;
+        min-height: 2.5em;
     }
 
     .fader-name .fader-number {
@@ -262,7 +270,20 @@ body {
         appearance: slider-vertical;
         -webkit-appearance: slider-vertical;
         width: 1.5rem;
-        height: 9rem;
+        height: 12rem;
+    }
+
+    /*
+       Bootstrap zentriert den Griff auf der Bahn mit
+       "margin-top: -0.25rem" - die Haelfte der Differenz zwischen
+       1rem Griff und 0.5rem Bahn. Diese Rechnung gilt aber nur fuer
+       eine WAAGERECHTE Bahn. Stellt WebKit den Regler senkrecht,
+       vertauscht es die Achsen intern, und aus der Korrektur wird ein
+       seitlicher Versatz: Der Griff sitzt dann nicht mehr mittig im
+       Kanalzug. Auf 0 gesetzt zentriert WebKit selbst.
+    */
+    .fader-input::-webkit-slider-thumb {
+        margin-top: 0;
     }
 
     .fader-db {

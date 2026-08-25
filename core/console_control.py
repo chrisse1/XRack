@@ -48,9 +48,18 @@ def pad(data: bytes) -> bytes:
     """
     Füllt auf ein Vielfaches von 4 Byte auf - OSC verlangt das für
     Strings und Blobs.
+
+    Der Nullabschluss steckt schon in `data`. Passt die Länge damit
+    bereits ins 4-Byte-Raster, wird NICHT weiter aufgefüllt - "4 -
+    len % 4" hätte hier vier überzählige Nullen angehängt. Die
+    Nachricht bliebe zwar ausgerichtet, aber das Typ-Tag stünde vier
+    Byte zu spät, und der Empfänger läse eine Nachricht ohne
+    Argumente. Betroffen war jede Adresse mit 19, 23, 27 ... Zeichen
+    - dass es bisher nicht auffiel, lag nur daran, dass keine der
+    verwendeten Adressen diese Länge hatte.
     """
 
-    return data + b"\x00" * (4 - len(data) % 4)
+    return data + b"\x00" * (-len(data) % 4)
 
 
 def encode(address: str, *arguments) -> bytes:
@@ -212,9 +221,17 @@ MAIN_ADDRESS = {
 }
 
 
-def channel_addresses(family: str, channels: int) -> list[ChannelSpec]:
+def channel_addresses(
+    family: str, channels: int, linked=()
+) -> list[ChannelSpec]:
     """
     Liefert die Regler: Eingangskanäle und am Ende die Summe.
+
+    `linked` enthält die Nummern der jeweils ERSTEN Kanäle gekoppelter
+    Paare (die 1 steht also für das Paar 1+2). Ein gekoppeltes Paar
+    ergibt nur einen Regler, beschriftet wie "1+2" - zwei getrennte
+    Regler wären dort nur doppelt, weil das Pult den zweiten Kanal
+    ohnehin mitzieht.
 
     Die Adressen bilden die Kanalzahl des Audiointerfaces *nicht*
     durchgehend ab: Beim X32 sind es echte /ch/01 bis /ch/32, die
@@ -227,22 +244,36 @@ def channel_addresses(family: str, channels: int) -> list[ChannelSpec]:
     einer Stelle und sind am Pult leicht zu korrigieren.
     """
 
-    if family == FAMILY_XAIR:
+    linked = set(linked)
 
-        result = [
-            ChannelSpec(f"/ch/{index:02d}", str(index))
-            for index in range(1, min(channels, 16) + 1)
-        ]
+    count = min(channels, 16 if family == FAMILY_XAIR else 32)
 
-        if channels >= 18:
-            result.append(ChannelSpec("/rtn/aux", "17+18"))
+    result = []
+    index = 1
 
-    else:
+    while index <= count:
 
-        result = [
-            ChannelSpec(f"/ch/{index:02d}", str(index))
-            for index in range(1, min(channels, 32) + 1)
-        ]
+        if index in linked and index + 1 <= count:
+
+            #
+            # Gekoppeltes Paar: eine Adresse, Beschriftung wie beim
+            # Aux-Rückweg. Geschickt wird an den ersten Kanal, den
+            # zweiten zieht das Pult selbst mit.
+            #
+            result.append(
+                ChannelSpec(f"/ch/{index:02d}", f"{index}+{index + 1}")
+            )
+
+            index += 2
+
+        else:
+
+            result.append(ChannelSpec(f"/ch/{index:02d}", str(index)))
+
+            index += 1
+
+    if family == FAMILY_XAIR and channels >= 18:
+        result.append(ChannelSpec("/rtn/aux", "17+18"))
 
     main = MAIN_ADDRESS.get(family)
 
@@ -270,6 +301,23 @@ class ConsoleControl:
         self._family: str | None = None
         self._port: int | None = None
         self._detected_for: str | None = None
+
+        #
+        # Gekoppelte Kanalpaare. Der Stand wird gemerkt, damit ein
+        # Reglerbefehl dieselbe Kanalliste trifft, die die Oberfläche
+        # gerade anzeigt - sonst könnte eine Kopplung, die zwischen
+        # Anzeigen und Schieben umgelegt wird, die Nummern verschieben
+        # und der Befehl landete auf dem Nachbarkanal.
+        #
+        self._linked: set[int] = set()
+
+        #
+        # None = noch nicht geprüft. False bei _link_supported heißt:
+        # Das Pult kennt die Abfrage nicht, also gar nicht erst wieder
+        # fragen.
+        #
+        self._link_supported = True
+        self._fader_link: bool | None = None
 
     def _request(self, host: str, port: int, message: bytes) -> bytes | None:
         """
@@ -327,6 +375,14 @@ class ConsoleControl:
                 self._port = port
                 self._detected_for = host
 
+                #
+                # Anderes Pult, andere Kopplungen - alles Gemerkte gilt
+                # nicht mehr.
+                #
+                self._linked = set()
+                self._link_supported = True
+                self._fader_link = None
+
                 self.logger.info(
                     "Mischpult erkannt: %s auf %s:%d",
                     family,
@@ -339,8 +395,93 @@ class ConsoleControl:
         self._family = None
         self._port = None
         self._detected_for = None
+        self._linked = set()
 
         return None
+
+    def _fader_follows_link(self, host: str) -> bool:
+        """
+        Prüft, ob Fader und Stummschaltung der Kanalkopplung überhaupt
+        folgen.
+
+        Beim X32 ist das eine eigene Einstellung: Zwei Kanäle können
+        gekoppelt sein (gleicher EQ, gleiche Dynamik), ihre Fader aber
+        trotzdem unabhängig bleiben. In dem Fall dürfen wir sie nicht
+        zu einem Regler zusammenfassen - sonst bewegt sich sichtbar nur
+        die Hälfte.
+        """
+
+        if self._fader_link is not None:
+            return self._fader_link
+
+        answer = self._request(
+            host, self._port, encode("/config/linkcfg/fdrmute")
+        )
+
+        if answer is None:
+
+            #
+            # Keine Antwort heißt: Das Pult kennt die Einstellung nicht
+            # (die X-Air-Serie hat sie nicht). Dann gibt es auch keine
+            # Einschränkung - dort ziehen gekoppelte Kanäle immer
+            # zusammen.
+            #
+            self._fader_link = True
+
+        else:
+
+            _, arguments = decode(answer)
+
+            self._fader_link = not (arguments and arguments[0] == 0)
+
+        return self._fader_link
+
+    def linked_pairs(self, host: str, channels: int) -> set[int]:
+        """
+        Fragt am Pult ab, welche Kanalpaare gekoppelt sind.
+
+        Zurück kommt die Nummer des jeweils ERSTEN Kanals - die 1 steht
+        also für das Paar 1+2. Nur Mono-Eingänge lassen sich koppeln;
+        Aux-Rückweg und Summe sind ohnehin schon stereo.
+        """
+
+        if self._port is None or not self._link_supported:
+            return set()
+
+        if not self._fader_follows_link(host):
+            return set()
+
+        limit = min(channels, 16 if self._family == FAMILY_XAIR else 32)
+
+        pairs = set()
+
+        for first in range(1, limit, 2):
+
+            answer = self._request(
+                host,
+                self._port,
+                encode(f"/config/chlink/{first}-{first + 1}"),
+            )
+
+            if answer is None:
+
+                #
+                # Antwortet schon das erste Paar nicht, kennt das Pult
+                # die Adresse nicht. Dann nicht weiterfragen: Sonst
+                # kostet jede Aktualisierung acht bis sechzehn
+                # Zeitüberschreitungen und die Oberfläche wird zäh.
+                #
+                if first == 1:
+                    self._link_supported = False
+
+                break
+
+            _, arguments = decode(answer)
+
+            if arguments and arguments[0] == 1:
+                pairs.add(first)
+
+        return pairs
 
     def get_channels(self, host: str, channels: int) -> list[dict] | None:
         """
@@ -355,10 +496,16 @@ class ConsoleControl:
         if family is None or self._port is None:
             return None
 
+        #
+        # Vor dem Auslesen die Kopplungen holen - danach steht fest,
+        # wie viele Regler es überhaupt gibt.
+        #
+        self._linked = self.linked_pairs(host, channels)
+
         result = []
 
         for index, spec in enumerate(
-            channel_addresses(family, channels), start=1
+            channel_addresses(family, channels, self._linked), start=1
         ):
 
             address = spec.address
@@ -437,7 +584,7 @@ class ConsoleControl:
         if family is None or self._port is None:
             return False
 
-        addresses = channel_addresses(family, channels)
+        addresses = channel_addresses(family, channels, self._linked)
 
         if not 1 <= channel <= len(addresses):
             return False
@@ -465,7 +612,7 @@ class ConsoleControl:
         if family is None or self._port is None:
             return False
 
-        addresses = channel_addresses(family, channels)
+        addresses = channel_addresses(family, channels, self._linked)
 
         if not 1 <= channel <= len(addresses):
             return False
