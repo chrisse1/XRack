@@ -39,6 +39,19 @@ the Pi itself.
   your home network through XRack's own IP - so X32-Edit, X-AIR-Edit or
   Mixing Station work without rewiring anything. The address to type
   into the app is shown right below the switch.
+- **Channel strips**: a card showing the console's own faders, with
+  the channel names read from the mixer - volume and mute per channel
+  plus the main fader, so you don't have to switch to X-AIR-Edit while
+  practising. Linked channel pairs are recognised and shown as a single
+  strip. The faders are locked until you open the padlock, and while
+  locked XRack sends nothing at all over the network.
+
+  XRack finds the console by itself: through its own DHCP lease when
+  the mixer is plugged into the Pi, otherwise by an OSC broadcast on
+  the network - the same way X32-Edit and X-AIR-Edit find their mixers.
+  That covers the case where console and Pi are both on a router. If a
+  router blocks the broadcast, the IP can be entered by hand in the
+  settings.
 - Level meter, a settings dialog (language, port, Wi-Fi, console
   access, mixer sample rate), optional Wi-Fi client + access point
   setup, installable as a PWA.
@@ -148,6 +161,20 @@ am Pi nötig.
   IP ansprechbar - X32-Edit, X-AIR-Edit oder Mixing Station
   funktionieren damit, ohne etwas umzustecken. Die Adresse, die in die
   App gehört, steht direkt unter dem Schalter.
+- **Kanalzüge**: Eine Karte mit den Fadern des Pults, samt der
+  Kanalbeschriftungen vom Mischpult - Lautstärke und Stummschaltung je
+  Kanal plus der Summenregler, damit man beim Üben nicht nach
+  X-AIR-Edit wechseln muss. Gekoppelte Kanalpaare erkennt XRack und
+  zeigt sie als einen Regler. Die Fader sind gesperrt, bis man das
+  Schloss öffnet; im gesperrten Zustand geht kein einziges Paket ins
+  Netz.
+
+  Die Konsole findet XRack selbst: über die eigene DHCP-Vergabeliste,
+  wenn das Pult am Pi hängt, sonst per OSC-Rundruf im Netz - so wie
+  X32-Edit und X-AIR-Edit ihre Pulte auch finden. Damit ist der Fall
+  abgedeckt, dass Pult und Pi zusammen an einem Router hängen. Lässt
+  ein Router den Rundruf nicht durch, trägt man die IP in den
+  Einstellungen von Hand ein.
 - Pegelmesser, Einstellungsdialog (Sprache, Port, WLAN, Zugang zur
   Konsole, Mischpult-Samplerate), optionale WLAN-Client- und
   Access-Point-Einrichtung, als PWA installierbar.

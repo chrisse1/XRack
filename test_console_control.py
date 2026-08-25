@@ -9,6 +9,7 @@ durchspielen - nur die Frage, ob die Kennlinie und die Kanaladressen
 zur echten X-Serie passen, bleibt dem Test am Pult vorbehalten.
 """
 
+import logging
 import socket
 import struct
 import threading
@@ -20,6 +21,7 @@ from core.console_control import (
     FAMILY_XAIR,
     MIN_DB,
     ConsoleControl,
+    broadcast_addresses,
     channel_addresses,
     db_to_fader,
     decode,
@@ -674,6 +676,212 @@ try:
     assert fresh.set_mute("127.0.0.1", 18, 1, True) is False
 
     print("OK: Ohne Pult liefert get_channels None (nicht erreichbar), set_fader False")
+
+    # ----------------------------------------------------------------
+    # 7. Suchlauf per Rundruf
+    #
+    # Der Fall, fuer den es ihn gibt: Pult und Pi haengen zusammen an
+    # einem Router. Dann vergibt der Router die Adressen, der Pi hat
+    # keine Vergabeliste - ohne Suchlauf bliebe die Konsole unsichtbar.
+    # ----------------------------------------------------------------
+
+    #
+    # Rundruf-Adressen: mindestens eine, und niemals die von loopback -
+    # dorthin zu senden faende nie ein Pult.
+    #
+    adressen = broadcast_addresses()
+
+    assert adressen, "Es wurde keine einzige Rundruf-Adresse ermittelt."
+    assert all(not a.startswith("127.") for a in adressen), adressen
+
+    print(f"OK: Rundruf-Adressen werden ermittelt ({', '.join(adressen)})")
+
+    #
+    # Der eigentliche Suchlauf gegen die Attrappe. Die lauscht auf
+    # localhost und auf einem zufaelligen Port, ein echter Rundruf
+    # erreicht sie also nicht - deshalb wird fuer den Test die
+    # Adressliste auf genau ihren Sockel gelenkt.
+    #
+    import core.console_control as ccmodul
+
+    sucher = ConsoleControl()
+
+    original_broadcast = ccmodul.broadcast_addresses
+    original_xair = ccmodul.PORT_XAIR
+    original_x32 = ccmodul.PORT_X32
+
+    ccmodul.broadcast_addresses = lambda: ["127.0.0.1"]
+    ccmodul.PORT_XAIR = console.port
+    ccmodul.PORT_X32 = console.port
+
+    try:
+
+        gefunden = sucher.discover()
+
+        assert gefunden == "127.0.0.1", (
+            f"Das Pult wurde nicht gefunden: {gefunden}"
+        )
+
+        print("OK: Das Pult antwortet auf den Rundruf und wird gefunden")
+
+        #
+        # Die Bremse: Die Fader-Karte fragt alle zwei Sekunden. Ohne
+        # sie ginge bei jeder Abfrage ein Rundruf ins Netz.
+        #
+        console.received.clear()
+
+        for _ in range(5):
+            assert sucher.discover() == "127.0.0.1"
+
+        assert not console.received, (
+            f"Trotz Bremse wurde erneut gesucht: {console.received}"
+        )
+
+        print("OK: Wiederholte Abfragen loesen keinen neuen Rundruf aus")
+
+        #
+        # Nach detect_reset() muss wieder gesucht werden - sonst
+        # bliebe eine geaenderte Adresse fuer immer unentdeckt.
+        #
+        sucher.detect_reset()
+
+        assert sucher.discover() == "127.0.0.1"
+        assert console.received, "Nach detect_reset() wurde nicht neu gesucht."
+
+        print("OK: Nach dem Zuruecksetzen wird wieder gesucht")
+
+    finally:
+        ccmodul.broadcast_addresses = original_broadcast
+        ccmodul.PORT_XAIR = original_xair
+        ccmodul.PORT_X32 = original_x32
+
+    #
+    # Antwortet niemand, darf der Suchlauf None liefern und nicht
+    # haengen - sonst stuende die Oberflaeche bei jedem Aufruf.
+    #
+    leer = ConsoleControl()
+
+    started = time.monotonic()
+    assert leer.discover() is None
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 3.0, f"Suchlauf ohne Pult dauerte {elapsed:.1f}s"
+
+    print(f"OK: Ohne Pult liefert der Suchlauf None und haengt nicht ({elapsed:.2f}s)")
+
+    # ----------------------------------------------------------------
+    # 8. Reihenfolge, in der die Pult-IP gesucht wird
+    #
+    # Von Hand vor Vergabeliste vor Suchlauf. Eine falsche Reihenfolge
+    # faellt nicht auf - sie benutzt einfach still die falsche Adresse.
+    # ----------------------------------------------------------------
+
+    import types
+
+    from core.application import Application
+
+    class FakeStore:
+
+        def __init__(self, werte=None):
+            self.werte = dict(werte or {})
+
+        def get(self, key, default=None):
+            return self.werte.get(key, default)
+
+        def set(self, key, value):
+            self.werte[key] = value
+
+    zuruecksetzungen = []
+
+    def stub(manual="", lease=None, discovered=None, channels=18):
+        return types.SimpleNamespace(
+            selected_audio_device=(
+                types.SimpleNamespace(channels=channels)
+                if channels
+                else None
+            ),
+            state_store=FakeStore({"console_ip_manual": manual}),
+            wlan_control=types.SimpleNamespace(
+                get_status=lambda: {"console_ip": lease}
+            ),
+            console_control=types.SimpleNamespace(
+                discover=lambda: discovered,
+                #
+                # set_console_host() verwirft das Gemerkte - hinter
+                # einer neuen Adresse kann ein anderes Pult stecken.
+                #
+                detect_reset=lambda: zuruecksetzungen.append(True),
+            ),
+            logger=logging.getLogger("XRack-Test"),
+        )
+
+    #
+    # Von Hand schlaegt alles andere - wer sie eintraegt, hat einen Grund.
+    #
+    host, kanaele, herkunft = Application._console_host_and_channels(
+        stub(manual="10.0.0.5", lease="192.168.7.2", discovered="172.16.0.9")
+    )
+    assert (host, kanaele, herkunft) == ("10.0.0.5", 18, "manual"), (host, herkunft)
+
+    #
+    # Ohne Eintrag gewinnt die Vergabeliste des Pi: Steht die Konsole
+    # dort, haengt sie per Kabel am Pi - naeher geht es nicht.
+    #
+    host, _, herkunft = Application._console_host_and_channels(
+        stub(lease="192.168.7.2", discovered="172.16.0.9")
+    )
+    assert (host, herkunft) == ("192.168.7.2", "lease"), (host, herkunft)
+
+    #
+    # Und erst wenn beides fehlt, der Suchlauf - der Fall "beide am
+    # Router".
+    #
+    host, _, herkunft = Application._console_host_and_channels(
+        stub(discovered="172.16.0.9")
+    )
+    assert (host, herkunft) == ("172.16.0.9", "discovered"), (host, herkunft)
+
+    #
+    # Findet auch der nichts, bleibt es bei None - die Karte zeigt dann
+    # ihren Hinweis statt toter Regler.
+    #
+    host, _, _ = Application._console_host_and_channels(stub())
+    assert host is None
+
+    print("OK: Die Pult-IP wird in der richtigen Reihenfolge gesucht")
+
+    #
+    # Leerzeichen im Eingabefeld duerfen nicht als Adresse durchgehen -
+    # sonst schiebe XRack OSC-Pakete an einen leeren Hostnamen.
+    #
+    host, _, herkunft = Application._console_host_and_channels(
+        stub(manual="   ", lease="192.168.7.2")
+    )
+    assert (host, herkunft) == ("192.168.7.2", "lease"), (host, herkunft)
+
+    print("OK: Ein leeres Feld schaltet zurueck auf die automatische Suche")
+
+    #
+    # Ungueltige Eingaben werden abgelehnt, gueltige gemerkt.
+    #
+    eintragen = stub()
+
+    assert Application.set_console_host(eintragen, "keine-ip")[0] is False
+    assert Application.set_console_host(eintragen, "999.1.1.1")[0] is False
+    assert Application.set_console_host(eintragen, "192.168.1.50")[0] is True
+
+    assert eintragen.state_store.get("console_ip_manual") == "192.168.1.50"
+
+    print("OK: Ungueltige Adressen werden abgelehnt, gueltige gemerkt")
+
+    #
+    # Beim Eintragen muss das Gemerkte verworfen werden. Sonst
+    # spraeche XRack die neue Adresse mit der Familie und dem Port des
+    # alten Pults an - und wunderte sich, dass niemand antwortet.
+    #
+    assert zuruecksetzungen, "Nach einer neuen Adresse wurde nicht zurueckgesetzt."
+
+    print("OK: Eine neue Adresse verwirft die gemerkte Pult-Erkennung")
 
 finally:
     console.stop()

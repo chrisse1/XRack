@@ -2161,6 +2161,7 @@ async function loadSettings() {
         document.getElementById("settings-pin-new-confirm").value = "";
 
         applyWlanSettings(data.wlan);
+        applyConsoleHost(data);
     } catch (error) {
         console.error("Fehler beim Laden der Einstellungen:", error);
     }
@@ -2643,6 +2644,75 @@ function applyWlanSettings(wlan) {
     if (ready) {
         document.getElementById("settings-app-ip-value").textContent = wlan.home_ip;
         document.getElementById("settings-console-ip-value").textContent = wlan.console_ip;
+    }
+}
+
+//
+// Zeigt, welche IP fuer das Pult benutzt wird und woher sie stammt -
+// von Hand eingetragen, am Pi angemeldet oder im Netz gefunden. Ohne
+// diese Rueckmeldung raet man beim Eintragen ins Blaue.
+//
+function applyConsoleHost(data) {
+    const field = document.getElementById("settings-console-host");
+    const found = document.getElementById("settings-console-host-found");
+
+    if (!field || !found) return;
+
+    field.value = data.console_ip_manual || "";
+
+    if (!data.console_host) {
+        found.className = "small mt-1 text-body-secondary";
+        found.textContent = I18N.settings_console_host_none;
+        return;
+    }
+
+    const key = "settings_console_host_" + data.console_host_source;
+
+    found.className = "small mt-1 text-success";
+    found.textContent = (I18N[key] || "{ip}").replace("{ip}", data.console_host);
+}
+
+document
+    .getElementById("btn-settings-console-host")
+    .addEventListener("click", saveConsoleHost);
+
+async function saveConsoleHost() {
+    const field = document.getElementById("settings-console-host");
+    const found = document.getElementById("settings-console-host-found");
+
+    const button = document.getElementById("btn-settings-console-host");
+
+    button.disabled = true;
+
+    try {
+        const response = await fetch("/api/console/host", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ip: field.value.trim() }),
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            found.className = "small mt-1 text-danger";
+            found.textContent = data.message || I18N.settings_console_host_invalid;
+            return;
+        }
+
+        //
+        // Einstellungen neu laden: Erst danach steht fest, welche IP
+        // jetzt tatsaechlich benutzt wird - beim Leeren des Feldes
+        // greift ja wieder die Automatik.
+        //
+        const settings = await (await fetch("/api/settings")).json();
+        applyConsoleHost(settings);
+
+    } catch (error) {
+        console.error("Pult-IP konnte nicht gespeichert werden:", error);
+        found.className = "small mt-1 text-danger";
+        found.textContent = I18N.settings_console_host_invalid;
+    } finally {
+        button.disabled = false;
     }
 }
 

@@ -26,6 +26,7 @@ from core.state_store import StateStore
 from core.pin import hash_pin, verify_pin
 from core.stem_combiner import combine_stems, StemCombineError
 import getpass
+import ipaddress
 import platform
 import psutil
 import re
@@ -881,15 +882,23 @@ class Application:
 
         return True, ""
 
-    def _console_host_and_channels(self) -> tuple[str | None, int]:
+    def _console_host_and_channels(self) -> tuple[str | None, int, str]:
         """
-        Liefert die IP des Mischpults und die Kanalzahl des Interfaces.
+        Liefert IP und Herkunft des Mischpults sowie die Kanalzahl des
+        Interfaces.
 
-        Die IP kommt aus derselben Quelle wie bei der Portweiterleitung -
-        sie ist nur bekannt, wenn die Konsole per Kabel am Pi hängt.
+        Die IP wird in fester Reihenfolge gesucht:
+
+        1. Von Hand eingetragen - wer sie einträgt, hat einen Grund;
+           das schlägt jede Automatik.
+        2. Aus der DHCP-Vergabeliste des Pi. Die gibt es nur, wenn der
+           Pi selbst die Adresse vergeben hat, also bei der
+           Ethernet-Freigabe oder der Bridge.
+        3. Per Rundruf. Das ist der Fall, für den es die anderen beiden
+           nicht gibt: Pult und Pi hängen zusammen an einem Router, der
+           die Adressen vergibt - dann weiß der Pi von sich aus nichts
+           von der Konsole.
         """
-
-        host = self.wlan_control.get_status().get("console_ip")
 
         channels = (
             self.selected_audio_device.channels
@@ -897,7 +906,68 @@ class Application:
             else 0
         )
 
-        return host, channels
+        manual = (self.state_store.get("console_ip_manual") or "").strip()
+
+        if manual:
+            return manual, channels, "manual"
+
+        lease = self.wlan_control.get_status().get("console_ip")
+
+        if lease:
+            return lease, channels, "lease"
+
+        return self.console_control.discover(), channels, "discovered"
+
+    def get_console_host(self) -> dict:
+        """
+        Welche IP für das Pult benutzt wird und woher sie stammt -
+        fürs Einstellungen-Modal.
+
+        Bewusst nicht über get_console_channels(): Das läse alle Kanäle
+        aus, nur um eine Adresse anzuzeigen.
+        """
+
+        host, _, source = self._console_host_and_channels()
+
+        return {
+            "manual": (self.state_store.get("console_ip_manual") or ""),
+            "host": host or "",
+            "source": source if host else "",
+        }
+
+    def set_console_host(self, ip: str) -> tuple[bool, str]:
+        """
+        Trägt die IP des Mischpults von Hand ein. Ein leerer Wert
+        schaltet zurück auf die automatische Suche.
+
+        Gebraucht wird das als Rückfall: Manche Router lassen Rundrufe
+        zwischen WLAN und Kabel nicht durch, dann findet der Suchlauf
+        nichts, obwohl das Pult erreichbar ist.
+        """
+
+        ip = (ip or "").strip()
+
+        if ip:
+
+            try:
+                ipaddress.IPv4Address(ip)
+            except ValueError:
+                return False, "Das ist keine gültige IPv4-Adresse."
+
+        self.state_store.set("console_ip_manual", ip)
+
+        #
+        # Gemerkte Familie verwerfen: Eine neue Adresse kann ein
+        # anderes Pult sein, und die Erkennung haengt am Host.
+        #
+        self.console_control.detect_reset()
+
+        self.logger.info(
+            "Pult-IP von Hand gesetzt: %s",
+            ip or "(automatisch)",
+        )
+
+        return True, ""
 
     def get_console_channels(self) -> dict:
         """
@@ -909,12 +979,14 @@ class Application:
         Steuerweg da, aber Pult antwortet nicht.
         """
 
-        host, channels = self._console_host_and_channels()
+        host, channels, source = self._console_host_and_channels()
 
         if not host or channels <= 0:
             return {
                 "available": False,
                 "reason": "no_connection",
+                "host": "",
+                "host_source": "",
                 "channels": [],
             }
 
@@ -924,12 +996,16 @@ class Application:
             return {
                 "available": False,
                 "reason": "no_response",
+                "host": host,
+                "host_source": source,
                 "channels": [],
             }
 
         return {
             "available": True,
             "reason": "",
+            "host": host,
+            "host_source": source,
             "channels": result,
         }
 
@@ -939,7 +1015,7 @@ class Application:
         sein soll (-unendlich).
         """
 
-        host, channels = self._console_host_and_channels()
+        host, channels, _ = self._console_host_and_channels()
 
         if not host or channels <= 0:
             return False
@@ -954,7 +1030,7 @@ class Application:
     def set_console_mute(self, channel: int, muted: bool) -> bool:
         """Schaltet einen Kanal am Pult stumm oder wieder an."""
 
-        host, channels = self._console_host_and_channels()
+        host, channels, _ = self._console_host_and_channels()
 
         if not host or channels <= 0:
             return False

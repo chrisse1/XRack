@@ -211,6 +211,20 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_app_ip_label": "In der Steuerungs-App eintragen:",
         "settings_console_ip_label": "Konsole am Pi:",
         "settings_console_ip_not_found": "Noch nicht erkannt.",
+        "settings_console_host_label": "IP des Mischpults",
+        "settings_console_host_placeholder": "automatisch",
+        "settings_console_host_hint": (
+            "Leer lassen, wenn das Pult am Pi hängt oder im Netz "
+            "gefunden wird. Eintragen, wenn Pult und Pi zusammen an "
+            "einem Router hängen und die Kanalzüge trotzdem keine "
+            "Verbindung melden - manche Router lassen den Suchlauf "
+            "nicht durch."
+        ),
+        "settings_console_host_invalid": "Das ist keine gültige IPv4-Adresse.",
+        "settings_console_host_manual": "Wird benutzt: {ip} (von Hand eingetragen)",
+        "settings_console_host_lease": "Wird benutzt: {ip} (am Pi angemeldet)",
+        "settings_console_host_discovered": "Wird benutzt: {ip} (im Netz gefunden)",
+        "settings_console_host_none": "Kein Mischpult gefunden.",
 
         # Update aus dem Internet oder über USB-Stick
         "settings_update_title": "Update",
@@ -567,6 +581,19 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_app_ip_label": "Enter this in your control app:",
         "settings_console_ip_label": "Console at the Pi:",
         "settings_console_ip_not_found": "Not detected yet.",
+        "settings_console_host_label": "Mixer IP address",
+        "settings_console_host_placeholder": "automatic",
+        "settings_console_host_hint": (
+            "Leave empty if the console is attached to the Pi or gets "
+            "found on the network. Fill it in if console and Pi are "
+            "both on a router and the channel strips still report no "
+            "connection - some routers do not pass the search through."
+        ),
+        "settings_console_host_invalid": "That is not a valid IPv4 address.",
+        "settings_console_host_manual": "In use: {ip} (entered by hand)",
+        "settings_console_host_lease": "In use: {ip} (registered at the Pi)",
+        "settings_console_host_discovered": "In use: {ip} (found on the network)",
+        "settings_console_host_none": "No mixer found.",
 
         # Update from the internet or via USB stick
         "settings_update_title": "Update",

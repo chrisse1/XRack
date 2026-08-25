@@ -22,7 +22,10 @@ import logging
 import math
 import socket
 import struct
+import time
 from typing import NamedTuple
+
+import psutil
 
 #
 # X32/M32 lauschen auf 10023, die X-Air-Serie (XR12/16/18, X18) auf
@@ -42,6 +45,65 @@ TIMEOUT = 0.3
 
 MIN_DB = -90.0
 MAX_DB = 10.0
+
+#
+# Suchlauf per Rundruf: So finden auch X-AIR-Edit und X32-Edit ihre
+# Pulte. Gebraucht wird das, wenn Pult und Pi zusammen an einem Router
+# hängen - dann ist nicht der Pi der DHCP-Server, und seine
+# Vergabeliste kennt die Konsole gar nicht.
+#
+DISCOVERY_TIMEOUT = 0.6
+
+#
+# Wie oft höchstens gesucht wird. Die Fader-Karte fragt im entsperrten
+# Zustand alle zwei Sekunden - ohne diese Bremse ginge bei jeder
+# Abfrage ein Rundruf ins Netz.
+#
+DISCOVERY_INTERVAL = 30.0
+
+
+def broadcast_addresses() -> list[str]:
+    """
+    Liefert die Rundruf-Adressen aller IPv4-Schnittstellen.
+
+    Nicht einfach 255.255.255.255: Hat der Pi mehrere Schnittstellen
+    (WLAN und Kabel), entscheidet dabei die Routing-Tabelle, über
+    welche gesendet wird - und das ist womöglich nicht die, an der das
+    Pult hängt. Je Schnittstelle ihre eigene Adresse zu nehmen erreicht
+    beide.
+    """
+
+    result = []
+
+    try:
+
+        for addresses in psutil.net_if_addrs().values():
+
+            for address in addresses:
+
+                if address.family != socket.AF_INET:
+                    continue
+
+                if not address.broadcast:
+                    continue
+
+                if address.address.startswith("127."):
+                    continue
+
+                if address.broadcast not in result:
+                    result.append(address.broadcast)
+
+    except Exception:
+        #
+        # Schnittstellen nicht auslesbar - dann wenigstens der
+        # allgemeine Rundruf.
+        #
+        pass
+
+    if not result:
+        result.append("255.255.255.255")
+
+    return result
 
 
 def pad(data: bytes) -> bytes:
@@ -319,6 +381,12 @@ class ConsoleControl:
         self._link_supported = True
         self._fader_link: bool | None = None
 
+        #
+        # Ergebnis des Suchlaufs samt Zeitpunkt des letzten Versuchs.
+        #
+        self._discovered: str | None = None
+        self._last_discovery = 0.0
+
     def _request(self, host: str, port: int, message: bytes) -> bytes | None:
         """
         Schickt eine Nachricht und wartet auf genau eine Antwort.
@@ -354,6 +422,100 @@ class ConsoleControl:
             self.logger.warning("OSC konnte nicht gesendet werden: %s", exc)
 
             return False
+
+    def detect_reset(self) -> None:
+        """
+        Verwirft alles Gemerkte - Familie, Port, Kopplungen und den
+        Suchlauf.
+
+        Nötig, wenn sich die Adresse ändert: Dahinter kann ein anderes
+        Pult stecken, und die Familienerkennung hängt am Host.
+        """
+
+        self._family = None
+        self._port = None
+        self._detected_for = None
+        self._linked = set()
+        self._link_supported = True
+        self._fader_link = None
+        self._discovered = None
+        self._last_discovery = 0.0
+
+    def discover(self) -> str | None:
+        """
+        Sucht das Pult per Rundruf im lokalen Netz.
+
+        Gebraucht wird das, wenn Pult und Pi zusammen an einem Router
+        hängen: Dann vergibt der Router die Adressen, der Pi hat keine
+        Vergabeliste, in der die Konsole stünde - und ohne Adresse
+        nützt der beste Steuerweg nichts.
+
+        Das Ergebnis wird gemerkt und höchstens alle 30 Sekunden neu
+        ermittelt. Damit heilt sich ein veralteter Treffer von selbst
+        (das Pult bekommt eine neue Adresse), ohne dass jede Abfrage
+        der Fader-Karte einen Rundruf auslöst.
+        """
+
+        now = time.monotonic()
+
+        if now - self._last_discovery < DISCOVERY_INTERVAL:
+            return self._discovered
+
+        self._last_discovery = now
+        self._discovered = self._probe()
+
+        if self._discovered:
+            self.logger.info("Mischpult gefunden: %s", self._discovered)
+
+        return self._discovered
+
+    def _probe(self) -> str | None:
+        """Ein Rundruf-Durchgang auf beiden Ports."""
+
+        message = encode("/info")
+
+        try:
+
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                sock.settimeout(DISCOVERY_TIMEOUT)
+
+                for address in broadcast_addresses():
+
+                    for port in (PORT_XAIR, PORT_X32):
+
+                        try:
+                            sock.sendto(message, (address, port))
+                        except OSError:
+                            #
+                            # Einzelne Schnittstelle nicht bespielbar -
+                            # die anderen trotzdem versuchen.
+                            #
+                            continue
+
+                deadline = time.monotonic() + DISCOVERY_TIMEOUT
+
+                while time.monotonic() < deadline:
+
+                    try:
+                        data, sender = sock.recvfrom(4096)
+                    except (socket.timeout, OSError):
+                        break
+
+                    #
+                    # Nur eine echte /info-Antwort zählt. Im Netz kann
+                    # auf einen Rundruf auch anderes zurückkommen, und
+                    # dessen Adresse als Pult zu nehmen wäre schlimmer
+                    # als gar kein Treffer.
+                    #
+                    if decode(data)[0] == "/info":
+                        return sender[0]
+
+        except OSError as exc:
+            self.logger.warning("Suchlauf fehlgeschlagen: %s", exc)
+
+        return None
 
     def detect(self, host: str) -> str | None:
         """

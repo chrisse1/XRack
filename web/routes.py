@@ -85,6 +85,12 @@ class UpdateSelection(BaseModel):
     #
     source: str = "usb"
 
+class ConsoleHostSelection(BaseModel):
+    #
+    # Leer heisst: wieder automatisch suchen.
+    #
+    ip: str = ""
+
 class MuteSelection(BaseModel):
     channel: int
     muted: bool
@@ -514,6 +520,8 @@ async def get_settings(request: Request):
 
     wlan = application.get_wlan_status()
 
+    console = application.get_console_host()
+
     return {
         "language": application.config.data.application.language,
         "sample_rate": application.mixer_sample_rate,
@@ -521,6 +529,15 @@ async def get_settings(request: Request):
         "record_name_prefix": application.record_name_prefix,
         "wlan": wlan,
         "pin_protected": application.pin_protection_enabled(),
+        #
+        # Leer = automatisch (Vergabeliste oder Suchlauf).
+        #
+        "console_ip_manual": console["manual"],
+        #
+        # Welche IP tatsaechlich benutzt wird und woher sie stammt.
+        #
+        "console_host": console["host"],
+        "console_host_source": console["source"],
     }
 
 
@@ -1191,6 +1208,27 @@ async def update_status(request: Request):
     application = request.app.state.application
 
     return application.get_update_status()
+
+
+@router.post("/api/console/host")
+async def console_host(
+    selection: ConsoleHostSelection,
+    request: Request,
+):
+    """
+    Trägt die IP des Mischpults von Hand ein - für den Fall, dass Pult
+    und Pi zusammen an einem Router hängen und der Suchlauf nichts
+    findet. Ein leerer Wert schaltet zurück auf die automatische Suche.
+    """
+
+    application = request.app.state.application
+
+    success, message = application.set_console_host(selection.ip)
+
+    return {
+        "success": success,
+        "message": message,
+    }
 
 
 @router.post("/api/update/acknowledge")
