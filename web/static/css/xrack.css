@@ -131,3 +131,111 @@ body {
     }
 
 }
+
+/* ------------------------------------------------------------------
+   Kanalfader
+
+   Die Ausrichtung hängt allein an diesen Regeln - das JavaScript baut
+   für beide Fälle dieselbe Struktur und kennt die Ausrichtung gar
+   nicht. Würde es beim Umschalten neu rendern, spränge beim Drehen des
+   Geräts ein Regler unter dem Finger weg.
+
+   Unter 992px: waagerechte Zeilen (Name links, Regler dehnt sich,
+   dB rechts). Ab 992px: senkrechte Fader nebeneinander wie am Pult.
+   ------------------------------------------------------------------ */
+
+.fader-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.fader-cell {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.fader-name {
+    flex: 0 0 8rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8rem;
+    color: #9aa4ad;
+}
+
+.fader-name .fader-number {
+    color: #6c757d;
+    margin-right: 0.35rem;
+}
+
+.fader-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+}
+
+.fader-db {
+    flex: 0 0 4rem;
+    text-align: right;
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.fader-cell.is-locked .fader-db {
+    color: #6c757d;
+}
+
+@media (min-width: 992px) {
+
+    .fader-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(2.75rem, 1fr));
+        gap: 0.75rem 0.25rem;
+    }
+
+    .fader-cell {
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .fader-name {
+        flex: 0 0 auto;
+        width: 100%;
+        text-align: center;
+        font-size: 0.7rem;
+    }
+
+    .fader-name .fader-number {
+        display: block;
+        margin-right: 0;
+    }
+
+    /*
+       Senkrechte Regler sind der einzige Teil, den Browser
+       unterschiedlich gelöst haben - darum mehrgleisig:
+       writing-mode ist der heutige Standard, slider-vertical deckt
+       ältere WebKit-Stände ab, und im Markup steht zusätzlich
+       orient="vertical" (das stört waagerecht nicht).
+    */
+    .fader-input {
+        flex: 0 0 auto;
+        writing-mode: vertical-lr;
+        direction: rtl;
+        appearance: slider-vertical;
+        -webkit-appearance: slider-vertical;
+        width: 1.5rem;
+        height: 9rem;
+    }
+
+    .fader-db {
+        flex: 0 0 auto;
+        width: 100%;
+        text-align: center;
+    }
+
+}

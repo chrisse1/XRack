@@ -600,6 +600,244 @@ async function pollLevels() {
 }
 
 // ============================================================
+// 7d. KANALFADER DER KONSOLE
+// ============================================================
+
+//
+// Die Fader sind bewusst gesperrt, bis man sie über das Schloss-Symbol
+// freigibt - damit beim Hantieren mit dem Gerät nichts verrutscht.
+//
+// Die Sperre dient zugleich als Verkehrsbremse: Nur im entsperrten
+// Zustand wird das Pult überhaupt abgefragt. Gesperrt (der Normalfall)
+// entsteht kein einziges UDP-Paket.
+//
+let fadersUnlocked = false;
+let faderPollTimer = null;
+let faderChannels = [];
+
+//
+// Kanal, an dem gerade gezogen wird - der wird vom Auffrischen
+// ausgenommen, sonst springt der Regler unter dem Finger weg.
+//
+let faderDragging = null;
+
+//
+// Beim Ziehen entstehen sonst hunderte Anfragen pro Sekunde.
+//
+const FADER_SEND_INTERVAL = 50;
+let faderLastSent = 0;
+
+const FADER_MIN_DB = -90;
+const FADER_MAX_DB = 10;
+
+function formatDb(db) {
+    if (db === null || db === undefined || db <= FADER_MIN_DB) {
+        return "-∞";
+    }
+    return (db > 0 ? "+" : "") + db.toFixed(1);
+}
+
+function toggleFaderLock() {
+    fadersUnlocked = !fadersUnlocked;
+
+    const button = document.getElementById("btn-faders-lock");
+    button.innerHTML = fadersUnlocked
+        ? `<i class="bi bi-unlock-fill"></i>`
+        : `<i class="bi bi-lock-fill"></i>`;
+    button.title = fadersUnlocked ? I18N.faders_lock : I18N.faders_unlock;
+    button.classList.toggle("btn-outline-secondary", !fadersUnlocked);
+    button.classList.toggle("btn-warning", fadersUnlocked);
+
+    document.querySelectorAll(".fader-input").forEach((input) => {
+        input.disabled = !fadersUnlocked;
+    });
+
+    document.querySelectorAll(".fader-cell").forEach((cell) => {
+        cell.classList.toggle("is-locked", !fadersUnlocked);
+    });
+
+    const hint = document.getElementById("faders-hint");
+    if (hint) hint.classList.toggle("d-none", fadersUnlocked);
+
+    if (fadersUnlocked) {
+        loadFaders();
+        if (faderPollTimer) clearInterval(faderPollTimer);
+        faderPollTimer = setInterval(loadFaders, 2000);
+    } else if (faderPollTimer) {
+        clearInterval(faderPollTimer);
+        faderPollTimer = null;
+    }
+}
+
+async function loadFaders() {
+    let data;
+
+    try {
+        const response = await fetch("/api/console/channels");
+        data = await response.json();
+    } catch (error) {
+        console.error("Fehler beim Abrufen der Fader:", error);
+        return;
+    }
+
+    const unavailable = document.getElementById("faders-unavailable");
+    const grid = document.getElementById("faders-grid");
+    const hint = document.getElementById("faders-hint");
+    if (!unavailable || !grid) return;
+
+    if (!data.available) {
+        unavailable.textContent = data.reason === "no_response"
+            ? I18N.faders_no_response
+            : I18N.faders_no_connection;
+        unavailable.classList.remove("d-none");
+        grid.classList.add("d-none");
+        if (hint) hint.classList.add("d-none");
+        faderChannels = [];
+        return;
+    }
+
+    unavailable.classList.add("d-none");
+    grid.classList.remove("d-none");
+
+    //
+    // Beim ersten Laden sind die Fader gesperrt - dann gehört der
+    // Hinweis sichtbar, sonst wirkt die Karte kaputt.
+    //
+    if (hint) hint.classList.toggle("d-none", fadersUnlocked);
+
+    renderFaders(data.channels);
+}
+
+function renderFaders(channels) {
+    const grid = document.getElementById("faders-grid");
+
+    //
+    // Struktur nur neu bauen, wenn sich Kanalzahl oder Beschriftungen
+    // geändert haben - sonst nur Werte setzen (Muster wie bei der
+    // Pegelanzeige). Die Ausrichtung waagerecht/senkrecht macht allein
+    // das CSS, hier gibt es dafür keine Fallunterscheidung.
+    //
+    const signature = channels.map((c) => `${c.label}|${c.name}`).join(";");
+
+    if (grid.dataset.signature !== signature) {
+        grid.dataset.signature = signature;
+        grid.className = "fader-grid";
+        grid.innerHTML = "";
+
+        channels.forEach((channel) => {
+            const cell = document.createElement("div");
+            cell.className = "fader-cell" + (fadersUnlocked ? "" : " is-locked");
+            cell.innerHTML = `
+                <span class="fader-name" title="${channel.name || ""}">
+                    <span class="fader-number">${channel.label}</span>${channel.name || ""}
+                </span>
+                <input
+                    type="range"
+                    class="form-range fader-input"
+                    orient="vertical"
+                    min="${FADER_MIN_DB}"
+                    max="${FADER_MAX_DB}"
+                    step="0.5"
+                    data-channel="${channel.channel}"
+                    ${fadersUnlocked ? "" : "disabled"}
+                >
+                <span class="fader-db"></span>
+            `;
+
+            const input = cell.querySelector(".fader-input");
+            input.addEventListener("input", onFaderInput);
+            input.addEventListener("pointerdown", () => {
+                faderDragging = channel.channel;
+            });
+
+            //
+            // Das Loslassen behandelt bewusst nur der Zuhörer am
+            // Dokument (weiter unten): Ein eigener pointerup hier
+            // liefe durch das Bubbling zuerst, würde faderDragging
+            // leeren - und der Endwert käme nie beim Pult an.
+            //
+
+            grid.appendChild(cell);
+        });
+    }
+
+    faderChannels = channels;
+
+    channels.forEach((channel, index) => {
+        if (faderDragging === channel.channel) return;
+
+        const cell = grid.children[index];
+        const input = cell.querySelector(".fader-input");
+        const readout = cell.querySelector(".fader-db");
+
+        const db = channel.db === null ? FADER_MIN_DB : channel.db;
+
+        input.value = db;
+        readout.textContent = formatDb(channel.db);
+    });
+}
+
+async function onFaderInput(event) {
+    const input = event.target;
+    const readout = input.closest(".fader-cell").querySelector(".fader-db");
+
+    const db = parseFloat(input.value);
+    readout.textContent = formatDb(db <= FADER_MIN_DB ? null : db);
+
+    //
+    // Drosseln: Beim Ziehen feuert "input" pro Pixel, das würde das
+    // Pult mit UDP-Paketen überschwemmen.
+    //
+    const now = Date.now();
+    if (now - faderLastSent < FADER_SEND_INTERVAL) return;
+    faderLastSent = now;
+
+    await sendFader(parseInt(input.dataset.channel, 10), db);
+}
+
+async function sendFader(channel, db) {
+    try {
+        await fetch("/api/console/fader", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                channel,
+                db: db <= FADER_MIN_DB ? null : db,
+            }),
+        });
+    } catch (error) {
+        console.error("Fader konnte nicht gesetzt werden:", error);
+    }
+}
+
+//
+// Beim Loslassen den Endwert noch einmal sicher schicken - die
+// Drosselung oben könnte genau die letzte Bewegung verschluckt haben.
+//
+function finishFaderDrag() {
+    if (faderDragging === null) return;
+
+    const input = document.querySelector(
+        `.fader-input[data-channel="${faderDragging}"]`
+    );
+
+    if (input) {
+        sendFader(faderDragging, parseFloat(input.value));
+    }
+
+    faderDragging = null;
+}
+
+document.addEventListener("pointerup", finishFaderDrag);
+document.addEventListener("pointercancel", finishFaderDrag);
+
+//
+// Einmal beim Laden prüfen, ob überhaupt ein Steuerweg besteht - dann
+// steht dort gleich der passende Hinweis statt einer leeren Karte.
+//
+loadFaders();
+
+// ============================================================
 // 8. RECORDING INFO LOADING
 // ============================================================
 

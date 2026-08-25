@@ -20,6 +20,7 @@ from core.wlan_control import WlanControl, SHARE_CONNECTION
 from core.bluetooth_control import BluetoothControl
 from core.usb_storage import UsbStorage
 from core.updater import Updater
+from core.console_control import ConsoleControl
 from core.state_store import StateStore
 from core.pin import hash_pin, verify_pin
 from core.stem_combiner import combine_stems, StemCombineError
@@ -124,6 +125,8 @@ class Application:
         self.usb_storage = UsbStorage()
 
         self.updater = Updater(self.usb_storage)
+
+        self.console_control = ConsoleControl()
 
         self._usb_copy_lock = threading.Lock()
 
@@ -783,6 +786,76 @@ class Application:
         """Liefert den Fortschritt eines laufenden/letzten Updates."""
 
         return self.updater.get_status()
+
+    def _console_host_and_channels(self) -> tuple[str | None, int]:
+        """
+        Liefert die IP des Mischpults und die Kanalzahl des Interfaces.
+
+        Die IP kommt aus derselben Quelle wie bei der Portweiterleitung -
+        sie ist nur bekannt, wenn die Konsole per Kabel am Pi hängt.
+        """
+
+        host = self.wlan_control.get_status().get("console_ip")
+
+        channels = (
+            self.selected_audio_device.channels
+            if self.selected_audio_device is not None
+            else 0
+        )
+
+        return host, channels
+
+    def get_console_channels(self) -> dict:
+        """
+        Liefert Kanalnamen und Faderstellungen des Mischpults für die
+        Fader-Karte.
+
+        Unterscheidet zwei Fälle, damit die Oberfläche sie erklären
+        kann: kein Steuerweg (Konsole nicht per Kabel erreichbar) und
+        Steuerweg da, aber Pult antwortet nicht.
+        """
+
+        host, channels = self._console_host_and_channels()
+
+        if not host or channels <= 0:
+            return {
+                "available": False,
+                "reason": "no_connection",
+                "channels": [],
+            }
+
+        result = self.console_control.get_channels(host, channels)
+
+        if result is None:
+            return {
+                "available": False,
+                "reason": "no_response",
+                "channels": [],
+            }
+
+        return {
+            "available": True,
+            "reason": "",
+            "channels": result,
+        }
+
+    def set_console_fader(self, channel: int, db: float | None) -> bool:
+        """
+        Setzt einen Kanalfader. `db` ist None, wenn der Fader ganz zu
+        sein soll (-unendlich).
+        """
+
+        host, channels = self._console_host_and_channels()
+
+        if not host or channels <= 0:
+            return False
+
+        return self.console_control.set_fader(
+            host,
+            channels,
+            channel,
+            float("-inf") if db is None else db,
+        )
 
     def eject_usb(self) -> tuple[bool, str]:
         """

@@ -357,6 +357,45 @@
 
     </div>
 
+    <!-- Kanalfader -------------------------------------------------->
+
+    <div class="row g-4 mt-0">
+
+        <div class="col-12">
+
+            {% set title %}
+            <i class="bi bi-sliders me-2"></i>{{ t.faders_title }}
+            {% endset %}
+
+            {% set header_right %}
+            <button
+                id="btn-faders-lock"
+                class="btn btn-outline-secondary btn-sm"
+                title="{{ t.faders_unlock }}"
+                onclick="toggleFaderLock()"
+            >
+                <i class="bi bi-lock-fill"></i>
+            </button>
+            {% endset %}
+
+            {% set body %}
+            <div id="faders-unavailable" class="text-muted small">
+                {{ t.faders_no_connection }}
+            </div>
+
+            <div id="faders-grid" class="d-none"></div>
+
+            <small id="faders-hint" class="text-body-secondary d-block mt-2 d-none">
+                {{ t.faders_locked_hint }}
+            </small>
+            {% endset %}
+
+            {% include "components/status_card.html" %}
+
+        </div>
+
+    </div>
+
     <!-- System ------------------------------------------------------>
 
     {% include "components/footer_status.html" %}

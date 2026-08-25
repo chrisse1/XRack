@@ -302,6 +302,25 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "alert_settings_pin_mismatch": "Die beiden PINs stimmen nicht überein.",
 
         # Bluetooth-Karte
+        # Kanalfader der Konsole
+        "faders_title": "Kanalfader",
+        "faders_unlock": "Fader entsperren",
+        "faders_lock": "Fader sperren",
+        "faders_locked_hint": (
+            "Die Fader sind gesperrt - zum Ändern oben auf das Schloss "
+            "tippen."
+        ),
+        "faders_no_connection": (
+            "Kein Steuerweg zur Konsole. Die Fadersteuerung läuft über "
+            "Netzwerk, nicht über das USB-Audiokabel - dafür muss die "
+            "Konsole per Kabel angeschlossen und einer der beiden "
+            "Zugangswege in den Einstellungen aktiv sein."
+        ),
+        "faders_no_response": (
+            "Die Konsole ist per Kabel verbunden, antwortet aber nicht "
+            "auf Steuerbefehle. Ist sie eingeschaltet?"
+        ),
+
         "bluetooth_title": "Bluetooth",
         "bluetooth_channels_label": "Zielkanäle:",
         "bluetooth_power_label": "Bluetooth",
@@ -612,6 +631,25 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "alert_settings_pin_mismatch": "The two PINs don't match.",
 
         # Bluetooth card
+        # Console channel faders
+        "faders_title": "Channel faders",
+        "faders_unlock": "Unlock faders",
+        "faders_lock": "Lock faders",
+        "faders_locked_hint": (
+            "The faders are locked - tap the padlock above to change "
+            "them."
+        ),
+        "faders_no_connection": (
+            "No control path to the console. Fader control runs over "
+            "the network, not the USB audio cable - the console needs "
+            "to be connected by cable and one of the two access routes "
+            "enabled in the settings."
+        ),
+        "faders_no_response": (
+            "The console is connected by cable but does not answer "
+            "control messages. Is it switched on?"
+        ),
+
         "bluetooth_title": "Bluetooth",
         "bluetooth_channels_label": "Target channels:",
         "bluetooth_power_label": "Bluetooth",

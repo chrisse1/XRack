@@ -73,6 +73,14 @@ class BridgeSelection(BaseModel):
 class ConsoleAccessSelection(BaseModel):
     enabled: bool
 
+class FaderSelection(BaseModel):
+    channel: int
+    #
+    # None bedeutet "Fader ganz zu" (-unendlich) - als JSON gibt es
+    # kein -inf.
+    #
+    db: float | None
+
 class PinVerifySelection(BaseModel):
     pin: str
 
@@ -1166,6 +1174,39 @@ async def update_status(request: Request):
     application = request.app.state.application
 
     return application.get_update_status()
+
+
+@router.get("/api/console/channels")
+async def console_channels(request: Request):
+    """
+    Kanalnamen und Faderstellungen des Mischpults für die Fader-Karte.
+
+    Wird vom Frontend nur abgefragt, solange die Fader entsperrt sind -
+    im gesperrten Normalfall entsteht dadurch gar kein Netzverkehr zum
+    Pult.
+    """
+
+    application = request.app.state.application
+
+    return application.get_console_channels()
+
+
+@router.post("/api/console/fader")
+async def set_console_fader(
+    selection: FaderSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success = application.set_console_fader(
+        selection.channel,
+        selection.db,
+    )
+
+    return {
+        "success": success,
+    }
 
 
 @router.get("/api/usb/status")
