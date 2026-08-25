@@ -399,12 +399,143 @@ def download_package(repository: str, branch: str) -> Path | None:
     return DOWNLOAD_FILE
 
 
+def git_branch(install_dir: Path) -> str | None:
+    """
+    Liefert den ausgecheckten Branch - oder None, wenn das Verzeichnis
+    keine Git-Arbeitskopie ist, git fehlt oder der Kopf abgetrennt ist.
+    """
+
+    if not (install_dir / ".git").is_dir():
+        return None
+
+    try:
+
+        result = subprocess.run(
+            [
+                "git",
+                "-c",
+                f"safe.directory={install_dir}",
+                "-C",
+                str(install_dir),
+                "rev-parse",
+                "--abbrev-ref",
+                "HEAD",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+    except (OSError, subprocess.SubprocessError) as exc:
+        log(f"git nicht verfügbar: {exc}")
+        return None
+
+    if result.returncode != 0:
+        log(f"git rev-parse fehlgeschlagen: {result.stderr.strip()}")
+        return None
+
+    branch = result.stdout.strip()
+
+    #
+    # "HEAD" heißt: abgetrennter Kopf, also kein Branch. Dann gibt es
+    # nichts, das man sinnvoll nachziehen könnte.
+    #
+    return None if branch in ("", "HEAD") else branch
+
+
+def align_git(install_dir: Path, branch: str, service_user: str) -> bool:
+    """
+    Zieht die Git-Arbeitskopie auf den gerade eingespielten Stand nach.
+
+    Ohne das zeigt HEAD weiter auf den alten Commit, während die Dateien
+    schon die neuen sind - ein späteres "git pull" bricht dann mit
+    "local changes would be overwritten" ab.
+
+    Zwei bewusste Einschränkungen:
+
+    Erstens läuft das nur, wenn der ausgecheckte Branch derselbe ist,
+    aus dem das Update kam. Wer auf einem Entwicklungszweig sitzt und
+    aus main aktualisiert, will seinen Zweig nicht auf main gezogen
+    bekommen - da ist der bloße Hinweis richtig.
+
+    Zweitens steht das hier ganz am Ende, nach bestandener
+    Gesundheitsprüfung, und nicht mitten im Ablauf. Der Rückfall beruht
+    auf Sicherungskopie und Dateitausch; wäre git Teil davon, müsste
+    auch der Rückfall git zurückdrehen, und aus einem Weg würden zwei,
+    die zusammenpassen müssen. Scheitert das Nachziehen hier, ist
+    nichts kaputt - es bleibt beim Hinweis.
+
+    Der Preis dieser Reihenfolge: Zwischen dem Herunterladen der ZIP
+    und diesem Zeitpunkt könnte jemand auf den Branch pushen, dann
+    holte das "reset" einen minimal neueren Stand als den geprüften.
+    Das Fenster ist Sekunden groß und betrifft nur ein Projekt, auf das
+    während des eigenen Updates jemand anders pusht.
+    """
+
+    def git(*arguments) -> subprocess.CompletedProcess | None:
+
+        try:
+
+            return subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    f"safe.directory={install_dir}",
+                    "-C",
+                    str(install_dir),
+                    *arguments,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+
+        except (OSError, subprocess.SubprocessError) as exc:
+            log(f"git {' '.join(arguments)} fehlgeschlagen: {exc}")
+            return None
+
+    result = git("fetch", "origin", branch)
+
+    if result is None or result.returncode != 0:
+        log(f"git fetch fehlgeschlagen: {result.stderr.strip() if result else '-'}")
+        return False
+
+    #
+    # FETCH_HEAD statt origin/<branch>: Das setzt "git fetch" immer,
+    # unabhängig davon, wie die Verfolgungszweige eingerichtet sind.
+    #
+    result = git("reset", "--hard", "FETCH_HEAD")
+
+    if result is None or result.returncode != 0:
+        log(f"git reset fehlgeschlagen: {result.stderr.strip() if result else '-'}")
+        return False
+
+    log(f"Git-Arbeitskopie auf {branch} nachgezogen")
+
+    #
+    # git lief als root, die Dateien gehören jetzt root. Zurückgeben,
+    # sonst kann der Dienstbenutzer sein eigenes Verzeichnis nicht mehr
+    # verwalten.
+    #
+    chown_tree(install_dir, service_user)
+
+    return True
+
+
 def run_update(
     zip_file: Path,
     install_dir: Path,
     service_user: str,
     port: int,
+    branch: str = "",
 ) -> int:
+    """
+    `branch` ist nur beim Weg über das Internet gesetzt - nur dort ist
+    bekannt, welcher Stand eingespielt wurde, und nur dann lässt sich
+    eine Git-Arbeitskopie sinnvoll nachziehen. Beim USB-Stick bringt
+    der Nutzer irgendeine ZIP mit; welchem Commit die entspricht, weiß
+    hier niemand.
+    """
 
     log(f"Update gestartet: {zip_file} -> {install_dir}")
 
@@ -605,8 +736,24 @@ def run_update(
     #
     needs_git_reset = (install_dir / ".git").is_dir()
 
+    ausgecheckt = None
+
     if needs_git_reset:
+
         log("Installationsverzeichnis ist eine Git-Arbeitskopie")
+
+        ausgecheckt = git_branch(install_dir)
+
+        #
+        # Nachziehen nur, wenn derselbe Branch ausgecheckt ist, aus dem
+        # das Update kam. Sitzt dort ein Entwicklungszweig und kam das
+        # Update aus main, wäre ein "reset" ein Zweigwechsel hinter dem
+        # Rücken des Nutzers - dann bleibt es beim Hinweis.
+        #
+        if branch and ausgecheckt == branch:
+
+            if align_git(install_dir, branch, service_user):
+                needs_git_reset = False
 
     if needs_install_script:
         message += (
@@ -621,12 +768,27 @@ def run_update(
         )
 
     if needs_git_reset:
+
         message += (
             " Hinweis: Das Verzeichnis ist eine Git-Arbeitskopie. XRack "
             "tauscht die Dateien direkt aus, git weiß davon nichts - ein "
-            "späteres \"git pull\" schlägt deshalb fehl. Mit "
-            "\"git reset --hard\" zieht man git wieder nach."
+            "späteres \"git pull\" schlägt deshalb fehl."
         )
+
+        if ausgecheckt and branch and ausgecheckt != branch:
+            #
+            # Der haeufigste Fall: Auf dem Geraet liegt ein
+            # Entwicklungszweig, aktualisiert wurde aus main. Dann ist
+            # der genaue Befehl hilfreicher als ein allgemeiner Rat.
+            #
+            message += (
+                f" Ausgecheckt ist \"{ausgecheckt}\", eingespielt wurde "
+                f"\"{branch}\". Zurück zum Entwickeln: "
+                f"\"git reset --hard origin/{ausgecheckt}\" "
+                f"(nach einem \"git fetch\")."
+            )
+        else:
+            message += " Mit \"git reset --hard\" zieht man git wieder nach."
 
     write_status(
         "success",
@@ -753,7 +915,17 @@ def main() -> int:
             )
             return 1
 
-    return run_update(zip_file, install_dir, arguments.service_user, port)
+    #
+    # Der Branch wird nur beim Online-Weg weitergereicht - beim
+    # USB-Stick ist unbekannt, welchem Stand die ZIP entspricht.
+    #
+    return run_update(
+        zip_file,
+        install_dir,
+        arguments.service_user,
+        port,
+        branch=arguments.branch if arguments.repository else "",
+    )
 
 
 if __name__ == "__main__":

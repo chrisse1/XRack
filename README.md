@@ -169,12 +169,19 @@ am Pi nötig.
   nicht zurückkommt, stellt XRack den vorherigen Stand selbsttätig
   wieder her.
 
-  Ist das Installationsverzeichnis eine Git-Arbeitskopie, weist die
-  Erfolgsmeldung darauf hin: XRack tauscht die Dateien direkt aus und
-  lässt `.git` unangetastet, ein späteres `git pull` schlägt deshalb
-  fehl. Mit `git reset --hard` zieht man git wieder nach. Bewusst
-  automatisiert XRack das nicht - es würde alles verwerfen, was auf dem
-  Gerät von Hand geändert wurde.
+  Ist das Installationsverzeichnis eine Git-Arbeitskopie, zieht XRack
+  sie nach dem Update aus dem Internet gleich mit nach - `git pull`
+  funktioniert danach ohne Zutun weiter. Das passiert nur, wenn
+  derselbe Branch ausgecheckt ist, aus dem das Update kam: Wer auf
+  einem Entwicklungszweig sitzt und aus `main` aktualisiert, soll
+  seinen Zweig nicht hinter seinem Rücken gewechselt bekommen - dort
+  nennt die Erfolgsmeldung stattdessen den passenden Befehl. Beim Weg
+  über den USB-Stick bleibt es ebenfalls beim Hinweis, weil dort
+  unbekannt ist, welchem Stand die mitgebrachte ZIP entspricht.
+
+  Nutzerdaten sind davon nicht betroffen: Aufnahmen, Musik, PIN,
+  Einstellungen und `.venv` stehen in der `.gitignore` und werden von
+  git gar nicht verfolgt.
 - **Diagnose-Aufzeichnung**: Ein Schalter in den Einstellungen, der im
   Hintergrund mitschreibt, wie es XRack und dem Netzwerk geht - und was
   XRack im selben Moment gerade tat. Gedacht für Fehler, die nur

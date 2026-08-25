@@ -500,6 +500,182 @@ try:
         server.shutdown()
 
     # ----------------------------------------------------------------
+    # Git-Arbeitskopie nachziehen
+    #
+    # Gegen ein echtes lokales Repository - kein Netz noetig. Der
+    # Ursprung enthaelt denselben Stand wie die ZIP; genau so ist es in
+    # Wirklichkeit auch, weil beide vom selben Branch stammen.
+    # ----------------------------------------------------------------
+
+    import os
+    import subprocess
+
+    def git(verzeichnis, *argumente):
+        return subprocess.run(
+            ["git", "-C", str(verzeichnis), *argumente],
+            capture_output=True,
+            text=True,
+        )
+
+    verfuegbar = subprocess.run(
+        ["git", "--version"], capture_output=True
+    ).returncode == 0
+
+    if not verfuegbar:
+        print("HINWEIS: git fehlt - Nachzieh-Tests uebersprungen")
+
+    else:
+
+        umgebung = {
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.invalid",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.invalid",
+        }
+        os.environ.update(umgebung)
+
+        #
+        # Ursprung aufbauen: derselbe Inhalt, den auch die ZIP bringt.
+        #
+        ursprung = scratch / "origin"
+        ursprung.mkdir()
+
+        with zipfile.ZipFile(zip_path) as archive:
+            archive.extractall(ursprung)
+
+        quelle = updater.find_source_directory(ursprung)
+
+        #
+        # Die echte .gitignore mitnehmen: Genau sie ist der Grund,
+        # warum ein "reset --hard" auf dem Pi ungefaehrlich ist -
+        # Aufnahmen, Musik, PIN und venv sind gar nicht verfolgt. Ohne
+        # sie wuerde der Test etwas pruefen, das es so nicht gibt.
+        #
+        shutil.copy(
+            Path(__file__).parent / ".gitignore", quelle / ".gitignore"
+        )
+
+        git(quelle, "init", "-q", "-b", "main")
+        git(quelle, "add", "-A")
+        git(quelle, "commit", "-q", "-m", "Stand aus der ZIP")
+
+        commit = git(quelle, "rev-parse", "HEAD").stdout.strip()
+
+        #
+        # Arbeitskopie: derselbe Branch, aber noch der alte Stand.
+        #
+        arbeitskopie = scratch / "install-arbeitskopie"
+
+        assert git(
+            scratch, "clone", "-q", str(quelle), str(arbeitskopie)
+        ).returncode == 0, "Klonen fehlgeschlagen"
+
+        for eintrag in arbeitskopie.iterdir():
+            if eintrag.name != ".git":
+                shutil.rmtree(eintrag) if eintrag.is_dir() else eintrag.unlink()
+
+        build_install(arbeitskopie)
+
+        shutil.rmtree(work, ignore_errors=True)
+        updater.check_health = lambda port: True
+
+        assert updater.run_update(
+            zip_path, arbeitskopie, "xrack", 8080, branch="main"
+        ) == 0
+
+        status = json.loads((work / "status.json").read_text(encoding="utf-8"))
+
+        assert status["needs_git_reset"] is False, (
+            f"git wurde nicht nachgezogen: {status}"
+        )
+        assert "git" not in status["message"], status["message"]
+
+        #
+        # Der eigentliche Beweis: Nach dem Update ist die Arbeitskopie
+        # sauber und zeigt auf den richtigen Commit. Genau das ist die
+        # Voraussetzung dafuer, dass ein spaeteres "git pull" laeuft.
+        #
+        assert git(arbeitskopie, "status", "--porcelain").stdout.strip() == "", (
+            "Die Arbeitskopie ist nach dem Update immer noch schmutzig:\n"
+            + git(arbeitskopie, "status", "--porcelain").stdout
+        )
+
+        #
+        # Und die Nutzerdaten muessen das Nachziehen ueberstanden
+        # haben - "reset --hard" fasst nicht verfolgte Dateien nicht
+        # an, aber genau darauf verlaesst sich der ganze Ansatz.
+        #
+        for geschuetzt in ("recordings", "music", "config/state.json", ".venv"):
+            assert (arbeitskopie / geschuetzt).exists(), (
+                f"Das Nachziehen hat Nutzerdaten verloren: {geschuetzt}"
+            )
+        assert git(arbeitskopie, "rev-parse", "HEAD").stdout.strip() == commit, (
+            "HEAD zeigt nicht auf den eingespielten Stand."
+        )
+        assert git(
+            arbeitskopie, "rev-parse", "--abbrev-ref", "HEAD"
+        ).stdout.strip() == "main", "Der Branch wurde abgetrennt."
+
+        print("OK: Nach dem Online-Update ist die Git-Arbeitskopie sauber und aktuell")
+
+        #
+        # Gegenprobe zur wichtigsten Einschraenkung: Sitzt auf dem
+        # Geraet ein anderer Branch, darf NICHT nachgezogen werden -
+        # das waere ein Zweigwechsel hinter dem Ruecken des Nutzers.
+        #
+        git(arbeitskopie, "checkout", "-q", "-b", "entwicklung")
+
+        for eintrag in arbeitskopie.iterdir():
+            if eintrag.name != ".git":
+                shutil.rmtree(eintrag) if eintrag.is_dir() else eintrag.unlink()
+
+        build_install(arbeitskopie)
+
+        shutil.rmtree(work, ignore_errors=True)
+
+        assert updater.run_update(
+            zip_path, arbeitskopie, "xrack", 8080, branch="main"
+        ) == 0
+
+        status = json.loads((work / "status.json").read_text(encoding="utf-8"))
+
+        assert status["needs_git_reset"] is True, (
+            f"Auf einem fremden Branch darf nicht nachgezogen werden: {status}"
+        )
+        assert git(
+            arbeitskopie, "rev-parse", "--abbrev-ref", "HEAD"
+        ).stdout.strip() == "entwicklung", (
+            "Der Updater hat den Branch gewechselt."
+        )
+
+        #
+        # ... und die Meldung muss dann den passenden Befehl nennen,
+        # nicht nur allgemein auf git verweisen.
+        #
+        assert "entwicklung" in status["message"], status["message"]
+
+        print("OK: Auf einem fremden Branch wird nicht nachgezogen, sondern erklaert")
+
+        #
+        # Beim USB-Weg ist kein Branch bekannt - dann bleibt es beim
+        # Hinweis, auch wenn zufaellig der richtige Branch ausgecheckt
+        # ist. Raten waere hier das Falsche.
+        #
+        git(arbeitskopie, "checkout", "-q", "main")
+
+        shutil.rmtree(work, ignore_errors=True)
+
+        assert updater.run_update(zip_path, arbeitskopie, "xrack", 8080) == 0
+
+        status = json.loads((work / "status.json").read_text(encoding="utf-8"))
+
+        assert status["needs_git_reset"] is True, (
+            f"Ohne bekannten Branch darf nicht nachgezogen werden: {status}"
+        )
+
+        print("OK: Ohne bekannten Branch (USB-Weg) bleibt es beim Hinweis")
+
+    # ----------------------------------------------------------------
     # Quittieren: "Update erfolgreich" darf nicht ewig stehenbleiben
     #
     # Die Statusdatei liegt in /var/tmp und wird nie geloescht - ohne
