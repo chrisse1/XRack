@@ -648,8 +648,13 @@ function toggleFaderLock() {
     button.classList.toggle("btn-outline-secondary", !fadersUnlocked);
     button.classList.toggle("btn-warning", fadersUnlocked);
 
-    document.querySelectorAll(".fader-input").forEach((input) => {
-        input.disabled = !fadersUnlocked;
+    //
+    // Die Sperre muss beides erfassen - ein Mute-Knopf, der trotz
+    // Schloss reagiert, wäre eine Lücke genau dort, wo die Sperre
+    // schützen soll.
+    //
+    document.querySelectorAll(".fader-input, .fader-mute").forEach((element) => {
+        element.disabled = !fadersUnlocked;
     });
 
     document.querySelectorAll(".fader-cell").forEach((cell) => {
@@ -717,7 +722,9 @@ function renderFaders(channels) {
     // Pegelanzeige). Die Ausrichtung waagerecht/senkrecht macht allein
     // das CSS, hier gibt es dafür keine Fallunterscheidung.
     //
-    const signature = channels.map((c) => `${c.label}|${c.name}`).join(";");
+    const signature = channels
+        .map((c) => `${c.label}|${c.name}|${c.is_main}`)
+        .join(";");
 
     if (grid.dataset.signature !== signature) {
         grid.dataset.signature = signature;
@@ -726,11 +733,21 @@ function renderFaders(channels) {
 
         channels.forEach((channel) => {
             const cell = document.createElement("div");
-            cell.className = "fader-cell" + (fadersUnlocked ? "" : " is-locked");
+            cell.className =
+                "fader-cell"
+                + (fadersUnlocked ? "" : " is-locked")
+                + (channel.is_main ? " is-main" : "");
             cell.innerHTML = `
                 <span class="fader-name" title="${channel.name || ""}">
                     <span class="fader-number">${channel.label}</span>${channel.name || ""}
                 </span>
+                <button
+                    type="button"
+                    class="btn btn-outline-secondary fader-mute"
+                    data-channel="${channel.channel}"
+                    title="${I18N.faders_mute}"
+                    ${fadersUnlocked ? "" : "disabled"}
+                >M</button>
                 <input
                     type="range"
                     class="form-range fader-input"
@@ -743,6 +760,9 @@ function renderFaders(channels) {
                 >
                 <span class="fader-db"></span>
             `;
+
+            cell.querySelector(".fader-mute")
+                .addEventListener("click", () => toggleMute(channel.channel));
 
             const input = cell.querySelector(".fader-input");
             input.addEventListener("input", onFaderInput);
@@ -769,12 +789,48 @@ function renderFaders(channels) {
         const cell = grid.children[index];
         const input = cell.querySelector(".fader-input");
         const readout = cell.querySelector(".fader-db");
+        const mute = cell.querySelector(".fader-mute");
 
         const db = channel.db === null ? FADER_MIN_DB : channel.db;
 
         input.value = db;
         readout.textContent = formatDb(channel.db);
+
+        //
+        // Stumm wird als gefüllter roter Knopf gezeigt, sonst nur als
+        // Umriss - auf einen Blick erkennbar, welche Kanäle liegen.
+        //
+        mute.classList.toggle("btn-danger", channel.muted);
+        mute.classList.toggle("btn-outline-secondary", !channel.muted);
     });
+}
+
+async function toggleMute(channel) {
+    const cell = document.querySelector(
+        `.fader-mute[data-channel="${channel}"]`
+    )?.closest(".fader-cell");
+
+    if (!cell) return;
+
+    const button = cell.querySelector(".fader-mute");
+    const muted = !button.classList.contains("btn-danger");
+
+    //
+    // Sofort umschalten, damit die Rückmeldung nicht erst beim
+    // nächsten Auffrischen kommt.
+    //
+    button.classList.toggle("btn-danger", muted);
+    button.classList.toggle("btn-outline-secondary", !muted);
+
+    try {
+        await fetch("/api/console/mute", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ channel, muted }),
+        });
+    } catch (error) {
+        console.error("Stummschaltung fehlgeschlagen:", error);
+    }
 }
 
 async function onFaderInput(event) {

@@ -16,6 +16,7 @@ import time
 
 from core.console_control import (
     FAMILY_X32,
+    MAIN_ADDRESS,
     FAMILY_XAIR,
     MIN_DB,
     ConsoleControl,
@@ -151,20 +152,64 @@ print("OK: Werte außerhalb des Bereichs werden begrenzt")
 
 xair = channel_addresses(FAMILY_XAIR, 18)
 
-assert len(xair) == 17, (
-    f"XR18 sollte 17 Regler ergeben (16 + Aux-Paar), ergibt aber {len(xair)}"
+#
+# 16 Mono + Aux-Paar + Summe
+#
+assert len(xair) == 18, (
+    f"XR18 sollte 18 Regler ergeben (16 + Aux + Summe), ergibt aber {len(xair)}"
 )
-assert xair[15] == ("/ch/16", "16")
-assert xair[16] == ("/rtn/aux", "17+18"), (
+assert xair[15].address == "/ch/16"
+assert xair[16] == ("/rtn/aux", "17+18", False), (
     f"Der Aux-Rückweg fehlt oder heißt anders: {xair[16]}"
 )
 
 x32 = channel_addresses(FAMILY_X32, 32)
-assert len(x32) == 32
-assert x32[0] == ("/ch/01", "1")
-assert x32[31] == ("/ch/32", "32")
+assert len(x32) == 33, f"X32 sollte 32 + Summe ergeben, ergibt {len(x32)}"
+assert x32[0] == ("/ch/01", "1", False)
+assert x32[31] == ("/ch/32", "32", False)
 
 print("OK: Kanaladressen stimmen je Familie (X-Air 16+Aux, X32 durchgehend)")
+
+# ----------------------------------------------------------------
+# 4b. Die Summe hat je Familie eine eigene Adresse
+# ----------------------------------------------------------------
+
+assert xair[-1].is_main is True, "Letzter Regler muss die Summe sein."
+assert xair[-1].address == MAIN_ADDRESS[FAMILY_XAIR] == "/lr", xair[-1]
+assert xair[-1].label == "Main"
+
+assert x32[-1].is_main is True
+assert x32[-1].address == MAIN_ADDRESS[FAMILY_X32] == "/main/st", x32[-1]
+
+#
+# Genau ein Summenregler, nicht mehrere
+#
+assert sum(1 for spec in xair if spec.is_main) == 1
+assert sum(1 for spec in x32 if spec.is_main) == 1
+
+print("OK: Summenregler hat je Familie die richtige Adresse (X-Air /lr, X32 /main/st)")
+
+# ----------------------------------------------------------------
+# 4c. Mute wird als Integer kodiert - mit umgekehrter Logik
+# ----------------------------------------------------------------
+
+message = encode("/ch/01/mix/on", 0)
+
+assert len(message) % 4 == 0
+assert b",i\x00\x00" in message, "Typ-Tag ',i' fehlt - Mute braucht einen Integer."
+assert message[-4:] == struct.pack(">i", 0), "Integer muss Big-Endian sein."
+
+address, arguments = decode(encode("/ch/05/mix/on", 1))
+assert address == "/ch/05/mix/on"
+assert arguments == [1]
+
+#
+# bool darf nicht versehentlich als Float durchrutschen
+#
+assert decode(encode("/x", True))[1] == [1]
+assert decode(encode("/x", False))[1] == [0]
+
+print("OK: Mute wird als Big-Endian-Integer kodiert (0 = stumm, 1 = an)")
 
 # ----------------------------------------------------------------
 # 5. Attrappen-Pult: kompletter Austausch ohne Hardware
@@ -186,6 +231,7 @@ class FakeConsole:
 
         self.faders: dict[str, float] = {}
         self.names: dict[str, str] = {}
+        self.on: dict[str, int] = {}
         self.received: list[tuple[str, list]] = []
 
         self._running = True
@@ -212,6 +258,8 @@ class FakeConsole:
                 #
                 if address.endswith("/mix/fader"):
                     self.faders[address] = arguments[0]
+                elif address.endswith("/mix/on"):
+                    self.on[address] = arguments[0]
                 continue
 
             #
@@ -222,6 +270,9 @@ class FakeConsole:
 
             elif address.endswith("/mix/fader"):
                 reply = encode(address, self.faders.get(address, 0.75))
+
+            elif address.endswith("/mix/on"):
+                reply = encode(address, self.on.get(address, 1))
 
             elif address.endswith("/config/name"):
                 reply = encode(address, self.names.get(address, ""))
@@ -260,13 +311,17 @@ try:
     channels = control.get_channels("127.0.0.1", 18)
 
     assert channels is not None, "Attrappen-Pult hat nicht geantwortet."
-    assert len(channels) == 17, f"Erwartet 17 Regler, bekommen {len(channels)}"
+    assert len(channels) == 18, (
+        f"Erwartet 18 Regler (16 + Aux + Summe), bekommen {len(channels)}"
+    )
 
     assert channels[0]["name"] == "Click"
     assert abs(channels[0]["db"] - 0.0) < 0.01, channels[0]
     assert channels[1]["name"] == "Gitarre"
     assert abs(channels[1]["db"] - (-10.0)) < 0.01, channels[1]
     assert channels[16]["label"] == "17+18"
+    assert channels[17]["label"] == "Main"
+    assert channels[17]["is_main"] is True
 
     print("OK: Kanalnamen und Faderwerte werden vom Pult gelesen")
 
@@ -309,9 +364,72 @@ try:
     # Ungültige Kanalnummern werden abgelehnt
     #
     assert control.set_fader("127.0.0.1", 18, 0, 0.0) is False
-    assert control.set_fader("127.0.0.1", 18, 18, 0.0) is False
+    assert control.set_fader("127.0.0.1", 18, 19, 0.0) is False
 
     print("OK: Ungültige Kanalnummern werden abgelehnt")
+
+    # ----------------------------------------------------------------
+    # 5b. Summenregler landet auf seiner eigenen Adresse
+    # ----------------------------------------------------------------
+
+    assert control.set_fader("127.0.0.1", 18, 18, 0.0) is True
+
+    time.sleep(0.1)
+
+    assert "/lr/mix/fader" in console.faders, (
+        f"Die Summe wurde nicht angesprochen: {sorted(console.faders)}"
+    )
+    assert abs(console.faders["/lr/mix/fader"] - 0.75) < 1e-6
+
+    print("OK: Der Summenregler landet beim X-Air auf /lr")
+
+    # ----------------------------------------------------------------
+    # 5c. Stummschaltung - mit umgekehrter Logik
+    # ----------------------------------------------------------------
+
+    assert control.set_mute("127.0.0.1", 18, 3, True) is True
+
+    time.sleep(0.1)
+
+    assert console.on["/ch/03/mix/on"] == 0, (
+        f"Stumm muss 0 senden, gesendet wurde "
+        f"{console.on.get('/ch/03/mix/on')}"
+    )
+
+    assert control.set_mute("127.0.0.1", 18, 3, False) is True
+
+    time.sleep(0.1)
+
+    assert console.on["/ch/03/mix/on"] == 1, "Wieder an muss 1 senden."
+
+    print("OK: Stummschaltung sendet 0, Aufheben sendet 1 (umgekehrte Logik)")
+
+    #
+    # ... und wird auch richtig zurückgelesen
+    #
+    console.on["/ch/04/mix/on"] = 0
+
+    channels = control.get_channels("127.0.0.1", 18)
+
+    assert channels[3]["muted"] is True, (
+        f"Stummer Kanal wurde nicht erkannt: {channels[3]}"
+    )
+    assert channels[2]["muted"] is False
+
+    print("OK: Stummschaltung wird korrekt zurückgelesen")
+
+    #
+    # Auch die Summe lässt sich stummschalten
+    #
+    assert control.set_mute("127.0.0.1", 18, 18, True) is True
+
+    time.sleep(0.1)
+
+    assert console.on["/lr/mix/on"] == 0
+
+    print("OK: Auch die Summe lässt sich stummschalten")
+
+    assert control.set_mute("127.0.0.1", 18, 19, True) is False
 
     # ----------------------------------------------------------------
     # 6. Familienerkennung
@@ -342,6 +460,7 @@ try:
     #
     assert fresh.get_channels("127.0.0.1", 18) is None
     assert fresh.set_fader("127.0.0.1", 18, 1, 0.0) is False
+    assert fresh.set_mute("127.0.0.1", 18, 1, True) is False
 
     print("OK: Ohne Pult liefert get_channels None (nicht erreichbar), set_fader False")
 

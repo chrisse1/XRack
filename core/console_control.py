@@ -22,6 +22,7 @@ import logging
 import math
 import socket
 import struct
+from typing import NamedTuple
 
 #
 # X32/M32 lauschen auf 10023, die X-Air-Serie (XR12/16/18, X18) auf
@@ -65,9 +66,22 @@ def encode(address: str, *arguments) -> bytes:
 
     for argument in arguments:
 
-        if isinstance(argument, float):
+        #
+        # bool zuerst prüfen: In Python ist bool eine Unterklasse von
+        # int, sonst würde True als Integer 1 durchrutschen - was hier
+        # zwar zufällig richtig wäre, aber nur zufällig.
+        #
+        if isinstance(argument, bool):
+            tags += "i"
+            values += struct.pack(">i", 1 if argument else 0)
+
+        elif isinstance(argument, float):
             tags += "f"
             values += struct.pack(">f", argument)
+
+        elif isinstance(argument, int):
+            tags += "i"
+            values += struct.pack(">i", argument)
 
         elif isinstance(argument, str):
             tags += "s"
@@ -181,36 +195,61 @@ def db_to_fader(db: float) -> float:
     return max(0.0, min(1.0, value))
 
 
-def channel_addresses(family: str, channels: int) -> list[tuple[str, str]]:
+class ChannelSpec(NamedTuple):
+    """Ein Regler: wohin geschickt wird, wie er heißt, und ob er die Summe ist."""
+
+    address: str
+    label: str
+    is_main: bool = False
+
+
+#
+# Adresse des Summenreglers - unterscheidet sich je Familie.
+#
+MAIN_ADDRESS = {
+    FAMILY_XAIR: "/lr",
+    FAMILY_X32: "/main/st",
+}
+
+
+def channel_addresses(family: str, channels: int) -> list[ChannelSpec]:
     """
-    Liefert (OSC-Adresse, Beschriftung) der Eingangskanäle.
+    Liefert die Regler: Eingangskanäle und am Ende die Summe.
 
     Die Adressen bilden die Kanalzahl des Audiointerfaces *nicht*
     durchgehend ab: Beim X32 sind es echte /ch/01 bis /ch/32, die
     X-Air-Serie hat dagegen nur 16 Mono-Kanäle plus ein Aux-Rückweg-Paar
     mit eigener Adresse. Ein XR18 mit 18 USB-Kanälen ergibt dort also
-    17 Regler, weil der Aux-Rückweg ein Stereopaar mit einem
-    gemeinsamen Fader ist - er wird als "17+18" beschriftet. Darum eine
-    ausdrückliche Liste statt einer Formel: So steht dieser Unterschied
-    an genau einer Stelle und ist am Pult leicht zu korrigieren.
+    17 Kanalregler, weil der Aux-Rückweg ein Stereopaar mit einem
+    gemeinsamen Fader ist - er wird als "17+18" beschriftet. Auch die
+    Summe heißt je nach Familie anders. Darum eine ausdrückliche Liste
+    statt einer Formel: So stehen alle diese Unterschiede an genau
+    einer Stelle und sind am Pult leicht zu korrigieren.
     """
 
     if family == FAMILY_XAIR:
 
         result = [
-            (f"/ch/{index:02d}", str(index))
+            ChannelSpec(f"/ch/{index:02d}", str(index))
             for index in range(1, min(channels, 16) + 1)
         ]
 
         if channels >= 18:
-            result.append(("/rtn/aux", "17+18"))
+            result.append(ChannelSpec("/rtn/aux", "17+18"))
 
-        return result
+    else:
 
-    return [
-        (f"/ch/{index:02d}", str(index))
-        for index in range(1, min(channels, 32) + 1)
-    ]
+        result = [
+            ChannelSpec(f"/ch/{index:02d}", str(index))
+            for index in range(1, min(channels, 32) + 1)
+        ]
+
+    main = MAIN_ADDRESS.get(family)
+
+    if main:
+        result.append(ChannelSpec(main, "Main", is_main=True))
+
+    return result
 
 
 class ConsoleControl:
@@ -318,12 +357,16 @@ class ConsoleControl:
 
         result = []
 
-        for index, (address, label) in enumerate(
+        for index, spec in enumerate(
             channel_addresses(family, channels), start=1
         ):
 
+            address = spec.address
+            label = spec.label
+
             name = ""
             db = MIN_DB
+            muted = False
 
             #
             # Eine Anfrage ohne Argumente liefert den aktuellen Wert
@@ -351,11 +394,28 @@ class ConsoleControl:
                 if arguments and isinstance(arguments[0], str):
                     name = arguments[0].strip()
 
+            #
+            # Achtung, umgekehrte Logik: "mix/on" = 1 heißt, der Kanal
+            # ist AN. Stumm ist also 0, nicht 1.
+            #
+            answer = self._request(
+                host, self._port, encode(f"{address}/mix/on")
+            )
+
+            if answer is not None:
+
+                _, arguments = decode(answer)
+
+                if arguments and isinstance(arguments[0], int):
+                    muted = arguments[0] == 0
+
             result.append(
                 {
                     "channel": index,
                     "label": label,
                     "name": name,
+                    "is_main": spec.is_main,
+                    "muted": muted,
                     #
                     # None steht für "Fader zu" (-unendlich) - als JSON
                     # gibt es kein -inf.
@@ -382,10 +442,38 @@ class ConsoleControl:
         if not 1 <= channel <= len(addresses):
             return False
 
-        address = addresses[channel - 1][0]
+        address = addresses[channel - 1].address
 
         return self._send(
             host,
             self._port,
             encode(f"{address}/mix/fader", db_to_fader(db)),
+        )
+
+    def set_mute(
+        self, host: str, channels: int, channel: int, muted: bool
+    ) -> bool:
+        """
+        Schaltet einen Kanal stumm oder wieder an.
+
+        Die Konsole kennt kein "mute", sondern "mix/on" - der Wert ist
+        also umgekehrt: 0 heißt stumm, 1 heißt an.
+        """
+
+        family = self.detect(host)
+
+        if family is None or self._port is None:
+            return False
+
+        addresses = channel_addresses(family, channels)
+
+        if not 1 <= channel <= len(addresses):
+            return False
+
+        address = addresses[channel - 1].address
+
+        return self._send(
+            host,
+            self._port,
+            encode(f"{address}/mix/on", 0 if muted else 1),
         )

@@ -177,6 +177,39 @@ body {
     flex: 1 1 auto;
     min-width: 0;
     margin: 0;
+
+    /*
+       Ohne das muss der Browser bei jeder Berührung raten, ob eine
+       Zieh-Geste den Regler bewegen oder die Seite scrollen soll. Bei
+       waagerechten Reglern faellt das kaum auf, weil quer zur
+       Scrollrichtung gezogen wird - bei senkrechten (ab 992px) ist es
+       dieselbe Richtung, und der Browser entscheidet sich fuers
+       Scrollen, sofern der Finger nicht exakt den Griff trifft.
+       "none" heisst: Beruehrungen hier sind nie Scrollgesten.
+    */
+    touch-action: none;
+}
+
+.fader-mute {
+    flex: 0 0 auto;
+    padding: 0.05rem 0.4rem;
+    font-size: 0.7rem;
+    line-height: 1.4;
+}
+
+/*
+   Die Summe ist optisch abgesetzt, damit man sie nicht mit einem
+   Kanalzug verwechselt.
+*/
+.fader-cell.is-main {
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    margin-top: 0.4rem;
+    padding-top: 0.4rem;
+}
+
+.fader-cell.is-main .fader-name {
+    font-weight: 600;
+    color: #dee2e6;
 }
 
 .fader-db {
@@ -236,6 +269,19 @@ body {
         flex: 0 0 auto;
         width: 100%;
         text-align: center;
+    }
+
+    /*
+       Senkrecht stehen die Regler nebeneinander - die Summe wird
+       deshalb links abgetrennt statt oben.
+    */
+    .fader-cell.is-main {
+        border-top: 0;
+        border-left: 1px solid rgba(255, 255, 255, 0.15);
+        margin-top: 0;
+        padding-top: 0;
+        padding-left: 0.5rem;
+        margin-left: 0.25rem;
     }
 
 }

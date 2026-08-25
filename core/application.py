@@ -890,6 +890,16 @@ class Application:
             float("-inf") if db is None else db,
         )
 
+    def set_console_mute(self, channel: int, muted: bool) -> bool:
+        """Schaltet einen Kanal am Pult stumm oder wieder an."""
+
+        host, channels = self._console_host_and_channels()
+
+        if not host or channels <= 0:
+            return False
+
+        return self.console_control.set_mute(host, channels, channel, muted)
+
     def eject_usb(self) -> tuple[bool, str]:
         """
         Hängt den USB-Stick sicher aus. Lehnt ab, solange noch ein

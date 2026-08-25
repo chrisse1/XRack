@@ -76,6 +76,10 @@ class ConsoleAccessSelection(BaseModel):
 class DiagnosticsSelection(BaseModel):
     enabled: bool
 
+class MuteSelection(BaseModel):
+    channel: int
+    muted: bool
+
 class FaderSelection(BaseModel):
     channel: int
     #
@@ -1250,6 +1254,24 @@ async def set_console_fader(
     success = application.set_console_fader(
         selection.channel,
         selection.db,
+    )
+
+    return {
+        "success": success,
+    }
+
+
+@router.post("/api/console/mute")
+async def set_console_mute(
+    selection: MuteSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success = application.set_console_mute(
+        selection.channel,
+        selection.muted,
     )
 
     return {

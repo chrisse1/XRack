@@ -323,6 +323,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Die Fader sind gesperrt - zum Ändern oben auf das Schloss "
             "tippen."
         ),
+        "faders_mute": "Stumm schalten",
         "faders_no_connection": (
             "Kein Steuerweg zur Konsole. Die Fadersteuerung läuft über "
             "Netzwerk, nicht über das USB-Audiokabel - dafür muss die "
@@ -664,6 +665,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "The faders are locked - tap the padlock above to change "
             "them."
         ),
+        "faders_mute": "Mute",
         "faders_no_connection": (
             "No control path to the console. Fader control runs over "
             "the network, not the USB audio cable - the console needs "
