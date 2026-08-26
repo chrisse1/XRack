@@ -693,6 +693,43 @@ EOF
 }
 
 #
+# Fremde WLAN-Profile stilllegen.
+#
+# Raspberry Pi OS legt beim Schreiben der Speicherkarte auf Wunsch
+# schon ein WLAN-Profil an (meist "preconfigured"), und wer den Pi
+# vorher von Hand ins Heimnetz gebracht hat, hat ebenfalls eines.
+# Beide bleiben sonst neben XRack-Home stehen, alle mit
+# "autoconnect yes" - welches nach einem Neustart gewinnt,
+# entscheidet NetworkManager dann nach Kriterien, die von aussen wie
+# Zufall aussehen. Genau das ist der Grund, warum ein Geraet
+# manchmal im falschen Netz aufwacht.
+#
+# Abgeschaltet wird nur das selbsttaetige Verbinden - geloescht wird
+# nichts: Wer gerade ueber genau dieses Profil per SSH verbunden ist,
+# soll die Sitzung nicht verlieren (autoconnect wirkt erst beim
+# naechsten Verbindungsaufbau), und wer es spaeter wieder braucht,
+# findet es noch vor.
+#
+disable_foreign_wifi_profiles() {
+
+    while IFS=: read -r name typ; do
+
+        [ "${typ}" = "802-11-wireless" ] || continue
+        [ "${name}" = "XRack-Home" ] && continue
+        [ "${name}" = "XRack-AP" ] && continue
+
+        if [ "$(nmcli -g connection.autoconnect connection show "${name}" 2>/dev/null)" = "no" ]; then
+            continue
+        fi
+
+        echo "$(L "XRack: WLAN-Profil '${name}' verbindet sich nicht mehr von selbst (bleibt aber erhalten)." "XRack: Wi-Fi profile '${name}' will no longer connect on its own (it is kept, though).")"
+
+        sudo nmcli connection modify "${name}" connection.autoconnect no >/dev/null 2>&1 || true
+
+    done < <(nmcli -t -f NAME,TYPE connection show 2>/dev/null)
+}
+
+#
 # Rueckfallweg: der alte Access Point ueber NetworkManager.
 #
 # Bleibt erhalten, damit auf einem Geraet, auf dem hostapd nicht
@@ -800,8 +837,8 @@ configure_wifi() {
 
             mapfile -t WIFI_INTERFACES < <(nmcli -t -f DEVICE,TYPE device status | awk -F: '$2=="wifi"{print $1}')
 
-            if [ "${#WIFI_INTERFACES[@]}" -lt 2 ]; then
-                echo "$(L "Es wurden nur ${#WIFI_INTERFACES[@]} WLAN-Interface(s) gefunden - für Client + Access Point werden zwei benötigt. WLAN-Setup übersprungen." "Only ${#WIFI_INTERFACES[@]} Wi-Fi interface(s) found - two are needed for client + access point. Wi-Fi setup skipped.")"
+            if [ "${#WIFI_INTERFACES[@]}" -lt 1 ]; then
+                echo "$(L "Kein WLAN-Interface gefunden - WLAN-Setup übersprungen." "No Wi-Fi interface found - Wi-Fi setup skipped.")"
             else
 
                 echo ""
@@ -813,25 +850,49 @@ configure_wifi() {
                 CLIENT_IFACE=""
                 AP_IFACE=""
 
-                for attempt in 1 2 3; do
+                #
+                # Mit nur einem Funkgerät gibt es nichts auszuwählen:
+                # Es geht ins Heimnetz. Ein Access Point ginge auf
+                # demselben Gerät zwar theoretisch, in der Praxis
+                # aber nur auf demselben Kanal wie das Heimnetz und
+                # mit reihenweise Treiberfehlern - deshalb hier
+                # ausdrücklich nicht.
+                #
+                # Vorher wurde in diesem Fall das GESAMTE WLAN-Setup
+                # übersprungen, also auch die Heimnetz-Verbindung.
+                # Wer nur das eingebaute WLAN hatte, stand danach ohne
+                # jede WLAN-Einrichtung da.
+                #
+                if [ "${#WIFI_INTERFACES[@]}" -eq 1 ]; then
+
+                    CLIENT_IFACE="${WIFI_INTERFACES[0]}"
 
                     echo ""
-                    read -r -p "$(L "Welches Interface soll sich mit deinem Heimnetz verbinden (Nummer 1-${#WIFI_INTERFACES[@]})? " "Which interface should connect to your home network (number 1-${#WIFI_INTERFACES[@]})? ")" CLIENT_INDEX || true
-                    read -r -p "$(L "Welches Interface soll den Access Point aufspannen (Nummer 1-${#WIFI_INTERFACES[@]})? " "Which interface should run the access point (number 1-${#WIFI_INTERFACES[@]})? ")" AP_INDEX || true
+                    echo "$(L "Nur ein WLAN-Interface (${CLIENT_IFACE}) - es wird für das Heimnetz benutzt." "Only one Wi-Fi interface (${CLIENT_IFACE}) - it will be used for the home network.")"
+                    echo "$(L "Für einen eigenen Access Point wird ein zweites gebraucht (z.B. ein USB-WLAN-Stick)." "A separate access point needs a second one (e.g. a USB Wi-Fi adapter).")"
 
-                    if valid_wifi_index "${CLIENT_INDEX}" "${#WIFI_INTERFACES[@]}" \
-                        && valid_wifi_index "${AP_INDEX}" "${#WIFI_INTERFACES[@]}" \
-                        && [ "${CLIENT_INDEX}" != "${AP_INDEX}" ]; then
+                else
 
-                        CLIENT_IFACE="${WIFI_INTERFACES[$((CLIENT_INDEX - 1))]}"
-                        AP_IFACE="${WIFI_INTERFACES[$((AP_INDEX - 1))]}"
-                        break
-                    fi
+                    for attempt in 1 2 3; do
 
-                    echo "$(L "Ungültige oder gleiche Auswahl (gültig: 1-${#WIFI_INTERFACES[@]}, beide unterschiedlich) - bitte erneut eingeben." "Invalid or identical selection (valid: 1-${#WIFI_INTERFACES[@]}, must be different) - please try again.")"
-                done
+                        echo ""
+                        read -r -p "$(L "Welches Interface soll sich mit deinem Heimnetz verbinden (Nummer 1-${#WIFI_INTERFACES[@]})? " "Which interface should connect to your home network (number 1-${#WIFI_INTERFACES[@]})? ")" CLIENT_INDEX || true
+                        read -r -p "$(L "Welches Interface soll den Access Point aufspannen (Nummer 1-${#WIFI_INTERFACES[@]})? " "Which interface should run the access point (number 1-${#WIFI_INTERFACES[@]})? ")" AP_INDEX || true
 
-                if [ -z "${CLIENT_IFACE}" ] || [ -z "${AP_IFACE}" ]; then
+                        if valid_wifi_index "${CLIENT_INDEX}" "${#WIFI_INTERFACES[@]}" \
+                            && valid_wifi_index "${AP_INDEX}" "${#WIFI_INTERFACES[@]}" \
+                            && [ "${CLIENT_INDEX}" != "${AP_INDEX}" ]; then
+
+                            CLIENT_IFACE="${WIFI_INTERFACES[$((CLIENT_INDEX - 1))]}"
+                            AP_IFACE="${WIFI_INTERFACES[$((AP_INDEX - 1))]}"
+                            break
+                        fi
+
+                        echo "$(L "Ungültige oder gleiche Auswahl (gültig: 1-${#WIFI_INTERFACES[@]}, beide unterschiedlich) - bitte erneut eingeben." "Invalid or identical selection (valid: 1-${#WIFI_INTERFACES[@]}, must be different) - please try again.")"
+                    done
+                fi
+
+                if [ -z "${CLIENT_IFACE}" ]; then
                     echo "$(L "Zu viele Fehlversuche - WLAN-Setup wird übersprungen." "Too many failed attempts - Wi-Fi setup will be skipped.")"
                 else
 
@@ -839,10 +900,16 @@ configure_wifi() {
                     read -r -p "$(L "Heimnetz-SSID: " "Home network SSID: ")" HOME_SSID || true
                     read_confirmed_secret "$(L "Heimnetz-Passwort (mind. 8 Zeichen)" "Home network password (min. 8 characters)")" 8 HOME_PASSWORD
 
-                    echo ""
-                    read -r -p "$(L "Name des Access Points (Standard: XRack): " "Access point name (default: XRack): ")" AP_SSID_INPUT || true
-                    AP_SSID="${AP_SSID_INPUT:-XRack}"
-                    read_confirmed_secret "$(L "Passwort für den Access Point (mind. 8 Zeichen)" "Access point password (min. 8 characters)")" 8 AP_PASSWORD
+                    AP_SSID=""
+                    AP_PASSWORD=""
+
+                    if [ -n "${AP_IFACE}" ]; then
+
+                        echo ""
+                        read -r -p "$(L "Name des Access Points (Standard: XRack): " "Access point name (default: XRack): ")" AP_SSID_INPUT || true
+                        AP_SSID="${AP_SSID_INPUT:-XRack}"
+                        read_confirmed_secret "$(L "Passwort für den Access Point (mind. 8 Zeichen)" "Access point password (min. 8 characters)")" 8 AP_PASSWORD
+                    fi
 
                     if [ -z "${HOME_SSID}" ] || [ "${#HOME_PASSWORD}" -lt 8 ]; then
                         echo "$(L "Heimnetz-SSID fehlt oder Passwort fehlt/zu kurz (mind. 8 Zeichen) - Heimnetz-Verbindung übersprungen." "Home network SSID missing, or password missing/too short (min. 8 characters) - home network connection skipped.")"
@@ -858,6 +925,13 @@ configure_wifi() {
                             connection.autoconnect yes >/dev/null; then
 
                             XRACK_WLAN_CLIENT_SSID="${HOME_SSID}"
+
+                            #
+                            # Alte WLAN-Profile aus dem Weg raeumen -
+                            # sonst konkurrieren sie mit XRack-Home um
+                            # dasselbe Funkgeraet.
+                            #
+                            disable_foreign_wifi_profiles
 
                             sudo nmcli connection up "XRack-Home" ifname "${CLIENT_IFACE}" \
                                 || echo "$(L "Warnung: Verbindung zu '${HOME_SSID}' konnte nicht sofort hergestellt werden (SSID/Passwort prüfen)." "Warning: could not connect to '${HOME_SSID}' immediately (check SSID/password).")"
@@ -895,7 +969,15 @@ configure_wifi() {
                         fi
                     fi
 
-                    if [ "${#AP_PASSWORD}" -lt 8 ]; then
+                    if [ -z "${AP_IFACE}" ]; then
+
+                        #
+                        # Kein zweites Funkgerät - dazu wurde oben
+                        # schon alles gesagt.
+                        #
+                        :
+
+                    elif [ "${#AP_PASSWORD}" -lt 8 ]; then
                         echo "$(L "Access-Point-Passwort fehlt/zu kurz (mind. 8 Zeichen) - Access Point übersprungen." "Access point password missing/too short (min. 8 characters) - access point skipped.")"
                     else
 
@@ -1288,6 +1370,17 @@ offer_reboot_for_bridge() {
 #
 # Ablauf
 #
+
+#
+# Wird install.sh nur eingelesen statt ausgefuehrt, hier aufhoeren:
+# Dann stehen die Funktionen zur Verfuegung, ohne dass etwas
+# installiert wird. Genau das macht test_wlan_setup.py, um
+# die WLAN-Einrichtung durchzuspielen - ohne diesen Ausstieg wuerde
+# der Test anfangen, Pakete zu installieren.
+#
+if [ -n "${XRACK_INSTALL_SOURCE_ONLY}" ]; then
+    return 0 2>/dev/null || exit 0
+fi
 
 confirm_start
 choose_language

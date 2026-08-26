@@ -1,5 +1,5 @@
 """
-Prüft die Access-Point-Einrichtung aus install.sh, ohne Funkgerät.
+Prüft die WLAN-Einrichtung aus install.sh, ohne Funkgerät.
 
 Warum es diesen Test gibt: An install.sh merkt man einen Fehler
 frühestens beim Installieren auf dem Gerät - und dann steht man
@@ -14,6 +14,10 @@ ohne dass irgendwo eine Warnung erschienen wäre.
 Geprüft wird gegen nachgestellte Werkzeuge (sudo, nmcli, iw,
 systemctl, install, rfkill) im PATH. Die Funktionen selbst werden
 unverändert aus install.sh herausgeschnitten und ausgeführt.
+
+Zum Schluss läuft der komplette WLAN-Abschnitt einmal durch, mit
+vorgegebenen Antworten - einmal mit zwei Funkgeräten (Heimnetz +
+Access Point) und einmal mit nur einem (Heimnetz allein).
 """
 
 import os
@@ -52,11 +56,37 @@ exec "$@"
 FAKE_NMCLI = """#!/usr/bin/env bash
 echo "$*" >> "$AP_STATE/nmcli"
 if [ "$1" = "-t" ]; then
-    cat "$AP_STATE/connections" 2>/dev/null
+    #
+    # "device status" listet die Funkgeraete, "NAME,TYPE" alle
+    # Profile samt Art, alles andere nur die Profilnamen.
+    #
+    if [ "$4" = "device" ]; then
+        cat "$AP_STATE/devices" 2>/dev/null
+    elif [ "$3" = "NAME,TYPE" ]; then
+        cat "$AP_STATE/profiles" 2>/dev/null
+    else
+        cat "$AP_STATE/connections" 2>/dev/null
+    fi
+    exit 0
+fi
+if [ "$1" = "-g" ]; then
+    # nmcli -g <schluessel> connection show <name>
+    name="${@: -1}"
+    grep -m1 "^$name=" "$AP_STATE/autoconnect" 2>/dev/null | cut -d= -f2-
     exit 0
 fi
 if [ "$2" = "add" ]; then
-    echo "$4" >> "$AP_STATE/connections"
+    #
+    # Den Profilnamen hinter "con-name" herausfischen, damit spaetere
+    # Abfragen das Profil auch finden.
+    #
+    while [ $# -gt 0 ]; do
+        if [ "$1" = "con-name" ]; then
+            echo "$2" >> "$AP_STATE/connections"
+            break
+        fi
+        shift
+    done
 fi
 exit 0
 """
@@ -420,6 +450,251 @@ try:
     )
 
     print("OK: Die Bridge bekommt eine feste Adresse, eth0 bleibt aus")
+
+    # ----------------------------------------------------------------
+    # 9. Fremde WLAN-Profile werden stillgelegt, nicht geloescht
+    #
+    # Raspberry Pi OS legt beim Schreiben der Speicherkarte oft schon
+    # ein WLAN-Profil an ("preconfigured"). Bleibt es neben
+    # XRack-Home mit "autoconnect yes" stehen, entscheidet
+    # NetworkManager nach einem Neustart, welches gewinnt - und das
+    # sieht von aussen wie Zufall aus.
+    # ----------------------------------------------------------------
+
+    ordner = scratch / "fremdprofile"
+    ordner.mkdir(parents=True)
+
+    (ordner / "profiles").write_text(
+        "preconfigured:802-11-wireless\n"
+        "XRack-Home:802-11-wireless\n"
+        "Wired connection 1:802-3-ethernet\n"
+        "Schon-aus:802-11-wireless\n",
+        encoding="utf-8",
+    )
+    (ordner / "autoconnect").write_text(
+        "preconfigured=yes\nXRack-Home=yes\n"
+        "Wired connection 1=yes\nSchon-aus=no\n",
+        encoding="utf-8",
+    )
+
+    ergebnis = lauf(ordner, "disable_foreign_wifi_profiles")
+
+    assert ergebnis.returncode == 0, ergebnis.stderr
+
+    aufrufe = (ordner / "nmcli").read_text(encoding="utf-8")
+
+    assert "connection modify preconfigured connection.autoconnect no" in aufrufe, (
+        f"Das mitgelieferte WLAN-Profil bleibt aktiv: {aufrufe}"
+    )
+
+    assert "modify XRack-Home" not in aufrufe, (
+        f"XRack-Home hat sich selbst abgeschaltet: {aufrufe}"
+    )
+
+    assert "Wired connection" not in aufrufe, (
+        f"Die Kabelverbindung wurde mit abgeschaltet: {aufrufe}"
+    )
+
+    #
+    # Nachsehen darf es - nur aendern nicht, wenn schon aus.
+    #
+    assert "modify Schon-aus" not in aufrufe, (
+        f"Ein bereits abgeschaltetes Profil wurde nochmal geaendert: {aufrufe}"
+    )
+
+    #
+    # Nichts darf verschwinden: Wer gerade ueber genau dieses Profil
+    # per SSH verbunden ist, soll es spaeter wiederfinden.
+    #
+    assert "connection delete" not in aufrufe, (
+        f"Ein fremdes Profil wurde geloescht statt stillgelegt: {aufrufe}"
+    )
+
+    print("OK: Fremde WLAN-Profile werden stillgelegt, nicht geloescht")
+
+    # ================================================================
+    # Der ganze WLAN-Abschnitt, einmal durchgespielt
+    #
+    # Bis hierher wurden einzelne Funktionen geprueft. Was dabei nicht
+    # auffaellt: ob der Ablauf als Ganzes durchlaeuft - also ob die
+    # Abfragen in der richtigen Reihenfolge kommen und ob am Ende das
+    # Richtige eingerichtet ist. Genau das kann man auf einem frisch
+    # aufgesetzten Pi erst merken, wenn es zu spaet ist.
+    #
+    # Deshalb hier: install.sh wird eingelesen (nicht ausgefuehrt,
+    # siehe XRACK_INSTALL_SOURCE_ONLY), und configure_wifi laeuft mit
+    # vorgegebenen Antworten gegen nachgestellte Werkzeuge.
+    #
+    # Die Abfragen lesen teils mit "read -s" (Passwoerter), das
+    # braucht ein Terminal - deshalb laeuft das Ganze in einer
+    # Pseudo-Konsole.
+    # ================================================================
+
+    def wlan_einrichten(ordner: Path, geraete: list[str],
+                        antworten: list[str]) -> tuple[str, dict]:
+        """
+        Spielt configure_wifi mit `antworten` durch und liefert
+        (Ausgabe, erzeugte Dateien).
+
+        Gestartet wird über "script", weil configure_wifi nur bei
+        einem echten Terminal überhaupt loslegt ("[ -t 0 ]") und die
+        Passwortabfragen mit "read -s" arbeiten. "script" stellt eine
+        Pseudo-Konsole bereit und reicht die Antworten hinein.
+        """
+
+        ordner.mkdir(parents=True, exist_ok=True)
+
+        binordner = ordner / "bin"
+        binordner.mkdir(exist_ok=True)
+
+        for name, inhalt in (
+            ("sudo", FAKE_SUDO),
+            ("nmcli", FAKE_NMCLI),
+            ("systemctl", FAKE_SYSTEMCTL),
+            ("iw", FAKE_IW),
+            ("rfkill", FAKE_STILL),
+            ("sleep", FAKE_STILL),
+            ("raspi-config", FAKE_STILL),
+        ):
+            datei = binordner / name
+            datei.write_text(inhalt, encoding="utf-8")
+            datei.chmod(0o755)
+
+        (ordner / "devices").write_text(
+            "".join(f"{g}:wifi\n" for g in geraete) + "eth0:ethernet\n",
+            encoding="utf-8",
+        )
+        (ordner / "phy-info").write_text(PHY_5GHZ_NEU, encoding="utf-8")
+        (ordner / "moegliche-baender").write_text("a\ng\n", encoding="utf-8")
+
+        #
+        # Ein mitgeliefertes WLAN-Profil, wie es der Raspberry Pi
+        # Imager anlegt.
+        #
+        (ordner / "profiles").write_text(
+            "preconfigured:802-11-wireless\n", encoding="utf-8"
+        )
+        (ordner / "autoconnect").write_text(
+            "preconfigured=yes\n", encoding="utf-8"
+        )
+
+        skript = ordner / "lauf.sh"
+        skript.write_text(
+            "\n".join([
+                "export XRACK_INSTALL_SOURCE_ONLY=1",
+                f"source {INSTALL}",
+                f'XRACK_HOSTAPD_CONF="{ordner}/xrack.conf"',
+                f'XRACK_HOSTAPD_UNIT="{ordner}/xrack-hostapd.service"',
+                f'XRACK_NM_UNMANAGED="{ordner}/nm-unmanaged.conf"',
+                "XRACK_LANGUAGE=de",
+                "configure_wifi",
+                'echo "ERGEBNIS-CLIENT=${XRACK_WLAN_CLIENT_SSID}"',
+                'echo "ERGEBNIS-AP=${XRACK_WLAN_AP_SSID}"',
+                'echo "ERGEBNIS-BRIDGE=${XRACK_WLAN_BRIDGE}"',
+            ]),
+            encoding="utf-8",
+        )
+
+        umgebung = dict(os.environ)
+        umgebung["AP_STATE"] = str(ordner)
+        umgebung["PATH"] = f"{binordner}:{os.environ['PATH']}"
+
+        ergebnis = subprocess.run(
+            ["script", "-qec", f"bash {skript}", "/dev/null"],
+            input=("\n".join(antworten) + "\n").encode(),
+            capture_output=True,
+            env=umgebung,
+            timeout=120,
+        )
+
+        return ergebnis.stdout.decode(errors="replace"), {
+            "conf": ordner / "xrack.conf",
+            "nmcli": ordner / "nmcli",
+        }
+
+    # ----------------------------------------------------------------
+    # 10. Zwei Funkgeraete: Heimnetz UND Access Point
+    # ----------------------------------------------------------------
+
+    ausgabe, dateien = wlan_einrichten(
+        scratch / "ablauf-zwei",
+        ["wlan0", "wlan1"],
+        [
+            "j",                # WLAN einrichten?
+            "DE",               # Land
+            "1", "2",           # Client wlan0, Access Point wlan1
+            "MeinHeimnetz",     # SSID
+            "heimpasswort", "heimpasswort",
+            "",                 # AP-Name: Vorgabe (XRack)
+            "appasswort", "appasswort",
+        ],
+    )
+
+    assert "ERGEBNIS-CLIENT=MeinHeimnetz" in ausgabe, ausgabe[-2000:]
+    assert "ERGEBNIS-AP=XRack" in ausgabe, ausgabe[-2000:]
+    assert "ERGEBNIS-BRIDGE=ja" in ausgabe, ausgabe[-2000:]
+
+    conf = dateien["conf"].read_text(encoding="utf-8")
+
+    assert "ssid=XRack" in conf, conf
+    assert "wpa_passphrase=appasswort" in conf, conf
+    assert "interface=wlan1" in conf, conf
+
+    aufrufe = dateien["nmcli"].read_text(encoding="utf-8")
+
+    assert "con-name XRack-Home" in aufrufe, aufrufe
+    assert "con-name XRack-Share-eth0" in aufrufe, aufrufe
+
+    #
+    # Das mitgelieferte WLAN-Profil darf sich nicht mehr von selbst
+    # verbinden - sonst wacht der Pi je nach Laune im falschen Netz
+    # auf.
+    #
+    assert "modify preconfigured connection.autoconnect no" in aufrufe, aufrufe
+
+    print("OK: Mit zwei Funkgeraeten kommen Heimnetz und Access Point")
+
+    # ----------------------------------------------------------------
+    # 11. Nur ein Funkgeraet: Heimnetz trotzdem
+    #
+    # Vorher wurde in diesem Fall das ganze WLAN-Setup uebersprungen.
+    # Wer nur das eingebaute WLAN hat (kein USB-Stick), stand danach
+    # ohne jede WLAN-Einrichtung da - und musste sie von Hand
+    # nachholen, obwohl der Installer sie haette machen koennen.
+    # ----------------------------------------------------------------
+
+    ausgabe, dateien = wlan_einrichten(
+        scratch / "ablauf-eins",
+        ["wlan0"],
+        [
+            "j",
+            "DE",
+            "MeinHeimnetz",
+            "heimpasswort", "heimpasswort",
+        ],
+    )
+
+    assert "ERGEBNIS-CLIENT=MeinHeimnetz" in ausgabe, (
+        "Mit nur einem Funkgeraet wurde auch die Heimnetz-Verbindung "
+        f"uebersprungen:\n{ausgabe[-2000:]}"
+    )
+
+    assert "ERGEBNIS-AP=" in ausgabe and "ERGEBNIS-AP=XRack" not in ausgabe, (
+        f"Auf dem einzigen Funkgeraet wurde ein Access Point "
+        f"aufgespannt:\n{ausgabe[-2000:]}"
+    )
+
+    assert not dateien["conf"].exists(), (
+        "Es wurde eine hostapd-Konfiguration geschrieben, obwohl es "
+        "nur ein Funkgeraet gibt."
+    )
+
+    aufrufe = dateien["nmcli"].read_text(encoding="utf-8")
+
+    assert "con-name XRack-Home" in aufrufe, aufrufe
+    assert "con-name XRack-AP" not in aufrufe, aufrufe
+
+    print("OK: Mit einem Funkgeraet kommt wenigstens das Heimnetz")
 
     print("Alle Tests erfolgreich.")
 

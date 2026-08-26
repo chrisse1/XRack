@@ -260,8 +260,9 @@ cd XRack
 ./install.sh
 ```
 
-`install.sh` installiert alle Abhängigkeiten und richtet einen
-systemd-Dienst ein, der XRack automatisch beim Booten startet. Es
+`install.sh` ist für einen frisch aufgesetzten Raspberry Pi gedacht:
+Es installiert alle Abhängigkeiten und richtet einen systemd-Dienst
+ein, der XRack automatisch beim Booten startet. Es
 fragt interaktiv nach Sprache, Port und Hostname des Webinterfaces
 sowie einer 4-stelligen PIN, die das Einstellungen-Menü vor unbefugten
 Änderungen schützt (später im Einstellungen-Menü selbst änderbar), und
@@ -270,6 +271,16 @@ ein - die Abfragen dazu erklären sich beim Durchlaufen von selbst.
 Außerdem wird das automatische Einhängen von USB-Sticks eingerichtet,
 damit der "Auf USB-Stick kopieren"-Button ohne weitere Einrichtung
 funktioniert, sobald ein Stick angeschlossen wird.
+
+Zur WLAN-Einrichtung: Mit **zwei** WLAN-Interfaces (eingebautes plus
+USB-Adapter) richtet der Installer beides ein - die Verbindung ins
+Heimnetz und den eigenen Access Point. Mit **einem** bekommt XRack die
+Heimnetz-Verbindung; für einen Access Point wird ein zweites Funkgerät
+gebraucht. Vorhandene WLAN-Profile (etwa das vom Raspberry Pi Imager
+angelegte `preconfigured`) werden dabei stillgelegt, damit sie sich
+nicht mehr von selbst verbinden und XRacks Profil nicht das Funkgerät
+streitig machen - gelöscht wird nichts, wer sie später braucht, findet
+sie noch vor.
 
 Danach ist das Webinterface unter `https://<hostname>.local:<port>`
 erreichbar (Standard: `https://xrack.local:8080`). Das Zertifikat ist

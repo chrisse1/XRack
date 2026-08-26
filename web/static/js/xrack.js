@@ -1002,6 +1002,40 @@ document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") loadFaders();
 });
 
+//
+// Nach einem Wechsel des Zugangswegs zur Konsole noch einmal
+// nachsehen.
+//
+// Ohne das musste man den Browser neu laden: Die Kanalzug-Karte fragt
+// im gesperrten Zustand bewusst gar nicht nach (siehe oben), also
+// blieb sie nach dem Umschalten auf "keine Verbindung" stehen -
+// obwohl das Pult laengst wieder antwortete.
+//
+// Einmal nachfragen reicht dabei nicht. Das Umschalten trennt die
+// Kabelverbindung kurz, damit das Pult neu per DHCP fragt (siehe
+// scripts/xrack-link-bounce.sh), und danach braucht das Pult selbst
+// noch einen Moment, bis es unter der neuen Adresse antwortet.
+// Deshalb ein paar Mal in wachsenden Abstaenden - und dann Schluss.
+// Ein Dauer-Poll waere hier falsch und wuerde die Ruhe im gesperrten
+// Zustand wieder aufheben.
+//
+const CONSOLE_RECHECK_DELAYS = [500, 3000, 8000, 15000];
+
+let consoleRecheckTimers = [];
+
+function recheckConsoleAfterSwitch() {
+
+    //
+    // Schnell hintereinander umgeschaltet: die alten Nachfragen
+    // abbestellen, sonst laufen zwei Reihen uebereinander.
+    //
+    consoleRecheckTimers.forEach(clearTimeout);
+
+    consoleRecheckTimers = CONSOLE_RECHECK_DELAYS.map(
+        (verzoegerung) => setTimeout(loadFaders, verzoegerung)
+    );
+}
+
 async function loadFaders() {
     let data;
 
@@ -3061,6 +3095,13 @@ async function saveConsoleHost() {
         const settings = await (await fetch("/api/settings")).json();
         applyConsoleHost(settings);
 
+        //
+        // Eine von Hand eingetragene Adresse gilt sofort - die
+        // Kanalzug-Karte soll das nicht erst beim naechsten Laden
+        // merken.
+        //
+        loadFaders();
+
     } catch (error) {
         console.error("Pult-IP konnte nicht gespeichert werden:", error);
         found.className = "small mt-1 text-danger";
@@ -3380,6 +3421,11 @@ async function toggleBridge(event) {
     // Schließt sich mit der Heimnetz-Freigabe aus - deren Schalter
     // kann sich dabei im Hintergrund mit geändert haben.
     await loadSettings();
+
+    //
+    // Die Konsole ist jetzt unter einer anderen Adresse zu erreichen.
+    //
+    recheckConsoleAfterSwitch();
 }
 
 async function toggleConsoleAccess(event) {
@@ -3415,6 +3461,11 @@ async function toggleConsoleAccess(event) {
     // also erst beim nächsten Öffnen bzw. Nachladen.
     //
     await loadSettings();
+
+    //
+    // Die Konsole ist jetzt unter einer anderen Adresse zu erreichen.
+    //
+    recheckConsoleAfterSwitch();
 }
 
 // ============================================================
