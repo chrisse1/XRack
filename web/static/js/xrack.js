@@ -1221,6 +1221,52 @@ function recheckConsoleAfterSwitch() {
     );
 }
 
+//
+// "Mischpult erneut suchen"
+//
+// Sitzt im Kopf der Kanalzug-Karte, weil man genau dort merkt, dass
+// nichts gefunden wurde. Was dahinter passiert, steht in
+// Application.search_console(): Gemerktes verwerfen, bei
+// Kabelbetrieb die Verbindung kurz trennen (damit das Pult neu per
+// DHCP fragt) und dann sofort suchen, ohne die uebliche Wartezeit
+// zwischen zwei Rundrufen.
+//
+document
+    .getElementById("btn-console-search")
+    .addEventListener("click", searchConsole);
+
+async function searchConsole() {
+    const button = document.getElementById("btn-console-search");
+
+    //
+    // Das dauert ein paar Sekunden (Trennen, warten, Rundruf).
+    // Solange sperren und das dem Auge auch zeigen.
+    //
+    button.disabled = true;
+    button.innerHTML = `<span class="spinner-border spinner-border-sm"></span>`;
+
+    try {
+        const response = await fetch("/api/console/search", { method: "POST" });
+        const data = await response.json();
+
+        await loadFaders();
+        await loadSettings();
+
+        alert(
+            data.found
+                ? I18N.alert_console_search_found.replace("{ip}", data.host)
+                : I18N.alert_console_search_none
+        );
+
+    } catch (error) {
+        console.error("Suche fehlgeschlagen:", error);
+        alert(I18N.alert_console_search_failed);
+    } finally {
+        button.disabled = false;
+        button.innerHTML = `<i class="bi bi-search"></i>`;
+    }
+}
+
 async function loadFaders() {
 
     if (faderRequestPending) return;
@@ -3626,55 +3672,6 @@ async function submitWifiChange(url, ssid, password) {
 
     alert(I18N.settings_saved);
     await loadSettings();
-}
-
-//
-// Kabel ziehen und wieder anstecken - nur eben aus der Ferne.
-//
-document
-    .getElementById("btn-console-reconnect")
-    .addEventListener("click", reconnectConsole);
-
-async function reconnectConsole() {
-    const button = document.getElementById("btn-console-reconnect");
-
-    //
-    // Das Skript trennt und wartet - zusammen ein paar Sekunden.
-    // Solange den Knopf sperren, sonst klickt man in der Zeit noch
-    // dreimal und trennt mitten im Neuaufbau wieder.
-    //
-    button.disabled = true;
-
-    try {
-        const response = await fetch("/api/settings/console_reconnect", {
-            method: "POST",
-        });
-
-        const result = await response.json();
-
-        if (!result.success) {
-            alert(
-                I18N.alert_console_reconnect_failed
-                    .replace("{message}", result.message || "")
-            );
-            return;
-        }
-
-        alert(I18N.alert_console_reconnect_done);
-
-        //
-        // Danach dasselbe Nachfassen wie beim Umschalten: Das Pult
-        // braucht einen Moment fuer seine neue Adresse.
-        //
-        await loadSettings();
-        recheckConsoleAfterSwitch();
-
-    } catch (error) {
-        console.error("Verbindung konnte nicht neu aufgebaut werden:", error);
-        alert(I18N.alert_console_reconnect_failed.replace("{message}", ""));
-    } finally {
-        button.disabled = false;
-    }
 }
 
 async function toggleBridge(event) {

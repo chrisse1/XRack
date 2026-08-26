@@ -65,22 +65,67 @@ class NetzwerkMixin:
         return self.wlan_control.set_ap_wifi(ssid, password)
 
 
-    def reconnect_console(self) -> tuple[bool, str]:
+    def search_console(self) -> dict:
         """
-        Stösst beim angeschlossenen Pult eine neue Adressvergabe an
-        (siehe WlanControl.reconnect_console).
+        Sucht das Mischpult neu - alles, was XRack dafür tun kann, in
+        einem Rutsch:
+
+        1. Alles Gemerkte verwerfen (Adresse, Pultfamilie, Port).
+        2. Die Kabelverbindung kurz trennen, falls das Pult per Kabel
+           hängt - erst dann fragt es wieder per DHCP nach einer
+           Adresse (siehe scripts/xrack-link-bounce.sh).
+        3. Neu suchen, ohne auf die übliche Wartezeit zwischen zwei
+           Rundrufen zu warten.
+
+        Wichtig beim Trennen: Das passiert nur, wenn eine der beiden
+        Kabel-Betriebsarten läuft. Sonst kann eth0 nämlich etwas ganz
+        anderes sein - hängen Pult und Pi zusammen an einem Router,
+        ist es die Leitung dorthin, und XRack würde sich beim Suchen
+        selbst die Verbindung unter den Füßen wegziehen.
         """
 
-        erfolg, meldung = self.wlan_control.reconnect_console()
+        status = self.wlan_control.get_status()
 
-        if erfolg:
-            #
-            # Die gemerkte Familie/Adresse hängt an der alten IP - nach
-            # dem Neuaufbau kann eine andere kommen.
-            #
-            self.console_control.detect_reset()
+        am_kabel = (
+            status.get("bridge_enabled")
+            or status.get("console_access_enabled")
+        )
 
-        return erfolg, meldung
+        getrennt = False
+
+        if am_kabel:
+            getrennt, _ = self.wlan_control.reconnect_console()
+
+        #
+        # Erst nach dem Trennen verwerfen: Sonst merkt sich der
+        # Suchlauf womöglich noch die alte Adresse, die während des
+        # Trennens ja noch eine Weile antwortet.
+        #
+        self.console_control.detect_reset()
+
+        host, channels, source = self._console_host_and_channels()
+
+        if not host:
+            #
+            # Über die Vergabeliste war nichts zu holen - dann den
+            # Rundruf ausdrücklich erzwingen.
+            #
+            host = self.console_control.discover(force=True)
+            source = "discovered" if host else source
+
+        self.logger.info(
+            "Mischpult-Suche: %s (%s), Verbindung getrennt: %s",
+            host or "nichts gefunden",
+            source,
+            "ja" if getrennt else "nein",
+        )
+
+        return {
+            "found": bool(host),
+            "host": host,
+            "source": source if host else None,
+            "cable_reset": getrennt,
+        }
 
     def set_bridge(self, enabled: bool) -> tuple[bool, str]:
         """

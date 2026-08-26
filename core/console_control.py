@@ -513,7 +513,7 @@ class ConsoleControl:
         self._last_discovery = 0.0
         self._pair_link = {}
 
-    def discover(self) -> str | None:
+    def discover(self, force: bool = False) -> str | None:
         """
         Sucht das Pult per Rundruf im lokalen Netz.
 
@@ -526,11 +526,17 @@ class ConsoleControl:
         ermittelt. Damit heilt sich ein veralteter Treffer von selbst
         (das Pult bekommt eine neue Adresse), ohne dass jede Abfrage
         der Fader-Karte einen Rundruf auslöst.
+
+        `force` überspringt diese Wartezeit. Das ist für den Fall
+        gedacht, dass jemand ausdrücklich "erneut suchen" drückt: Wer
+        das tut, hat gerade etwas verändert (Kabel eingesteckt, Pult
+        eingeschaltet) und soll nicht bis zu 30 Sekunden auf eine
+        Antwort warten, die längst zu holen wäre.
         """
 
         now = time.monotonic()
 
-        if now - self._last_discovery < DISCOVERY_INTERVAL:
+        if not force and now - self._last_discovery < DISCOVERY_INTERVAL:
             return self._discovered
 
         self._last_discovery = now

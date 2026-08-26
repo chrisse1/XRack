@@ -385,6 +385,19 @@
             {% endset %}
 
             {% set header_right %}
+            {#
+                Die Suche gehoert hierher und nicht ins
+                Einstellungen-Fenster: Wer sie braucht, sieht gerade
+                auf eine Karte, die "keine Verbindung" meldet.
+            #}
+            <button
+                id="btn-console-search"
+                class="btn btn-outline-secondary btn-sm me-1"
+                title="{{ t.faders_search }}"
+            >
+                <i class="bi bi-search"></i>
+            </button>
+
             <button
                 id="btn-faders-lock"
                 class="btn btn-outline-secondary btn-sm"

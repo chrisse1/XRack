@@ -331,15 +331,22 @@ Passwort im Klartext). Kommt der Access Point mit neuen Werten nicht
 hoch, stellt XRack die alten wieder her, statt einen stummen Access
 Point zu hinterlassen.
 
-Findet XRack das per Kabel angeschlossene Mischpult nicht, hilft im
-Einstellungen-Menü **"Kabelverbindung neu aufbauen"**. Der Grund
-dahinter: Das Pult fragt erst dann wieder per DHCP nach einer Adresse,
-wenn die Verbindung tatsächlich weg war. Wird es nachträglich
-eingesteckt oder neu gestartet, während XRack schon läuft, behält es
-seine alte Adresse - unter Umständen aus einem ganz anderen Netz. Beim
-Umschalten der Betriebsart macht XRack das von selbst; in allen
-anderen Fällen half bisher nur, das Kabel zu ziehen. Der Knopf macht
-genau das, ohne aufzustehen.
+Findet XRack das Mischpult nicht, hilft der Lupen-Knopf oben in der
+Kanalfader-Karte (**"Mischpult erneut suchen"**). Er verwirft die
+gemerkte Adresse, trennt bei Kabelbetrieb kurz die Netzwerkbuchse und
+sucht dann sofort neu.
+
+Das Trennen ist dabei der Kern: Das Pult fragt erst dann wieder per
+DHCP nach einer Adresse, wenn die Verbindung tatsächlich weg war. Wird
+es nachträglich eingesteckt oder neu gestartet, während XRack schon
+läuft, behält es seine alte - unter Umständen aus einem ganz anderen
+Netz. Beim Umschalten der Betriebsart macht XRack das von selbst; in
+allen anderen Fällen half bisher nur, das Kabel zu ziehen.
+
+Getrennt wird nur, wenn eine der beiden Kabel-Betriebsarten läuft.
+Hängen Pult und Pi zusammen an einem Router, ist die Netzwerkbuchse
+die Leitung dorthin - XRack würde sich sonst beim Suchen die eigene
+Verbindung abschneiden.
 
 Nachsehen, was los ist:
 

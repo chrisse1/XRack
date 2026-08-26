@@ -49,6 +49,15 @@ class FaderSelection(BaseModel):
     db: float | None
 
 
+@router.post("/api/console/search")
+def search_console(request: Request):
+    """
+    Sucht das Mischpult neu (siehe Application.search_console).
+    """
+
+    return request.app.state.application.search_console()
+
+
 @router.get("/api/console/pair")
 def console_pair(request: Request, start: int):
     """

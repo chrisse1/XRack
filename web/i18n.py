@@ -206,18 +206,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "UDP 10024 für X-AIR-Edit/Mixing Station). Schließt sich "
             "mit dem Access-Point-Weg darüber aus."
         ),
-        "btn_console_reconnect": "Kabelverbindung neu aufbauen",
-        "settings_console_reconnect_hint": (
-            "Trennt die Netzwerkbuchse kurz - dasselbe wie Kabel ziehen "
-            "und wieder anstecken. Nötig, wenn das Pult nach dem "
-            "Einstecken oder einem Neustart noch eine Adresse aus einem "
-            "anderen Netz hält."
+        "faders_search": "Mischpult erneut suchen",
+        "alert_console_search_found": "Mischpult gefunden: {ip}",
+        "alert_console_search_none": (
+            "Kein Mischpult gefunden. Prüfe, ob es eingeschaltet und "
+            "angeschlossen ist - im Einstellungen-Menü lässt sich die "
+            "IP auch von Hand eintragen."
         ),
-        "alert_console_reconnect_done": (
-            "Verbindung neu aufgebaut. Das Pult holt sich jetzt eine "
-            "Adresse - das dauert einen Moment."
-        ),
-        "alert_console_reconnect_failed": "Neuaufbau fehlgeschlagen: {message}",
+        "alert_console_search_failed": "Suche fehlgeschlagen.",
         "settings_console_access_waiting": (
             "Warte auf die Konsole - ist sie per Kabel angeschlossen "
             "und eingeschaltet?"
@@ -616,18 +612,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "X32-Edit, UDP 10024 for X-AIR-Edit/Mixing Station). "
             "Mutually exclusive with the access point route above."
         ),
-        "btn_console_reconnect": "Rebuild cable connection",
-        "settings_console_reconnect_hint": (
-            "Briefly drops the network port - the same as unplugging the "
-            "cable and plugging it back in. Needed when the console still "
-            "holds an address from another network after being plugged in "
-            "or after a restart."
+        "faders_search": "Search for mixer again",
+        "alert_console_search_found": "Mixer found: {ip}",
+        "alert_console_search_none": (
+            "No mixer found. Check that it is switched on and connected - "
+            "you can also enter the IP by hand in the settings menu."
         ),
-        "alert_console_reconnect_done": (
-            "Connection rebuilt. The console is fetching an address now - "
-            "give it a moment."
-        ),
-        "alert_console_reconnect_failed": "Rebuild failed: {message}",
+        "alert_console_search_failed": "Search failed.",
         "settings_console_access_waiting": (
             "Waiting for the console - is it plugged in and switched on?"
         ),
