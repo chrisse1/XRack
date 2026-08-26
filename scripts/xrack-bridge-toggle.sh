@@ -70,6 +70,17 @@ if [ "${MODE}" = "on" ]; then
     nmcli connection down "XRack-AP" >/dev/null 2>&1 || true
     nmcli connection up "XRack-AP" ifname "${AP_IFACE}"
 
+    #
+    # Das Pult zum erneuten DHCP bewegen: Es liegt jetzt in einem
+    # anderen Netz, merkt davon aber nichts, solange die Verbindung
+    # durchgehend bestand. Siehe xrack-link-bounce.sh.
+    #
+    BOUNCE="$(dirname "$0")/xrack-link-bounce.sh"
+
+    if [ -x "${BOUNCE}" ]; then
+        "${BOUNCE}" eth0 || true
+    fi
+
 elif [ "${MODE}" = "off" ]; then
 
     nmcli connection modify "XRack-AP" \

@@ -108,6 +108,30 @@ exit 0
 """
 
 
+#
+# Nachgestelltes "ip": Merkt sich jedes Schalten der Verbindung. Damit
+# laesst sich pruefen, ob die Umschalt-Skripte die Verbindung wirklich
+# kurz trennen - das ist es, was das Mischpult zum erneuten DHCP
+# bewegt.
+#
+FAKE_IP = r"""#!/usr/bin/env bash
+if [ "$1" = "link" ] && [ "$2" = "show" ]; then
+    grep -qx "$3" "$NM_STATE/interfaces" 2>/dev/null && exit 0
+    exit 1
+fi
+if [ "$1" = "link" ] && [ "$2" = "set" ]; then
+    echo "$3 $4" >> "$NM_STATE/link"
+fi
+exit 0
+"""
+
+#
+# Nachgestelltes "sleep": Die Skripte warten auf echte Hardware. Im
+# Test soll das nicht dauern.
+#
+FAKE_SLEEP = "#!/usr/bin/env bash\nexit 0\n"
+
+
 class Netzwerk:
     """Ein nachgestelltes NetworkManager-Setup."""
 
@@ -142,6 +166,13 @@ class Netzwerk:
         nmcli.write_text(FAKE_NMCLI, encoding="utf-8")
         nmcli.chmod(0o755)
 
+        for name, inhalt in (("ip", FAKE_IP), ("sleep", FAKE_SLEEP)):
+            datei = binordner / name
+            datei.write_text(inhalt, encoding="utf-8")
+            datei.chmod(0o755)
+
+        (self.pfad / "interfaces").write_text("eth0\nwlan1\n", encoding="utf-8")
+
         self.umgebung = dict(os.environ)
         self.umgebung["NM_STATE"] = str(self.pfad)
         self.umgebung["PATH"] = f"{binordner}:{os.environ['PATH']}"
@@ -170,6 +201,16 @@ class Netzwerk:
         if not datei.exists():
             return set()
         return set(datei.read_text(encoding="utf-8").split())
+
+    def linkschaltungen(self) -> list:
+        """Was am Anschluss geschaltet wurde, in der Reihenfolge."""
+
+        datei = self.pfad / "link"
+
+        if not datei.exists():
+            return []
+
+        return datei.read_text(encoding="utf-8").split("\n")[:-1]
 
     def aktiviere(self, name: str) -> None:
         with (self.pfad / "active").open("a", encoding="utf-8") as f:
@@ -306,6 +347,59 @@ try:
     assert "XRack-Share-eth0" in netz.aktiv()
 
     print("OK: Ohne Access Point laesst sich die Freigabe trotzdem schalten")
+
+    # ----------------------------------------------------------------
+    # 6b. Beide Schalter muessen die Verbindung kurz trennen
+    #
+    # Die beiden Zugangswege liegen in verschiedenen Netzen (Bridge
+    # 10.42.0.x, Freigabe 10.77.0.x). Der Pi stellt sich beim
+    # Umschalten sofort um - das angeschlossene Pult aber nicht: Es
+    # fragt erst dann wieder per DHCP nach, wenn die Verbindung
+    # tatsaechlich weg war. Bleibt sie durchgehend bestehen, behaelt es
+    # seine alte Adresse, bis die Lease abläuft. Deshalb half bisher
+    # nur Kabel ziehen oder ein Neustart.
+    # ----------------------------------------------------------------
+
+    netz = Netzwerk(scratch / "e")
+
+    assert netz.schalte("xrack-share-toggle.sh", "on").returncode == 0
+
+    geschaltet = netz.linkschaltungen()
+
+    assert "eth0 down" in geschaltet and "eth0 up" in geschaltet, (
+        f"Die Freigabe hat die Verbindung nicht getrennt: {geschaltet}"
+    )
+    assert geschaltet.index("eth0 down") < geschaltet.index("eth0 up"), (
+        f"Erst trennen, dann wieder verbinden: {geschaltet}"
+    )
+
+    print("OK: Die Freigabe trennt die Verbindung kurz (erzwingt neues DHCP)")
+
+    netz = Netzwerk(scratch / "f")
+
+    assert netz.schalte("xrack-bridge-toggle.sh", "on").returncode == 0
+
+    geschaltet = netz.linkschaltungen()
+
+    assert "eth0 down" in geschaltet and "eth0 up" in geschaltet, (
+        f"Die Bridge hat die Verbindung nicht getrennt: {geschaltet}"
+    )
+
+    print("OK: Die Bridge trennt die Verbindung ebenfalls kurz")
+
+    #
+    # Beim Ausschalten dagegen nicht: Dort wechselt kein Netz, und ein
+    # unnoetiges Trennen wuerde nur alles kurz stoeren.
+    #
+    netz = Netzwerk(scratch / "g")
+
+    assert netz.schalte("xrack-share-toggle.sh", "off").returncode == 0
+
+    assert netz.linkschaltungen() == [], (
+        f"Beim Ausschalten wurde unnoetig getrennt: {netz.linkschaltungen()}"
+    )
+
+    print("OK: Beim Ausschalten bleibt die Verbindung unangetastet")
 
     # ----------------------------------------------------------------
     # 7. Der Lease-Leser darf keine abgelaufenen Adressen melden
