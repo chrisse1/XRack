@@ -1213,6 +1213,7 @@ configure_sudoers() {
         "${INSTALL_DIR}/scripts/xrack-share-toggle.sh" \
         "${INSTALL_DIR}/scripts/xrack-dhcp-lease.sh" \
         "${INSTALL_DIR}/scripts/xrack-link-bounce.sh" \
+        "${INSTALL_DIR}/scripts/xrack-bridge-ensure.sh" \
         "${INSTALL_DIR}/scripts/xrack-port-forward.sh" \
         "${INSTALL_DIR}/scripts/xrack-bt-power.sh" \
         "${INSTALL_DIR}/scripts/xrack-bt-pair.sh" \

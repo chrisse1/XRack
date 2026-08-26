@@ -130,6 +130,16 @@ fi
 if [ "$1" = "link" ] && [ "$2" = "set" ]; then
     echo "$3 $4" >> "$NM_STATE/link"
 fi
+#
+# "ip -4 addr show br0" - hat die Bridge eine Adresse? Die Datei
+# "bridge-adresse" entscheidet das im Test.
+#
+if [ "$1" = "-4" ] && [ "$2" = "addr" ]; then
+    if [ -f "$NM_STATE/bridge-adresse" ]; then
+        echo "    inet 10.42.0.1/24 brd 10.42.0.255 scope global br0"
+    fi
+    exit 0
+fi
 exit 0
 """
 
@@ -190,6 +200,12 @@ class Netzwerk:
 
         (self.pfad / "interfaces").write_text("eth0\nwlan1\n", encoding="utf-8")
 
+        #
+        # Im Normalfall trägt die Bridge ihre Adresse. Einzelne Tests
+        # nehmen sie weg, um den beobachteten Ausfall nachzustellen.
+        #
+        (self.pfad / "bridge-adresse").write_text("da\n", encoding="utf-8")
+
         self.umgebung = dict(os.environ)
         self.umgebung["NM_STATE"] = str(self.pfad)
         self.umgebung["PATH"] = f"{binordner}:{os.environ['PATH']}"
@@ -241,6 +257,31 @@ class Netzwerk:
             text=True,
             timeout=30,
         )
+
+
+def bridge_neuaufbauten(netz) -> list:
+    """
+    Die Aufrufe, die die Bridge SELBST hochfahren - nicht ihren
+    eth0-Anschluss (der heisst "XRack-Bridge-eth0" und wird beim
+    Einschalten ohnehin hochgefahren).
+
+    Die Attrappe schreibt die ganze Befehlszeile mit, also etwa
+    "-w 10 connection up XRack-Bridge". Ein Vergleich auf den
+    Zeilenanfang geht deshalb ins Leere - und ein Test, der nie etwas
+    findet, besteht immer.
+    """
+
+    datei = netz.pfad / "calls"
+
+    if not datei.exists():
+        return []
+
+    return [
+        zeile
+        for zeile in datei.read_text(encoding="utf-8").splitlines()
+        if "connection up XRack-Bridge" in zeile
+        and "XRack-Bridge-eth0" not in zeile
+    ]
 
 
 scratch = Path(tempfile.mkdtemp())
@@ -796,6 +837,88 @@ cp "$quelle" "$ziel"
     assert netz.linkschaltungen() == [], netz.linkschaltungen()
 
     print("OK: Ein fehlender Anschluss ist kein Fehler")
+
+    # ----------------------------------------------------------------
+    # 13. Die Bridge ohne Adresse wird neu aufgebaut
+    #
+    # Beobachtet am Geraet: Nach dem Zurueckschalten war der
+    # Bridge-Port angehaengt, die Kabelverbindung getrennt und wieder
+    # verbunden - und trotzdem kam kein einziges DHCP-Paket zurueck.
+    # In der Gegenrichtung hatte derselbe Ablauf zwei Sekunden spaeter
+    # ein DHCPACK gebracht. Der Unterschied lag an der antwortenden
+    # Seite: Auf br0 hat niemand geantwortet.
+    #
+    # "Verbindung aktiv" heisst eben nicht "Bridge traegt ihre
+    # Adresse" - und ohne Adresse kein DHCP-Server.
+    # ----------------------------------------------------------------
+
+    netz = Netzwerk(scratch / "bridge-ohne-adresse")
+
+    #
+    # Die Bridge gilt als aktiv, hat aber keine Adresse.
+    #
+    netz.aktiviere("XRack-Bridge")
+    (netz.pfad / "bridge-adresse").unlink()
+
+    assert netz.schalte("xrack-bridge-toggle.sh", "on").returncode == 0
+
+    #
+    # Gemeint ist die Bridge selbst - nicht ihr eth0-Anschluss, der
+    # heisst "XRack-Bridge-eth0" und wird ohnehin hochgefahren.
+    #
+    aufrufe = bridge_neuaufbauten(netz)
+
+    assert aufrufe, (
+        "Die Bridge wurde nicht neu aufgebaut, obwohl ihr die Adresse "
+        "fehlte."
+    )
+
+    print("OK: Fehlt der Bridge die Adresse, wird sie neu aufgebaut")
+
+    # ----------------------------------------------------------------
+    # 14. Mit Adresse wird sie in Ruhe gelassen
+    #
+    # Ein Neuaufbau unterbricht kurz den Verkehr aller am Access Point
+    # angemeldeten Geraete - das darf nur passieren, wenn es noetig
+    # ist.
+    # ----------------------------------------------------------------
+
+    netz = Netzwerk(scratch / "bridge-mit-adresse")
+    netz.aktiviere("XRack-Bridge")
+
+    assert netz.schalte("xrack-bridge-toggle.sh", "on").returncode == 0
+
+    aufrufe = bridge_neuaufbauten(netz)
+
+    assert aufrufe == [], (
+        f"Die laufende Bridge wurde unnoetig neu aufgebaut: {aufrufe}"
+    )
+
+    print("OK: Eine laufende Bridge mit Adresse bleibt unangetastet")
+
+    # ----------------------------------------------------------------
+    # 15. Auch beim Einschalten der Freigabe wird nachgesehen
+    #
+    # Das ist der Moment, in dem die Bridge ihren einzigen von
+    # NetworkManager verwalteten Anschluss verliert - also genau der
+    # Zeitpunkt, an dem der Ausfall entsteht. Ihn dort zu bemerken ist
+    # besser, als ihn beim Zurueckschalten zu reparieren.
+    # ----------------------------------------------------------------
+
+    netz = Netzwerk(scratch / "freigabe-prueft-bridge")
+    netz.aktiviere("XRack-Bridge")
+    (netz.pfad / "bridge-adresse").unlink()
+
+    assert netz.schalte("xrack-share-toggle.sh", "on").returncode == 0
+
+    aufrufe = (netz.pfad / "calls").read_text(encoding="utf-8")
+
+    assert "connection up XRack-Bridge" in aufrufe, (
+        f"Beim Einschalten der Freigabe wurde die Bridge nicht "
+        f"nachgesehen:\n{aufrufe}"
+    )
+
+    print("OK: Die Freigabe sieht beim Umschalten nach der Bridge")
 
     print("Alle Tests erfolgreich.")
 

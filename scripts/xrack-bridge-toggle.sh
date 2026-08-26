@@ -40,14 +40,16 @@ fi
 #
 # br0 trägt die IP-Adresse, den DHCP-Server und die
 # Internet-Weitergabe für alles, was am Access Point hängt. Sie muss
-# also in beiden Betriebsarten laufen - ein erneutes "up" auf einer
-# bereits aktiven Bridge würde die Verbindungen der angemeldeten
-# Geräte unnötig unterbrechen, deshalb vorher nachsehen.
+# also in beiden Betriebsarten laufen - und zwar mitsamt ihrer
+# Adresse, nicht nur "aktiv" laut NetworkManager. Das prüft
+# xrack-bridge-ensure.sh; dort steht auch, warum das nötig ist.
 #
 bridge_sicherstellen() {
 
-    if ! nmcli -t -f NAME connection show --active | grep -qx "XRack-Bridge"; then
-        nmcli -w 10 connection up "XRack-Bridge" >/dev/null 2>&1 || true
+    ENSURE="$(dirname "$0")/xrack-bridge-ensure.sh"
+
+    if [ -x "${ENSURE}" ]; then
+        "${ENSURE}" || true
     fi
 }
 

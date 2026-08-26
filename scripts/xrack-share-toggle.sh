@@ -41,6 +41,20 @@ if [ "${MODE}" = "on" ]; then
     nmcli connection down "XRack-Bridge-eth0" >/dev/null 2>&1 || true
     nmcli connection modify "XRack-Bridge-eth0" connection.autoconnect no 2>/dev/null || true
 
+    #
+    # Jetzt hat die Bridge keinen von NetworkManager verwalteten
+    # Anschluss mehr - der Access Point gehört hostapd. Genau hier
+    # nachsehen, ob sie ihre Adresse behält: Verliert sie sie, ist mit
+    # ihr der DHCP-Server weg, und das fällt erst auf, wenn beim
+    # Zurückschalten niemand mehr antwortet. Siehe
+    # xrack-bridge-ensure.sh.
+    #
+    ENSURE="$(dirname "$0")/xrack-bridge-ensure.sh"
+
+    if [ -x "${ENSURE}" ]; then
+        "${ENSURE}" || true
+    fi
+
     ETH0_CON="$(nmcli -t -f NAME,DEVICE connection show | awk -F: '$2=="eth0"{print $1; exit}')"
 
     if [ -n "${ETH0_CON}" ] && [ "${ETH0_CON}" != "XRack-Share-eth0" ]; then
