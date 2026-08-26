@@ -529,18 +529,77 @@ configure_wifi() {
                         if sudo nmcli connection add type wifi ifname "${AP_IFACE}" con-name "XRack-AP" \
                             ssid "${AP_SSID}" mode ap >/dev/null; then
 
+                            #
+                            # Verschlüsselung ausdrücklich auf CCMP (AES)
+                            # festlegen. Ohne das bietet der Access Point je
+                            # nach Treiber zusätzlich das alte TKIP an.
+                            # Aktuelle Handys handeln das mitunter aus und
+                            # scheitern dann am Schlüsselaustausch - für den
+                            # Nutzer sieht das aus wie ein falsches Passwort,
+                            # obwohl es stimmt. Genau dieses Bild ("mal
+                            # sofort, mal zehnmal") hatten wir im Feld.
+                            #
+                            # PMF wird bewusst NICHT abgeschaltet: Das würde
+                            # den Schutz gegen Abmelde-Angriffe aufgeben. Der
+                            # Standard von NetworkManager bleibt stehen.
+                            #
+                            AP_BAND="bg"
+
+                            #
+                            # 5 GHz bevorzugen, wenn der Adapter es kann.
+                            # 2,4 GHz ist in Wohngegenden meist zugestellt,
+                            # und ein volles Band erzeugt dasselbe Bild wie
+                            # eine falsche Verschlüsselung: Die Anmeldung
+                            # geht im Störnebel unter.
+                            #
+                            # Kein fester Kanal - den sucht der Treiber
+                            # passend zur eingestellten Funkregion. Ein fest
+                            # eingetragener Kanal wäre in anderen Ländern
+                            # womöglich gar nicht erlaubt.
+                            #
+                            AP_PHY="$(iw dev "${AP_IFACE}" info 2>/dev/null | awk '/wiphy/ {print $2}')"
+
+                            if [ -n "${AP_PHY}" ] \
+                               && iw phy "phy${AP_PHY}" info 2>/dev/null \
+                                  | grep -qE '\* 5[0-9]{3} MHz' ; then
+                                AP_BAND="a"
+                            fi
+
                             sudo nmcli connection modify "XRack-AP" \
-                                802-11-wireless.band bg \
+                                802-11-wireless.band "${AP_BAND}" \
                                 ipv4.method shared \
                                 wifi-sec.key-mgmt wpa-psk \
                                 wifi-sec.proto rsn \
+                                wifi-sec.pairwise ccmp \
+                                wifi-sec.group ccmp \
                                 wifi-sec.psk "${AP_PASSWORD}" \
                                 connection.autoconnect yes
 
                             XRACK_WLAN_AP_SSID="${AP_SSID}"
 
-                            sudo nmcli connection up "XRack-AP" ifname "${AP_IFACE}" \
-                                || echo "$(L "Warnung: Access Point konnte nicht gestartet werden." "Warning: the access point could not be started.")"
+                            if ! sudo nmcli connection up "XRack-AP" ifname "${AP_IFACE}" >/dev/null 2>&1; then
+
+                                #
+                                # 5 GHz hat nicht funktioniert - etwa weil
+                                # die Funkregion die Kanäle nicht freigibt.
+                                # Dann zurück auf 2,4 GHz, statt den Nutzer
+                                # ohne Access Point dastehen zu lassen.
+                                #
+                                if [ "${AP_BAND}" = "a" ]; then
+
+                                    echo "$(L "XRack: 5 GHz hat nicht funktioniert - Access Point wird auf 2,4 GHz gestellt." "XRack: 5 GHz did not work - switching the access point to 2.4 GHz.")"
+
+                                    sudo nmcli connection modify "XRack-AP" 802-11-wireless.band bg
+                                    AP_BAND="bg"
+                                fi
+
+                                sudo nmcli connection up "XRack-AP" ifname "${AP_IFACE}" >/dev/null 2>&1 \
+                                    || echo "$(L "Warnung: Access Point konnte nicht gestartet werden." "Warning: the access point could not be started.")"
+                            fi
+
+                            if [ "${AP_BAND}" = "a" ]; then
+                                echo "$(L "XRack: Access Point läuft auf 5 GHz." "XRack: Access point is running on 5 GHz.")"
+                            fi
 
                             #
                             # Optional: Ethernet-Interface (z.B. das per Kabel
