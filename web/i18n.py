@@ -43,7 +43,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "label_size": "Größe",
         "recent_recordings": "Letzte Dateien",
         "no_recordings": "Keine Aufnahmen vorhanden.",
-        "btn_all_recordings": "Alle Aufnahmen...",
+        "btn_all_recordings": "Alle Dateien...",
         "channels_option": "{n} Kanäle",
 
         # Musikspieler-Karte
@@ -92,7 +92,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
 
         # Aufnahmen-Modal
-        "modal_recordings_title": "Aufnahmen",
+        "modal_recordings_title": "Alle Dateien",
+        "section_soundchecks": "Soundchecks",
+        "section_practice_mixes": "Übungsmixe",
         "btn_delete_selected": "Ausgewählte löschen",
         "btn_close": "Schließen",
         "badge_selected_for_soundcheck": "Für Wiedergabe ausgewählt",
@@ -440,7 +442,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "label_size": "Size",
         "recent_recordings": "Recent files",
         "no_recordings": "No recordings yet.",
-        "btn_all_recordings": "All recordings...",
+        "btn_all_recordings": "All files...",
         "channels_option": "{n} channels",
 
         # Music player card
@@ -489,7 +491,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
 
         # Recordings modal
-        "modal_recordings_title": "Recordings",
+        "modal_recordings_title": "All files",
+        "section_soundchecks": "Soundchecks",
+        "section_practice_mixes": "Practice mixes",
         "btn_delete_selected": "Delete selected",
         "btn_close": "Close",
         "badge_selected_for_soundcheck": "Selected for playback",

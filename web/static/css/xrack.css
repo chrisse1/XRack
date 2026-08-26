@@ -1,3 +1,31 @@
+/*
+   Die Farbe der Summe. Steht hier oben, weil sie an mehreren Stellen
+   gebraucht wird und dann nur an einer Stelle zu aendern ist.
+   Bernstein, weil es aus den grauen Kanalbeschriftungen heraussticht,
+   ohne wie ein Fehler auszusehen (das waere Rot).
+
+   Zwei Toene, und zwar aus einem handfesten Grund: Die Karten sind
+   weiss. Bootstraps Warnton (#ffc107) hat auf Weiss ein
+   Kontrastverhaeltnis von 1,6:1 - als Text schlicht nicht lesbar. Als
+   Flaeche (der Reglerbalken) ist er dagegen genau richtig, denn dort
+   zaehlt die Auffaelligkeit, nicht die Lesbarkeit.
+
+   Deshalb: --xrack-main-farbe fuer Text (5,2:1 auf Weiss),
+   --xrack-main-flaeche fuer alles Gefuellte.
+*/
+:root {
+    --xrack-main-farbe: #a15c07;
+    --xrack-main-flaeche: #ffc107;
+
+    /*
+       Die Trennlinie zur Summe. Sie war vorher hell auf hell
+       (rgba(255,255,255,.15) auf weisser Karte) und damit unsichtbar -
+       gedacht war sie fuer den dunklen Seitenhintergrund. Jetzt in der
+       Summenfarbe, blass genug, um nicht mit dem Text zu konkurrieren.
+    */
+    --xrack-main-linie: rgba(161, 92, 7, 0.35);
+}
+
 body {
 
     background: #1d2125;
@@ -205,14 +233,27 @@ body {
    Kanalzug verwechselt.
 */
 .fader-cell.is-main {
-    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    border-top: 1px solid var(--xrack-main-linie);
     margin-top: 0.4rem;
     padding-top: 0.4rem;
 }
 
+/*
+   Und farblich: Die Summe liegt ueber allem, ein versehentlicher
+   Griff dorthin ist der teuerste Fehlgriff der Karte. Die Trennlinie
+   allein sieht man im Eifer nicht - eine andere Farbe schon.
+*/
 .fader-cell.is-main .fader-name {
     font-weight: 600;
-    color: #dee2e6;
+    color: var(--xrack-main-farbe);
+}
+
+.fader-cell.is-main .fader-input {
+    accent-color: var(--xrack-main-flaeche);
+}
+
+.fader-cell.is-main .fader-db {
+    color: var(--xrack-main-farbe);
 }
 
 .fader-db,
@@ -339,7 +380,7 @@ body {
     */
     .fader-cell.is-main {
         border-top: 0;
-        border-left: 1px solid rgba(255, 255, 255, 0.15);
+        border-left: 1px solid var(--xrack-main-linie);
         margin-top: 0;
         padding-top: 0;
         padding-left: 0;
@@ -363,3 +404,56 @@ body {
    zwischen anderen Bedienelementen, ein aufgestellter Regler wuerde
    sie auseinanderziehen.
    ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------
+   Schloss am Schnellregler
+
+   Sitzt links vor dem Mute-Knopf und sieht genauso aus - beide sind
+   kleine Schaltflaechen in derselben Zeile.
+   ------------------------------------------------------------------ */
+
+.pair-lock {
+    flex: 0 0 auto;
+    padding: 0.05rem 0.4rem;
+    font-size: 0.7rem;
+    line-height: 1.4;
+}
+
+/*
+   Gesperrt: Der Regler bleibt sichtbar (man soll den eingestellten
+   Pegel ja ablesen koennen), tritt aber zurueck.
+*/
+.pair-fader.is-locked .pair-input,
+.pair-fader.is-locked .pair-db {
+    opacity: 0.55;
+}
+
+/* ------------------------------------------------------------------
+   Dateiangaben in den Karten
+
+   Beschriftung und Wert in zwei Spalten, damit alle Werte an
+   derselben Stelle beginnen. "max-content" heisst: so breit wie die
+   laengste Beschriftung - kein geratener fester Wert, der bei
+   laengeren Uebersetzungen umbricht.
+   ------------------------------------------------------------------ */
+
+.info-grid {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 0.15rem 0.75rem;
+    align-items: baseline;
+}
+
+.info-grid dt {
+    font-weight: 400;
+    color: #9aa4ad;
+}
+
+.info-grid dd {
+    margin: 0;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}

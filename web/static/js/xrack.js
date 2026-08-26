@@ -259,7 +259,17 @@ function updateRecordingList(recordings) {
     const list = document.getElementById("recording-list");
     list.innerHTML = "";
 
-    if (recordings.length === 0) {
+    //
+    // Nur Soundcheck-Aufnahmen: Diese Liste sitzt in der Soundcheck-
+    // Karte, und der Knopf darunter spielt genau das ab, was hier
+    // ausgewählt ist. Übungsmixe gehören dort nicht hin - sie sind
+    // über "Alle Dateien" erreichbar.
+    //
+    const soundchecks = recordings.filter(
+        (recording) => !isPracticeMix(kindFromFilename(recording))
+    );
+
+    if (soundchecks.length === 0) {
         list.innerHTML = `<div class="text-muted text-center py-3">${I18N.no_recordings}</div>`;
         return;
     }
@@ -267,7 +277,7 @@ function updateRecordingList(recordings) {
     const group = document.createElement("div");
     group.className = "list-group";
 
-    recordings.slice(0, 3).forEach((recording) => {
+    soundchecks.slice(0, 3).forEach((recording) => {
         const item = document.createElement("button");
         item.type = "button";
         item.className = "list-group-item list-group-item-action";
@@ -278,9 +288,21 @@ function updateRecordingList(recordings) {
 
         const badge = kindBadge(kindFromFilename(recording));
 
-        item.innerHTML = recording === selectedRecording
-            ? `<i class="bi bi-check-circle-fill me-2"></i>${recording} ${badge}`
-            : `${recording} ${badge}`;
+        //
+        // Name links, Kennzeichen rechts: Untereinander stehen die
+        // Kennzeichen dann in einer Spalte statt hinter
+        // unterschiedlich langen Dateinamen zu tanzen.
+        //
+        item.innerHTML = `
+            <span class="d-flex justify-content-between align-items-center gap-2">
+                <span class="text-break">
+                    ${recording === selectedRecording
+                        ? `<i class="bi bi-check-circle-fill me-2"></i>`
+                        : ``}${recording}
+                </span>
+                <span class="flex-shrink-0">${badge}</span>
+            </span>
+        `;
 
         item.onclick = async () => {
             selectedRecording = recording;
@@ -607,13 +629,30 @@ async function pollLevels() {
 // Die Fader sind bewusst gesperrt, bis man sie über das Schloss-Symbol
 // freigibt - damit beim Hantieren mit dem Gerät nichts verrutscht.
 //
-// Die Sperre dient zugleich als Verkehrsbremse: Nur im entsperrten
-// Zustand wird das Pult überhaupt abgefragt. Gesperrt (der Normalfall)
-// entsteht kein einziges UDP-Paket.
+// Die Sperre betrifft nur das Bedienen, nicht das Anzeigen: Abgefragt
+// wird im Sekundentakt, gesperrt wie entsperrt. Vorher war es anders
+// gedacht - die Sperre war zugleich eine Verkehrsbremse, im
+// Ruhezustand ging kein einziges Paket ins Netz. Nur zeigte die Karte
+// dann eben auch nichts von dem, was am Pult passierte, und wirkte
+// eingefroren. Wer neben dem Pult steht und einen Regler schiebt,
+// erwartet das auf dem Schirm zu sehen.
 //
+// Der Preis ist bekannt und in Kauf genommen: eine Abfrage je Sekunde,
+// solange die Seite offen ist.
+//
+const FADER_POLL_INTERVAL = 1000;
+
 let fadersUnlocked = false;
 let faderPollTimer = null;
 let faderChannels = [];
+
+//
+// Läuft gerade eine Abfrage? Antwortet das Pult langsam (oder gar
+// nicht - dann steht jede der bis zu 63 OSC-Anfragen in ihrer eigenen
+// Zeitüberschreitung), dauert eine Runde länger als eine Sekunde. Ohne
+// diese Bremse liefen die Abfragen übereinander und würden immer mehr.
+//
+let faderRequestPending = false;
 
 //
 // Kanal, an dem gerade gezogen wird - der wird vom Auffrischen
@@ -696,14 +735,12 @@ function toggleFaderLock() {
     const hint = document.getElementById("faders-hint");
     if (hint) hint.classList.toggle("d-none", fadersUnlocked);
 
-    if (fadersUnlocked) {
-        loadFaders();
-        if (faderPollTimer) clearInterval(faderPollTimer);
-        faderPollTimer = setInterval(loadFaders, 2000);
-    } else if (faderPollTimer) {
-        clearInterval(faderPollTimer);
-        faderPollTimer = null;
-    }
+    //
+    // Beim Entsperren einmal sofort nachsehen, damit man nicht bis zur
+    // nächsten Runde auf aktuelle Werte wartet. Der Takt selbst läuft
+    // durchgehend (siehe oben) und wird hier nicht angefasst.
+    //
+    if (fadersUnlocked) loadFaders();
 
     resetFaderAutolock();
 }
@@ -752,9 +789,29 @@ async function sendToConsole(url, payload, was) {
     }
 }
 
+function neuerPairZustand() {
+    return {
+        start: null,
+        dragging: false,
+        lastSent: 0,
+        lastPoll: 0,
+        available: false,
+
+        //
+        // "aktiv" heisst: Die Quelle laeuft gerade - Musik spielt bzw.
+        // Bluetooth ist eingeschaltet. Ist sie still, bleibt der
+        // Regler gesperrt: Ihn dann zu verstellen wuerde unbemerkt
+        // den Pegel fuer das naechste Mal veraendern.
+        //
+        aktiv: false,
+        unlocked: false,
+        autolockTimer: null,
+    };
+}
+
 const pairFaders = {
-    music: { start: null, dragging: false, lastSent: 0, lastPoll: 0, available: false },
-    bluetooth: { start: null, dragging: false, lastSent: 0, lastPoll: 0, available: false },
+    music: neuerPairZustand(),
+    bluetooth: neuerPairZustand(),
 };
 
 //
@@ -769,16 +826,114 @@ const PAIR_POLL_IDLE = 15000;
 function pairElements(prefix) {
     return {
         box: document.getElementById(`${prefix}-pair`),
+        lock: document.getElementById(`${prefix}-pair-lock`),
         input: document.getElementById(`${prefix}-pair-input`),
         mute: document.getElementById(`${prefix}-pair-mute`),
         readout: document.getElementById(`${prefix}-pair-db`),
     };
 }
 
+// ------------------------------------------------------------
+// Sperre der Schnellregler
+//
+// Dieselbe Idee wie bei den Kanalzuegen, nur mit einer zusaetzlichen
+// Bedingung: Entsperren laesst sich der Regler nur, solange die
+// Quelle laeuft. Steht sie still, gibt es nichts zu regeln - und ein
+// Regler, der dann trotzdem etwas verstellt, faellt erst beim
+// naechsten Abspielen auf.
+// ------------------------------------------------------------
+
+//
+// Setzt die Bedienbarkeit aus dem Zustand: erreichbar + Quelle laeuft
+// + entsperrt. Wird nach jeder Aenderung an einem dieser drei Dinge
+// aufgerufen, damit es nur eine Stelle gibt, die das entscheidet.
+//
+function applyPairLock(prefix) {
+    const state = pairFaders[prefix];
+    const { box, lock, input, mute } = pairElements(prefix);
+
+    if (!box || !lock || !input || !mute) return;
+
+    const bedienbar = state.available && state.aktiv && state.unlocked;
+
+    input.disabled = !bedienbar;
+    mute.disabled = !bedienbar;
+
+    //
+    // Das Schloss selbst ist nur benutzbar, wenn es etwas freizugeben
+    // gibt.
+    //
+    lock.disabled = !(state.available && state.aktiv);
+
+    lock.innerHTML = state.unlocked
+        ? `<i class="bi bi-unlock-fill"></i>`
+        : `<i class="bi bi-lock-fill"></i>`;
+
+    lock.title = state.unlocked ? I18N.faders_lock : I18N.faders_unlock;
+    lock.classList.toggle("btn-outline-secondary", !state.unlocked);
+    lock.classList.toggle("btn-warning", state.unlocked);
+
+    box.classList.toggle("is-locked", !state.unlocked);
+}
+
+function setPairUnlocked(prefix, offen) {
+    const state = pairFaders[prefix];
+
+    if (state.unlocked === offen) return;
+
+    state.unlocked = offen;
+
+    applyPairLock(prefix);
+    resetPairAutolock(prefix);
+}
+
+function togglePairLock(prefix) {
+    const state = pairFaders[prefix];
+
+    //
+    // Bei stillstehender Quelle passiert nichts - der Knopf ist dann
+    // ohnehin gesperrt, aber ein Tastendruck kaeme trotzdem hier an.
+    //
+    if (!state.available || !state.aktiv) return;
+
+    setPairUnlocked(prefix, !state.unlocked);
+}
+
+//
+// Automatische Sperre - dieselbe Frist wie bei den Kanalzuegen, aus
+// dem Einstellungen-Menue. Sie laeuft auf Ruhe seit der letzten
+// Beruehrung, nicht ab dem Entsperren.
+//
+function resetPairAutolock(prefix) {
+    const state = pairFaders[prefix];
+
+    if (state.autolockTimer) {
+        clearTimeout(state.autolockTimer);
+        state.autolockTimer = null;
+    }
+
+    if (!fadersAutolock.enabled || !state.unlocked) return;
+
+    state.autolockTimer = setTimeout(() => {
+
+        //
+        // Nicht mitten in einer Zieh-Geste zuschnappen.
+        //
+        if (state.dragging) {
+            resetPairAutolock(prefix);
+            return;
+        }
+
+        setPairUnlocked(prefix, false);
+
+    }, fadersAutolock.seconds * 1000);
+}
+
 //
 // Wird aus den Statusaktualisierungen beider Karten aufgerufen.
 // "start" ist der erste Kanal des gewaehlten Paars, "active" sagt, ob
-// gerade gespielt bzw. verbunden ist.
+// die Quelle gerade laeuft (Musikwiedergabe bzw. eingeschaltetes
+// Bluetooth).
 //
 function refreshPairFader(prefix, start, active) {
     const state = pairFaders[prefix];
@@ -798,6 +953,20 @@ function refreshPairFader(prefix, start, active) {
     //
     const changed = state.start !== start;
     state.start = start;
+
+    //
+    // Quelle aus? Dann zusperren. Wer die Musik anhält, soll den
+    // Regler nicht offen zurücklassen - beim nächsten Start wäre er
+    // sonst weiterhin frei.
+    //
+    const warAktiv = state.aktiv;
+    state.aktiv = Boolean(active);
+
+    if (!state.aktiv && state.unlocked) {
+        setPairUnlocked(prefix, false);
+    } else if (state.aktiv !== warAktiv) {
+        applyPairLock(prefix);
+    }
 
     if (state.dragging) return;
 
@@ -824,6 +993,7 @@ async function loadPairFader(prefix) {
     } catch (error) {
         box.classList.add("d-none");
         state.available = false;
+        applyPairLock(prefix);
         return;
     }
 
@@ -833,6 +1003,8 @@ async function loadPairFader(prefix) {
     state.linkedByXrack = Boolean(data.linked_by_xrack);
 
     box.classList.toggle("d-none", !data.available);
+
+    applyPairLock(prefix);
 
     if (!data.available) return;
 
@@ -848,14 +1020,19 @@ async function loadPairFader(prefix) {
 }
 
 ["music", "bluetooth"].forEach((prefix) => {
-    const { input, mute } = pairElements(prefix);
+    const { input, mute, lock } = pairElements(prefix);
 
     if (!input || !mute) return;
 
     const state = pairFaders[prefix];
 
+    if (lock) {
+        lock.addEventListener("click", () => togglePairLock(prefix));
+    }
+
     input.addEventListener("pointerdown", () => {
         state.dragging = true;
+        resetPairAutolock(prefix);
     });
 
     input.addEventListener("input", async () => {
@@ -875,7 +1052,15 @@ async function loadPairFader(prefix) {
         await sendPairFader(prefix, db);
     });
 
-    mute.addEventListener("click", () => togglePairMute(prefix));
+    mute.addEventListener("click", () => {
+        resetPairAutolock(prefix);
+        togglePairMute(prefix);
+    });
+
+    //
+    // Ausgangszustand herstellen: gesperrt, Knöpfe aus.
+    //
+    applyPairLock(prefix);
 });
 
 //
@@ -1037,6 +1222,11 @@ function recheckConsoleAfterSwitch() {
 }
 
 async function loadFaders() {
+
+    if (faderRequestPending) return;
+
+    faderRequestPending = true;
+
     let data;
 
     try {
@@ -1045,6 +1235,8 @@ async function loadFaders() {
     } catch (error) {
         console.error("Fehler beim Abrufen der Fader:", error);
         return;
+    } finally {
+        faderRequestPending = false;
     }
 
     const unavailable = document.getElementById("faders-unavailable");
@@ -1241,10 +1433,13 @@ document.addEventListener("pointerup", finishFaderDrag);
 document.addEventListener("pointercancel", finishFaderDrag);
 
 //
-// Einmal beim Laden prüfen, ob überhaupt ein Steuerweg besteht - dann
-// steht dort gleich der passende Hinweis statt einer leeren Karte.
+// Sofort beim Laden abfragen - dann steht gleich der passende Hinweis
+// da statt einer leeren Karte - und danach im Sekundentakt weiter,
+// unabhängig von der Sperre: Was am Pult passiert, soll die Karte auch
+// zeigen, wenn hier gerade niemand etwas bedienen darf.
 //
 loadFaders();
+faderPollTimer = setInterval(loadFaders, FADER_POLL_INTERVAL);
 
 // ============================================================
 // 8. RECORDING INFO LOADING
@@ -1363,12 +1558,46 @@ async function loadRecordings()
         );
     }
 }
+//
+// Getrennt nach Art, nicht gemischt: Soundcheck-Aufnahmen und
+// Übungsmixe entstehen bei verschiedenen Gelegenheiten und werden
+// auch verschieden gebraucht. Durcheinander muss man jede Zeile
+// einzeln am Kennzeichen prüfen.
+//
+// Leere Abschnitte werden weggelassen - eine Überschrift ohne Inhalt
+// sieht aus, als fehle etwas.
+//
 function renderRecordings(recordings) {
     const container = document.getElementById("recordingsList");
     container.innerHTML = "";
-    for (const recording of recordings) {
-        container.appendChild(createRecordingCard(recording));
-    }
+
+    const abschnitte = [
+        {
+            titel: I18N.section_soundchecks,
+            dateien: recordings.filter((r) => !isPracticeMix(r.kind)),
+        },
+        {
+            titel: I18N.section_practice_mixes,
+            dateien: recordings.filter((r) => isPracticeMix(r.kind)),
+        },
+    ];
+
+    abschnitte.forEach((abschnitt, index) => {
+
+        if (abschnitt.dateien.length === 0) return;
+
+        const ueberschrift = document.createElement("h6");
+        ueberschrift.className =
+            "text-body-secondary" + (index === 0 ? " mb-2" : " mt-4 mb-2");
+        ueberschrift.textContent =
+            `${abschnitt.titel} (${abschnitt.dateien.length})`;
+
+        container.appendChild(ueberschrift);
+
+        for (const recording of abschnitt.dateien) {
+            container.appendChild(createRecordingCard(recording));
+        }
+    });
 }
 
 function createRecordingCard(recording) {
@@ -1902,10 +2131,14 @@ function updateMusicPlayer(data) {
 
     const select = document.getElementById("music-channels");
 
+    //
+    // Pausiert zählt als "läuft": Wer kurz anhält, um die Lautstärke
+    // zu setzen, soll dabei nicht ausgesperrt werden.
+    //
     refreshPairFader(
         "music",
         select ? Number(select.value) : null,
-        data.music_playing
+        data.music_playing || data.music_paused
     );
 }
 
@@ -3492,10 +3725,14 @@ function updateBluetooth(data) {
 
     const select = document.getElementById("bluetooth-channels");
 
+    //
+    // Eingeschaltet reicht - man will den Pegel setzen können, bevor
+    // das Handy zu spielen anfängt, nicht erst mitten im Stück.
+    //
     refreshPairFader(
         "bluetooth",
         select ? Number(select.value) : null,
-        data.bluetooth_streaming
+        bluetoothSlowStatus.powered || data.bluetooth_streaming
     );
 }
 

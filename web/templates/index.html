@@ -132,28 +132,32 @@
 
             <hr>
 
-            <div class="d-flex flex-column flex-xxl-row" style="gap: 0.25rem 1rem;">
-                <div class="d-flex" style="gap: 0.5rem; flex: 1 1 0; min-width: 0;">
-                    <span class="flex-shrink-0">{{ t.label_file }}</span>
-                    <strong id="recorder-file" class="text-break" style="min-width: 0;">-</strong>
-                    <span id="recorder-kind" class="flex-shrink-0"></span>
-                </div>
-                <div class="d-flex justify-content-xxl-end" style="gap: 0.5rem; flex: 1 1 0; min-width: 0;">
-                    <span class="flex-shrink-0">{{ t.label_format }}</span>
-                    <strong id="recorder-format" class="text-break text-xxl-end" style="min-width: 0;">Wave64</strong>
-                </div>
-            </div>
+            {#
+                Beschriftung links, Wert rechts - und zwar alle Werte
+                an derselben Stelle. Das Raster macht genau das: Die
+                erste Spalte ist so breit wie die laengste
+                Beschriftung, die zweite nimmt den Rest. Nebeneinander
+                gesetzt (wie vorher) begann jeder Wert woanders, was
+                beim Ueberfliegen jedes Mal ein kurzes Suchen war.
+            #}
+            <dl class="info-grid mb-0">
 
-            <div class="d-flex flex-column flex-xxl-row mt-1" style="gap: 0.25rem 1rem;">
-                <div class="d-flex" style="gap: 0.5rem; flex: 1 1 0; min-width: 0;">
-                    <span class="flex-shrink-0">{{ t.label_duration }}</span>
-                    <strong id="recorder-duration" class="text-break" style="min-width: 0;">00:00:00</strong>
-                </div>
-                <div class="d-flex justify-content-xxl-end" style="gap: 0.5rem; flex: 1 1 0; min-width: 0;">
-                    <span class="flex-shrink-0">{{ t.label_size }}</span>
-                    <strong id="recorder-size" class="text-break text-xxl-end" style="min-width: 0;">0 MB</strong>
-                </div>
-            </div>
+                <dt>{{ t.label_file }}</dt>
+                <dd>
+                    <strong id="recorder-file" class="text-break">-</strong>
+                    <span id="recorder-kind"></span>
+                </dd>
+
+                <dt>{{ t.label_format }}</dt>
+                <dd><strong id="recorder-format" class="text-break">Wave64</strong></dd>
+
+                <dt>{{ t.label_duration }}</dt>
+                <dd><strong id="recorder-duration">00:00:00</strong></dd>
+
+                <dt>{{ t.label_size }}</dt>
+                <dd><strong id="recorder-size">0 MB</strong></dd>
+
+            </dl>
 
             <hr>
 
@@ -223,10 +227,6 @@
               </button>
             </div>
 
-            {% with prefix = "music" %}
-              {% include "components/pair_fader.html" %}
-            {% endwith %}
-
             <hr>
 
             <div class="d-flex justify-content-around gap-2">
@@ -261,18 +261,27 @@
               </button>
             </div>
 
+            {#
+                Der Schnellregler sitzt unter den Bedienknoepfen: Was
+                man zuerst braucht (starten, pausieren, weiter), steht
+                oben; die Lautstaerke regelt man danach.
+            #}
+            {% with prefix = "music" %}
+              {% include "components/pair_fader.html" %}
+            {% endwith %}
+
             <hr>
 
-            <div class="d-flex flex-column flex-xxl-row" style="gap: 0.25rem 1rem;">
-                <div class="d-flex" style="gap: 0.5rem; flex: 1 1 0; min-width: 0;">
-                    <span class="flex-shrink-0">{{ t.label_title }}</span>
-                    <strong id="player-title" class="text-break" style="min-width: 0;">-</strong>
-                </div>
-                <div class="d-flex justify-content-xxl-end" style="gap: 0.5rem; flex: 1 1 0; min-width: 0;">
-                    <span class="flex-shrink-0">{{ t.label_mode }}</span>
-                    <strong id="player-mode" class="text-break text-xxl-end" style="min-width: 0;">-</strong>
-                </div>
-            </div>
+            {# Gleiches Raster wie in der Soundcheck-Karte. #}
+            <dl class="info-grid mb-0">
+
+                <dt>{{ t.label_title }}</dt>
+                <dd><strong id="player-title" class="text-break">-</strong></dd>
+
+                <dt>{{ t.label_mode }}</dt>
+                <dd><strong id="player-mode" class="text-break">-</strong></dd>
+
+            </dl>
 
             <div class="mt-2">
                 <input
