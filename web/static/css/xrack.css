@@ -150,7 +150,8 @@ body {
     gap: 0.25rem;
 }
 
-.fader-cell {
+.fader-cell,
+.pair-fader {
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -173,7 +174,8 @@ body {
     margin-right: 0.35rem;
 }
 
-.fader-input {
+.fader-input,
+.pair-input {
     flex: 1 1 auto;
     min-width: 0;
     margin: 0;
@@ -190,7 +192,8 @@ body {
     touch-action: none;
 }
 
-.fader-mute {
+.fader-mute,
+.pair-mute {
     flex: 0 0 auto;
     padding: 0.05rem 0.4rem;
     font-size: 0.7rem;
@@ -212,7 +215,8 @@ body {
     color: #dee2e6;
 }
 
-.fader-db {
+.fader-db,
+.pair-db {
     flex: 0 0 4rem;
     text-align: right;
     font-size: 0.75rem;
@@ -347,41 +351,15 @@ body {
 /* ------------------------------------------------------------------
    Schnellregler in der Musikspieler- und Bluetooth-Karte
 
-   Derselbe Aufbau wie eine waagerechte Zeile der Kanalzug-Karte, nur
-   ohne Beschriftung - welches Paar gemeint ist, steht direkt darueber
-   in der Kanalauswahl.
+   Die Zeile ist aufgebaut wie eine waagerechte Zeile der
+   Kanalzug-Karte und teilt sich deshalb deren Regeln oben
+   (.fader-cell/.pair-fader und so weiter) - nur ohne Beschriftung,
+   denn welches Paar gemeint ist, steht direkt darueber in der
+   Kanalauswahl.
+
+   Was sie ausdruecklich NICHT teilt, ist der Senkrecht-Block ab
+   992px: Die Kanalzuege stellen sich auf breiten Displays auf, der
+   Schnellregler bleibt immer waagerecht. Er sitzt in einer Karte
+   zwischen anderen Bedienelementen, ein aufgestellter Regler wuerde
+   sie auseinanderziehen.
    ------------------------------------------------------------------ */
-
-.pair-fader {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 0.5rem;
-    min-width: 0;
-}
-
-.pair-input {
-    flex: 1 1 auto;
-    min-width: 0;
-    margin: 0;
-
-    /*
-       Wie bei den Kanalzuegen: Ohne das muss der Browser bei jeder
-       Beruehrung raten, ob gezogen oder gescrollt werden soll.
-    */
-    touch-action: none;
-}
-
-.pair-mute {
-    flex: 0 0 auto;
-    padding: 0.05rem 0.4rem;
-    font-size: 0.7rem;
-    line-height: 1.4;
-}
-
-.pair-db {
-    flex: 0 0 4rem;
-    text-align: right;
-    font-size: 0.75rem;
-    font-variant-numeric: tabular-nums;
-}

@@ -790,6 +790,55 @@ try:
 
     print("OK: Beim natuerlichen Stereopaar wird gar nicht erst gekoppelt")
 
+    #
+    # Feinheit, die beim Zusammenlegen der Lesewege leicht verlorengeht:
+    # Antwortet der Fader nicht, liefert get_pair None - die Karte
+    # blendet sich dann aus. Die ganze Kanalliste dagegen gibt bei
+    # einem stummen Kanal nicht auf, sondern zeigt ihn als "zu".
+    # "Kein Wert" und "-unendlich" sind zwei verschiedene Dinge.
+    #
+    class StummerFader:
+        """Antwortet auf alles - nur nicht auf Faderabfragen."""
+
+        def __init__(self, echt):
+            self.echt = echt
+
+        def __enter__(self):
+            self.vorher = self.echt._request
+
+            def gefiltert(host, port, message):
+                if decode(message)[0].endswith("/mix/fader"):
+                    return None
+                return self.vorher(host, port, message)
+
+            self.echt._request = gefiltert
+            return self
+
+        def __exit__(self, *_):
+            self.echt._request = self.vorher
+
+    with StummerFader(control):
+
+        assert control.get_pair("127.0.0.1", 18, 9) is None, (
+            "Ohne Faderantwort muss get_pair None liefern."
+        )
+
+        kanaele = control.get_channels("127.0.0.1", 18)
+
+        assert kanaele is not None, (
+            "Die Kanalliste darf wegen eines stummen Faders nicht aufgeben."
+        )
+        #
+        # MIN_DB, nicht None: Die Kanalliste setzt einen unbeantworteten
+        # Fader auf den untersten Wert. Die Oberflaeche zeigt den
+        # ohnehin als "-unendlich" an.
+        #
+        assert kanaele[0]["db"] == MIN_DB, (
+            f"Ohne Antwort gehoert der Kanal ganz nach unten: {kanaele[0]}"
+        )
+
+    print("OK: Ohne Faderantwort liefert das Paar None, die Kanalliste -unendlich")
+
     # ----------------------------------------------------------------
     # 6. Familienerkennung
     # ----------------------------------------------------------------

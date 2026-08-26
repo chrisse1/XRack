@@ -717,6 +717,41 @@ function toggleFaderLock() {
 // das Namenspraefix ("music" oder "bluetooth").
 // ------------------------------------------------------------
 
+//
+// Zwei Bausteine, die sich Kanalzuege und Schnellregler teilen. Sie
+// standen vorher in beiden Wegen getrennt - ein geaenderter
+// Knopf-Stil oder eine vergessene Fehlerbehandlung waere nur an einer
+// der beiden Stellen angekommen.
+//
+
+//
+// Stumm wird als gefuellter roter Knopf gezeigt, sonst nur als Umriss
+// - auf einen Blick erkennbar, welche Kanaele liegen.
+//
+function renderMuteButton(button, muted) {
+    if (!button) return;
+
+    button.classList.toggle("btn-danger", muted);
+    button.classList.toggle("btn-outline-secondary", !muted);
+}
+
+//
+// Ein Befehl ans Pult. Faellt er aus, ist das kein Grund, die
+// Oberflaeche anzuhalten: Beim naechsten Auffrischen steht ohnehin
+// wieder der echte Wert vom Pult da.
+//
+async function sendToConsole(url, payload, was) {
+    try {
+        await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+    } catch (error) {
+        console.error(`${was} fehlgeschlagen:`, error);
+    }
+}
+
 const pairFaders = {
     music: { start: null, dragging: false, lastSent: 0, lastPoll: 0, available: false },
     bluetooth: { start: null, dragging: false, lastSent: 0, lastPoll: 0, available: false },
@@ -809,8 +844,7 @@ async function loadPairFader(prefix) {
         readout.textContent = formatDb(data.db);
     }
 
-    mute.classList.toggle("btn-danger", data.muted);
-    mute.classList.toggle("btn-outline-secondary", !data.muted);
+    renderMuteButton(mute, data.muted);
 }
 
 ["music", "bluetooth"].forEach((prefix) => {
@@ -871,18 +905,11 @@ async function sendPairFader(prefix, db) {
 
     if (!state.start) return;
 
-    try {
-        await fetch("/api/console/pair/fader", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                start: state.start,
-                db: db <= FADER_MIN_DB ? null : db,
-            }),
-        });
-    } catch (error) {
-        console.error("Pegel konnte nicht gesetzt werden:", error);
-    }
+    await sendToConsole(
+        "/api/console/pair/fader",
+        { start: state.start, db: db <= FADER_MIN_DB ? null : db },
+        "Pegel"
+    );
 }
 
 async function togglePairMute(prefix) {
@@ -893,18 +920,13 @@ async function togglePairMute(prefix) {
 
     const muted = !mute.classList.contains("btn-danger");
 
-    mute.classList.toggle("btn-danger", muted);
-    mute.classList.toggle("btn-outline-secondary", !muted);
+    renderMuteButton(mute, muted);
 
-    try {
-        await fetch("/api/console/pair/mute", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ start: state.start, muted }),
-        });
-    } catch (error) {
-        console.error("Stummschaltung fehlgeschlagen:", error);
-    }
+    await sendToConsole(
+        "/api/console/pair/mute",
+        { start: state.start, muted },
+        "Stummschaltung"
+    );
 }
 
 //
@@ -1088,12 +1110,7 @@ function renderFaders(channels) {
         input.value = db;
         readout.textContent = formatDb(channel.db);
 
-        //
-        // Stumm wird als gefüllter roter Knopf gezeigt, sonst nur als
-        // Umriss - auf einen Blick erkennbar, welche Kanäle liegen.
-        //
-        mute.classList.toggle("btn-danger", channel.muted);
-        mute.classList.toggle("btn-outline-secondary", !channel.muted);
+        renderMuteButton(mute, channel.muted);
     });
 }
 
@@ -1113,18 +1130,13 @@ async function toggleMute(channel) {
     // Sofort umschalten, damit die Rückmeldung nicht erst beim
     // nächsten Auffrischen kommt.
     //
-    button.classList.toggle("btn-danger", muted);
-    button.classList.toggle("btn-outline-secondary", !muted);
+    renderMuteButton(button, muted);
 
-    try {
-        await fetch("/api/console/mute", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ channel, muted }),
-        });
-    } catch (error) {
-        console.error("Stummschaltung fehlgeschlagen:", error);
-    }
+    await sendToConsole(
+        "/api/console/mute",
+        { channel, muted },
+        "Stummschaltung"
+    );
 }
 
 async function onFaderInput(event) {
@@ -1152,18 +1164,11 @@ async function onFaderInput(event) {
 }
 
 async function sendFader(channel, db) {
-    try {
-        await fetch("/api/console/fader", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                channel,
-                db: db <= FADER_MIN_DB ? null : db,
-            }),
-        });
-    } catch (error) {
-        console.error("Fader konnte nicht gesetzt werden:", error);
-    }
+    await sendToConsole(
+        "/api/console/fader",
+        { channel, db: db <= FADER_MIN_DB ? null : db },
+        "Fader"
+    );
 }
 
 //
@@ -1856,27 +1861,48 @@ function updateMusicPlayer(data) {
     );
 }
 
+//
+// Die Kanalauswahl sieht in beiden Karten gleich aus: Stereopaare ab
+// dem ersten Kanal, immer ungerade beginnend (1+2, 3+4, ...). Genau
+// deshalb laesst sich jedes waehlbare Paar am Pult auch koppeln - der
+// Fall "2+3" kann gar nicht erst entstehen.
+//
+// Neu aufgebaut wird nur, wenn sich die Kanalzahl geaendert hat. Sonst
+// wuerde die Auswahl bei jeder Statusabfrage zurueckspringen.
+//
+function buildChannelOptions(select, channels, preferred) {
+    if (select.dataset.built === String(channels)) return false;
+
+    select.innerHTML = "";
+
+    for (let start = 1; start + 1 <= channels; start += 2) {
+        const option = document.createElement("option");
+        option.value = start;
+        option.textContent = I18N.channel_option
+            .replace("{a}", start)
+            .replace("{b}", start + 1);
+        select.appendChild(option);
+    }
+
+    select.dataset.built = String(channels);
+    select.value = preferred;
+
+    return true;
+}
+
 function updateMusicChannels(data) {
     const select = document.getElementById("music-channels");
     if (!select) return;
 
-    if (select.dataset.built !== String(data.audio_channels)) {
-        select.innerHTML = "";
-
-        for (let start = 1; start + 1 <= data.audio_channels; start += 2) {
-            const option = document.createElement("option");
-            option.value = start;
-            option.textContent = I18N.channel_option.replace("{a}", start).replace("{b}", start + 1);
-            select.appendChild(option);
-        }
-
-        select.dataset.built = String(data.audio_channels);
-
-        // Zuletzt genutzten Kanal vorbelegen (nur beim (Neu-)Aufbau
-        // der Optionen, nicht bei jeder Statusabfrage - sonst
-        // würde eine manuelle Auswahl ständig überschrieben).
-        select.value = data.music_preferred_start_channel;
-    }
+    //
+    // Vorbelegt wird mit dem zuletzt genutzten Kanal - nur beim
+    // Neuaufbau, damit eine Auswahl von Hand nicht ueberschrieben wird.
+    //
+    buildChannelOptions(
+        select,
+        data.audio_channels,
+        data.music_preferred_start_channel
+    );
 
     if (data.music_playing) {
         select.value = data.music_start_channel + 1;
@@ -3412,19 +3438,11 @@ function updateBluetoothChannels(data) {
     const select = document.getElementById("bluetooth-channels");
     if (!select) return;
 
-    if (select.dataset.built !== String(data.audio_channels)) {
-        select.innerHTML = "";
-
-        for (let start = 1; start + 1 <= data.audio_channels; start += 2) {
-            const option = document.createElement("option");
-            option.value = start;
-            option.textContent = I18N.channel_option.replace("{a}", start).replace("{b}", start + 1);
-            select.appendChild(option);
-        }
-
-        select.dataset.built = String(data.audio_channels);
-        select.value = bluetoothSlowStatus.preferred_start_channel || 1;
-    }
+    buildChannelOptions(
+        select,
+        data.audio_channels,
+        bluetoothSlowStatus.preferred_start_channel || 1
+    );
 
     select.onchange = () => {
         const vorher = pairFaders.bluetooth.start;

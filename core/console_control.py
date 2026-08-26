@@ -717,6 +717,78 @@ class ConsoleControl:
 
         return pairs
 
+    #
+    # Lesen und Schreiben laufen fuer alle Regler ueber dieselben vier
+    # Bausteine. Vorher stand dieselbe Abfrage-und-Auspacken-Folge an
+    # sechs Stellen; ein Tippfehler in einer davon waere nur an genau
+    # einem Regler aufgefallen.
+    #
+
+    def _read(self, host: str, address: str, endung: str, typ):
+        """
+        Fragt einen Wert ab und packt ihn aus.
+
+        None heisst "keine oder keine brauchbare Antwort" - der
+        Aufrufer entscheidet, ob das ein Standardwert oder ein
+        Abbruchgrund ist. Der Unterschied zaehlt: Beim Auslesen der
+        ganzen Kanalliste ist ein stummer Kanal kein Grund
+        aufzugeben, beim einzelnen Stereopaar dagegen schon.
+
+        Eine Anfrage ohne Argumente liefert bei der X-Serie den
+        aktuellen Wert zurueck.
+        """
+
+        answer = self._request(host, self._port, encode(f"{address}{endung}"))
+
+        if answer is None:
+            return None
+
+        _, arguments = decode(answer)
+
+        if arguments and isinstance(arguments[0], typ):
+            return arguments[0]
+
+        return None
+
+    def _read_db(self, host: str, address: str) -> float:
+        """Faderstellung in dB; MIN_DB, wenn nichts zurueckkommt."""
+
+        wert = self._read(host, address, "/mix/fader", float)
+
+        return MIN_DB if wert is None else fader_to_db(wert)
+
+    def _read_muted(self, host: str, address: str) -> bool:
+        """
+        Stummschaltung.
+
+        Achtung, umgekehrte Logik: "mix/on" = 1 heisst, der Kanal ist
+        AN. Stumm ist also 0, nicht 1.
+        """
+
+        wert = self._read(host, address, "/mix/on", int)
+
+        return wert == 0 if wert is not None else False
+
+    def _read_name(self, host: str, address: str) -> str:
+        """Kanalbeschriftung vom Pult; leer, wenn unbenannt."""
+
+        wert = self._read(host, address, "/config/name", str)
+
+        return wert.strip() if wert else ""
+
+    def _write(self, host: str, addresses: list[str], endung: str, wert) -> bool:
+        """
+        Schreibt denselben Wert an alle angegebenen Adressen.
+
+        Mehrere sind es nur bei einem ungekoppelten Stereopaar - dort
+        muessen beide Kanaele einzeln bedient werden.
+        """
+
+        return all(
+            self._send(host, self._port, encode(f"{address}{endung}", wert))
+            for address in addresses
+        )
+
     def get_channels(self, host: str, channels: int) -> list[dict] | None:
         """
         Liest Namen und Faderstellung aller Kanäle.
@@ -743,57 +815,19 @@ class ConsoleControl:
         ):
 
             address = spec.address
-            label = spec.label
-
-            name = ""
-            db = MIN_DB
-            muted = False
 
             #
-            # Eine Anfrage ohne Argumente liefert den aktuellen Wert
-            # zurück - so ist es bei der X-Serie vorgesehen.
+            # Ein stummer Kanal ist hier kein Abbruchgrund - die
+            # uebrigen sollen trotzdem erscheinen.
             #
-            answer = self._request(
-                host, self._port, encode(f"{address}/mix/fader")
-            )
-
-            if answer is not None:
-
-                _, arguments = decode(answer)
-
-                if arguments and isinstance(arguments[0], float):
-                    db = fader_to_db(arguments[0])
-
-            answer = self._request(
-                host, self._port, encode(f"{address}/config/name")
-            )
-
-            if answer is not None:
-
-                _, arguments = decode(answer)
-
-                if arguments and isinstance(arguments[0], str):
-                    name = arguments[0].strip()
-
-            #
-            # Achtung, umgekehrte Logik: "mix/on" = 1 heißt, der Kanal
-            # ist AN. Stumm ist also 0, nicht 1.
-            #
-            answer = self._request(
-                host, self._port, encode(f"{address}/mix/on")
-            )
-
-            if answer is not None:
-
-                _, arguments = decode(answer)
-
-                if arguments and isinstance(arguments[0], int):
-                    muted = arguments[0] == 0
+            db = self._read_db(host, address)
+            name = self._read_name(host, address)
+            muted = self._read_muted(host, address)
 
             result.append(
                 {
                     "channel": index,
-                    "label": label,
+                    "label": spec.label,
                     "name": name,
                     "is_main": spec.is_main,
                     "muted": muted,
@@ -884,29 +918,19 @@ class ConsoleControl:
 
         family = self._family
 
-        db = MIN_DB
-        muted = False
+        #
+        # Anders als beim Auslesen der ganzen Liste ist hier eine
+        # ausbleibende Antwort ein Abbruchgrund: Die Karte zeigt genau
+        # einen Regler, und ein Regler ohne Wert waere schlimmer als
+        # gar keiner. Deshalb hier der rohe Wert statt _read_db().
+        #
+        roh = self._read(host, targets[0], "/mix/fader", float)
 
-        answer = self._request(
-            host, self._port, encode(f"{targets[0]}/mix/fader")
-        )
-
-        if answer is None:
+        if roh is None:
             return None
 
-        _, arguments = decode(answer)
-
-        if arguments and isinstance(arguments[0], float):
-            db = fader_to_db(arguments[0])
-
-        answer = self._request(host, self._port, encode(f"{targets[0]}/mix/on"))
-
-        if answer is not None:
-
-            _, arguments = decode(answer)
-
-            if arguments and isinstance(arguments[0], int):
-                muted = arguments[0] == 0
+        db = fader_to_db(roh)
+        muted = self._read_muted(host, targets[0])
 
         return {
             "db": None if math.isinf(db) else round(db, 1),
@@ -929,12 +953,7 @@ class ConsoleControl:
         if not targets:
             return False
 
-        value = db_to_fader(db)
-
-        return all(
-            self._send(host, self._port, encode(f"{target}/mix/fader", value))
-            for target in targets
-        )
+        return self._write(host, targets, "/mix/fader", db_to_fader(db))
 
     def set_pair_mute(
         self, host: str, channels: int, start: int, muted: bool
@@ -946,12 +965,7 @@ class ConsoleControl:
         if not targets:
             return False
 
-        value = 0 if muted else 1
-
-        return all(
-            self._send(host, self._port, encode(f"{target}/mix/on", value))
-            for target in targets
-        )
+        return self._write(host, targets, "/mix/on", 0 if muted else 1)
 
     def set_link(
         self, host: str, channels: int, start: int, linked: bool
@@ -1004,12 +1018,11 @@ class ConsoleControl:
         if not 1 <= channel <= len(addresses):
             return False
 
-        address = addresses[channel - 1].address
-
-        return self._send(
+        return self._write(
             host,
-            self._port,
-            encode(f"{address}/mix/fader", db_to_fader(db)),
+            [addresses[channel - 1].address],
+            "/mix/fader",
+            db_to_fader(db),
         )
 
     def set_mute(
@@ -1032,10 +1045,9 @@ class ConsoleControl:
         if not 1 <= channel <= len(addresses):
             return False
 
-        address = addresses[channel - 1].address
-
-        return self._send(
+        return self._write(
             host,
-            self._port,
-            encode(f"{address}/mix/on", 0 if muted else 1),
+            [addresses[channel - 1].address],
+            "/mix/on",
+            0 if muted else 1,
         )
