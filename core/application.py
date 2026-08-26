@@ -33,6 +33,18 @@ import re
 import threading
 import time
 
+
+#
+# Grenzen für die automatische Sperre der Kanalzüge. Unter fünf
+# Sekunden wäre sie unbenutzbar - der Regler wäre gesperrt, bevor man
+# ihn losgelassen hat. Nach oben eine Stunde; danach ist es praktisch
+# "aus", und dafür gibt es den Schalter.
+#
+AUTOLOCK_MIN_SECONDS = 5
+AUTOLOCK_MAX_SECONDS = 3600
+AUTOLOCK_DEFAULT_SECONDS = 60
+
+
 class Application:
     """Main XRack application."""
 
@@ -917,6 +929,58 @@ class Application:
             return lease, channels, "lease"
 
         return self.console_control.discover(), channels, "discovered"
+
+    def get_faders_autolock(self) -> dict:
+        """
+        Ob und nach wie vielen Sekunden Ruhe sich die Fader-Karte
+        wieder von selbst sperrt.
+        """
+
+        return {
+            "enabled": bool(
+                self.state_store.get("faders_autolock_enabled", True)
+            ),
+            "seconds": int(
+                self.state_store.get(
+                    "faders_autolock_seconds", AUTOLOCK_DEFAULT_SECONDS
+                )
+            ),
+        }
+
+    def set_faders_autolock(
+        self, enabled: bool, seconds: int
+    ) -> tuple[bool, str]:
+        """
+        Stellt die automatische Sperre ein.
+
+        Die Sekunden werden auch dann gemerkt, wenn die Sperre gerade
+        aus ist - sonst müsste man sie beim Wiedereinschalten erneut
+        eingeben.
+        """
+
+        try:
+            seconds = int(seconds)
+        except (TypeError, ValueError):
+            return False, "Bitte eine Zahl in Sekunden angeben."
+
+        if not (
+            AUTOLOCK_MIN_SECONDS <= seconds <= AUTOLOCK_MAX_SECONDS
+        ):
+            return False, (
+                f"Bitte einen Wert zwischen {AUTOLOCK_MIN_SECONDS} und "
+                f"{AUTOLOCK_MAX_SECONDS} Sekunden angeben."
+            )
+
+        self.state_store.set("faders_autolock_enabled", bool(enabled))
+        self.state_store.set("faders_autolock_seconds", seconds)
+
+        self.logger.info(
+            "Automatische Fader-Sperre: %s (%d s)",
+            "an" if enabled else "aus",
+            seconds,
+        )
+
+        return True, ""
 
     def get_console_host(self) -> dict:
         """

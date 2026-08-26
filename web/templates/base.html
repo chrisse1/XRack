@@ -748,6 +748,56 @@
 
                             <div id="settings-console-host-found" class="small mt-1"></div>
                         </div>
+
+                        <!--
+                            Automatische Sperre der Kanalzuege. Das
+                            Sekundenfeld bleibt sichtbar, wenn der
+                            Schalter aus ist - nur ausgegraut, damit man
+                            den gemerkten Wert weiter sieht.
+                        -->
+                        <div class="mt-3">
+                            <div class="form-check form-switch">
+                                <input
+                                    type="checkbox"
+                                    role="switch"
+                                    id="settings-faders-autolock-toggle"
+                                    class="form-check-input"
+                                >
+                                <label
+                                    class="form-check-label"
+                                    for="settings-faders-autolock-toggle"
+                                >
+                                    {{ t.settings_faders_autolock_title }}
+                                </label>
+                            </div>
+
+                            <div class="input-group input-group-sm mt-2">
+                                <input
+                                    type="number"
+                                    id="settings-faders-autolock-seconds"
+                                    class="form-control"
+                                    min="5"
+                                    max="3600"
+                                    step="5"
+                                >
+                                <span class="input-group-text">
+                                    {{ t.settings_faders_autolock_unit }}
+                                </span>
+                                <button
+                                    id="btn-settings-faders-autolock"
+                                    class="btn btn-outline-secondary"
+                                    type="button"
+                                >
+                                    {{ t.btn_save }}
+                                </button>
+                            </div>
+
+                            <small class="text-body-secondary d-block mt-1">
+                                {{ t.settings_faders_autolock_hint }}
+                            </small>
+
+                            <div id="settings-faders-autolock-result" class="small mt-1"></div>
+                        </div>
                     </div>
 
                 </div>
@@ -1005,6 +1055,7 @@
 </div>
 
 <script>window.I18N = {{ i18n_json | safe }};</script>
+<script>window.FADERS_AUTOLOCK = {{ faders_autolock_json | safe }};</script>
 <script src="{{ url_for('static', path='js/bootstrap.bundle.min.js') }}"></script>
 <script src="{{ url_for('static', path='js/xrack.js') }}?v={{ asset_version }}"></script>
 </body>

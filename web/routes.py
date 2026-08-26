@@ -85,6 +85,10 @@ class UpdateSelection(BaseModel):
     #
     source: str = "usb"
 
+class FadersAutolockSelection(BaseModel):
+    enabled: bool
+    seconds: int
+
 class ConsoleHostSelection(BaseModel):
     #
     # Leer heisst: wieder automatisch suchen.
@@ -179,6 +183,15 @@ async def index(request: Request):
             "lang": language,
             "t": translations,
             "i18n_json": json.dumps(translations, ensure_ascii=False),
+            #
+            # Direkt in die Seite: Die Fader-Karte braucht die
+            # Einstellung sofort beim Laden. Ueber /api/settings zu
+            # gehen wuerde bei jedem Seitenaufruf einen Suchlauf nach
+            # dem Pult anstossen - fuer zwei Zahlen zu viel.
+            #
+            "faders_autolock_json": json.dumps(
+                application.get_faders_autolock()
+            ),
         },
     )
 
@@ -538,6 +551,7 @@ async def get_settings(request: Request):
         #
         "console_host": console["host"],
         "console_host_source": console["source"],
+        "faders_autolock": application.get_faders_autolock(),
     }
 
 
@@ -1208,6 +1222,29 @@ async def update_status(request: Request):
     application = request.app.state.application
 
     return application.get_update_status()
+
+
+@router.post("/api/settings/faders-autolock")
+async def settings_faders_autolock(
+    selection: FadersAutolockSelection,
+    request: Request,
+):
+    """
+    Stellt ein, ob und nach wie vielen Sekunden Ruhe sich die
+    Fader-Karte wieder von selbst sperrt.
+    """
+
+    application = request.app.state.application
+
+    success, message = application.set_faders_autolock(
+        selection.enabled, selection.seconds
+    )
+
+    return {
+        "success": success,
+        "message": message,
+        "faders_autolock": application.get_faders_autolock(),
+    }
 
 
 @router.post("/api/console/host")

@@ -630,6 +630,38 @@ let faderLastSent = 0;
 const FADER_MIN_DB = -90;
 const FADER_MAX_DB = 10;
 
+//
+// Automatische Sperre. Sie laeuft auf Ruhe seit der letzten
+// Beruehrung, nicht ab dem Entsperren: Wer gerade mischt, soll nicht
+// mitten im Zug ausgesperrt werden.
+//
+const fadersAutolock = window.FADERS_AUTOLOCK || { enabled: false, seconds: 60 };
+let faderAutolockTimer = null;
+
+function resetFaderAutolock() {
+    if (faderAutolockTimer) {
+        clearTimeout(faderAutolockTimer);
+        faderAutolockTimer = null;
+    }
+
+    if (!fadersAutolock.enabled || !fadersUnlocked) return;
+
+    faderAutolockTimer = setTimeout(() => {
+        //
+        // Nicht mitten in einer Zieh-Geste zuschnappen - das waere
+        // genau der Moment, in dem eine Sperre schadet statt zu
+        // schuetzen. Stattdessen die Frist neu beginnen.
+        //
+        if (faderDragging !== null) {
+            resetFaderAutolock();
+            return;
+        }
+
+        if (fadersUnlocked) toggleFaderLock();
+
+    }, fadersAutolock.seconds * 1000);
+}
+
 function formatDb(db) {
     if (db === null || db === undefined || db <= FADER_MIN_DB) {
         return "-∞";
@@ -672,6 +704,8 @@ function toggleFaderLock() {
         clearInterval(faderPollTimer);
         faderPollTimer = null;
     }
+
+    resetFaderAutolock();
 }
 
 async function loadFaders() {
@@ -767,6 +801,7 @@ function renderFaders(channels) {
             input.addEventListener("input", onFaderInput);
             input.addEventListener("pointerdown", () => {
                 faderDragging = channel.channel;
+                resetFaderAutolock();
             });
 
             //
@@ -814,6 +849,8 @@ async function toggleMute(channel) {
     const button = cell.querySelector(".fader-mute");
     const muted = !button.classList.contains("btn-danger");
 
+    resetFaderAutolock();
+
     //
     // Sofort umschalten, damit die Rückmeldung nicht erst beim
     // nächsten Auffrischen kommt.
@@ -835,6 +872,12 @@ async function toggleMute(channel) {
 async function onFaderInput(event) {
     const input = event.target;
     const readout = input.closest(".fader-cell").querySelector(".fader-db");
+
+    //
+    // Jede Beruehrung schiebt die Frist nach hinten - auch die
+    // Tastaturbedienung, die kein pointerdown ausloest.
+    //
+    resetFaderAutolock();
 
     const db = parseFloat(input.value);
     readout.textContent = formatDb(db <= FADER_MIN_DB ? null : db);
@@ -2162,6 +2205,7 @@ async function loadSettings() {
 
         applyWlanSettings(data.wlan);
         applyConsoleHost(data);
+        applyFadersAutolock(data.faders_autolock);
     } catch (error) {
         console.error("Fehler beim Laden der Einstellungen:", error);
     }
@@ -2711,6 +2755,90 @@ async function saveConsoleHost() {
         console.error("Pult-IP konnte nicht gespeichert werden:", error);
         found.className = "small mt-1 text-danger";
         found.textContent = I18N.settings_console_host_invalid;
+    } finally {
+        button.disabled = false;
+    }
+}
+
+// ------------------------------------------------------------
+// Automatische Sperre der Kanalzuege
+// ------------------------------------------------------------
+
+function applyFadersAutolock(einstellung) {
+    if (!einstellung) return;
+
+    const toggle = document.getElementById("settings-faders-autolock-toggle");
+    const seconds = document.getElementById("settings-faders-autolock-seconds");
+
+    if (!toggle || !seconds) return;
+
+    toggle.checked = einstellung.enabled;
+    seconds.value = einstellung.seconds;
+    seconds.disabled = !einstellung.enabled;
+
+    document.getElementById("settings-faders-autolock-result").textContent = "";
+}
+
+document
+    .getElementById("settings-faders-autolock-toggle")
+    .addEventListener("change", (event) => {
+        //
+        // Das Feld nur ausgrauen, nicht leeren - der gemerkte Wert
+        // soll beim Wiedereinschalten noch dastehen.
+        //
+        document.getElementById("settings-faders-autolock-seconds").disabled =
+            !event.target.checked;
+    });
+
+document
+    .getElementById("btn-settings-faders-autolock")
+    .addEventListener("click", saveFadersAutolock);
+
+async function saveFadersAutolock() {
+    const toggle = document.getElementById("settings-faders-autolock-toggle");
+    const seconds = document.getElementById("settings-faders-autolock-seconds");
+    const result = document.getElementById("settings-faders-autolock-result");
+
+    const button = document.getElementById("btn-settings-faders-autolock");
+
+    button.disabled = true;
+
+    try {
+        const response = await fetch("/api/settings/faders-autolock", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                enabled: toggle.checked,
+                seconds: parseInt(seconds.value, 10) || 0,
+            }),
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            result.className = "small mt-1 text-danger";
+            result.textContent = data.message;
+            return;
+        }
+
+        //
+        // Sofort wirksam machen, ohne die Seite neu zu laden: Die
+        // Fader-Karte liest ihre Einstellung beim Laden aus der Seite,
+        // also hier dasselbe Objekt nachziehen und die laufende Frist
+        // neu setzen.
+        //
+        fadersAutolock.enabled = data.faders_autolock.enabled;
+        fadersAutolock.seconds = data.faders_autolock.seconds;
+
+        resetFaderAutolock();
+
+        applyFadersAutolock(data.faders_autolock);
+
+        result.className = "small mt-1 text-success";
+        result.textContent = I18N.settings_faders_autolock_saved;
+
+    } catch (error) {
+        console.error("Automatische Sperre konnte nicht gespeichert werden:", error);
     } finally {
         button.disabled = false;
     }

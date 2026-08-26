@@ -883,6 +883,57 @@ try:
 
     print("OK: Eine neue Adresse verwirft die gemerkte Pult-Erkennung")
 
+    # ----------------------------------------------------------------
+    # 9. Automatische Sperre der Kanalzuege
+    # ----------------------------------------------------------------
+
+    sperre = stub()
+
+    #
+    # Voreinstellung: an, nach einer Minute.
+    #
+    voreinstellung = Application.get_faders_autolock(sperre)
+
+    assert voreinstellung == {"enabled": True, "seconds": 60}, voreinstellung
+
+    #
+    # Gueltige Werte werden gemerkt.
+    #
+    assert Application.set_faders_autolock(sperre, True, 120)[0] is True
+    assert Application.get_faders_autolock(sperre) == {
+        "enabled": True,
+        "seconds": 120,
+    }
+
+    #
+    # Grenzen: zu kurz waere unbenutzbar - gesperrt, bevor man den
+    # Regler losgelassen hat.
+    #
+    assert Application.set_faders_autolock(sperre, True, 1)[0] is False
+    assert Application.set_faders_autolock(sperre, True, 99999)[0] is False
+    assert Application.set_faders_autolock(sperre, True, "viel")[0] is False
+
+    #
+    # Abgelehnte Werte duerfen den gemerkten nicht ueberschreiben.
+    #
+    assert Application.get_faders_autolock(sperre)["seconds"] == 120, (
+        "Ein abgelehnter Wert hat den gemerkten ueberschrieben."
+    )
+
+    print("OK: Die automatische Sperre nimmt nur sinnvolle Zeiten an")
+
+    #
+    # Die Zeit bleibt gemerkt, auch wenn die Sperre aus ist - sonst
+    # muesste man sie beim Wiedereinschalten neu eingeben.
+    #
+    assert Application.set_faders_autolock(sperre, False, 300)[0] is True
+    assert Application.get_faders_autolock(sperre) == {
+        "enabled": False,
+        "seconds": 300,
+    }
+
+    print("OK: Die Zeit bleibt gemerkt, auch wenn die Sperre aus ist")
+
 finally:
     console.stop()
 

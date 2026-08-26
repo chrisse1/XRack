@@ -44,7 +44,9 @@ the Pi itself.
   plus the main fader, so you don't have to switch to X-AIR-Edit while
   practising. Linked channel pairs are recognised and shown as a single
   strip. The faders are locked until you open the padlock, and while
-  locked XRack sends nothing at all over the network.
+  locked XRack sends nothing at all over the network. They lock again
+  on their own once none has been touched for a while - how long, and
+  whether at all, is set in the settings.
 
   XRack finds the console by itself: through its own DHCP lease when
   the mixer is plugged into the Pi, otherwise by an OSC broadcast on
@@ -167,7 +169,9 @@ am Pi nötig.
   X-AIR-Edit wechseln muss. Gekoppelte Kanalpaare erkennt XRack und
   zeigt sie als einen Regler. Die Fader sind gesperrt, bis man das
   Schloss öffnet; im gesperrten Zustand geht kein einziges Paket ins
-  Netz.
+  Netz. Sie sperren sich von selbst wieder, wenn eine Weile keiner
+  angefasst wurde - ob überhaupt und nach wie vielen Sekunden, stellt
+  man in den Einstellungen ein.
 
   Die Konsole findet XRack selbst: über die eigene DHCP-Vergabeliste,
   wenn das Pult am Pi hängt, sonst per OSC-Rundruf im Netz - so wie

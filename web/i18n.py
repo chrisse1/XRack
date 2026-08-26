@@ -225,6 +225,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_console_host_lease": "Wird benutzt: {ip} (am Pi angemeldet)",
         "settings_console_host_discovered": "Wird benutzt: {ip} (im Netz gefunden)",
         "settings_console_host_none": "Kein Mischpult gefunden.",
+        "settings_faders_autolock_title": "Kanalzüge automatisch sperren",
+        "settings_faders_autolock_unit": "Sekunden",
+        "settings_faders_autolock_hint": (
+            "Die Kanalzüge sperren sich wieder, wenn so lange keiner "
+            "angefasst wurde. Jede Berührung setzt die Zeit zurück, "
+            "mitten im Ziehen schnappt die Sperre also nicht zu."
+        ),
+        "settings_faders_autolock_saved": "Gespeichert.",
 
         # Update aus dem Internet oder über USB-Stick
         "settings_update_title": "Update",
@@ -594,6 +602,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_console_host_lease": "In use: {ip} (registered at the Pi)",
         "settings_console_host_discovered": "In use: {ip} (found on the network)",
         "settings_console_host_none": "No mixer found.",
+        "settings_faders_autolock_title": "Lock channel strips automatically",
+        "settings_faders_autolock_unit": "seconds",
+        "settings_faders_autolock_hint": (
+            "The channel strips lock again once none has been touched "
+            "for that long. Every touch resets the timer, so the lock "
+            "never snaps shut mid-drag."
+        ),
+        "settings_faders_autolock_saved": "Saved.",
 
         # Update from the internet or via USB stick
         "settings_update_title": "Update",
