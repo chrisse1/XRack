@@ -366,15 +366,22 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "tippen."
         ),
         "faders_mute": "Stumm schalten",
+        #
+        # Beide Meldungen beschreiben dieselbe Lage und beginnen
+        # deshalb gleich - nur der zweite Satz sagt, woran es liegt.
+        # Vorher lasen sie sich wie zwei verschiedene Fehler, was beim
+        # Vergleich zweier Geräte unnötig verwirrt.
+        #
         "faders_no_connection": (
-            "Kein Steuerweg zur Konsole. Die Fadersteuerung läuft über "
-            "Netzwerk, nicht über das USB-Audiokabel - dafür muss die "
-            "Konsole per Kabel angeschlossen und einer der beiden "
-            "Zugangswege in den Einstellungen aktiv sein."
+            "Keine Verbindung zur Konsole. Es ist noch kein Zugangsweg "
+            "aktiv - die Fadersteuerung läuft über Netzwerk, nicht über "
+            "das USB-Audiokabel. In den Einstellungen einen der beiden "
+            "Wege einschalten."
         ),
         "faders_no_response": (
-            "Die Konsole ist per Kabel verbunden, antwortet aber nicht "
-            "auf Steuerbefehle. Ist sie eingeschaltet?"
+            "Keine Verbindung zur Konsole. Der Zugangsweg steht, aber "
+            "unter {ip} antwortet nichts. Ist die Konsole eingeschaltet "
+            "und das Kabel gesteckt?"
         ),
 
         "bluetooth_title": "Bluetooth",
@@ -749,14 +756,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "faders_mute": "Mute",
         "faders_no_connection": (
-            "No control path to the console. Fader control runs over "
-            "the network, not the USB audio cable - the console needs "
-            "to be connected by cable and one of the two access routes "
-            "enabled in the settings."
+            "No connection to the console. No access route is enabled "
+            "yet - fader control runs over the network, not the USB "
+            "audio cable. Enable one of the two routes in the settings."
         ),
         "faders_no_response": (
-            "The console is connected by cable but does not answer "
-            "control messages. Is it switched on?"
+            "No connection to the console. The access route is up, but "
+            "nothing answers at {ip}. Is the console switched on and "
+            "the cable plugged in?"
         ),
 
         "bluetooth_title": "Bluetooth",

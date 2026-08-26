@@ -988,6 +988,20 @@ async function setPairLink(start, linked) {
     }
 }
 
+//
+// Gesperrt wird nicht gepollt - das ist Absicht, im Ruhezustand soll
+// kein einziges Paket ins Netz gehen. Der Preis: Die Karte zeigt dann
+// den Stand vom letzten Laden. Wer zwei Geraete nebeneinander legt,
+// sieht deshalb womoeglich zwei verschiedene Meldungen fuer dieselbe
+// Lage - genau das ist einmal passiert.
+//
+// Kompromiss ohne Dauerverkehr: einmal nachfragen, sobald die Seite
+// wieder sichtbar wird. Also genau dann, wenn jemand hinsieht.
+//
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") loadFaders();
+});
+
 async function loadFaders() {
     let data;
 
@@ -1006,7 +1020,7 @@ async function loadFaders() {
 
     if (!data.available) {
         unavailable.textContent = data.reason === "no_response"
-            ? I18N.faders_no_response
+            ? I18N.faders_no_response.replace("{ip}", data.host || "?")
             : I18N.faders_no_connection;
         unavailable.classList.remove("d-none");
         grid.classList.add("d-none");

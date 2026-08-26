@@ -307,6 +307,87 @@ try:
 
     print("OK: Ohne Access Point laesst sich die Freigabe trotzdem schalten")
 
+    # ----------------------------------------------------------------
+    # 7. Der Lease-Leser darf keine abgelaufenen Adressen melden
+    #
+    # dnsmasq laesst abgelaufene Eintraege eine Weile in der Datei
+    # stehen. Wurde nur die letzte Zeile genommen, meldete XRack eine
+    # Adresse, unter der laengst nichts mehr antwortet - und das sieht
+    # aus, als sei die Konsole erreichbar. Danach sucht man lange an
+    # der falschen Stelle.
+    # ----------------------------------------------------------------
+
+    import time
+
+    lease_skript = SKRIPTE / "xrack-dhcp-lease.sh"
+
+    def lease_lesen(zeilen: list[str]) -> str:
+        """Legt eine Lease-Datei an und fragt das Skript danach."""
+
+        ordner = Path(tempfile.mkdtemp(dir=scratch))
+
+        #
+        # Das Skript baut den Pfad aus dem Interface-Namen. Deshalb
+        # einen "Interface-Namen" uebergeben, der auf unsere Datei
+        # zeigt - so bleibt das Skript unveraendert pruefbar.
+        #
+        datei = ordner / "dnsmasq-test.leases"
+        datei.write_text("\n".join(zeilen) + "\n", encoding="utf-8")
+
+        inhalt = lease_skript.read_text(encoding="utf-8").replace(
+            "/var/lib/NetworkManager/dnsmasq-${IFACE}.leases",
+            str(ordner / "dnsmasq-${IFACE}.leases"),
+        )
+
+        kopie = ordner / "lease.sh"
+        kopie.write_text(inhalt, encoding="utf-8")
+        kopie.chmod(0o755)
+
+        return subprocess.run(
+            [str(kopie), "test"], capture_output=True, text=True, timeout=10
+        ).stdout.strip()
+
+    jetzt = int(time.time())
+
+    #
+    # Gueltige Lease wird gemeldet.
+    #
+    assert lease_lesen([
+        f"{jetzt + 3600} 11:22:33:44:55:66 10.77.0.120 pult *"
+    ]) == "10.77.0.120"
+
+    #
+    # Abgelaufene NICHT.
+    #
+    assert lease_lesen([
+        f"{jetzt - 3600} 11:22:33:44:55:66 10.77.0.99 alt *"
+    ]) == "", "Eine abgelaufene Lease wurde als aktuelle Adresse gemeldet."
+
+    #
+    # Steht eine abgelaufene HINTER einer gueltigen, gewinnt die
+    # gueltige - "letzte Zeile" allein waere hier falsch.
+    #
+    assert lease_lesen([
+        f"{jetzt + 3600} 11:22:33:44:55:66 10.77.0.120 pult *",
+        f"{jetzt - 3600} aa:bb:cc:dd:ee:ff 10.77.0.99 alt *",
+    ]) == "10.77.0.120", (
+        "Eine abgelaufene Lease hat eine gueltige verdraengt."
+    )
+
+    #
+    # Zeitstempel 0 heisst bei dnsmasq "laeuft nie ab".
+    #
+    assert lease_lesen([
+        "0 11:22:33:44:55:66 10.77.0.120 dauerhaft *"
+    ]) == "10.77.0.120"
+
+    #
+    # Leere Datei: keine Ausgabe, kein Fehler.
+    #
+    assert lease_lesen([""]) == ""
+
+    print("OK: Der Lease-Leser meldet nur gueltige Adressen")
+
     print("Alle Tests erfolgreich.")
 
 finally:

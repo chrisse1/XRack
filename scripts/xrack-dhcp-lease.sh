@@ -28,7 +28,19 @@ fi
 
 #
 # Format je Zeile: "<ablauf-timestamp> <mac> <ip> <hostname> <client-id>".
-# Nur die zuletzt vergebene (letzte Zeile) Lease ausgeben, falls doch
-# mehrere Geräte je an diesem Interface hingen.
 #
-tail -n 1 "${LEASE_FILE}" 2>/dev/null | awk '{print $3}'
+# Der Zeitstempel wird ausgewertet, nicht ignoriert: dnsmasq laesst
+# abgelaufene Eintraege eine Weile stehen. Ohne Pruefung meldete XRack
+# eine Adresse, unter der laengst nichts mehr antwortet - und das sieht
+# dann so aus, als sei die Konsole erreichbar, obwohl sie es nicht ist.
+# Genau danach sucht man lange an der falschen Stelle.
+#
+# Ein Zeitstempel von 0 bedeutet bei dnsmasq "laeuft nie ab" und zaehlt
+# deshalb als gueltig.
+#
+# Von den gueltigen die zuletzt vergebene ausgeben, falls mehrere
+# Geraete je an diesem Interface hingen.
+#
+awk -v jetzt="$(date +%s)" \
+    '$1 == 0 || $1 > jetzt { ip = $3 } END { if (ip) print ip }' \
+    "${LEASE_FILE}" 2>/dev/null
