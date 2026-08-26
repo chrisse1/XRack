@@ -37,6 +37,19 @@ BRIDGE_PORT_CONNECTION = "XRack-Bridge-eth0"
 #
 BRIDGE_CONNECTION = "XRack-Bridge"
 
+#
+# Die Geräte hinter den Profilen. Gebraucht werden sie, um beim Kernel
+# nachzusehen statt bei NetworkManager - siehe console_port_bridged().
+#
+BRIDGE_DEVICE = "br0"
+CONSOLE_DEVICE = "eth0"
+
+#
+# Wo der Kernel seine Netzwerkgeräte auflistet. Als Konstante, damit
+# der Test einen nachgestellten Baum unterschieben kann.
+#
+SYS_NET = Path("/sys/class/net")
+
 
 class WlanControl:
     """Kapselt privilegierte WLAN-/Netzwerkbefehle."""
@@ -156,6 +169,47 @@ class WlanControl:
 
         return self._ap_ssid
 
+    def console_port_bridged(self) -> bool | None:
+        """
+        True, wenn die Netzwerkbuchse tatsächlich in der Bridge hängt.
+
+        Warum nicht NetworkManager fragen: Dessen Buchführung sagt nur,
+        ob das Profil aktiviert wurde - nicht, ob das Gerät auch
+        wirklich in der Bridge steckt. Genau das kann auseinanderlaufen,
+        und der Schaden ist dann heimtückisch: Die DHCP-Vergabeliste von
+        br0 enthält den Eintrag des Pults noch stundenlang weiter (die
+        Lease läuft ja nicht sofort ab). XRack meldete also eine
+        Konsolen-IP, hinter der niemand mehr antwortet - und das sieht
+        aus, als sei das Pult erreichbar, obwohl es das nicht ist.
+
+        Der Kernel weiß es genau: /sys/class/net/eth0/master ist ein
+        Verweis auf das Gerät, in dem die Buchse hängt - und existiert
+        gar nicht, wenn sie in keiner Bridge steckt.
+
+        Liefert None, wenn sich das nicht feststellen lässt (kein
+        Linux, kein solches Gerät). Dann entscheidet weiter
+        NetworkManager.
+        """
+
+        pfad = SYS_NET / CONSOLE_DEVICE
+
+        if not pfad.exists():
+            return None
+
+        master = pfad / "master"
+
+        if not master.is_symlink():
+            #
+            # Buchse vorhanden, aber in keiner Bridge - das ist eine
+            # eindeutige Antwort, kein "weiß nicht".
+            #
+            return False
+
+        try:
+            return master.resolve().name == BRIDGE_DEVICE
+        except OSError:
+            return None
+
     def get_connected_client_ip(self, interface: str) -> str | None:
         """
         Liefert die IP-Adresse des zuletzt über `interface`
@@ -265,12 +319,23 @@ class WlanControl:
         active = self.active_connection_names()
 
         #
-        # "Konsole über XRacks Access Point erreichbar" heißt jetzt
-        # genau: Hängt eth0 in der Bridge? Die Bridge selbst läuft
-        # dauerhaft (der Access Point funkt hinein) und taugt deshalb
-        # nicht mehr als Anzeige dafür.
+        # "Konsole über XRacks Access Point erreichbar" heißt genau:
+        # Hängt eth0 in der Bridge? Die Bridge selbst läuft dauerhaft
+        # (der Access Point funkt hinein) und taugt deshalb nicht als
+        # Anzeige dafür.
         #
-        bridge_enabled = BRIDGE_PORT_CONNECTION in active
+        # Gefragt wird der Kernel, nicht NetworkManager: Ein aktiviertes
+        # Profil heißt noch nicht, dass die Buchse auch wirklich in der
+        # Bridge steckt (siehe console_port_bridged). Nur wenn sich das
+        # nicht feststellen lässt, zählt wieder das Profil.
+        #
+        bridged = self.console_port_bridged()
+
+        bridge_enabled = (
+            bridged
+            if bridged is not None
+            else BRIDGE_PORT_CONNECTION in active
+        )
 
         #
         # "Konsole aus dem Heimnetz erreichbar machen" ist technisch die
