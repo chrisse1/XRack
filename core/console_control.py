@@ -345,6 +345,68 @@ def channel_addresses(
     return result
 
 
+def pair_addresses(
+    family: str, channels: int, start: int, linked=()
+) -> list[str]:
+    """
+    Liefert die Adressen, über die sich das Stereopaar (start,
+    start+1) regeln lässt.
+
+    Meist zwei - die beiden Kanäle sind am Pult eigenständig. Nur eine
+    in zwei Fällen:
+
+    - Die Kanäle sind am Pult gekoppelt. Dann zieht das Pult den
+      Partner selbst mit; zweimal zu senden wäre überflüssig und würde
+      einen absichtlichen Versatz zwischen beiden einebnen.
+    - Das Paar ist von Natur aus stereo und hat nur einen Fader. Beim
+      X-Air sind das die Kanäle 17+18: Die liegen auf dem
+      Aux-Rückweg (/rtn/aux) und hatten nie zwei getrennte Regler.
+      Genau deshalb gibt es dort auch nichts zu koppeln.
+
+    Leere Liste, wenn das Paar außerhalb der Kanäle liegt.
+    """
+
+    specs = channel_addresses(family, channels, linked)
+
+    #
+    # Natürliches Stereopaar: Ein Regler, dessen Beschriftung beide
+    # Kanäle nennt ("17+18"). Genauso sieht eine gekoppelte Zweiergruppe
+    # aus - beide sind hier richtig behandelt.
+    #
+    beschriftung = f"{start}+{start + 1}"
+
+    for spec in specs:
+        if spec.label == beschriftung:
+            return [spec.address]
+
+    #
+    # Sonst die beiden Kanäle einzeln - der Regler in der Karte muss
+    # dann eben zwei Adressen bedienen.
+    #
+    result = []
+
+    for nummer in (start, start + 1):
+
+        for spec in specs:
+            if spec.label == str(nummer):
+                result.append(spec.address)
+                break
+
+    return result
+
+
+def is_natural_pair(family: str, channels: int, start: int) -> bool:
+    """
+    True, wenn das Paar am Pult ohnehin nur einen Fader hat und sich
+    deshalb weder koppeln noch entkoppeln lässt.
+
+    Geprüft wird ohne jede Kopplung: Bleibt es auch dann ein einziger
+    Regler, liegt es an der Bauart und nicht an einer Einstellung.
+    """
+
+    return len(pair_addresses(family, channels, start)) == 1
+
+
 class ConsoleControl:
     """
     Spricht mit dem Mischpult. Hält keine dauerhafte Verbindung - jede
@@ -386,6 +448,15 @@ class ConsoleControl:
         #
         self._discovered: str | None = None
         self._last_discovery = 0.0
+
+        #
+        # Kopplungszustand einzelner Paare, je Startkanal mit
+        # Zeitstempel. Anders als _linked (das get_channels für alle
+        # Paare auf einmal holt) wird hier gezielt ein Paar gefragt -
+        # die Karten von Musikspieler und Bluetooth brauchen immer nur
+        # ihr eigenes.
+        #
+        self._pair_link: dict[int, tuple[float, bool]] = {}
 
     def _request(self, host: str, port: int, message: bytes) -> bytes | None:
         """
@@ -440,6 +511,7 @@ class ConsoleControl:
         self._fader_link = None
         self._discovered = None
         self._last_discovery = 0.0
+        self._pair_link = {}
 
     def discover(self) -> str | None:
         """
@@ -734,6 +806,187 @@ class ConsoleControl:
             )
 
         return result
+
+    #
+    # Wie lange der Kopplungszustand eines Paars gilt, bevor neu
+    # gefragt wird. Waehrend eines Reglerzugs darf nicht bei jedem
+    # Schritt nachgefragt werden - das waeren Dutzende Anfragen pro
+    # Sekunde, nur um zu wissen, wohin gesendet wird.
+    #
+    PAIR_LINK_MAX_AGE = 5.0
+
+    def _pair_linked(self, host: str, start: int) -> bool:
+        """
+        Fragt gezielt fuer ein Paar, ob es am Pult gekoppelt ist.
+        """
+
+        if self._port is None or not self._link_supported:
+            return False
+
+        if not self._fader_follows_link(host):
+            return False
+
+        now = time.monotonic()
+
+        stamp, value = self._pair_link.get(start, (0.0, False))
+
+        if now - stamp < self.PAIR_LINK_MAX_AGE:
+            return value
+
+        answer = self._request(
+            host,
+            self._port,
+            encode(f"/config/chlink/{start}-{start + 1}"),
+        )
+
+        if answer is None:
+
+            if start == 1:
+                self._link_supported = False
+
+            self._pair_link[start] = (now, False)
+
+            return False
+
+        _, arguments = decode(answer)
+
+        value = bool(arguments and arguments[0] == 1)
+
+        self._pair_link[start] = (now, value)
+
+        return value
+
+    def _pair_targets(self, host: str, channels: int, start: int) -> list[str]:
+        """Die Adressen, die fuer dieses Paar zu bedienen sind."""
+
+        family = self.detect(host)
+
+        if family is None or self._port is None:
+            return []
+
+        linked = {start} if self._pair_linked(host, start) else set()
+
+        return pair_addresses(family, channels, start, linked)
+
+    def get_pair(self, host: str, channels: int, start: int) -> dict | None:
+        """
+        Liest Pegel und Stummschaltung eines Stereopaars.
+
+        Gelesen wird immer vom ersten Kanal des Paars. Stehen beide
+        unterschiedlich, gewinnt also der erste - die Karte zeigt einen
+        Regler, und der muss einen Wert haben.
+        """
+
+        targets = self._pair_targets(host, channels, start)
+
+        if not targets:
+            return None
+
+        family = self._family
+
+        db = MIN_DB
+        muted = False
+
+        answer = self._request(
+            host, self._port, encode(f"{targets[0]}/mix/fader")
+        )
+
+        if answer is None:
+            return None
+
+        _, arguments = decode(answer)
+
+        if arguments and isinstance(arguments[0], float):
+            db = fader_to_db(arguments[0])
+
+        answer = self._request(host, self._port, encode(f"{targets[0]}/mix/on"))
+
+        if answer is not None:
+
+            _, arguments = decode(answer)
+
+            if arguments and isinstance(arguments[0], int):
+                muted = arguments[0] == 0
+
+        return {
+            "db": None if math.isinf(db) else round(db, 1),
+            "muted": muted,
+            "linked": len(targets) == 1,
+            #
+            # Von Natur aus stereo: Dann laesst sich nichts koppeln
+            # und es darf auch nicht danach gefragt werden.
+            #
+            "natural": is_natural_pair(family, channels, start),
+        }
+
+    def set_pair_fader(
+        self, host: str, channels: int, start: int, db: float
+    ) -> bool:
+        """Setzt den Pegel beider Kanäle des Paars."""
+
+        targets = self._pair_targets(host, channels, start)
+
+        if not targets:
+            return False
+
+        value = db_to_fader(db)
+
+        return all(
+            self._send(host, self._port, encode(f"{target}/mix/fader", value))
+            for target in targets
+        )
+
+    def set_pair_mute(
+        self, host: str, channels: int, start: int, muted: bool
+    ) -> bool:
+        """Schaltet beide Kanäle des Paars stumm oder wieder an."""
+
+        targets = self._pair_targets(host, channels, start)
+
+        if not targets:
+            return False
+
+        value = 0 if muted else 1
+
+        return all(
+            self._send(host, self._port, encode(f"{target}/mix/on", value))
+            for target in targets
+        )
+
+    def set_link(
+        self, host: str, channels: int, start: int, linked: bool
+    ) -> bool:
+        """
+        Koppelt ein Kanalpaar am Pult oder hebt die Kopplung auf.
+
+        Bei natürlichen Stereopaaren (X-Air 17+18) gibt es nichts zu
+        koppeln - dort wird gar nicht erst gesendet.
+        """
+
+        family = self.detect(host)
+
+        if family is None or self._port is None:
+            return False
+
+        if is_natural_pair(family, channels, start):
+            return False
+
+        erfolg = self._send(
+            host,
+            self._port,
+            encode(f"/config/chlink/{start}-{start + 1}", 1 if linked else 0),
+        )
+
+        if erfolg:
+            #
+            # Gemerkten Zustand sofort nachziehen, sonst schickte der
+            # naechste Reglerzug bis zu fuenf Sekunden lang noch an die
+            # alte Adressliste.
+            #
+            self._pair_link[start] = (time.monotonic(), linked)
+            self._linked = set()
+
+        return erfolg
 
     def set_fader(self, host: str, channels: int, channel: int, db: float) -> bool:
         """

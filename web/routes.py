@@ -85,6 +85,24 @@ class UpdateSelection(BaseModel):
     #
     source: str = "usb"
 
+class PairFaderSelection(BaseModel):
+    #
+    # Erster Kanal des Stereopaars (immer ungerade).
+    #
+    start: int
+    #
+    # None bedeutet "Fader ganz zu" - als JSON gibt es kein -inf.
+    #
+    db: float | None
+
+class PairMuteSelection(BaseModel):
+    start: int
+    muted: bool
+
+class PairLinkSelection(BaseModel):
+    start: int
+    linked: bool
+
 class FadersAutolockSelection(BaseModel):
     enabled: bool
     seconds: int
@@ -1222,6 +1240,67 @@ async def update_status(request: Request):
     application = request.app.state.application
 
     return application.get_update_status()
+
+
+@router.get("/api/console/pair")
+async def console_pair(request: Request, start: int):
+    """
+    Pegel und Stummschaltung des Stereopaars, das im Musikspieler oder
+    bei Bluetooth gewählt ist - damit man dafür nicht zur Fader-Karte
+    scrollen muss.
+    """
+
+    application = request.app.state.application
+
+    return application.get_console_pair(start)
+
+
+@router.post("/api/console/pair/fader")
+async def console_pair_fader(
+    selection: PairFaderSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    return {
+        "success": application.set_console_pair_fader(
+            selection.start, selection.db
+        )
+    }
+
+
+@router.post("/api/console/pair/mute")
+async def console_pair_mute(
+    selection: PairMuteSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    return {
+        "success": application.set_console_pair_mute(
+            selection.start, selection.muted
+        )
+    }
+
+
+@router.post("/api/console/pair/link")
+async def console_pair_link(
+    selection: PairLinkSelection,
+    request: Request,
+):
+    """
+    Koppelt das Kanalpaar am Pult oder hebt die Kopplung auf.
+    """
+
+    application = request.app.state.application
+
+    return {
+        "success": application.set_console_pair_link(
+            selection.start, selection.linked
+        )
+    }
 
 
 @router.post("/api/settings/faders-autolock")

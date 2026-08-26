@@ -23,6 +23,8 @@ from core.console_control import (
     ConsoleControl,
     broadcast_addresses,
     channel_addresses,
+    is_natural_pair,
+    pair_addresses,
     db_to_fader,
     decode,
     encode,
@@ -362,6 +364,8 @@ class FakeConsole:
                     self.faders[address] = arguments[0]
                 elif address.endswith("/mix/on"):
                     self.on[address] = arguments[0]
+                elif address.startswith("/config/chlink/"):
+                    self.chlink[address[len("/config/chlink/"):]] = arguments[0]
                 continue
 
             #
@@ -643,6 +647,148 @@ try:
         f"OK: Kennt das Pult die Kopplungs-Abfrage nicht, wird nur einmal "
         f"gefragt ({elapsed:.2f}s)"
     )
+
+    # ----------------------------------------------------------------
+    # 5e. Stereopaar direkt regeln (Musikspieler-/Bluetooth-Karte)
+    # ----------------------------------------------------------------
+
+    #
+    # Ausgangslage zuruecksetzen: Die Kopplungstests davor haben den
+    # gemerkten Zustand veraendert.
+    #
+    console.chlink.clear()
+    console.answer_chlink = True
+    console.fdrmute = None
+
+    control.detect_reset()
+    control._family = FAMILY_XAIR
+    control._port = console.port
+    control._detected_for = "127.0.0.1"
+
+    #
+    # Reine Adressrechnung: ungekoppelt zwei Adressen, gekoppelt eine,
+    # und beim natuerlichen Stereopaar ohnehin nur eine.
+    #
+    assert pair_addresses(FAMILY_XAIR, 18, 9) == ["/ch/09", "/ch/10"]
+    assert pair_addresses(FAMILY_XAIR, 18, 9, linked={9}) == ["/ch/09"]
+    assert pair_addresses(FAMILY_XAIR, 18, 17) == ["/rtn/aux"]
+    assert pair_addresses(FAMILY_X32, 32, 31) == ["/ch/31", "/ch/32"]
+
+    #
+    # Ausserhalb der Kanaele: leere Liste statt einer geratenen Adresse.
+    #
+    assert pair_addresses(FAMILY_XAIR, 18, 19) == []
+
+    assert is_natural_pair(FAMILY_XAIR, 18, 17) is True
+    assert is_natural_pair(FAMILY_XAIR, 18, 9) is False
+    assert is_natural_pair(FAMILY_X32, 32, 17) is False
+
+    print("OK: Ein Stereopaar wird je nach Kopplung ueber eine oder zwei Adressen geregelt")
+
+    #
+    # Ungekoppelt muss der Wert an BEIDE Kanaele gehen - sonst bewegte
+    # sich nur die halbe Musik.
+    #
+    console.faders.pop("/ch/09/mix/fader", None)
+    console.faders.pop("/ch/10/mix/fader", None)
+
+    assert control.set_pair_fader("127.0.0.1", 18, 9, -10.0) is True
+
+    time.sleep(0.1)
+
+    assert abs(console.faders["/ch/09/mix/fader"] - 0.5) < 1e-6, console.faders
+    assert abs(console.faders["/ch/10/mix/fader"] - 0.5) < 1e-6, console.faders
+
+    print("OK: Ungekoppelt geht der Pegel an beide Kanaele des Paars")
+
+    assert control.set_pair_mute("127.0.0.1", 18, 9, True) is True
+
+    time.sleep(0.1)
+
+    assert console.on["/ch/09/mix/on"] == 0
+    assert console.on["/ch/10/mix/on"] == 0
+
+    print("OK: Auch die Stummschaltung erfasst beide Kanaele")
+
+    #
+    # Auslesen: vom ersten Kanal des Paars.
+    #
+    zustand = control.get_pair("127.0.0.1", 18, 9)
+
+    assert zustand is not None
+    assert abs(zustand["db"] - (-10.0)) < 0.01, zustand
+    assert zustand["muted"] is True, zustand
+    assert zustand["linked"] is False, zustand
+    assert zustand["natural"] is False, zustand
+
+    print("OK: Pegel und Stummschaltung des Paars werden zurueckgelesen")
+
+    #
+    # Koppeln - und danach darf nur noch eine Adresse bedient werden.
+    # Zweimal zu senden wuerde einen absichtlichen Versatz einebnen.
+    #
+    assert control.set_link("127.0.0.1", 18, 9, True) is True
+
+    time.sleep(0.1)
+
+    assert console.chlink.get("9-10") == 1, console.chlink
+
+    console.faders.pop("/ch/10/mix/fader", None)
+
+    assert control.set_pair_fader("127.0.0.1", 18, 9, 0.0) is True
+
+    time.sleep(0.1)
+
+    assert abs(console.faders["/ch/09/mix/fader"] - 0.75) < 1e-6
+    assert "/ch/10/mix/fader" not in console.faders, (
+        "Trotz Kopplung wurde der zweite Kanal noch einzeln angesprochen."
+    )
+
+    assert control.get_pair("127.0.0.1", 18, 9)["linked"] is True
+
+    print("OK: Nach dem Koppeln wird nur noch der erste Kanal angesprochen")
+
+    #
+    # Entkoppeln geht genauso wieder zurueck.
+    #
+    assert control.set_link("127.0.0.1", 18, 9, False) is True
+
+    time.sleep(0.1)
+
+    assert console.chlink.get("9-10") == 0
+
+    console.faders.pop("/ch/10/mix/fader", None)
+
+    assert control.set_pair_fader("127.0.0.1", 18, 9, 0.0) is True
+
+    time.sleep(0.1)
+
+    assert "/ch/10/mix/fader" in console.faders, (
+        "Nach dem Entkoppeln muss wieder an beide Kanaele gesendet werden."
+    )
+
+    print("OK: Nach dem Entkoppeln gehen die Werte wieder an beide Kanaele")
+
+    #
+    # Das natuerliche Stereopaar: eine Adresse, und nichts zu koppeln.
+    # Genau der Fall, den der XR18 mit 17+18 mitbringt.
+    #
+    zustand = control.get_pair("127.0.0.1", 18, 17)
+
+    assert zustand["natural"] is True, zustand
+    assert zustand["linked"] is True, zustand
+
+    console.received.clear()
+
+    assert control.set_link("127.0.0.1", 18, 17, True) is False, (
+        "Beim Aux-Rueckweg gibt es nichts zu koppeln."
+    )
+
+    assert not [a for a, _ in console.received if a.startswith("/config/chlink")], (
+        "Trotzdem wurde eine Kopplung ans Pult geschickt."
+    )
+
+    print("OK: Beim natuerlichen Stereopaar wird gar nicht erst gekoppelt")
 
     # ----------------------------------------------------------------
     # 6. Familienerkennung
@@ -933,6 +1079,70 @@ try:
     }
 
     print("OK: Die Zeit bleibt gemerkt, auch wenn die Sperre aus ist")
+
+    # ----------------------------------------------------------------
+    # 10. XRack merkt sich nur die selbst gesetzten Kopplungen
+    #
+    # Eine Kopplung, die am Pult eingerichtet wurde, gehoert dem
+    # Nutzer. XRack darf sie nicht ungefragt aufloesen - und deshalb
+    # auch gar nicht erst zum Entkoppeln anbieten.
+    # ----------------------------------------------------------------
+
+    gesetzt = []
+
+    kopplung = types.SimpleNamespace(
+        selected_audio_device=types.SimpleNamespace(channels=18),
+        state_store=FakeStore({"console_ip_manual": "127.0.0.1"}),
+        wlan_control=types.SimpleNamespace(get_status=lambda: {"console_ip": None}),
+        console_control=types.SimpleNamespace(
+            set_link=lambda host, channels, start, linked: (
+                gesetzt.append((start, linked)) or True
+            ),
+        ),
+        logger=logging.getLogger("XRack-Test"),
+    )
+
+    #
+    # Die Aufloesung der Pult-IP ist hier nicht der Pruefgegenstand -
+    # sie hat ihren eigenen Abschnitt weiter oben.
+    #
+    kopplung._console_host_and_channels = (
+        lambda: Application._console_host_and_channels(kopplung)
+    )
+    kopplung._linked_by_xrack = lambda: Application._linked_by_xrack(kopplung)
+
+    assert Application.set_console_pair_link(kopplung, 9, True) is True
+    assert gesetzt == [(9, True)]
+
+    assert kopplung.state_store.get("console_linked_by_xrack") == [9]
+
+    #
+    # Ein zweites Paar kommt dazu, nicht an dessen Stelle.
+    #
+    assert Application.set_console_pair_link(kopplung, 3, True) is True
+    assert kopplung.state_store.get("console_linked_by_xrack") == [3, 9]
+
+    #
+    # Entkoppeln nimmt es wieder aus der Liste.
+    #
+    assert Application.set_console_pair_link(kopplung, 9, False) is True
+    assert kopplung.state_store.get("console_linked_by_xrack") == [3]
+
+    print("OK: XRack merkt sich, welche Paare es selbst gekoppelt hat")
+
+    #
+    # Scheitert das Senden ans Pult, darf auch nichts gemerkt werden -
+    # sonst boete XRack spaeter an, etwas zu entkoppeln, das es nie
+    # gekoppelt hat.
+    #
+    kopplung.console_control.set_link = lambda host, channels, start, linked: False
+
+    assert Application.set_console_pair_link(kopplung, 11, True) is False
+    assert kopplung.state_store.get("console_linked_by_xrack") == [3], (
+        "Trotz fehlgeschlagener Kopplung wurde etwas gemerkt."
+    )
+
+    print("OK: Eine fehlgeschlagene Kopplung wird nicht gemerkt")
 
 finally:
     console.stop()

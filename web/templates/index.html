@@ -223,6 +223,10 @@
               </button>
             </div>
 
+            {% with prefix = "music" %}
+              {% include "components/pair_fader.html" %}
+            {% endwith %}
+
             <hr>
 
             <div class="d-flex justify-content-around gap-2">
@@ -329,6 +333,10 @@
                       </label>
                   </div>
                 </div>
+
+                {% with prefix = "bluetooth" %}
+                  {% include "components/pair_fader.html" %}
+                {% endwith %}
 
                 <div class="d-flex gap-2 mt-2">
                   <button

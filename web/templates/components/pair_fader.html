@@ -1,0 +1,30 @@
+{#
+    Waagerechter Regler fuer das in dieser Karte gewaehlte Stereopaar -
+    damit man zum Lautermachen nicht bis zur Kanalzug-Karte scrollen
+    muss. "prefix" ist "music" oder "bluetooth"; die Logik dahinter ist
+    fuer beide dieselbe.
+
+    Versteckt, solange das Pult nicht erreichbar ist: Ein Regler, der
+    nichts bewegt, ist schlimmer als keiner.
+#}
+<div id="{{ prefix }}-pair" class="pair-fader mt-2 d-none">
+
+    <button
+        type="button"
+        id="{{ prefix }}-pair-mute"
+        class="btn btn-outline-secondary pair-mute"
+        title="{{ t.faders_mute }}"
+    >M</button>
+
+    <input
+        type="range"
+        id="{{ prefix }}-pair-input"
+        class="form-range pair-input"
+        min="-90"
+        max="10"
+        step="0.5"
+    >
+
+    <span id="{{ prefix }}-pair-db" class="pair-db"></span>
+
+</div>

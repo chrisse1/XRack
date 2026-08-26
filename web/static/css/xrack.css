@@ -343,3 +343,45 @@ body {
     }
 
 }
+
+/* ------------------------------------------------------------------
+   Schnellregler in der Musikspieler- und Bluetooth-Karte
+
+   Derselbe Aufbau wie eine waagerechte Zeile der Kanalzug-Karte, nur
+   ohne Beschriftung - welches Paar gemeint ist, steht direkt darueber
+   in der Kanalauswahl.
+   ------------------------------------------------------------------ */
+
+.pair-fader {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.pair-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+
+    /*
+       Wie bei den Kanalzuegen: Ohne das muss der Browser bei jeder
+       Beruehrung raten, ob gezogen oder gescrollt werden soll.
+    */
+    touch-action: none;
+}
+
+.pair-mute {
+    flex: 0 0 auto;
+    padding: 0.05rem 0.4rem;
+    font-size: 0.7rem;
+    line-height: 1.4;
+}
+
+.pair-db {
+    flex: 0 0 4rem;
+    text-align: right;
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+}

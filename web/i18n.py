@@ -233,6 +233,17 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "mitten im Ziehen schnappt die Sperre also nicht zu."
         ),
         "settings_faders_autolock_saved": "Gespeichert.",
+        "pair_link_confirm": (
+            "Kanäle {a} und {b} am Pult koppeln?\n\n"
+            "Gekoppelt gehen sie am Pult gemeinsam auf und ab. Der "
+            "Regler hier funktioniert auch ohne Kopplung - er schickt "
+            "den Wert dann eben an beide Kanäle."
+        ),
+        "pair_unlink_confirm": (
+            "Kanäle {a} und {b} wieder entkoppeln?\n\n"
+            "Sie bleiben sonst am Pult gekoppelt, auch wenn hier jetzt "
+            "ein anderes Paar gewählt ist."
+        ),
 
         # Update aus dem Internet oder über USB-Stick
         "settings_update_title": "Update",
@@ -610,6 +621,17 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "never snaps shut mid-drag."
         ),
         "settings_faders_autolock_saved": "Saved.",
+        "pair_link_confirm": (
+            "Link channels {a} and {b} on the console?\n\n"
+            "Once linked they move together on the console. The fader "
+            "here works without linking too - it simply sends the value "
+            "to both channels."
+        ),
+        "pair_unlink_confirm": (
+            "Unlink channels {a} and {b} again?\n\n"
+            "Otherwise they stay linked on the console even though a "
+            "different pair is selected here now."
+        ),
 
         # Update from the internet or via USB stick
         "settings_update_title": "Update",

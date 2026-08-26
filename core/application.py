@@ -20,7 +20,7 @@ from core.wlan_control import WlanControl, SHARE_CONNECTION
 from core.bluetooth_control import BluetoothControl
 from core.usb_storage import UsbStorage
 from core.updater import Updater
-from core.console_control import ConsoleControl
+from core.console_control import ConsoleControl, MIN_DB
 from core.diagnostics import Diagnostics
 from core.state_store import StateStore
 from core.pin import hash_pin, verify_pin
@@ -981,6 +981,103 @@ class Application:
         )
 
         return True, ""
+
+    # ----------------------------------------------------------------
+    # Stereopaar direkt aus der Musikspieler-/Bluetooth-Karte regeln
+    # ----------------------------------------------------------------
+
+    def get_console_pair(self, start: int) -> dict:
+        """
+        Pegel und Stummschaltung des Stereopaars, das in einer der
+        beiden Karten gewählt ist.
+        """
+
+        host, channels, _ = self._console_host_and_channels()
+
+        if not host or channels <= 0:
+            return {"available": False, "start": start}
+
+        result = self.console_control.get_pair(host, channels, start)
+
+        if result is None:
+            return {"available": False, "start": start}
+
+        return {
+            "available": True,
+            "start": start,
+            #
+            # Ob XRack selbst gekoppelt hat - nur das bietet es später
+            # wieder zum Entkoppeln an.
+            #
+            "linked_by_xrack": start in self._linked_by_xrack(),
+            **result,
+        }
+
+    def set_console_pair_fader(self, start: int, db: float | None) -> bool:
+        """Setzt den Pegel des Stereopaars."""
+
+        host, channels, _ = self._console_host_and_channels()
+
+        if not host or channels <= 0:
+            return False
+
+        return self.console_control.set_pair_fader(
+            host,
+            channels,
+            start,
+            MIN_DB if db is None else db,
+        )
+
+    def set_console_pair_mute(self, start: int, muted: bool) -> bool:
+        """Schaltet das Stereopaar stumm oder wieder an."""
+
+        host, channels, _ = self._console_host_and_channels()
+
+        if not host or channels <= 0:
+            return False
+
+        return self.console_control.set_pair_mute(host, channels, start, muted)
+
+    def _linked_by_xrack(self) -> set[int]:
+        """Welche Paare XRack selbst gekoppelt hat."""
+
+        return set(self.state_store.get("console_linked_by_xrack", []) or [])
+
+    def set_console_pair_link(self, start: int, linked: bool) -> bool:
+        """
+        Koppelt ein Kanalpaar am Pult oder hebt die Kopplung auf.
+
+        XRack merkt sich, was es selbst gekoppelt hat. Nur diese Paare
+        bietet es später zum Entkoppeln an - eine Kopplung, die der
+        Nutzer am Pult selbst eingerichtet hat, gehört ihm und darf
+        XRack nicht ungefragt wieder auflösen.
+        """
+
+        host, channels, _ = self._console_host_and_channels()
+
+        if not host or channels <= 0:
+            return False
+
+        if not self.console_control.set_link(host, channels, start, linked):
+            return False
+
+        gemerkt = self._linked_by_xrack()
+
+        if linked:
+            gemerkt.add(start)
+        else:
+            gemerkt.discard(start)
+
+        self.state_store.set("console_linked_by_xrack", sorted(gemerkt))
+
+        self.logger.info(
+            "Kanalpaar %d+%d %s",
+            start,
+            start + 1,
+            "gekoppelt" if linked else "entkoppelt",
+        )
+
+        return True
 
     def get_console_host(self) -> dict:
         """

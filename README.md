@@ -54,6 +54,15 @@ the Pi itself.
   That covers the case where console and Pi are both on a router. If a
   router blocks the broadcast, the IP can be entered by hand in the
   settings.
+
+  The music player and Bluetooth cards each carry a fader and a mute
+  button of their own for the stereo pair selected there - no need to
+  scroll down to the channel strips just to turn something up. It works
+  whether or not the two channels are linked on the console: unlinked,
+  the value simply goes to both. When you switch pairs, XRack offers to
+  link the new one - and to unlink the old one, but only if XRack
+  linked it in the first place. Pairs that are stereo by design (17+18
+  on the X-Air) have a single fader anyway, so nothing is asked there.
 - Level meter, a settings dialog (language, port, Wi-Fi, console
   access, mixer sample rate), optional Wi-Fi client + access point
   setup, installable as a PWA.
@@ -179,6 +188,17 @@ am Pi nötig.
   abgedeckt, dass Pult und Pi zusammen an einem Router hängen. Lässt
   ein Router den Rundruf nicht durch, trägt man die IP in den
   Einstellungen von Hand ein.
+
+  Musikspieler- und Bluetooth-Karte haben zusätzlich je einen eigenen
+  Regler samt Mute-Knopf für das dort gewählte Stereopaar - fürs
+  Lautermachen muss man also nicht zu den Kanalzügen scrollen. Das
+  funktioniert unabhängig davon, ob die beiden Kanäle am Pult
+  gekoppelt sind: Sind sie es nicht, geht der Wert einfach an beide.
+  Beim Wechsel des Paars bietet XRack an, das neue zu koppeln - und
+  das alte wieder zu entkoppeln, aber nur, wenn XRack es selbst
+  gekoppelt hat. Paare, die von Natur aus stereo sind (17+18 beim
+  X-Air), haben ohnehin nur einen Regler; dort wird gar nicht erst
+  gefragt.
 - Pegelmesser, Einstellungsdialog (Sprache, Port, WLAN, Zugang zur
   Konsole, Mischpult-Samplerate), optionale WLAN-Client- und
   Access-Point-Einrichtung, als PWA installierbar.

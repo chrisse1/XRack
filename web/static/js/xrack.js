@@ -708,6 +708,264 @@ function toggleFaderLock() {
     resetFaderAutolock();
 }
 
+// ------------------------------------------------------------
+// Schnellregler in der Musikspieler- und Bluetooth-Karte
+//
+// Regelt das Stereopaar, das in der jeweiligen Karte gewaehlt ist -
+// damit man zum Lautermachen nicht bis zur Kanalzug-Karte scrollen
+// muss. Beide Karten teilen sich diese Logik; der Unterschied ist nur
+// das Namenspraefix ("music" oder "bluetooth").
+// ------------------------------------------------------------
+
+const pairFaders = {
+    music: { start: null, dragging: false, lastSent: 0, lastPoll: 0, available: false },
+    bluetooth: { start: null, dragging: false, lastSent: 0, lastPoll: 0, available: false },
+};
+
+//
+// Solange die Quelle laeuft, oefter nachsehen - jemand koennte am Pult
+// oder in der Kanalzug-Karte drehen. Steht sie still, reicht ein
+// gelegentlicher Blick, damit der Regler auftaucht, sobald das Pult
+// erreichbar wird.
+//
+const PAIR_POLL_ACTIVE = 3000;
+const PAIR_POLL_IDLE = 15000;
+
+function pairElements(prefix) {
+    return {
+        box: document.getElementById(`${prefix}-pair`),
+        input: document.getElementById(`${prefix}-pair-input`),
+        mute: document.getElementById(`${prefix}-pair-mute`),
+        readout: document.getElementById(`${prefix}-pair-db`),
+    };
+}
+
+//
+// Wird aus den Statusaktualisierungen beider Karten aufgerufen.
+// "start" ist der erste Kanal des gewaehlten Paars, "active" sagt, ob
+// gerade gespielt bzw. verbunden ist.
+//
+function refreshPairFader(prefix, start, active) {
+    const state = pairFaders[prefix];
+    const { box } = pairElements(prefix);
+
+    if (!box) return;
+
+    if (!start) {
+        box.classList.add("d-none");
+        return;
+    }
+
+    //
+    // Kanalwechsel: sofort neu lesen, nicht auf das naechste
+    // Zeitfenster warten - sonst zeigt der Regler kurz den Pegel des
+    // vorherigen Paars.
+    //
+    const changed = state.start !== start;
+    state.start = start;
+
+    if (state.dragging) return;
+
+    const interval = state.available && active ? PAIR_POLL_ACTIVE : PAIR_POLL_IDLE;
+    const now = Date.now();
+
+    if (!changed && now - state.lastPoll < interval) return;
+
+    state.lastPoll = now;
+
+    loadPairFader(prefix);
+}
+
+async function loadPairFader(prefix) {
+    const state = pairFaders[prefix];
+    const { box, input, mute, readout } = pairElements(prefix);
+
+    if (!box || !state.start) return;
+
+    let data;
+
+    try {
+        data = await (await fetch(`/api/console/pair?start=${state.start}`)).json();
+    } catch (error) {
+        box.classList.add("d-none");
+        state.available = false;
+        return;
+    }
+
+    state.available = Boolean(data.available);
+    state.natural = Boolean(data.natural);
+    state.linked = Boolean(data.linked);
+    state.linkedByXrack = Boolean(data.linked_by_xrack);
+
+    box.classList.toggle("d-none", !data.available);
+
+    if (!data.available) return;
+
+    //
+    // Nicht ueberschreiben, waehrend der Finger am Regler ist.
+    //
+    if (!state.dragging) {
+        input.value = data.db === null ? FADER_MIN_DB : data.db;
+        readout.textContent = formatDb(data.db);
+    }
+
+    mute.classList.toggle("btn-danger", data.muted);
+    mute.classList.toggle("btn-outline-secondary", !data.muted);
+}
+
+["music", "bluetooth"].forEach((prefix) => {
+    const { input, mute } = pairElements(prefix);
+
+    if (!input || !mute) return;
+
+    const state = pairFaders[prefix];
+
+    input.addEventListener("pointerdown", () => {
+        state.dragging = true;
+    });
+
+    input.addEventListener("input", async () => {
+        const db = parseFloat(input.value);
+
+        pairElements(prefix).readout.textContent =
+            formatDb(db <= FADER_MIN_DB ? null : db);
+
+        //
+        // Drosseln wie bei den Kanalzuegen: "input" feuert beim Ziehen
+        // pro Pixel.
+        //
+        const now = Date.now();
+        if (now - state.lastSent < FADER_SEND_INTERVAL) return;
+        state.lastSent = now;
+
+        await sendPairFader(prefix, db);
+    });
+
+    mute.addEventListener("click", () => togglePairMute(prefix));
+});
+
+//
+// Wie bei den Kanalzuegen auf Dokumentebene: Ein Handler direkt am
+// Regler wuerde beim Loslassen zuerst laufen und den letzten Wert
+// verschlucken.
+//
+document.addEventListener("pointerup", finishPairDrag);
+document.addEventListener("pointercancel", finishPairDrag);
+
+async function finishPairDrag() {
+    for (const prefix of ["music", "bluetooth"]) {
+        const state = pairFaders[prefix];
+
+        if (!state.dragging) continue;
+
+        state.dragging = false;
+
+        const { input } = pairElements(prefix);
+
+        if (input) await sendPairFader(prefix, parseFloat(input.value));
+    }
+}
+
+async function sendPairFader(prefix, db) {
+    const state = pairFaders[prefix];
+
+    if (!state.start) return;
+
+    try {
+        await fetch("/api/console/pair/fader", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                start: state.start,
+                db: db <= FADER_MIN_DB ? null : db,
+            }),
+        });
+    } catch (error) {
+        console.error("Pegel konnte nicht gesetzt werden:", error);
+    }
+}
+
+async function togglePairMute(prefix) {
+    const state = pairFaders[prefix];
+    const { mute } = pairElements(prefix);
+
+    if (!state.start || !mute) return;
+
+    const muted = !mute.classList.contains("btn-danger");
+
+    mute.classList.toggle("btn-danger", muted);
+    mute.classList.toggle("btn-outline-secondary", !muted);
+
+    try {
+        await fetch("/api/console/pair/mute", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ start: state.start, muted }),
+        });
+    } catch (error) {
+        console.error("Stummschaltung fehlgeschlagen:", error);
+    }
+}
+
+//
+// Beim Wechsel des Stereopaars: erst fragen, ob das alte Paar wieder
+// entkoppelt werden soll, dann, ob das neue gekoppelt werden soll.
+//
+// Zwei Ausnahmen, ohne die das Fragen laestig oder schlicht falsch
+// waere:
+//
+// - Natuerliche Stereopaare (beim X-Air 17+18 auf dem Aux-Rueckweg)
+//   haben ohnehin nur einen Fader. Da gibt es nichts zu koppeln.
+// - Entkoppelt wird nur, was XRack selbst gekoppelt hat. Eine
+//   Kopplung, die am Pult eingerichtet wurde, gehoert dem Nutzer -
+//   die darf XRack nicht ungefragt aufloesen, und auch nicht anbieten.
+//
+async function handlePairChange(prefix, previous, next) {
+    const state = pairFaders[prefix];
+
+    if (previous && previous !== next && state.available) {
+
+        if (!state.natural && state.linked && state.linkedByXrack) {
+
+            const frage = I18N.pair_unlink_confirm
+                .replace("{a}", previous)
+                .replace("{b}", previous + 1);
+
+            if (confirm(frage)) await setPairLink(previous, false);
+        }
+    }
+
+    //
+    // Zustand des neuen Paars holen - erst danach steht fest, ob es
+    // ueberhaupt etwas zu koppeln gibt.
+    //
+    state.start = next;
+    await loadPairFader(prefix);
+
+    if (!state.available || state.natural || state.linked) return;
+
+    const frage = I18N.pair_link_confirm
+        .replace("{a}", next)
+        .replace("{b}", next + 1);
+
+    if (confirm(frage)) {
+        await setPairLink(next, true);
+        await loadPairFader(prefix);
+    }
+}
+
+async function setPairLink(start, linked) {
+    try {
+        await fetch("/api/console/pair/link", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ start, linked }),
+        });
+    } catch (error) {
+        console.error("Kopplung konnte nicht geaendert werden:", error);
+    }
+}
+
 async function loadFaders() {
     let data;
 
@@ -1588,6 +1846,14 @@ function updateMusicPlayer(data) {
     updateMusicStatus(data);
     updateMusicButtons(data);
     updateMusicSeek(data);
+
+    const select = document.getElementById("music-channels");
+
+    refreshPairFader(
+        "music",
+        select ? Number(select.value) : null,
+        data.music_playing
+    );
 }
 
 function updateMusicChannels(data) {
@@ -1619,7 +1885,11 @@ function updateMusicChannels(data) {
     select.disabled = isAudioBusy(data);
 
     select.onchange = () => {
-        setMusicChannelPreference(Number(select.value));
+        const vorher = pairFaders.music.start;
+        const nachher = Number(select.value);
+
+        setMusicChannelPreference(nachher);
+        handlePairChange("music", vorher, nachher);
     };
 }
 
@@ -3128,6 +3398,14 @@ function updateBluetooth(data) {
     updateBluetoothChannels(data);
     updateBluetoothStatusText(data);
     updateBluetoothControlsState(data);
+
+    const select = document.getElementById("bluetooth-channels");
+
+    refreshPairFader(
+        "bluetooth",
+        select ? Number(select.value) : null,
+        data.bluetooth_streaming
+    );
 }
 
 function updateBluetoothChannels(data) {
@@ -3149,7 +3427,11 @@ function updateBluetoothChannels(data) {
     }
 
     select.onchange = () => {
-        setBluetoothChannelPreference(Number(select.value));
+        const vorher = pairFaders.bluetooth.start;
+        const nachher = Number(select.value);
+
+        setBluetoothChannelPreference(nachher);
+        handlePairChange("bluetooth", vorher, nachher);
     };
 }
 
