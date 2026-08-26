@@ -438,6 +438,23 @@ class WlanControl:
             "on" if enabled else "off",
         )
 
+    def reconnect_console(self) -> tuple[bool, str]:
+        """
+        Trennt die Kabelverbindung kurz und stellt sie wieder her -
+        macht also das nach, was ein Ab- und Anstecken des Kabels
+        bewirkt (siehe scripts/xrack-link-bounce.sh).
+
+        Warum das von Hand auslösbar sein muss: Beim Umschalten der
+        Betriebsart macht das Umschalt-Skript das ohnehin. Nur passiert
+        genau das eben nicht, wenn sich sonst etwas ändert - das Pult
+        wird später eingesteckt, es oder der Pi wird neu gestartet,
+        oder das Pult hält noch eine Adresse aus einem früheren Netz.
+        Dann half bisher nur: hinter das Gerät greifen und das Kabel
+        ziehen. Genau das macht dieser Weg, ohne aufzustehen.
+        """
+
+        return self._run_script("xrack-link-bounce.sh", "eth0")
+
     def set_port_forward(
         self,
         enabled: bool,

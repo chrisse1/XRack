@@ -3628,6 +3628,55 @@ async function submitWifiChange(url, ssid, password) {
     await loadSettings();
 }
 
+//
+// Kabel ziehen und wieder anstecken - nur eben aus der Ferne.
+//
+document
+    .getElementById("btn-console-reconnect")
+    .addEventListener("click", reconnectConsole);
+
+async function reconnectConsole() {
+    const button = document.getElementById("btn-console-reconnect");
+
+    //
+    // Das Skript trennt und wartet - zusammen ein paar Sekunden.
+    // Solange den Knopf sperren, sonst klickt man in der Zeit noch
+    // dreimal und trennt mitten im Neuaufbau wieder.
+    //
+    button.disabled = true;
+
+    try {
+        const response = await fetch("/api/settings/console_reconnect", {
+            method: "POST",
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+            alert(
+                I18N.alert_console_reconnect_failed
+                    .replace("{message}", result.message || "")
+            );
+            return;
+        }
+
+        alert(I18N.alert_console_reconnect_done);
+
+        //
+        // Danach dasselbe Nachfassen wie beim Umschalten: Das Pult
+        // braucht einen Moment fuer seine neue Adresse.
+        //
+        await loadSettings();
+        recheckConsoleAfterSwitch();
+
+    } catch (error) {
+        console.error("Verbindung konnte nicht neu aufgebaut werden:", error);
+        alert(I18N.alert_console_reconnect_failed.replace("{message}", ""));
+    } finally {
+        button.disabled = false;
+    }
+}
+
 async function toggleBridge(event) {
     const enabled = event.target.checked;
     const confirmText = enabled ? I18N.confirm_bridge_on : I18N.confirm_bridge_off;

@@ -743,6 +743,60 @@ cp "$quelle" "$ziel"
 
     print("OK: Der Name des Access Points laesst sich auslesen")
 
+    # ----------------------------------------------------------------
+    # 12. Der Kabel-Trick allein, ohne Umschalten
+    #
+    # Beim Umschalten trennen die beiden Skripte die Verbindung
+    # ohnehin kurz. Nur passiert genau das eben nicht, wenn sich sonst
+    # etwas aendert - das Pult wird spaeter eingesteckt, es oder der
+    # Pi wird neu gestartet, oder das Pult haelt noch eine Adresse aus
+    # einem frueheren Netz. Dafuer laesst sich das Skript jetzt auch
+    # einzeln aufrufen (Knopf im Einstellungen-Fenster).
+    # ----------------------------------------------------------------
+
+    netz = Netzwerk(scratch / "kabel")
+
+    ergebnis = subprocess.run(
+        [str(SKRIPTE / "xrack-link-bounce.sh"), "eth0"],
+        env=netz.umgebung,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert ergebnis.returncode == 0, ergebnis.stderr
+
+    geschaltet = netz.linkschaltungen()
+
+    assert geschaltet == ["eth0 down", "eth0 up"], (
+        f"Erst trennen, dann wieder verbinden - bekommen: {geschaltet}"
+    )
+
+    print("OK: Der Kabel-Trick laesst sich einzeln ausloesen")
+
+    #
+    # Einen Anschluss, den es nicht gibt, darf das Skript nicht als
+    # Fehler melden: Nicht jede Installation hat jeden Anschluss, und
+    # ein Fehlschlag hier wuerde im Einstellungen-Fenster als roter
+    # Hinweis landen, obwohl nichts kaputt ist.
+    #
+    netz = Netzwerk(scratch / "kabel-fehlt")
+
+    ergebnis = subprocess.run(
+        [str(SKRIPTE / "xrack-link-bounce.sh"), "gibtsnicht0"],
+        env=netz.umgebung,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert ergebnis.returncode == 0, (
+        f"Ein fehlender Anschluss wurde als Fehler gemeldet: {ergebnis.stderr}"
+    )
+    assert netz.linkschaltungen() == [], netz.linkschaltungen()
+
+    print("OK: Ein fehlender Anschluss ist kein Fehler")
+
     print("Alle Tests erfolgreich.")
 
 finally:

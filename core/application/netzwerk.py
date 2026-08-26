@@ -65,6 +65,23 @@ class NetzwerkMixin:
         return self.wlan_control.set_ap_wifi(ssid, password)
 
 
+    def reconnect_console(self) -> tuple[bool, str]:
+        """
+        Stösst beim angeschlossenen Pult eine neue Adressvergabe an
+        (siehe WlanControl.reconnect_console).
+        """
+
+        erfolg, meldung = self.wlan_control.reconnect_console()
+
+        if erfolg:
+            #
+            # Die gemerkte Familie/Adresse hängt an der alten IP - nach
+            # dem Neuaufbau kann eine andere kommen.
+            #
+            self.console_control.detect_reset()
+
+        return erfolg, meldung
+
     def set_bridge(self, enabled: bool) -> tuple[bool, str]:
         """
         Schaltet die Ethernet+Access-Point-Bridge an oder aus.

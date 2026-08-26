@@ -221,6 +221,23 @@ def set_ap_wifi(
     }
 
 
+@router.post("/api/settings/console_reconnect")
+def reconnect_console(request: Request):
+    """
+    Baut die Kabelverbindung zum Pult neu auf - dasselbe wie Kabel
+    ziehen und wieder anstecken.
+    """
+
+    application = request.app.state.application
+
+    success, message = application.reconnect_console()
+
+    return {
+        "success": success,
+        "message": message,
+    }
+
+
 @router.post("/api/settings/bridge")
 def set_bridge(
     selection: BridgeSelection,
