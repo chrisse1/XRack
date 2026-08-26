@@ -300,11 +300,7 @@ class Recorder:
         return self._bytes_written / 1024 / 1024
 
 
-    @property
-    def gigabytes_written(self) -> float:
 
-        return self._bytes_written / 1024 / 1024 / 1024
-        
     @property
     def current_filename(self) -> str:
         """

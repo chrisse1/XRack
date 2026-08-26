@@ -56,4 +56,80 @@ with tempfile.TemporaryDirectory() as tmp_dir:
     assert store4.get("record_channels", 18) == 18
     print("OK: Beschädigte Datei führt nicht zum Absturz")
 
+    # ---------------------------------------------------------
+    # 5. Der Schreibvorgang ist unteilbar
+    #
+    # XRack laeuft auf einem Geraet, das auch mal einfach vom Strom
+    # getrennt wird. Wird direkt in die Zieldatei geschrieben, gibt es
+    # einen Moment, in dem sie abgeschnitten dasteht - und beim
+    # naechsten Start faengt load() das zwar ab, startet dann aber
+    # still mit leerem Zustand. Saemtliche Einstellungen waeren weg,
+    # ohne dass irgendwo etwas aufblinkt.
+    #
+    # Geprueft wird deshalb nicht das Ergebnis, sondern der Weg
+    # dorthin: Waehrend geschrieben wird, muss die Zieldatei entweder
+    # ihren alten Inhalt haben oder den neuen - nie etwas dazwischen.
+    # ---------------------------------------------------------
+
+    import json
+    import threading
+
+    atom_path = Path(tmp_dir) / "config" / "atomar.json"
+
+    store5 = StateStore(atom_path)
+    store5.set("wert", "alt")
+
+    gesehen = []
+    weiter = threading.Event()
+
+    def mitlesen():
+        """Liest die Zieldatei, waehrend geschrieben wird."""
+
+        while not weiter.is_set():
+
+            try:
+                gesehen.append(json.loads(atom_path.read_text(encoding="utf-8")))
+            except FileNotFoundError:
+                gesehen.append("fehlt")
+            except json.JSONDecodeError:
+                gesehen.append("halb")
+            except OSError:
+                pass
+
+    leser = threading.Thread(target=mitlesen, daemon=True)
+    leser.start()
+
+    #
+    # Viele Schreibvorgaenge mit wachsendem Inhalt, damit der Leser
+    # moeglichst oft mitten hinein faellt.
+    #
+    for runde in range(200):
+        store5.set("wert", "neu" * (runde + 1))
+
+    weiter.set()
+    leser.join(timeout=5.0)
+
+    assert gesehen, "Der Leser hat gar nichts gesehen - Test taugt nichts."
+
+    kaputt = [g for g in gesehen if g in ("halb", "fehlt")]
+
+    assert not kaputt, (
+        f"Bei {len(kaputt)} von {len(gesehen)} Blicken stand die Datei "
+        f"unvollstaendig da - der Schreibvorgang ist nicht unteilbar."
+    )
+
+    print(
+        f"OK: Waehrend {len(gesehen)} Blicken war die Zustandsdatei nie "
+        f"unvollstaendig"
+    )
+
+    #
+    # Und die Nebendatei darf nicht liegenbleiben.
+    #
+    assert not atom_path.with_suffix(".tmp").exists(), (
+        "Die temporaere Datei wurde nicht aufgeraeumt."
+    )
+
+    print("OK: Es bleibt keine Nebendatei liegen")
+
 print("Alle Tests erfolgreich.")

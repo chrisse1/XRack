@@ -156,12 +156,6 @@ class AudioManager:
     def get_devices(self) -> list[AudioDevice]:
         return self.devices
 
-    def get_default_device(self) -> AudioDevice | None:
-        if self.devices:
-            return self.devices[0]
-
-        return None
-        
     def get_device(self, device_id: str) -> AudioDevice | None:
         """
         Liefert ein Audiogerät anhand seiner ID.

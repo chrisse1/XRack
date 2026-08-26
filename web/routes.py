@@ -16,6 +16,27 @@ from fastapi import UploadFile, File, Form
 from audio.models import DeleteRecordingsRequest
 from web.i18n import get_translations
 
+#
+# Warum hier KEIN "async def" steht, obwohl FastAPI das anbietet:
+#
+# Ein async-Handler laeuft im Event-Loop. Blockiert er, steht die
+# gesamte Weboberflaeche still - auch der Sekundenpuls von
+# /api/status. Hinter praktisch jedem Endpunkt hier stecken aber
+# blockierende Aufrufe: subprocess (nmcli, bluetoothctl, ffmpeg) mit
+# Timeouts bis 30 Sekunden, Dateizugriffe und UDP-Anfragen ans
+# Mischpult. Antwortet das Pult auf /info, dann aber nicht mehr - Kabel
+# im Betrieb gezogen -, summieren sich allein dessen Zeitueberschreitungen
+# auf rund 19 Sekunden.
+#
+# Nicht-async Handler fuehrt FastAPI selbsttaetig in einem Threadpool
+# aus. Dort darf blockiert werden, ohne dass es alle anderen Anfragen
+# mitreisst. Fuer eine Anwendung, die im Kern Unterprozesse und Geraete
+# bedient, ist das die richtige Betriebsart - nicht die Ausnahme.
+#
+# Ein Handler darf hier nur dann async werden, wenn er tatsaechlich
+# "await" benutzt.
+#
+
 class AudioSelection(BaseModel):
     device_id: str
 
@@ -151,7 +172,7 @@ class BluetoothDisconnectSelection(BaseModel):
     mac: str
 
 @router.post("/api/audio/select")
-async def audio_select(
+def audio_select(
     selection: AudioSelection,
     request: Request,
 ):
@@ -167,7 +188,7 @@ async def audio_select(
     }
 
 @router.post("/api/audio/rescan")
-async def rescan_audio_devices(
+def rescan_audio_devices(
     request: Request,
 ):
 
@@ -182,7 +203,7 @@ async def rescan_audio_devices(
     }
 
 @router.get("/", response_class=HTMLResponse)
-async def index(request: Request):
+def index(request: Request):
 
     application = request.app.state.application
 
@@ -215,7 +236,7 @@ async def index(request: Request):
 
 
 @router.get("/api/status")
-async def status(request: Request):
+def status(request: Request):
 
     application = request.app.state.application
 
@@ -224,7 +245,7 @@ async def status(request: Request):
     return application.status.model_dump()
     
 @router.post("/api/recorder/start")
-async def recorder_start(request: Request):
+def recorder_start(request: Request):
 
     application = request.app.state.application
 
@@ -236,7 +257,7 @@ async def recorder_start(request: Request):
 
 
 @router.post("/api/recorder/stop")
-async def recorder_stop(request: Request):
+def recorder_stop(request: Request):
 
     application = request.app.state.application
 
@@ -247,7 +268,7 @@ async def recorder_stop(request: Request):
     }
 
 @router.post("/api/recorder/channels")
-async def recorder_channels(
+def recorder_channels(
     selection: RecorderChannels,
     request: Request,
 ):
@@ -264,7 +285,7 @@ async def recorder_channels(
 
 
 @router.post("/api/recorder/monitor/start")
-async def recorder_monitor_start(request: Request):
+def recorder_monitor_start(request: Request):
 
     application = request.app.state.application
 
@@ -276,7 +297,7 @@ async def recorder_monitor_start(request: Request):
 
 
 @router.post("/api/recorder/monitor/stop")
-async def recorder_monitor_stop(request: Request):
+def recorder_monitor_stop(request: Request):
 
     application = request.app.state.application
 
@@ -288,7 +309,7 @@ async def recorder_monitor_stop(request: Request):
 
 
 @router.get("/api/recorder/levels")
-async def recorder_levels(request: Request):
+def recorder_levels(request: Request):
 
     application = request.app.state.application
 
@@ -298,7 +319,7 @@ async def recorder_levels(request: Request):
     }
 
 @router.post("/api/recorder/soundcheck/start")
-async def soundcheck_start(
+def soundcheck_start(
     selection: SoundcheckSelection,
     request: Request,
 ):
@@ -315,7 +336,7 @@ async def soundcheck_start(
 
 
 @router.post("/api/recorder/soundcheck/stop")
-async def soundcheck_stop(request: Request):
+def soundcheck_stop(request: Request):
 
     application = request.app.state.application
 
@@ -327,7 +348,7 @@ async def soundcheck_stop(request: Request):
 
 
 @router.get("/api/music/browse")
-async def music_browse(
+def music_browse(
     request: Request,
     path: str = "",
 ):
@@ -350,7 +371,7 @@ async def music_browse(
 
 
 @router.post("/api/music/channel")
-async def music_channel(
+def music_channel(
     selection: MusicChannelSelection,
     request: Request,
 ):
@@ -367,7 +388,7 @@ async def music_channel(
 
 
 @router.post("/api/music/play-folder")
-async def music_play_folder(
+def music_play_folder(
     selection: MusicFolderSelection,
     request: Request,
 ):
@@ -385,7 +406,7 @@ async def music_play_folder(
 
 
 @router.post("/api/music/play-file")
-async def music_play_file(
+def music_play_file(
     selection: MusicFileSelection,
     request: Request,
 ):
@@ -403,7 +424,7 @@ async def music_play_file(
 
 
 @router.post("/api/music/stop")
-async def music_stop(request: Request):
+def music_stop(request: Request):
 
     application = request.app.state.application
 
@@ -415,7 +436,7 @@ async def music_stop(request: Request):
 
 
 @router.post("/api/music/pause")
-async def music_pause(request: Request):
+def music_pause(request: Request):
 
     application = request.app.state.application
 
@@ -427,7 +448,7 @@ async def music_pause(request: Request):
 
 
 @router.post("/api/music/resume")
-async def music_resume(request: Request):
+def music_resume(request: Request):
 
     application = request.app.state.application
 
@@ -439,7 +460,7 @@ async def music_resume(request: Request):
 
 
 @router.post("/api/music/skip")
-async def music_skip(request: Request):
+def music_skip(request: Request):
 
     application = request.app.state.application
 
@@ -451,7 +472,7 @@ async def music_skip(request: Request):
 
 
 @router.post("/api/music/seek")
-async def music_seek(
+def music_seek(
     selection: MusicSeekSelection,
     request: Request,
 ):
@@ -468,7 +489,7 @@ async def music_seek(
 
 
 @router.post("/api/music/create-folder")
-async def music_create_folder(
+def music_create_folder(
     selection: MusicFolderCreate,
     request: Request,
 ):
@@ -486,7 +507,7 @@ async def music_create_folder(
 
 
 @router.post("/api/music/delete")
-async def music_delete_file(
+def music_delete_file(
     selection: MusicFileDelete,
     request: Request,
 ):
@@ -503,7 +524,7 @@ async def music_delete_file(
 
 
 @router.post("/api/music/delete-multi")
-async def music_delete_files(
+def music_delete_files(
     selection: MusicFilesDelete,
     request: Request,
 ):
@@ -521,7 +542,7 @@ async def music_delete_files(
 
 
 @router.post("/api/system/shutdown")
-async def system_shutdown(request: Request):
+def system_shutdown(request: Request):
 
     application = request.app.state.application
 
@@ -533,7 +554,7 @@ async def system_shutdown(request: Request):
 
 
 @router.post("/api/system/restart")
-async def system_restart(request: Request):
+def system_restart(request: Request):
 
     application = request.app.state.application
 
@@ -545,7 +566,7 @@ async def system_restart(request: Request):
 
 
 @router.get("/api/settings")
-async def get_settings(request: Request):
+def get_settings(request: Request):
 
     application = request.app.state.application
 
@@ -574,7 +595,7 @@ async def get_settings(request: Request):
 
 
 @router.get("/api/settings/pin/status")
-async def get_settings_pin_status(request: Request):
+def get_settings_pin_status(request: Request):
 
     application = request.app.state.application
 
@@ -584,7 +605,7 @@ async def get_settings_pin_status(request: Request):
 
 
 @router.post("/api/settings/pin/verify")
-async def verify_settings_pin(
+def verify_settings_pin(
     selection: PinVerifySelection,
     request: Request,
 ):
@@ -599,7 +620,7 @@ async def verify_settings_pin(
 
 
 @router.post("/api/settings/pin/change")
-async def change_settings_pin(
+def change_settings_pin(
     selection: PinChangeSelection,
     request: Request,
 ):
@@ -618,7 +639,7 @@ async def change_settings_pin(
 
 
 @router.post("/api/settings/recording")
-async def set_recording_prefix(
+def set_recording_prefix(
     selection: RecordingPrefixSelection,
     request: Request,
 ):
@@ -633,7 +654,7 @@ async def set_recording_prefix(
 
 
 @router.post("/api/settings/language")
-async def set_language(
+def set_language(
     selection: LanguageSelection,
     request: Request,
 ):
@@ -648,7 +669,7 @@ async def set_language(
 
 
 @router.post("/api/settings/sample_rate")
-async def set_sample_rate(
+def set_sample_rate(
     selection: SampleRateSelection,
     request: Request,
 ):
@@ -663,7 +684,7 @@ async def set_sample_rate(
 
 
 @router.post("/api/settings/port")
-async def set_port(
+def set_port(
     selection: PortSelection,
     request: Request,
 ):
@@ -678,7 +699,7 @@ async def set_port(
 
 
 @router.post("/api/settings/wifi/home")
-async def set_home_wifi(
+def set_home_wifi(
     credentials: WifiCredentials,
     request: Request,
 ):
@@ -697,7 +718,7 @@ async def set_home_wifi(
 
 
 @router.post("/api/settings/wifi/ap")
-async def set_ap_wifi(
+def set_ap_wifi(
     credentials: WifiCredentials,
     request: Request,
 ):
@@ -716,7 +737,7 @@ async def set_ap_wifi(
 
 
 @router.post("/api/settings/bridge")
-async def set_bridge(
+def set_bridge(
     selection: BridgeSelection,
     request: Request,
 ):
@@ -734,7 +755,7 @@ async def set_bridge(
 
 
 @router.post("/api/settings/console_access")
-async def set_console_access(
+def set_console_access(
     selection: ConsoleAccessSelection,
     request: Request,
 ):
@@ -758,7 +779,7 @@ async def set_console_access(
 
 
 @router.get("/api/bluetooth/status")
-async def bluetooth_status(request: Request):
+def bluetooth_status(request: Request):
 
     application = request.app.state.application
 
@@ -766,7 +787,7 @@ async def bluetooth_status(request: Request):
 
 
 @router.post("/api/bluetooth/power")
-async def bluetooth_power(
+def bluetooth_power(
     selection: BluetoothPowerSelection,
     request: Request,
 ):
@@ -784,7 +805,7 @@ async def bluetooth_power(
 
 
 @router.post("/api/bluetooth/pair")
-async def bluetooth_pair(request: Request):
+def bluetooth_pair(request: Request):
 
     application = request.app.state.application
 
@@ -797,7 +818,7 @@ async def bluetooth_pair(request: Request):
 
 
 @router.post("/api/bluetooth/forget")
-async def bluetooth_forget(
+def bluetooth_forget(
     selection: BluetoothForgetSelection,
     request: Request,
 ):
@@ -815,7 +836,7 @@ async def bluetooth_forget(
 
 
 @router.post("/api/bluetooth/disconnect")
-async def bluetooth_disconnect(
+def bluetooth_disconnect(
     selection: BluetoothDisconnectSelection,
     request: Request,
 ):
@@ -833,7 +854,7 @@ async def bluetooth_disconnect(
 
 
 @router.post("/api/bluetooth/channel")
-async def bluetooth_channel(
+def bluetooth_channel(
     selection: BluetoothChannelSelection,
     request: Request,
 ):
@@ -850,7 +871,7 @@ async def bluetooth_channel(
 
 
 @router.post("/api/music/upload")
-async def music_upload(
+def music_upload(
     request: Request,
     path: str = Form(""),
     files: list[UploadFile] = File(...),
@@ -897,7 +918,7 @@ def get_recording_info(
     )
        
 @router.post("/api/recording/info")
-async def recording_info(
+def recording_info(
     selection: RecordingSelection,
     request: Request,
 ):
@@ -953,7 +974,7 @@ async def recording_info(
     }
 
 @router.get("/api/recordings")
-async def recordings(request: Request):
+def recordings(request: Request):
 
     application = request.app.state.application
 
@@ -982,7 +1003,7 @@ async def recordings(request: Request):
     return items
     
 @router.get("/api/audio/devices")
-async def audio_devices(request: Request):
+def audio_devices(request: Request):
 
     application = request.app.state.application
 
@@ -1014,7 +1035,7 @@ async def audio_devices(request: Request):
     return devices
     
 @router.get("/api/recordings/{filename}")
-async def download_recording(
+def download_recording(
     filename: str,
     request: Request,
 ):
@@ -1038,7 +1059,7 @@ async def download_recording(
     )
     
 @router.delete("/api/recordings/{filename}")
-async def delete_recording(
+def delete_recording(
     filename: str,
     request: Request,
 ):
@@ -1060,7 +1081,7 @@ async def delete_recording(
     return Response(status_code=204)
     
 @router.post("/api/recordings/delete")
-async def delete_recordings(
+def delete_recordings(
     request_data: DeleteRecordingsRequest,
     request: Request,
 ):
@@ -1085,7 +1106,7 @@ async def delete_recordings(
 
 
 @router.post("/api/recordings/upload")
-async def upload_recordings(
+def upload_recordings(
     request: Request,
     files: list[UploadFile] = File(...),
 ):
@@ -1147,7 +1168,7 @@ async def upload_recordings(
 
 
 @router.post("/api/recordings/combine")
-async def combine_recordings(
+def combine_recordings(
     request: Request,
     name: str = Form(...),
     files: list[UploadFile] = File(...),
@@ -1194,7 +1215,7 @@ async def combine_recordings(
 
 
 @router.get("/api/recordings/combine/status")
-async def combine_recordings_status(request: Request):
+def combine_recordings_status(request: Request):
 
     application = request.app.state.application
 
@@ -1202,7 +1223,7 @@ async def combine_recordings_status(request: Request):
 
 
 @router.get("/api/update/info")
-async def update_info(request: Request):
+def update_info(request: Request):
     """
     Liefert die laufende Version, ob eine ZIP auf dem USB-Stick liegt,
     und den Fortschritt eines laufenden Updates.
@@ -1214,7 +1235,7 @@ async def update_info(request: Request):
 
 
 @router.post("/api/update/start")
-async def update_start(request: Request, selection: UpdateSelection):
+def update_start(request: Request, selection: UpdateSelection):
     """
     Startet das Update - aus dem Internet oder aus der ZIP-Datei auf
     dem USB-Stick.
@@ -1235,7 +1256,7 @@ async def update_start(request: Request, selection: UpdateSelection):
 
 
 @router.get("/api/update/status")
-async def update_status(request: Request):
+def update_status(request: Request):
 
     application = request.app.state.application
 
@@ -1243,7 +1264,7 @@ async def update_status(request: Request):
 
 
 @router.get("/api/console/pair")
-async def console_pair(request: Request, start: int):
+def console_pair(request: Request, start: int):
     """
     Pegel und Stummschaltung des Stereopaars, das im Musikspieler oder
     bei Bluetooth gewählt ist - damit man dafür nicht zur Fader-Karte
@@ -1256,7 +1277,7 @@ async def console_pair(request: Request, start: int):
 
 
 @router.post("/api/console/pair/fader")
-async def console_pair_fader(
+def console_pair_fader(
     selection: PairFaderSelection,
     request: Request,
 ):
@@ -1271,7 +1292,7 @@ async def console_pair_fader(
 
 
 @router.post("/api/console/pair/mute")
-async def console_pair_mute(
+def console_pair_mute(
     selection: PairMuteSelection,
     request: Request,
 ):
@@ -1286,7 +1307,7 @@ async def console_pair_mute(
 
 
 @router.post("/api/console/pair/link")
-async def console_pair_link(
+def console_pair_link(
     selection: PairLinkSelection,
     request: Request,
 ):
@@ -1304,7 +1325,7 @@ async def console_pair_link(
 
 
 @router.post("/api/settings/faders-autolock")
-async def settings_faders_autolock(
+def settings_faders_autolock(
     selection: FadersAutolockSelection,
     request: Request,
 ):
@@ -1327,7 +1348,7 @@ async def settings_faders_autolock(
 
 
 @router.post("/api/console/host")
-async def console_host(
+def console_host(
     selection: ConsoleHostSelection,
     request: Request,
 ):
@@ -1348,7 +1369,7 @@ async def console_host(
 
 
 @router.post("/api/update/acknowledge")
-async def update_acknowledge(request: Request):
+def update_acknowledge(request: Request):
     """
     Quittiert das Ergebnis des letzten Updates - danach zeigt das
     Einstellungen-Modal es nicht mehr an.
@@ -1360,7 +1381,7 @@ async def update_acknowledge(request: Request):
 
 
 @router.get("/api/diagnostics/status")
-async def diagnostics_status(request: Request):
+def diagnostics_status(request: Request):
 
     application = request.app.state.application
 
@@ -1368,7 +1389,7 @@ async def diagnostics_status(request: Request):
 
 
 @router.post("/api/diagnostics")
-async def set_diagnostics(
+def set_diagnostics(
     selection: DiagnosticsSelection,
     request: Request,
 ):
@@ -1384,7 +1405,7 @@ async def set_diagnostics(
 
 
 @router.get("/api/diagnostics/download")
-async def download_diagnostics(request: Request):
+def download_diagnostics(request: Request):
     """
     Liefert die Aufzeichnung zum Herunterladen - damit man sie zur
     Fehlersuche weitergeben kann, ohne sie per SSH holen zu müssen.
@@ -1405,7 +1426,7 @@ async def download_diagnostics(request: Request):
 
 
 @router.get("/api/console/channels")
-async def console_channels(request: Request):
+def console_channels(request: Request):
     """
     Kanalnamen und Faderstellungen des Mischpults für die Fader-Karte.
 
@@ -1420,7 +1441,7 @@ async def console_channels(request: Request):
 
 
 @router.post("/api/console/fader")
-async def set_console_fader(
+def set_console_fader(
     selection: FaderSelection,
     request: Request,
 ):
@@ -1438,7 +1459,7 @@ async def set_console_fader(
 
 
 @router.post("/api/console/mute")
-async def set_console_mute(
+def set_console_mute(
     selection: MuteSelection,
     request: Request,
 ):
@@ -1456,7 +1477,7 @@ async def set_console_mute(
 
 
 @router.get("/api/usb/status")
-async def usb_status(request: Request):
+def usb_status(request: Request):
 
     application = request.app.state.application
 
@@ -1466,7 +1487,7 @@ async def usb_status(request: Request):
 
 
 @router.post("/api/recordings/copy_to_usb")
-async def copy_recording_to_usb(
+def copy_recording_to_usb(
     selection: UsbCopySelection,
     request: Request,
 ):
@@ -1484,7 +1505,7 @@ async def copy_recording_to_usb(
 
 
 @router.get("/api/usb/copy_status")
-async def usb_copy_status(request: Request):
+def usb_copy_status(request: Request):
 
     application = request.app.state.application
 
@@ -1492,7 +1513,7 @@ async def usb_copy_status(request: Request):
 
 
 @router.post("/api/usb/eject")
-async def eject_usb(request: Request):
+def eject_usb(request: Request):
 
     application = request.app.state.application
 

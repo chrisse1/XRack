@@ -5,6 +5,7 @@ als JSON-Datei, damit sie einen Neustart überstehen.
 
 import json
 import logging
+import os
 from pathlib import Path
 
 
@@ -48,7 +49,24 @@ class StateStore:
     def save(self) -> None:
         """
         Schreibt den aktuellen Zustand auf die Platte.
+
+        Erst vollständig in eine Nebendatei, dann umbenennen. Ein
+        Umbenennen im selben Verzeichnis ist unteilbar: Es gibt keinen
+        Moment, in dem die Zieldatei halb geschrieben dasteht.
+
+        Das ist hier keine Förmlichkeit. XRack läuft auf einem Gerät im
+        Rack, das auch mal einfach vom Strom getrennt wird. Direkt in
+        die Zieldatei geschrieben, hinterlässt so ein Moment eine
+        abgeschnittene Datei - und load() fängt den Fehler zwar ab,
+        startet dann aber still mit leerem Zustand. Weg wären
+        Audiogerät, Kanalzahl, Pult-IP, Sperrzeit und die
+        Kopplungs-Buchführung, ohne dass irgendwo etwas aufblinkt.
+
+        Dasselbe Muster benutzt schon scripts/xrack-update.py für seine
+        Statusdatei.
         """
+
+        temporaer = self.path.with_suffix(".tmp")
 
         try:
 
@@ -57,8 +75,21 @@ class StateStore:
                 exist_ok=True,
             )
 
-            with self.path.open("w", encoding="utf-8") as file:
+            with temporaer.open("w", encoding="utf-8") as file:
+
                 json.dump(self._data, file)
+
+                #
+                # Vor dem Umbenennen wirklich auf die Platte bringen.
+                # Ohne das steht der Inhalt womöglich noch im
+                # Schreibpuffer des Systems, während der neue Name
+                # bereits gilt - dann zeigt der Name nach einem
+                # Stromausfall auf eine leere Datei.
+                #
+                file.flush()
+                os.fsync(file.fileno())
+
+            temporaer.replace(self.path)
 
         except OSError as exc:
 
@@ -66,6 +97,11 @@ class StateStore:
                 "Zustand konnte nicht gespeichert werden: %s",
                 exc,
             )
+
+            #
+            # Halbe Nebendatei nicht liegen lassen.
+            #
+            temporaer.unlink(missing_ok=True)
 
     def get(self, key: str, default=None):
         return self._data.get(key, default)

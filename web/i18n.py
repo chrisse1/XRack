@@ -210,7 +210,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "settings_app_ip_label": "In der Steuerungs-App eintragen:",
         "settings_console_ip_label": "Konsole am Pi:",
-        "settings_console_ip_not_found": "Noch nicht erkannt.",
         "settings_console_host_label": "IP des Mischpults",
         "settings_console_host_placeholder": "automatisch",
         "settings_console_host_hint": (
@@ -599,7 +598,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "settings_app_ip_label": "Enter this in your control app:",
         "settings_console_ip_label": "Console at the Pi:",
-        "settings_console_ip_not_found": "Not detected yet.",
         "settings_console_host_label": "Mixer IP address",
         "settings_console_host_placeholder": "automatic",
         "settings_console_host_hint": (
