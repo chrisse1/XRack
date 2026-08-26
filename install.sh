@@ -192,7 +192,9 @@ install_system_dependencies() {
         openssl \
         exfatprogs \
         ntfs-3g \
-        iptables > /dev/null
+        iptables \
+        iw \
+        hostapd > /dev/null
 
     echo "$(L "XRack: Python-Umgebung wird eingerichtet..." "XRack: Setting up Python environment...")"
 
@@ -362,6 +364,381 @@ configure_firewall() {
 # mit dem Pi/Mischpult spricht - ganz ohne Router vor Ort. Komplett
 # optional und nur bei interaktivem Lauf, per NetworkManager (nmcli).
 #
+# ------------------------------------------------------------------
+# Access Point: hostapd statt NetworkManager
+# ------------------------------------------------------------------
+#
+# Warum dieser Umbau:
+#
+# NetworkManager spannt seinen Hotspot mit der AP-Betriebsart von
+# wpa_supplicant auf. Die ist dort Beiwerk - wpa_supplicant ist zum
+# Verbinden mit fremden Netzen gebaut, nicht zum Betreiben eines
+# eigenen. Im Betrieb sah das so aus: Mal verbindet sich das Handy
+# sofort, mal muss man das Passwort zehnmal eingeben. Im Protokoll
+# stand dazu nicht etwa ein Passwort- oder Schluesselfehler, sondern
+#
+#     handle_assoc_cb: STA ... not found
+#
+# Der Anmeldeversuch kam also an, nur war der Client zu diesem
+# Zeitpunkt intern schon wieder vergessen - ein Wettlauf. Fuer den
+# Nutzer sieht das aus wie ein falsches Passwort.
+#
+# hostapd ist das Programm, fuer das AP-Betrieb der Hauptzweck ist
+# (wpa_supplicants AP-Code stammt urspruenglich sogar daher). Damit
+# faellt die Ursache weg, statt sie zu umgehen.
+#
+# Aufbau danach:
+#
+#   hostapd  ->  Funk und Verschluesselung auf dem AP-Interface
+#   br0      ->  Layer 2: der Access Point immer, eth0 (Mischpult)
+#                zuschaltbar
+#   NM       ->  IP, DHCP und NAT auf br0 ("ipv4.method shared"),
+#                ausserdem Heimnetz-Client und Kabelverbindung
+#
+# Wichtig daran: Der Access Point haengt ab jetzt IMMER in der
+# Bridge, auch wenn gerade kein Ethernet zugeschaltet ist. Das
+# Umschalten "Konsole ueber XRacks Access Point erreichbar" haengt
+# damit nur noch eth0 in die Bridge ein oder aus - der Funkbetrieb
+# wird dabei nicht mehr angefasst. Vorher wurde dafuer der Access
+# Point selbst umkonfiguriert und neu gestartet; daher kamen der
+# Neustartbedarf beim Umschalten und der Zustand "beide Schalter an"
+# nach dem Booten.
+#
+# Damit hostapd das Interface bekommt, wird es NetworkManager
+# ausdruecklich entzogen (unmanaged-devices) - sonst wuerden beide
+# gleichzeitig darauf funken wollen.
+#
+
+XRACK_HOSTAPD_CONF="/etc/hostapd/xrack.conf"
+XRACK_HOSTAPD_UNIT="/etc/systemd/system/xrack-hostapd.service"
+XRACK_NM_UNMANAGED="/etc/NetworkManager/conf.d/99-xrack-hostapd.conf"
+
+#
+# Die Bridge anlegen, in der der Access Point lebt.
+#
+# eth0 wird hier bewusst NICHT aktiviert: Wer den Pi gerade per SSH
+# ueber eth0 einrichtet, verloere sonst mitten in der Installation
+# die Verbindung. Das eth0-Profil der Bridge wird nur angelegt und
+# bleibt aus, bis es im Einstellungen-Menue zugeschaltet wird
+# (scripts/xrack-bridge-toggle.sh).
+#
+setup_ap_bridge() {
+
+    #
+    # Feste Adresse statt NetworkManager die Range frei waehlen zu
+    # lassen: Sonst verschiebt sich das Subnetz je nach Reihenfolge
+    # anderer "shared"-Verbindungen zwischen 10.42.0.0/24 und
+    # 10.42.1.0/24, und die Portweiterleitung
+    # (scripts/xrack-port-forward.sh) zeigt auf eine veraltete
+    # Konsolen-IP.
+    #
+    if ! nmcli -t -f NAME connection show | grep -qx "XRack-Bridge"; then
+
+        sudo nmcli connection add type bridge ifname br0 con-name "XRack-Bridge" \
+            connection.autoconnect yes >/dev/null || return 1
+    fi
+
+    sudo nmcli connection modify "XRack-Bridge" \
+        ipv4.method shared \
+        ipv4.addresses 10.42.0.1/24 \
+        bridge.stp no \
+        connection.autoconnect yes || return 1
+
+    if ! nmcli -t -f NAME connection show | grep -qx "XRack-Bridge-eth0"; then
+
+        sudo nmcli connection add type ethernet ifname eth0 con-name "XRack-Bridge-eth0" \
+            master "XRack-Bridge" slave-type bridge \
+            connection.autoconnect no >/dev/null || return 1
+    fi
+
+    return 0
+}
+
+#
+# hostapd-Konfiguration schreiben.
+#
+# $1 = Interface, $2 = SSID, $3 = Passwort, $4 = Laendercode (darf
+# leer sein), $5 = hw_mode (a/g), $6 = Kanal
+#
+write_hostapd_conf() {
+
+    HOSTAPD_TMP="$(mktemp)"
+
+    {
+        echo "# Von install.sh erzeugt (XRack) - nicht von Hand aendern."
+        echo "# SSID und Passwort werden ueber das Einstellungen-Menue"
+        echo "# gesetzt (scripts/xrack-net-ap.sh)."
+        echo "interface=$1"
+        echo "bridge=br0"
+        echo "driver=nl80211"
+        echo "ssid=$2"
+
+        #
+        # Ohne Laendercode duerfte hostapd auf 5 GHz gar nicht senden.
+        # "00" ist die Welt-Region und erlaubt dort ebenfalls nichts -
+        # dann bleibt es bei 2,4 GHz ohne Laenderangabe.
+        #
+        if [ -n "$4" ] && [ "$4" != "00" ]; then
+            echo "country_code=$4"
+            echo "ieee80211d=1"
+        fi
+
+        echo "hw_mode=$5"
+        echo "channel=$6"
+        echo "ieee80211n=1"
+        echo "wmm_enabled=1"
+        echo "auth_algs=1"
+        echo "macaddr_acl=0"
+        echo "ignore_broadcast_ssid=0"
+
+        #
+        # WPA2 mit AES (CCMP), ausdruecklich ohne das alte TKIP: Neuere
+        # Handys handeln TKIP mitunter aus und scheitern dann am
+        # Schluesselaustausch.
+        #
+        echo "wpa=2"
+        echo "wpa_key_mgmt=WPA-PSK"
+        echo "rsn_pairwise=CCMP"
+
+        #
+        # Geschuetzte Verwaltungsrahmen angeboten, aber nicht
+        # verlangt (1 = optional): Schutz gegen Abmelde-Angriffe fuer
+        # alles, was es kann, ohne aeltere Geraete auszusperren.
+        #
+        echo "ieee80211w=1"
+
+        echo "wpa_passphrase=$3"
+
+    } > "${HOSTAPD_TMP}"
+
+    sudo install -o root -g root -m 0600 "${HOSTAPD_TMP}" "${XRACK_HOSTAPD_CONF}"
+
+    rm -f "${HOSTAPD_TMP}"
+}
+
+#
+# Den Dienst anlegen und starten; liefert 0, wenn der Access Point
+# danach tatsaechlich funkt.
+#
+# $1 = Interface
+#
+start_xrack_hostapd() {
+
+    sudo systemctl restart xrack-hostapd.service >/dev/null 2>&1 || true
+
+    #
+    # hostapd braucht einen Moment, bis das Interface im AP-Betrieb
+    # ist. Ein sofortiges Nachsehen meldete sonst Fehlschlag, obwohl
+    # gleich darauf alles laeuft.
+    #
+    sleep 4
+
+    if ! systemctl is-active --quiet xrack-hostapd.service; then
+        return 1
+    fi
+
+    #
+    # Zusaetzlich am Interface selbst nachsehen: Der Dienst kann
+    # laufen und hostapd trotzdem im Leerlauf haengen (z.B. weil die
+    # Funkregion den Kanal nicht freigibt).
+    #
+    if ! iw dev "$1" info 2>/dev/null | grep -q "type AP"; then
+        return 1
+    fi
+
+    return 0
+}
+
+#
+# Access Point mit hostapd einrichten.
+#
+# $1 = Interface, $2 = SSID, $3 = Passwort, $4 = Laendercode
+#
+# Liefert 0 bei Erfolg. Bei Fehlschlag wird das Interface wieder an
+# NetworkManager zurueckgegeben, damit der Rueckfallweg greifen kann.
+#
+setup_access_point_hostapd() {
+
+    AP_HW_MODE="g"
+    AP_CHANNEL="6"
+
+    #
+    # 5 GHz bevorzugen, wenn der Adapter und die Funkregion es
+    # hergeben: 2,4 GHz ist in Wohngegenden meist zugestellt, und ein
+    # volles Band erzeugt dasselbe Bild wie eine falsche
+    # Verschluesselung - die Anmeldung geht im Stoernebel unter.
+    #
+    # Geprueft wird an Kanal 36 (5180 MHz), weil der weltweit
+    # ueblichste 5-GHz-Kanal ohne Radarpflicht ist. Ein Kanal zaehlt
+    # nur, wenn er weder "disabled" noch "no IR" ist - "no IR"
+    # heisst, dass dort nicht von sich aus gesendet werden darf, ein
+    # Access Point also gerade nicht erlaubt ist.
+    #
+    if [ -n "$4" ] && [ "$4" != "00" ]; then
+
+        AP_PHY="$(iw dev "$1" info 2>/dev/null | awk '/wiphy/ {print $2}')"
+
+        if [ -n "${AP_PHY}" ]; then
+
+            #
+            # Die Frequenz steht je nach iw-Version als "5180 MHz"
+            # oder als "5180.0 MHz" in der Ausgabe - deshalb sind die
+            # Nachkommastellen hier ausdruecklich erlaubt. Ein
+            # Muster nur fuer die ganzzahlige Schreibweise fand auf
+            # neueren Systemen nie etwas und liess den Access Point
+            # stillschweigend auf 2,4 GHz.
+            #
+            AP_CHAN36="$(iw phy "phy${AP_PHY}" info 2>/dev/null \
+                | grep -E '\* 5180(\.[0-9]+)? MHz' | head -n 1)"
+
+            if [ -n "${AP_CHAN36}" ] \
+               && ! printf '%s' "${AP_CHAN36}" | grep -qE 'disabled|no IR'; then
+
+                AP_HW_MODE="a"
+                AP_CHANNEL="36"
+            fi
+        fi
+    fi
+
+    write_hostapd_conf "$1" "$2" "$3" "$4" "${AP_HW_MODE}" "${AP_CHANNEL}"
+
+    #
+    # Das Interface NetworkManager entziehen. Ohne das wuerde NM sein
+    # wpa_supplicant weiter darauf loslassen - zwei Programme auf
+    # einem Funkgeraet.
+    #
+    sudo mkdir -p "$(dirname "${XRACK_NM_UNMANAGED}")"
+
+    sudo tee "${XRACK_NM_UNMANAGED}" > /dev/null <<EOF
+# Von install.sh erzeugt (XRack): Das Access-Point-Interface gehoert
+# hostapd (siehe /etc/systemd/system/xrack-hostapd.service), nicht
+# NetworkManager. IP, DHCP und NAT macht NetworkManager weiterhin -
+# aber auf der Bridge br0, in der hostapd den Access Point einhaengt.
+[keyfile]
+unmanaged-devices=interface-name:$1
+EOF
+
+    sudo tee "${XRACK_HOSTAPD_UNIT}" > /dev/null <<EOF
+[Unit]
+Description=XRack Access Point (hostapd)
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+# Ein per rfkill gesperrtes Funkgeraet ist der haeufigste Grund,
+# warum hostapd direkt nach dem Booten nicht startet.
+ExecStartPre=-/usr/sbin/rfkill unblock wlan
+# Die Bridge muss es geben, bevor hostapd sich hineinhaengt. Kurzer
+# Zeitrahmen, damit ein fehlendes Kabel den Start nicht aufhaelt;
+# ein Fehlschlag ist unschaedlich (hostapd legt br0 sonst selbst an).
+ExecStartPre=-/usr/bin/nmcli -w 5 connection up XRack-Bridge
+ExecStart=/usr/sbin/hostapd ${XRACK_HOSTAPD_CONF}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    sudo systemctl daemon-reload
+
+    #
+    # Debians eigener hostapd-Dienst ist ab Werk maskiert und wuerde
+    # sonst eine zweite Instanz mitbringen - wir benutzen unsere
+    # eigene Unit und lassen seine ausdruecklich aus.
+    #
+    sudo systemctl disable hostapd.service >/dev/null 2>&1 || true
+
+    sudo systemctl enable xrack-hostapd.service >/dev/null 2>&1 || true
+
+    sudo nmcli device set "$1" managed no >/dev/null 2>&1 || true
+    sudo systemctl reload NetworkManager >/dev/null 2>&1 || true
+
+    sudo nmcli -w 10 connection up "XRack-Bridge" >/dev/null 2>&1 || true
+
+    if start_xrack_hostapd "$1"; then
+        return 0
+    fi
+
+    #
+    # Auf 5 GHz nicht hochgekommen - dann zurueck auf 2,4 GHz, statt
+    # den Nutzer ohne Access Point dastehen zu lassen.
+    #
+    if [ "${AP_HW_MODE}" = "a" ]; then
+
+        echo "$(L "XRack: 5 GHz hat nicht funktioniert - Access Point wird auf 2,4 GHz gestellt." "XRack: 5 GHz did not work - switching the access point to 2.4 GHz.")"
+
+        AP_HW_MODE="g"
+        AP_CHANNEL="6"
+
+        write_hostapd_conf "$1" "$2" "$3" "$4" "${AP_HW_MODE}" "${AP_CHANNEL}"
+
+        if start_xrack_hostapd "$1"; then
+            return 0
+        fi
+    fi
+
+    #
+    # hostapd laeuft ueberhaupt nicht. Interface zurueck an
+    # NetworkManager geben, damit der Rueckfallweg (der alte
+    # NM-Hotspot) es wieder benutzen darf.
+    #
+    sudo systemctl disable --now xrack-hostapd.service >/dev/null 2>&1 || true
+    sudo rm -f "${XRACK_NM_UNMANAGED}"
+    sudo systemctl reload NetworkManager >/dev/null 2>&1 || true
+    sudo nmcli device set "$1" managed yes >/dev/null 2>&1 || true
+
+    return 1
+}
+
+#
+# Rueckfallweg: der alte Access Point ueber NetworkManager.
+#
+# Bleibt erhalten, damit auf einem Geraet, auf dem hostapd nicht
+# startet (fehlendes Paket, Treiber ohne AP-Unterstuetzung), nicht
+# gar kein Access Point herauskommt. Er wird genauso in die Bridge
+# eingehaengt wie der hostapd-Weg - dadurch bleiben die
+# Umschalt-Skripte fuer beide Faelle dieselben.
+#
+# $1 = Interface, $2 = SSID, $3 = Passwort
+#
+setup_access_point_nm() {
+
+    sudo nmcli connection delete "XRack-AP" >/dev/null 2>&1 || true
+
+    sudo nmcli connection add type wifi ifname "$1" con-name "XRack-AP" \
+        ssid "$2" mode ap >/dev/null || return 1
+
+    sudo nmcli connection modify "XRack-AP" \
+        master "XRack-Bridge" slave-type bridge \
+        wifi-sec.key-mgmt wpa-psk \
+        wifi-sec.proto rsn \
+        wifi-sec.pairwise ccmp \
+        wifi-sec.group ccmp \
+        wifi-sec.psk "$3" \
+        wifi-sec.psk-flags 0 \
+        connection.autoconnect yes || return 1
+
+    sudo nmcli connection up "XRack-Bridge" >/dev/null 2>&1 || true
+
+    sudo nmcli connection up "XRack-AP" ifname "$1" >/dev/null 2>&1 || return 1
+
+    return 0
+}
+
+#
+# Optional: WLAN einrichten (Heimnetz-Client + eigener Access Point).
+#
+# Für Setups mit zwei WLAN-Interfaces, z.B. Onboard-WLAN als Client
+# im Heimnetz (Fernzugriff auf XRack) und ein zusätzlicher USB-WLAN-
+# Stick als eigener Access Point, über den z.B. eine Misch-App direkt
+# mit dem Pi/Mischpult spricht - ganz ohne Router vor Ort. Komplett
+# optional und nur bei interaktivem Lauf.
+#
+# Der Heimnetz-Client läuft über NetworkManager (nmcli), der Access
+# Point über hostapd - siehe den Kommentarblock weiter oben.
+#
 configure_wifi() {
 
     XRACK_WLAN_CLIENT_SSID=""
@@ -524,144 +901,55 @@ configure_wifi() {
 
                         echo "$(L "XRack: Access Point '${AP_SSID}' wird auf ${AP_IFACE} eingerichtet..." "XRack: Setting up access point '${AP_SSID}' on ${AP_IFACE}...")"
 
-                        sudo nmcli connection delete "XRack-AP" >/dev/null 2>&1 || true
+                        #
+                        # Der Ländercode entscheidet, ob 5 GHz überhaupt
+                        # erlaubt ist. Wurde oben keiner gesetzt, wird der
+                        # gerade geltende gelesen.
+                        #
+                        AP_COUNTRY="${XRACK_WLAN_COUNTRY}"
 
-                        if sudo nmcli connection add type wifi ifname "${AP_IFACE}" con-name "XRack-AP" \
-                            ssid "${AP_SSID}" mode ap >/dev/null; then
+                        if [ -z "${AP_COUNTRY}" ]; then
+                            AP_COUNTRY="$(iw reg get 2>/dev/null | awk '/^country/ {print $2}' | tr -d ':' | head -n 1)"
+                        fi
 
-                            #
-                            # Verschlüsselung ausdrücklich auf CCMP (AES)
-                            # festlegen. Ohne das bietet der Access Point je
-                            # nach Treiber zusätzlich das alte TKIP an.
-                            # Aktuelle Handys handeln das mitunter aus und
-                            # scheitern dann am Schlüsselaustausch - für den
-                            # Nutzer sieht das aus wie ein falsches Passwort,
-                            # obwohl es stimmt. Genau dieses Bild ("mal
-                            # sofort, mal zehnmal") hatten wir im Feld.
-                            #
-                            # PMF wird bewusst NICHT abgeschaltet: Das würde
-                            # den Schutz gegen Abmelde-Angriffe aufgeben. Der
-                            # Standard von NetworkManager bleibt stehen.
-                            #
-                            AP_BAND="bg"
+                        if ! setup_ap_bridge; then
 
-                            #
-                            # 5 GHz bevorzugen, wenn der Adapter es kann.
-                            # 2,4 GHz ist in Wohngegenden meist zugestellt,
-                            # und ein volles Band erzeugt dasselbe Bild wie
-                            # eine falsche Verschlüsselung: Die Anmeldung
-                            # geht im Störnebel unter.
-                            #
-                            # Kein fester Kanal - den sucht der Treiber
-                            # passend zur eingestellten Funkregion. Ein fest
-                            # eingetragener Kanal wäre in anderen Ländern
-                            # womöglich gar nicht erlaubt.
-                            #
-                            AP_PHY="$(iw dev "${AP_IFACE}" info 2>/dev/null | awk '/wiphy/ {print $2}')"
+                            echo "$(L "Warnung: Die Bridge br0 konnte nicht eingerichtet werden - ohne sie gibt es keinen Access Point." "Warning: could not set up the br0 bridge - without it there is no access point.")"
 
-                            if [ -n "${AP_PHY}" ] \
-                               && iw phy "phy${AP_PHY}" info 2>/dev/null \
-                                  | grep -qE '\* 5[0-9]{3} MHz' ; then
-                                AP_BAND="a"
-                            fi
-
-                            sudo nmcli connection modify "XRack-AP" \
-                                802-11-wireless.band "${AP_BAND}" \
-                                ipv4.method shared \
-                                wifi-sec.key-mgmt wpa-psk \
-                                wifi-sec.proto rsn \
-                                wifi-sec.pairwise ccmp \
-                                wifi-sec.group ccmp \
-                                wifi-sec.psk "${AP_PASSWORD}" \
-                                connection.autoconnect yes
+                        elif setup_access_point_hostapd "${AP_IFACE}" "${AP_SSID}" "${AP_PASSWORD}" "${AP_COUNTRY}"; then
 
                             XRACK_WLAN_AP_SSID="${AP_SSID}"
-
-                            if ! sudo nmcli connection up "XRack-AP" ifname "${AP_IFACE}" >/dev/null 2>&1; then
-
-                                #
-                                # 5 GHz hat nicht funktioniert - etwa weil
-                                # die Funkregion die Kanäle nicht freigibt.
-                                # Dann zurück auf 2,4 GHz, statt den Nutzer
-                                # ohne Access Point dastehen zu lassen.
-                                #
-                                if [ "${AP_BAND}" = "a" ]; then
-
-                                    echo "$(L "XRack: 5 GHz hat nicht funktioniert - Access Point wird auf 2,4 GHz gestellt." "XRack: 5 GHz did not work - switching the access point to 2.4 GHz.")"
-
-                                    sudo nmcli connection modify "XRack-AP" 802-11-wireless.band bg
-                                    AP_BAND="bg"
-                                fi
-
-                                sudo nmcli connection up "XRack-AP" ifname "${AP_IFACE}" >/dev/null 2>&1 \
-                                    || echo "$(L "Warnung: Access Point konnte nicht gestartet werden." "Warning: the access point could not be started.")"
-                            fi
-
-                            if [ "${AP_BAND}" = "a" ]; then
-                                echo "$(L "XRack: Access Point läuft auf 5 GHz." "XRack: Access point is running on 5 GHz.")"
-                            fi
+                            XRACK_WLAN_BRIDGE="ja"
 
                             #
-                            # Optional: Ethernet-Interface (z.B. das per Kabel
-                            # angeschlossene Mischpult) mit dem Access Point
-                            # bridgen, damit Steuerungs-Apps (z.B. Mixing
-                            # Station) das Pult über den AP finden - beide
-                            # landen dann im selben Netz statt in getrennten,
-                            # sich gegenseitig nicht sehenden Subnetzen.
+                            # Ein noch vorhandenes altes Hotspot-Profil aus
+                            # NetworkManager entfernen: Es funkt zwar nicht
+                            # mehr (das Interface gehört jetzt hostapd),
+                            # würde aber in der Oberfläche und in den
+                            # Umschalt-Skripten weiter als Access Point
+                            # gelten.
                             #
+                            sudo nmcli connection delete "XRack-AP" >/dev/null 2>&1 || true
 
-                            echo ""
-                            read -r -p "$(L "Ethernet-Interface (z.B. Mischpult an eth0) mit dem Access Point bridgen, damit Apps es finden? [J/n]: " "Bridge an Ethernet interface (e.g. mixing console on eth0) with the access point, so apps can find it? [Y/n]: ")" XRACK_BRIDGE_SETUP || true
-
-                            if [ "$(lower "${XRACK_BRIDGE_SETUP}")" != "n" ]; then
-
-                                echo "$(L "XRack: Bridge aus eth0 und ${AP_IFACE} wird vorbereitet..." "XRack: Preparing a bridge from eth0 and ${AP_IFACE}...")"
-                                echo "$(L "Hinweis: Wird jetzt nur angelegt, nicht sofort aktiviert - viele" "Note: this is only set up now, not activated immediately - many")"
-                                echo "$(L "konfigurieren den Pi anfangs per SSH über eth0, das würde sonst" "people configure the Pi over SSH via eth0 initially, which would")"
-                                echo "$(L "genau jetzt abbrechen. Aktiv wird die Bridge erst nach einem" "otherwise drop right now. The bridge only becomes active after a")"
-                                echo "$(L "Neustart (Abfrage dazu kommt ganz am Ende)." "restart (you'll be asked about that at the very end).")"
-
-                                #
-                                # Das bisherige eth0-Profil wird nur deaktiviert (nicht
-                                # gelöscht!), damit eine gerade laufende SSH-Sitzung
-                                # über eth0 nicht sofort abreißt. Es wird erst beim
-                                # nächsten Neustart durch das Bridge-Profil ersetzt.
-                                #
-
-                                ETH0_CON="$(nmcli -t -f NAME,DEVICE connection show | awk -F: '$2=="eth0"{print $1; exit}')"
-
-                                if [ -n "${ETH0_CON}" ] && [ "${ETH0_CON}" != "XRack-Bridge-eth0" ]; then
-                                    sudo nmcli connection modify "${ETH0_CON}" connection.autoconnect no
-                                fi
-
-                                sudo nmcli connection delete "XRack-Bridge-eth0" >/dev/null 2>&1 || true
-                                sudo nmcli connection delete "XRack-Bridge" >/dev/null 2>&1 || true
-
-                                if sudo nmcli connection add type bridge ifname br0 con-name "XRack-Bridge" \
-                                    connection.autoconnect yes >/dev/null \
-                                    && sudo nmcli connection modify "XRack-Bridge" ipv4.method shared \
-                                    && sudo nmcli connection add type ethernet ifname eth0 con-name "XRack-Bridge-eth0" \
-                                        master "XRack-Bridge" slave-type bridge connection.autoconnect yes >/dev/null; then
-
-                                    # Das Setzen von master/slave-type auf dem AP-Profil
-                                    # kann dabei das gespeicherte WLAN-Passwort
-                                    # zurücksetzen - deshalb wird es im selben Schritt
-                                    # gleich wieder mitgesetzt. Die Aktivierung selbst
-                                    # (nmcli connection up) passiert bewusst nicht hier,
-                                    # sondern erst nach dem Neustart am Ende des Skripts.
-                                    sudo nmcli connection modify "XRack-AP" \
-                                        master "XRack-Bridge" slave-type bridge \
-                                        wifi-sec.psk "${AP_PASSWORD}" \
-                                        wifi-sec.psk-flags 0 \
-                                        connection.autoconnect yes
-
-                                    XRACK_WLAN_BRIDGE="ja"
-                                else
-                                    echo "$(L "Warnung: Bridge konnte nicht eingerichtet werden." "Warning: the bridge could not be set up.")"
-                                fi
+                            if [ "${AP_HW_MODE}" = "a" ]; then
+                                echo "$(L "XRack: Access Point läuft auf 5 GHz (hostapd)." "XRack: Access point is running on 5 GHz (hostapd).")"
+                            else
+                                echo "$(L "XRack: Access Point läuft auf 2,4 GHz (hostapd)." "XRack: Access point is running on 2.4 GHz (hostapd).")"
                             fi
+
                         else
-                            echo "$(L "Warnung: Access-Point-Profil konnte nicht angelegt werden." "Warning: could not create the access point profile.")"
+
+                            echo "$(L "Warnung: hostapd ließ sich nicht starten - es wird der bisherige Weg über NetworkManager versucht." "Warning: hostapd would not start - falling back to the previous NetworkManager approach.")"
+
+                            if setup_access_point_nm "${AP_IFACE}" "${AP_SSID}" "${AP_PASSWORD}"; then
+
+                                XRACK_WLAN_AP_SSID="${AP_SSID}"
+                                XRACK_WLAN_BRIDGE="ja"
+
+                                echo "$(L "XRack: Access Point läuft über NetworkManager (Verbindungsaufbau kann gelegentlich mehrere Versuche brauchen)." "XRack: Access point is running via NetworkManager (connecting may occasionally take several attempts).")"
+                            else
+                                echo "$(L "Warnung: Access Point konnte nicht eingerichtet werden." "Warning: could not set up the access point.")"
+                            fi
                         fi
                     fi
 
@@ -838,6 +1126,7 @@ configure_sudoers() {
         "${INSTALL_DIR}/scripts/xrack-restart.sh" \
         "${INSTALL_DIR}/scripts/xrack-net-home.sh" \
         "${INSTALL_DIR}/scripts/xrack-net-ap.sh" \
+        "${INSTALL_DIR}/scripts/xrack-ap-info.sh" \
         "${INSTALL_DIR}/scripts/xrack-bridge-toggle.sh" \
         "${INSTALL_DIR}/scripts/xrack-share-toggle.sh" \
         "${INSTALL_DIR}/scripts/xrack-dhcp-lease.sh" \
@@ -856,6 +1145,7 @@ configure_sudoers() {
 ${INSTALL_DIR}/scripts/xrack-restart.sh, \
 ${INSTALL_DIR}/scripts/xrack-net-home.sh *, \
 ${INSTALL_DIR}/scripts/xrack-net-ap.sh *, \
+${INSTALL_DIR}/scripts/xrack-ap-info.sh, \
 ${INSTALL_DIR}/scripts/xrack-bridge-toggle.sh *, \
 ${INSTALL_DIR}/scripts/xrack-share-toggle.sh *, \
 ${INSTALL_DIR}/scripts/xrack-dhcp-lease.sh *, \
@@ -949,8 +1239,9 @@ print_summary() {
     fi
 
     if [ "${XRACK_WLAN_BRIDGE}" = "ja" ]; then
-        echo "$(L "Ethernet+AP gebridged:    eth0 (Mischpult) und Access Point im selben Netz (br0)" "Ethernet+AP bridged:      eth0 (mixing console) and access point on the same network (br0)")"
-        echo "$(L "                          (wird erst nach einem Neustart aktiv, siehe unten)" "                          (only active after a restart, see below)")"
+        echo "$(L "Access-Point-Netz:        br0, 10.42.0.1 (DHCP von XRack)" "Access point network:     br0, 10.42.0.1 (DHCP served by XRack)")"
+        echo "$(L "Ethernet+AP gebridged:    im Einstellungen-Menü zuschaltbar, aktuell aus" "Ethernet+AP bridged:      can be enabled in the Settings menu, currently off")"
+        echo "$(L "                          (legt eth0/Mischpult mit dem Access Point in ein Netz)" "                          (puts eth0/mixing console on the same network as the access point)")"
     fi
 
     if [ "${XRACK_WLAN_SHARE_READY}" = "ja" ]; then
@@ -973,9 +1264,9 @@ offer_reboot_for_bridge() {
     if [ "${XRACK_WLAN_BRIDGE}" = "ja" ]; then
 
         echo ""
-        echo "$(L "Die Ethernet+AP-Bridge wird erst nach einem Neustart aktiv" "The Ethernet+AP bridge only becomes active after a restart")"
-        echo "$(L "(damit eine laufende SSH-Verbindung über eth0 nicht mitten in" "(so a running SSH connection over eth0 doesn't drop in the")"
-        echo "$(L "der Installation abbricht)." "middle of the installation).")"
+        echo "$(L "Der Access Point läuft bereits. Ein Neustart ist trotzdem" "The access point is already running. A restart is still")"
+        echo "$(L "empfehlenswert: Nur so zeigt sich, ob er auch von selbst" "recommended: only then will you see whether it comes up on its")"
+        echo "$(L "wieder hochkommt." "own again.")"
 
         if [ -t 0 ]; then
 

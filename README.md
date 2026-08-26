@@ -288,6 +288,46 @@ sudo systemctl status xrack    # Status prüfen
 journalctl -u xrack -f         # Live-Logs ansehen
 ```
 
+### Der Access Point
+
+Wer XRack ohne Router vor Ort betreibt, lässt es sein eigenes WLAN
+aufspannen. Dafür läuft **hostapd** auf dem zweiten WLAN-Interface
+(z.B. dem USB-Adapter), nicht NetworkManagers eingebauter Hotspot:
+Dessen AP-Betriebsart stammt aus wpa_supplicant, das eigentlich zum
+Verbinden mit fremden Netzen gebaut ist, und verliert
+Anmeldeversuche gelegentlich in einem Wettlauf (`handle_assoc_cb:
+STA ... not found`). Für den Nutzer sieht das aus, als sei das
+Passwort falsch - mal klappt es sofort, mal erst beim zehnten
+Versuch.
+
+Der Aufbau danach:
+
+| Teil | Aufgabe |
+| --- | --- |
+| `hostapd` (`xrack-hostapd.service`) | Funk und Verschlüsselung, WPA2 mit AES, 5 GHz sofern erlaubt |
+| Bridge `br0` | Layer 2 - der Access Point immer, das Mischpult an eth0 zuschaltbar |
+| NetworkManager | IP, DHCP und Internet-Weitergabe auf `br0` (10.42.0.1), Heimnetz-Client, Kabelverbindung |
+
+Der Access Point hängt dauerhaft in der Bridge. Der Schalter "Konsole
+über XRacks Access Point erreichbar machen" hängt deshalb nur noch
+eth0 mit ein oder aus und rührt den Funkbetrieb nicht an - vorher
+wurde dafür der Access Point selbst umgebaut und neu gestartet, was
+beim Umschalten jedes Mal einen Neustart nötig machte.
+
+SSID und Passwort werden im Einstellungen-Menü gesetzt und landen in
+`/etc/hostapd/xrack.conf` (nur für root lesbar - dort steht das
+Passwort im Klartext). Kommt der Access Point mit neuen Werten nicht
+hoch, stellt XRack die alten wieder her, statt einen stummen Access
+Point zu hinterlassen.
+
+Nachsehen, was los ist:
+
+```bash
+sudo systemctl status xrack-hostapd    # läuft der Access Point?
+journalctl -u xrack-hostapd -f         # Live mitlesen
+iw dev                                 # welches Interface funkt wie?
+```
+
 ### Lizenz
 
 XRack steht unter der [GNU General Public License v3.0](LICENSE).

@@ -1,11 +1,27 @@
 #!/usr/bin/env bash
 #
-# Schaltet die Ethernet+Access-Point-Bridge ("XRack-Bridge", siehe
-# install.sh) an oder aus. Setzt voraus, dass sie schon einmal per
-# install.sh eingerichtet wurde - baut sie nicht neu auf.
+# Hängt das Ethernet-Interface (Mischpult an eth0) in die Bridge br0
+# ein oder wieder aus - das ist die Einstellung "Konsole über XRacks
+# Access Point erreichbar machen".
 #
-# Schließt sich mit der Ethernet+Heimnetz-Freigabe aus (beide
-# beanspruchen eth0) - deshalb wird hier die Freigabe mit
+# Der Access Point selbst hängt dauerhaft in derselben Bridge und
+# wird hier NICHT angefasst (siehe den Kommentarblock zum Access
+# Point in install.sh). Genau das war vorher anders: Da wurde der
+# Access Point beim Umschalten zum Bridge-Slave umkonfiguriert und
+# neu gestartet. Daraus entstanden zwei Fehlerbilder, die es jetzt
+# nicht mehr geben kann:
+#
+#   1. Nach dem Umschalten war ein Neustart nötig, weil der Access
+#      Point mit der neuen Master/Slave-Konfiguration nicht sauber
+#      wieder hochkam.
+#
+#   2. Nach einem Neustart waren beide Betriebsarten gleichzeitig an,
+#      weil NetworkManager mit einem Slave immer auch dessen Master
+#      hochzieht - unabhängig davon, ob der Master "autoconnect no"
+#      hat.
+#
+# Schließt sich weiterhin mit der Ethernet+Heimnetz-Freigabe aus
+# (beide beanspruchen eth0) - deshalb wird die Freigabe hier
 # abgeschaltet, falls aktiv.
 #
 # Wird ausschließlich per sudo durch XRack selbst aufgerufen (siehe
@@ -16,59 +32,48 @@ set -e
 
 MODE="$1"
 
-if ! nmcli -t -f NAME connection show | grep -qx "XRack-AP"; then
-    echo "XRack-AP ist nicht eingerichtet (install.sh mit WLAN-Setup ausführen)." >&2
+if ! nmcli -t -f NAME connection show | grep -qx "XRack-Bridge-eth0"; then
+    echo "XRack-Bridge-eth0 ist nicht eingerichtet (install.sh mit WLAN-Setup ausführen)." >&2
     exit 1
 fi
 
-AP_IFACE="$(nmcli -g connection.interface-name connection show "XRack-AP")"
+#
+# br0 trägt die IP-Adresse, den DHCP-Server und die
+# Internet-Weitergabe für alles, was am Access Point hängt. Sie muss
+# also in beiden Betriebsarten laufen - ein erneutes "up" auf einer
+# bereits aktiven Bridge würde die Verbindungen der angemeldeten
+# Geräte unnötig unterbrechen, deshalb vorher nachsehen.
+#
+bridge_sicherstellen() {
 
-# Das gespeicherte AP-Passwort wird beim Umhängen von master/slave-
-# type nicht verlässlich beibehalten - deshalb hier vorher auslesen
-# (root darf das, "nmcli -s") und bei jeder modify-Aktion explizit
-# wieder mitsetzen.
-CURRENT_PSK="$(nmcli -s -g 802-11-wireless-security.psk connection show "XRack-AP")"
+    if ! nmcli -t -f NAME connection show --active | grep -qx "XRack-Bridge"; then
+        nmcli -w 10 connection up "XRack-Bridge" >/dev/null 2>&1 || true
+    fi
+}
 
 if [ "${MODE}" = "on" ]; then
-
-    if ! nmcli -t -f NAME connection show | grep -qx "XRack-Bridge"; then
-        echo "XRack-Bridge ist nicht eingerichtet (install.sh mit WLAN+Bridge-Setup ausführen)." >&2
-        exit 1
-    fi
 
     #
     # Exklusiv zur Ethernet+Heimnetz-Freigabe - beide wollen eth0 für
     # sich.
     #
-    if nmcli -t -f NAME connection show --active | grep -qx "XRack-Share-eth0"; then
-        nmcli connection down "XRack-Share-eth0" >/dev/null 2>&1 || true
-    fi
-
+    nmcli connection down "XRack-Share-eth0" >/dev/null 2>&1 || true
     nmcli connection modify "XRack-Share-eth0" connection.autoconnect no 2>/dev/null || true
 
+    #
+    # Ein anderes, mitgeliefertes eth0-Profil ("Wired connection 1")
+    # würde sich das Interface beim nächsten Start zurückholen.
+    #
     ETH0_CON="$(nmcli -t -f NAME,DEVICE connection show | awk -F: '$2=="eth0"{print $1; exit}')"
 
     if [ -n "${ETH0_CON}" ] && [ "${ETH0_CON}" != "XRack-Bridge-eth0" ]; then
         nmcli connection modify "${ETH0_CON}" connection.autoconnect no
     fi
 
-    nmcli connection modify "XRack-AP" \
-        master "XRack-Bridge" slave-type bridge \
-        wifi-sec.psk "${CURRENT_PSK}" wifi-sec.psk-flags 0 \
-        connection.autoconnect yes
+    bridge_sicherstellen
 
     nmcli connection modify "XRack-Bridge-eth0" connection.autoconnect yes
-    nmcli connection modify "XRack-Bridge" connection.autoconnect yes
-
-    nmcli connection up "XRack-Bridge"
     nmcli connection up "XRack-Bridge-eth0" ifname eth0
-
-    # War der Access Point bereits aktiv (Standalone-Betrieb), reicht
-    # ein reines "connection up" nach dem Umhängen auf die Bridge oft
-    # nicht - erst herunterfahren erzwingt einen sauberen Neustart mit
-    # der neuen master/slave-Konfiguration.
-    nmcli connection down "XRack-AP" >/dev/null 2>&1 || true
-    nmcli connection up "XRack-AP" ifname "${AP_IFACE}"
 
     #
     # Das Pult zum erneuten DHCP bewegen: Es liegt jetzt in einem
@@ -83,19 +88,14 @@ if [ "${MODE}" = "on" ]; then
 
 elif [ "${MODE}" = "off" ]; then
 
-    nmcli connection modify "XRack-AP" \
-        connection.master "" \
-        connection.slave-type "" \
-        ipv4.method shared \
-        wifi-sec.psk "${CURRENT_PSK}" wifi-sec.psk-flags 0 \
-        connection.autoconnect yes
-
-    nmcli connection down "XRack-Bridge" >/dev/null 2>&1 || true
+    nmcli connection down "XRack-Bridge-eth0" >/dev/null 2>&1 || true
     nmcli connection modify "XRack-Bridge-eth0" connection.autoconnect no
-    nmcli connection modify "XRack-Bridge" connection.autoconnect no
 
-    nmcli connection down "XRack-AP" >/dev/null 2>&1 || true
-    nmcli connection up "XRack-AP" ifname "${AP_IFACE}"
+    #
+    # Die Bridge bleibt bewusst oben - der Access Point funkt weiter
+    # hinein.
+    #
+    bridge_sicherstellen
 
 else
     echo "Unbekannter Modus: ${MODE} (erwartet: on oder off)" >&2

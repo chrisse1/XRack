@@ -22,12 +22,40 @@ from pathlib import Path
 #
 SHARE_CONNECTION = "XRack-Share-eth0"
 
+#
+# Name des NetworkManager-Profils, das das Ethernet-Interface in die
+# Bridge einhängt ("Konsole über XRacks Access Point erreichbar
+# machen"). Der Access Point selbst ist hier bewusst kein Thema mehr:
+# Er läuft über hostapd und hängt dauerhaft in derselben Bridge
+# (siehe install.sh) - umgeschaltet wird nur noch eth0.
+#
+BRIDGE_PORT_CONNECTION = "XRack-Bridge-eth0"
+
+#
+# Die Bridge selbst. Sie trägt IP, DHCP und Internet-Weitergabe für
+# alles, was am Access Point hängt, und läuft deshalb dauerhaft.
+#
+BRIDGE_CONNECTION = "XRack-Bridge"
+
 
 class WlanControl:
     """Kapselt privilegierte WLAN-/Netzwerkbefehle."""
 
     def __init__(self):
         self.logger = logging.getLogger("XRack")
+
+        #
+        # Die SSID des Access Points steht seit der Umstellung auf
+        # hostapd in einer nur für root lesbaren Datei (sie enthält
+        # auch das Passwort) und wird deshalb über ein sudo-Skript
+        # gelesen. get_status() wird aber häufig aufgerufen - unter
+        # anderem bei jeder Suche nach der Konsolen-IP -, und ein
+        # Prozessstart je Aufruf wäre dort verschwendete Zeit.
+        # Ändern kann sich der Name ohnehin nur über set_ap_wifi(),
+        # und genau dort wird der Zwischenspeicher verworfen.
+        #
+        self._ap_ssid: str | None = None
+        self._ap_ssid_gelesen = False
 
     @property
     def available(self) -> bool:
@@ -102,6 +130,31 @@ class WlanControl:
             return None
 
         return output.strip() or None
+
+    def ap_ssid(self) -> str | None:
+        """
+        Liefert den Namen des eingerichteten Access Points, oder
+        None, wenn keiner eingerichtet ist.
+        """
+
+        if not self._ap_ssid_gelesen:
+
+            self._ap_ssid = self._run_script_read("xrack-ap-info.sh")
+
+            #
+            # Auf einem Gerät, das die neue Fassung eingespielt, aber
+            # install.sh noch nicht erneut durchlaufen hat, gibt es
+            # die sudo-Freigabe für dieses Skript noch nicht. Dann
+            # gilt der alte Weg: der Access Point aus NetworkManager.
+            # Ohne diesen Rückfall verschwände der Name des Access
+            # Points nach einem Update einfach aus der Anzeige.
+            #
+            if self._ap_ssid is None and "XRack-AP" in self.connection_names():
+                self._ap_ssid = self.connection_ssid("XRack-AP")
+
+            self._ap_ssid_gelesen = True
+
+        return self._ap_ssid
 
     def get_connected_client_ip(self, interface: str) -> str | None:
         """
@@ -211,7 +264,13 @@ class WlanControl:
         names = self.connection_names()
         active = self.active_connection_names()
 
-        bridge_enabled = "XRack-Bridge" in active
+        #
+        # "Konsole über XRacks Access Point erreichbar" heißt jetzt
+        # genau: Hängt eth0 in der Bridge? Die Bridge selbst läuft
+        # dauerhaft (der Access Point funkt hinein) und taugt deshalb
+        # nicht mehr als Anzeige dafür.
+        #
+        bridge_enabled = BRIDGE_PORT_CONNECTION in active
 
         #
         # "Konsole aus dem Heimnetz erreichbar machen" ist technisch die
@@ -243,12 +302,11 @@ class WlanControl:
                 if "XRack-Home" in names
                 else None
             ),
-            "ap_ssid": (
-                self.connection_ssid("XRack-AP")
-                if "XRack-AP" in names
-                else None
+            "ap_ssid": self.ap_ssid(),
+            "bridge_configured": (
+                BRIDGE_PORT_CONNECTION in names
+                and BRIDGE_CONNECTION in names
             ),
-            "bridge_configured": "XRack-Bridge" in names,
             "bridge_enabled": bridge_enabled,
             "console_access_configured": SHARE_CONNECTION in names,
             "console_access_enabled": console_access_enabled,
@@ -342,7 +400,16 @@ class WlanControl:
         Setzt SSID/Passwort des Access Points neu.
         """
 
-        return self._run_script("xrack-net-ap.sh", ssid, password)
+        erfolg, meldung = self._run_script("xrack-net-ap.sh", ssid, password)
+
+        #
+        # Auch im Fehlerfall verwerfen: Das Skript stellt bei einem
+        # Fehlschlag zwar die alten Werte wieder her, aber wenn schon
+        # etwas schiefging, ist neu nachsehen billiger als raten.
+        #
+        self._ap_ssid_gelesen = False
+
+        return erfolg, meldung
 
     def set_bridge(self, enabled: bool) -> tuple[bool, str]:
         """

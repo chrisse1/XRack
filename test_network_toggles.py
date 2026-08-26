@@ -1,22 +1,30 @@
 """
 Prüft die beiden Netzwerk-Schalter gegeneinander, ohne NetworkManager.
 
-Hintergrund: "Konsole über XRacks Access Point" (die Bridge) und
-"Konsole aus dem Heimnetz" (die Freigabe) beanspruchen beide eth0 und
-schließen sich deshalb aus. Jedes der beiden Skripte muss das jeweils
-andere sauber abräumen.
+Hintergrund: "Konsole über XRacks Access Point" (eth0 in der Bridge)
+und "Konsole aus dem Heimnetz" (die Freigabe) beanspruchen beide eth0
+und schließen sich deshalb aus. Jedes der beiden Skripte muss das
+jeweils andere sauber abräumen.
 
-Genau daran hing ein Fehler: Die Bridge hängt beim Einschalten den
-Access Point als Slave ein ("master XRack-Bridge"). Das Freigabe-Skript
-fuhr die Bridge zwar herunter, ließ den Access Point aber als Slave
-stehen. Folge: Der Access Point lief bis zum nächsten Neustart nicht -
-und beim Hochfahren zog NetworkManager mit dem Slave auch dessen Master
-wieder hoch, sodass beide Schalter gleichzeitig an waren.
+Der Access Point selbst gehört seit der Umstellung auf hostapd nicht
+mehr zum Umschaltvorgang: Er hängt dauerhaft in der Bridge br0, und
+umgeschaltet wird nur noch, ob eth0 mit dazukommt. Genau daran hing
+vorher ein Fehler - die Bridge hängte beim Einschalten den Access
+Point als Slave ein, das Freigabe-Skript ließ ihn als Slave stehen,
+und danach lief der Access Point bis zum nächsten Neustart nicht.
+Beim Hochfahren zog NetworkManager mit dem Slave dessen Master wieder
+hoch, sodass beide Schalter gleichzeitig an waren.
+
+Deshalb prüft dieser Test jetzt vor allem eines mit: Die Bridge muss
+in JEDER Stellung beider Schalter laufen bleiben - sie trägt IP,
+DHCP und Internet-Weitergabe für alles, was am Access Point hängt.
 
 Getestet wird gegen ein nachgestelltes nmcli: ein Skript im PATH, das
 Verbindungen und ihren Zustand in Dateien verwaltet und jeden Aufruf
 mitschreibt. Damit lässt sich prüfen, was die Skripte *tun*, ohne ein
-echtes Netzwerk anzufassen.
+echtes Netzwerk anzufassen. Für den Access Point selbst kommen weiter
+unten eine nachgestellte hostapd-Konfiguration und ein nachgestelltes
+systemctl dazu.
 """
 
 import os
@@ -135,23 +143,32 @@ FAKE_SLEEP = "#!/usr/bin/env bash\nexit 0\n"
 class Netzwerk:
     """Ein nachgestelltes NetworkManager-Setup."""
 
-    def __init__(self, verzeichnis: Path, mit_ap: bool = True):
+    def __init__(self, verzeichnis: Path, mit_bridge: bool = True):
 
         self.pfad = verzeichnis
         (self.pfad / "props").mkdir(parents=True)
 
         verbindungen = ["XRack-Home", "XRack-Share-eth0"]
 
-        if mit_ap:
-            verbindungen += ["XRack-AP", "XRack-Bridge", "XRack-Bridge-eth0"]
+        aktiv = ["XRack-Home"]
+
+        if mit_bridge:
+
+            verbindungen += ["XRack-Bridge", "XRack-Bridge-eth0"]
+
+            #
+            # Die Bridge läuft von Anfang an - so ist es auf dem Gerät
+            # auch: Der Access Point funkt hinein, unabhängig davon,
+            # ob gerade ein Mischpult am Kabel hängt.
+            #
+            aktiv.append("XRack-Bridge")
 
         (self.pfad / "connections").write_text(
             "\n".join(verbindungen) + "\n", encoding="utf-8"
         )
-        (self.pfad / "active").write_text("XRack-Home\n", encoding="utf-8")
-
-        if mit_ap:
-            self.setze("XRack-AP", "device", "wlan1")
+        (self.pfad / "active").write_text(
+            "\n".join(aktiv) + "\n", encoding="utf-8"
+        )
 
         self.setze("XRack-Share-eth0", "device", "eth0")
 
@@ -231,7 +248,7 @@ scratch = Path(tempfile.mkdtemp())
 try:
 
     # ----------------------------------------------------------------
-    # 1. Bridge an: Der Access Point wird Slave der Bridge
+    # 1. Bridge an: eth0 kommt in die Bridge
     # ----------------------------------------------------------------
 
     netz = Netzwerk(scratch / "a")
@@ -240,74 +257,80 @@ try:
 
     assert ergebnis.returncode == 0, ergebnis.stderr
 
-    assert netz.lies("XRack-AP", "master") == "XRack-Bridge", (
-        "Die Bridge muss den Access Point als Slave einhaengen."
+    assert "XRack-Bridge-eth0" in netz.aktiv(), (
+        f"eth0 haengt nicht in der Bridge: {sorted(netz.aktiv())}"
     )
-    assert netz.lies("XRack-AP", "slave-type") == "bridge"
+    assert netz.lies("XRack-Bridge-eth0", "autoconnect") == "yes", (
+        "Die Bridge-Stellung muss einen Neustart ueberleben."
+    )
 
-    print("OK: Bridge an haengt den Access Point als Slave ein")
+    print("OK: Bridge an haengt eth0 in die Bridge")
 
     # ----------------------------------------------------------------
-    # 2. Bridge aus: Der Access Point wird wieder eigenstaendig
+    # 2. Bridge aus: eth0 raus - die Bridge selbst bleibt oben
+    #
+    # Das ist der Kern der Umstellung. Vorher wurde beim Ausschalten
+    # die ganze Bridge heruntergefahren; der Access Point hing als
+    # Slave darin und war damit weg. Jetzt traegt die Bridge IP,
+    # DHCP und Internet-Weitergabe fuer den Access Point und muss in
+    # jeder Stellung laufen.
     # ----------------------------------------------------------------
 
     ergebnis = netz.schalte("xrack-bridge-toggle.sh", "off")
 
     assert ergebnis.returncode == 0, ergebnis.stderr
 
-    assert netz.lies("XRack-AP", "master") == "", (
-        f"Der Access Point haengt noch an "
-        f"{netz.lies('XRack-AP', 'master')!r}"
+    assert "XRack-Bridge-eth0" not in netz.aktiv(), (
+        f"eth0 haengt noch in der Bridge: {sorted(netz.aktiv())}"
+    )
+    assert netz.lies("XRack-Bridge-eth0", "autoconnect") == "no"
+
+    assert "XRack-Bridge" in netz.aktiv(), (
+        "Die Bridge wurde mit abgeschaltet - damit waere der Access "
+        "Point ohne IP, DHCP und Internet-Weitergabe."
     )
 
-    print("OK: Bridge aus loest den Access Point wieder heraus")
+    print("OK: Bridge aus nimmt eth0 heraus, laesst die Bridge aber laufen")
 
     # ----------------------------------------------------------------
-    # 3. Der eigentliche Fehler: Freigabe an, waehrend die Bridge laeuft
+    # 3. Freigabe an, waehrend eth0 in der Bridge haengt
     #
-    # Die Freigabe muss die Bridge vollstaendig abraeumen - also auch
-    # den Access Point wieder herausloesen. Bleibt er Slave, laeuft er
-    # bis zum Neustart nicht, und beim Hochfahren zieht er die Bridge
-    # wieder mit hoch: Dann sind beide Schalter an, obwohl sie sich
-    # ausschliessen.
+    # Die Freigabe muss eth0 aus der Bridge nehmen - aber eben nur
+    # eth0, nicht die Bridge.
     # ----------------------------------------------------------------
 
     netz = Netzwerk(scratch / "b")
 
     assert netz.schalte("xrack-bridge-toggle.sh", "on").returncode == 0
-    assert netz.lies("XRack-AP", "master") == "XRack-Bridge"
-    assert "XRack-Bridge" in netz.aktiv()
+    assert "XRack-Bridge-eth0" in netz.aktiv()
 
     ergebnis = netz.schalte("xrack-share-toggle.sh", "on")
 
     assert ergebnis.returncode == 0, ergebnis.stderr
 
-    assert netz.lies("XRack-AP", "master") == "", (
-        "Die Freigabe hat die Bridge heruntergefahren, den Access Point "
-        "aber als Slave stehenlassen. Er laeuft dann bis zum Neustart "
-        "nicht - und beim Hochfahren zieht NetworkManager mit ihm die "
-        "Bridge wieder hoch."
-    )
-    assert netz.lies("XRack-AP", "slave-type") == ""
-
-    print("OK: Freigabe an loest den Access Point aus der Bridge")
-
-    # ----------------------------------------------------------------
-    # 4. Danach darf nur noch die Freigabe aktiv sein
-    # ----------------------------------------------------------------
-
     aktiv = netz.aktiv()
 
     assert "XRack-Share-eth0" in aktiv, aktiv
-    assert "XRack-Bridge" not in aktiv, (
-        f"Bridge und Freigabe sind gleichzeitig aktiv: {sorted(aktiv)}"
+    assert "XRack-Bridge-eth0" not in aktiv, (
+        f"Bridge und Freigabe beanspruchen gleichzeitig eth0: {sorted(aktiv)}"
+    )
+    assert netz.lies("XRack-Bridge-eth0", "autoconnect") == "no", (
+        "eth0 darf nach dem Umschalten nicht von selbst wieder in die "
+        "Bridge zurueckkommen."
     )
 
-    assert netz.lies("XRack-Bridge", "autoconnect") == "no", (
-        "Die Bridge darf nach dem Umschalten nicht von selbst wiederkommen."
+    print("OK: Freigabe an nimmt eth0 aus der Bridge")
+
+    # ----------------------------------------------------------------
+    # 4. Auch dabei bleibt der Access Point in Betrieb
+    # ----------------------------------------------------------------
+
+    assert "XRack-Bridge" in netz.aktiv(), (
+        "Die Freigabe hat die Bridge mit abgeschaltet - der Access "
+        "Point stuende dann ohne DHCP da."
     )
 
-    print("OK: Nach dem Umschalten ist nur die Freigabe aktiv")
+    print("OK: Der Access Point laeuft auch beim Umschalten weiter")
 
     # ----------------------------------------------------------------
     # 5. Und in die andere Richtung genauso
@@ -322,27 +345,28 @@ try:
 
     aktiv = netz.aktiv()
 
-    assert "XRack-Bridge" in aktiv, aktiv
+    assert "XRack-Bridge-eth0" in aktiv, aktiv
     assert "XRack-Share-eth0" not in aktiv, (
         f"Freigabe laeuft trotz eingeschalteter Bridge weiter: {sorted(aktiv)}"
     )
     assert netz.lies("XRack-Share-eth0", "autoconnect") == "no"
+    assert "XRack-Bridge" in aktiv
 
     print("OK: Bridge an raeumt die Freigabe ab")
 
     # ----------------------------------------------------------------
-    # 6. Ohne eingerichteten Access Point darf die Freigabe trotzdem gehen
+    # 6. Ohne eingerichtete Bridge darf die Freigabe trotzdem gehen
     #
-    # Nicht jede Installation hat einen Access Point. Das Abraeumen der
-    # Bridge darf dann nicht zum Abbruch fuehren.
+    # Nicht jede Installation hat einen Access Point. Das Abraeumen
+    # der Bridge darf dann nicht zum Abbruch fuehren.
     # ----------------------------------------------------------------
 
-    netz = Netzwerk(scratch / "d", mit_ap=False)
+    netz = Netzwerk(scratch / "d", mit_bridge=False)
 
     ergebnis = netz.schalte("xrack-share-toggle.sh", "on")
 
     assert ergebnis.returncode == 0, (
-        f"Ohne Access Point schlug die Freigabe fehl: {ergebnis.stderr}"
+        f"Ohne Bridge schlug die Freigabe fehl: {ergebnis.stderr}"
     )
     assert "XRack-Share-eth0" in netz.aktiv()
 
@@ -481,6 +505,243 @@ try:
     assert lease_lesen([""]) == ""
 
     print("OK: Der Lease-Leser meldet nur gueltige Adressen")
+
+    # ----------------------------------------------------------------
+    # 8. Access Point umbenennen: hostapd-Konfiguration umschreiben
+    #
+    # Seit der Umstellung auf hostapd aendert das Einstellungen-Menue
+    # nicht mehr ein NetworkManager-Profil, sondern zwei Zeilen in
+    # /etc/hostapd/xrack.conf. Alles andere darin - Band, Kanal,
+    # Ländercode, Verschluesselung - muss dabei stehenbleiben.
+    # ----------------------------------------------------------------
+
+    HOSTAPD_VORLAGE = """# Von install.sh erzeugt (XRack)
+interface=wlan1
+bridge=br0
+driver=nl80211
+ssid=XRack
+country_code=DE
+ieee80211d=1
+hw_mode=a
+channel=36
+wpa=2
+wpa_key_mgmt=WPA-PSK
+rsn_pairwise=CCMP
+ieee80211w=1
+wpa_passphrase=altesPasswort
+"""
+
+    FAKE_SYSTEMCTL = r"""#!/usr/bin/env bash
+echo "$*" >> "$NM_STATE/systemctl"
+if [ "$1" = "is-active" ]; then
+    #
+    # Der Access Point kommt mit der SSID "KAPUTT" nicht hoch - so
+    # laesst sich der Rueckfall auf die alten Werte pruefen.
+    #
+    grep -q '^ssid=KAPUTT$' "$XRACK_TEST_CONF" && exit 1
+    exit 0
+fi
+exit 0
+"""
+
+    #
+    # Nachgestelltes "install": Der Test laeuft nicht als root, -o/-g
+    # koennen also nicht gelten. Kopiert und geschuetzt wird trotzdem
+    # echt - genau das ist ja die Eigenschaft, die zaehlt.
+    #
+    FAKE_INSTALL = r"""#!/usr/bin/env bash
+echo "$*" >> "$NM_STATE/install"
+ziel="${@: -1}"
+quelle="${@: -2:1}"
+cp "$quelle" "$ziel"
+"""
+
+    def ap_umgebung(ordner: Path, inhalt: str = HOSTAPD_VORLAGE):
+        """
+        Legt eine nachgestellte hostapd-Umgebung an und liefert
+        (Skript-Kopie, Konfigurationsdatei, Umgebung).
+        """
+
+        ordner.mkdir(parents=True)
+
+        conf = ordner / "xrack.conf"
+        conf.write_text(inhalt, encoding="utf-8")
+
+        binordner = ordner / "bin"
+        binordner.mkdir()
+
+        for name, quelltext in (
+            ("systemctl", FAKE_SYSTEMCTL),
+            ("install", FAKE_INSTALL),
+            ("sleep", FAKE_SLEEP),
+        ):
+            datei = binordner / name
+            datei.write_text(quelltext, encoding="utf-8")
+            datei.chmod(0o755)
+
+        skript = ordner / "net-ap.sh"
+        skript.write_text(
+            (SKRIPTE / "xrack-net-ap.sh").read_text(encoding="utf-8").replace(
+                'CONF="/etc/hostapd/xrack.conf"', f'CONF="{conf}"'
+            ),
+            encoding="utf-8",
+        )
+        skript.chmod(0o755)
+
+        umgebung = dict(os.environ)
+        umgebung["NM_STATE"] = str(ordner)
+        umgebung["XRACK_TEST_CONF"] = str(conf)
+        umgebung["PATH"] = f"{binordner}:{os.environ['PATH']}"
+
+        return skript, conf, umgebung
+
+    def ap_setzen(skript, umgebung, ssid, passwort):
+        return subprocess.run(
+            [str(skript), ssid, passwort],
+            env=umgebung,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+    skript, conf, umgebung = ap_umgebung(scratch / "ap1")
+
+    ergebnis = ap_setzen(skript, umgebung, "Neuer Name", "neuesGeheimnis")
+
+    assert ergebnis.returncode == 0, ergebnis.stderr
+
+    zeilen = conf.read_text(encoding="utf-8").splitlines()
+
+    assert "ssid=Neuer Name" in zeilen, zeilen
+    assert "wpa_passphrase=neuesGeheimnis" in zeilen, zeilen
+    assert "ssid=XRack" not in zeilen
+    assert "wpa_passphrase=altesPasswort" not in zeilen
+
+    for unveraendert in (
+        "hw_mode=a", "channel=36", "country_code=DE",
+        "rsn_pairwise=CCMP", "ieee80211w=1", "bridge=br0",
+    ):
+        assert unveraendert in zeilen, (
+            f"{unveraendert} ist beim Umbenennen verlorengegangen: {zeilen}"
+        )
+
+    assert (scratch / "ap1" / "systemctl").read_text(
+        encoding="utf-8"
+    ).count("restart") == 1, "Der Access Point wurde nicht neu gestartet."
+
+    print("OK: Umbenennen aendert nur SSID und Passwort")
+
+    #
+    # Die Datei darf hinterher nicht fuer alle lesbar sein - sie
+    # enthaelt das WLAN-Passwort im Klartext. Geprueft wird, womit
+    # das Skript sie ablegt (der Test selbst laeuft nicht als root
+    # und koennte den Besitzer gar nicht setzen).
+    #
+    abgelegt = (scratch / "ap1" / "install").read_text(encoding="utf-8")
+
+    assert "-m 0600" in abgelegt and "-o root" in abgelegt, (
+        f"Die hostapd-Konfiguration wird zu offen abgelegt: {abgelegt}"
+    )
+
+    print("OK: Die Konfiguration bleibt nur fuer root lesbar")
+
+    # ----------------------------------------------------------------
+    # 9. Kommt der Access Point nicht hoch, zaehlen wieder die alten
+    #    Werte
+    #
+    # Ohne das stuende jemand nach einem missglueckten Versuch ohne
+    # Access Point da - und bei einem Access Point ist der oft der
+    # einzige Zugang zum Geraet.
+    # ----------------------------------------------------------------
+
+    skript, conf, umgebung = ap_umgebung(scratch / "ap2")
+
+    vorher = conf.read_text(encoding="utf-8")
+
+    ergebnis = ap_setzen(skript, umgebung, "KAPUTT", "trotzdemLang")
+
+    assert ergebnis.returncode != 0, (
+        "Ein nicht startender Access Point wurde als Erfolg gemeldet."
+    )
+    assert conf.read_text(encoding="utf-8") == vorher, (
+        "Nach dem Fehlschlag stehen die untauglichen Werte noch drin."
+    )
+
+    print("OK: Nach einem Fehlschlag gelten wieder die alten Werte")
+
+    # ----------------------------------------------------------------
+    # 10. Unbrauchbare Eingaben werden abgewiesen
+    #
+    # Ein Zeilenumbruch in der SSID wuerde in der hostapd-Datei eine
+    # neue Einstellung erzeugen - der Rest der Zeile landete dann als
+    # Befehl in der Konfiguration.
+    # ----------------------------------------------------------------
+
+    skript, conf, umgebung = ap_umgebung(scratch / "ap3")
+
+    vorher = conf.read_text(encoding="utf-8")
+
+    for ssid, passwort, warum in (
+        ("Name", "kurz", "zu kurzes Passwort"),
+        ("Zeile1\nwpa_passphrase=offen", "langgenug1", "Zeilenumbruch in der SSID"),
+        ("", "langgenug1", "leere SSID"),
+        ("x" * 33, "langgenug1", "zu lange SSID"),
+    ):
+        ergebnis = ap_setzen(skript, umgebung, ssid, passwort)
+
+        assert ergebnis.returncode != 0, f"Angenommen trotz {warum}."
+        assert conf.read_text(encoding="utf-8") == vorher, (
+            f"Die Konfiguration wurde trotz {warum} veraendert."
+        )
+
+    print("OK: Unbrauchbare SSIDs und Passwoerter werden abgewiesen")
+
+    # ----------------------------------------------------------------
+    # 11. Den Namen wieder auslesen
+    #
+    # XRack laeuft nicht als root und kann die hostapd-Datei nicht
+    # selbst oeffnen - dafuer gibt es xrack-ap-info.sh.
+    # ----------------------------------------------------------------
+
+    def ap_name(inhalt: str, ordner: Path) -> str:
+
+        ordner.mkdir(parents=True)
+
+        conf = ordner / "xrack.conf"
+        conf.write_text(inhalt, encoding="utf-8")
+
+        skript = ordner / "ap-info.sh"
+        skript.write_text(
+            (SKRIPTE / "xrack-ap-info.sh").read_text(encoding="utf-8").replace(
+                'CONF="/etc/hostapd/xrack.conf"', f'CONF="{conf}"'
+            ),
+            encoding="utf-8",
+        )
+        skript.chmod(0o755)
+
+        return subprocess.run(
+            [str(skript)], capture_output=True, text=True, timeout=10
+        ).stdout.strip()
+
+    assert ap_name(HOSTAPD_VORLAGE, scratch / "info1") == "XRack"
+
+    #
+    # SSIDs duerfen Leerzeichen und Gleichheitszeichen enthalten.
+    #
+    assert ap_name(
+        HOSTAPD_VORLAGE.replace("ssid=XRack", "ssid=Bue hne=2"),
+        scratch / "info2",
+    ) == "Bue hne=2"
+
+    #
+    # Das Passwort darf dabei unter keinen Umstaenden mit
+    # herauskommen.
+    #
+    ausgabe = ap_name(HOSTAPD_VORLAGE, scratch / "info3")
+
+    assert "altesPasswort" not in ausgabe, ausgabe
+
+    print("OK: Der Name des Access Points laesst sich auslesen")
 
     print("Alle Tests erfolgreich.")
 
