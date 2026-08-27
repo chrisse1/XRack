@@ -1396,4 +1396,100 @@ with tempfile.TemporaryDirectory() as tmp:
 
     print("OK: Ohne Stick bleibt die Access-Point-Konfiguration stehen")
 
+
+
+# ====================================================================
+# Die systemd-Unit wird nach einem Update nachgezogen
+#
+# Sie wird sonst ausschliesslich beim Anlegen des Access Points
+# geschrieben. Eine bestehende Installation bekaeme neue
+# ExecStartPre-Zeilen also nie zu sehen - der Abgleich der
+# Geraetenamen liefe dort nie an, und genau das ist der Fall, den er
+# verhindern soll.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    wurzel = Path(tmp)
+    protokoll = wurzel / "protokoll.txt"
+    protokoll.touch()
+
+    binordner = _attrappen(wurzel, protokoll)
+
+    conf = wurzel / "xrack.conf"
+    conf.write_text("interface=wlan1\nssid=XRack\nhw_mode=a\n")
+
+    unit = wurzel / "xrack-hostapd.service"
+
+    #
+    # Der alte Stand: eine Unit ohne den Abgleich.
+    #
+    unit.write_text(
+        "[Service]\n"
+        "ExecStartPre=-/usr/sbin/rfkill unblock wlan\n"
+        "ExecStart=/usr/sbin/hostapd /etc/hostapd/xrack.conf\n"
+    )
+
+    umgebung = dict(os.environ)
+    umgebung["PATH"] = f"{binordner}:{umgebung['PATH']}"
+    umgebung["XRACK_HOSTAPD_CONF"] = str(conf)
+    umgebung["XRACK_HOSTAPD_UNIT"] = str(unit)
+
+    ergebnis = subprocess.run(
+        [str(SKRIPTE / "xrack-ap-setup.sh"), "--refresh-unit"],
+        capture_output=True, text=True, env=umgebung,
+    )
+
+    assert ergebnis.returncode == 0, ergebnis.stderr
+
+    inhalt = unit.read_text()
+
+    #
+    # Auf die Anweisung pruefen, nicht auf den Dateinamen: Der steht
+    # auch im Kommentar darueber, und dann faellt es nicht auf, wenn
+    # die ExecStartPre-Zeile fehlt.
+    #
+    abgleich = [
+        zeile for zeile in inhalt.splitlines()
+        if zeile.startswith("ExecStartPre=") and "xrack-wifi-bind.sh" in zeile
+    ]
+
+    assert len(abgleich) == 1, (
+        f"Der Abgleich der Geraetenamen fehlt weiterhin (gefunden: "
+        f"{abgleich}):\n{inhalt}"
+    )
+    assert str(conf) in inhalt, (
+        f"Die Unit zeigt auf die falsche Konfiguration:\n{inhalt}"
+    )
+    assert "systemctl daemon-reload" in protokoll.read_text(), (
+        "Ohne daemon-reload liest systemd die neue Unit gar nicht."
+    )
+
+    assert conf.read_text().startswith("interface=wlan1"), (
+        "--refresh-unit darf die Access-Point-Konfiguration nicht "
+        f"anfassen:\n{conf.read_text()}"
+    )
+
+    print("OK: Ein Update zieht die systemd-Unit des Access Points nach")
+
+    # ----------------------------------------------------------------
+    # Ohne eingerichteten Access Point gibt es nichts zu tun - und
+    # dann darf auch keine Unit entstehen.
+    # ----------------------------------------------------------------
+
+    conf.unlink()
+    unit.unlink()
+
+    ergebnis = subprocess.run(
+        [str(SKRIPTE / "xrack-ap-setup.sh"), "--refresh-unit"],
+        capture_output=True, text=True, env=umgebung,
+    )
+
+    assert ergebnis.returncode == 0, ergebnis.stderr
+    assert not unit.exists(), (
+        "Ohne Access Point wurde eine Unit angelegt, die ins Leere zeigt."
+    )
+
+    print("OK: Ohne Access Point legt --refresh-unit nichts an")
+
 print("Alle Tests erfolgreich.")
