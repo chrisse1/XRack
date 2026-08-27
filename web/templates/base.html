@@ -385,576 +385,679 @@
             </div>
 
             <div class="modal-body">
+                {#
+                    Nach Themen gruppiert und eingeklappt.
 
-                <!-- Sprache ------------------------------------------->
+                    Vorher standen zwoelf Abschnitte flach untereinander,
+                    getrennt nur durch Linien - man musste an allem
+                    vorbeiscrollen, um irgendwo hinzukommen. Zugeklappt
+                    passt jetzt die ganze Liste auf einen Blick.
 
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">
-                        {{ t.settings_language_label }}
-                    </label>
-                    <div class="d-flex gap-2">
-                        <select id="settings-language" class="form-select form-select-sm w-auto">
-                            <option value="de">Deutsch</option>
-                            <option value="en">English</option>
-                        </select>
-                        <button id="btn-settings-language-save" class="btn btn-primary btn-sm">
-                            {{ t.btn_save }}
-                        </button>
-                    </div>
-                </div>
+                    Die Bausteine darin sind unveraendert uebernommen; nur
+                    die Pult-IP und die Fader-Sperre sind umgezogen. Sie
+                    lagen im Block "Konsole aus dem Heimnetz" und
+                    verschwanden deshalb mit ihm, sobald keine
+                    WLAN-Verbindung bestand - ausgerechnet die Pult-IP von
+                    Hand ist aber der Notweg fuer Netze, in denen der
+                    Rundruf nicht durchkommt.
+                #}
+                <div class="accordion" id="settings-accordion">
 
-                <hr>
-
-                <!-- Port ------------------------------------------------>
-
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">
-                        {{ t.settings_sample_rate_label }}
-                    </label>
-                    <div class="d-flex gap-2">
-                        <select id="settings-sample-rate" class="form-select form-select-sm w-auto">
-                            <option value="44100">44.1 kHz</option>
-                            <option value="48000">48 kHz</option>
-                            <option value="88200">88.2 kHz</option>
-                            <option value="96000">96 kHz</option>
-                            <option value="176400">176.4 kHz</option>
-                            <option value="192000">192 kHz</option>
-                        </select>
-                        <button id="btn-settings-sample-rate-save" class="btn btn-primary btn-sm">
-                            {{ t.btn_save }}
-                        </button>
-                    </div>
-                    <small class="text-body-secondary">{{ t.settings_sample_rate_hint }}</small>
-                </div>
-
-                <hr>
-
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">
-                        {{ t.settings_port_label }}
-                    </label>
-                    <div class="d-flex gap-2 align-items-center flex-wrap">
-                        <input
-                            type="number"
-                            id="settings-port"
-                            class="form-control form-control-sm"
-                            style="width: 8rem;"
-                            min="1"
-                            max="65535"
-                        >
-                        <button id="btn-settings-port-save" class="btn btn-primary btn-sm">
-                            {{ t.btn_save }}
-                        </button>
-                        <button id="btn-settings-restart" class="btn btn-outline-warning btn-sm d-none">
-                            <i class="bi bi-arrow-clockwise me-1"></i>{{ t.btn_restart_now }}
-                        </button>
-                    </div>
-                    <small class="text-body-secondary">{{ t.settings_port_hint }}</small>
-                </div>
-
-                <hr>
-
-                <!-- Aufnahmename ----------------------------------------->
-
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">
-                        {{ t.settings_recording_label }}
-                    </label>
-                    <div class="d-flex gap-2">
-                        <input
-                            type="text"
-                            id="settings-recording-prefix"
-                            class="form-control form-control-sm"
-                            maxlength="40"
-                        >
-                        <button id="btn-settings-recording-save" class="btn btn-primary btn-sm">
-                            {{ t.btn_save }}
-                        </button>
-                    </div>
-                    <small class="text-body-secondary">{{ t.settings_recording_hint }}</small>
-                </div>
-
-                <hr>
-
-                <!-- PIN --------------------------------------------->
-
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">
-                        {{ t.settings_pin_label }}
-                    </label>
-                    <div id="settings-pin-current-field" class="mb-2 d-none">
-                        <input
-                            type="password"
-                            id="settings-pin-current"
-                            class="form-control form-control-sm pin-input"
-                            style="width: 8rem;"
-                            inputmode="numeric"
-                            pattern="[0-9]*"
-                            maxlength="4"
-                            autocomplete="off"
-                            placeholder="{{ t.settings_pin_current_placeholder }}"
-                        >
-                    </div>
-                    <div class="d-flex gap-2 flex-wrap">
-                        <input
-                            type="password"
-                            id="settings-pin-new"
-                            class="form-control form-control-sm pin-input"
-                            style="width: 8rem;"
-                            inputmode="numeric"
-                            pattern="[0-9]*"
-                            maxlength="4"
-                            autocomplete="off"
-                            placeholder="{{ t.settings_pin_new_placeholder }}"
-                        >
-                        <input
-                            type="password"
-                            id="settings-pin-new-confirm"
-                            class="form-control form-control-sm pin-input"
-                            style="width: 8rem;"
-                            inputmode="numeric"
-                            pattern="[0-9]*"
-                            maxlength="4"
-                            autocomplete="off"
-                            placeholder="{{ t.settings_pin_new_confirm_placeholder }}"
-                        >
-                        <button id="btn-settings-pin-save" class="btn btn-primary btn-sm">
-                            {{ t.btn_save }}
-                        </button>
-                    </div>
-                    <small class="text-body-secondary">{{ t.settings_pin_hint }}</small>
-                </div>
-
-                <hr>
-
-                <!-- WLAN --------------------------------------------->
-
-                <div id="settings-wlan-unavailable" class="text-muted d-none">
-                    {{ t.settings_wlan_unavailable }}
-                </div>
-
-                <div id="settings-wlan-sections">
-
-                    {#
-                        Die Funkregion steht ueber beiden Abschnitten,
-                        weil sie zu beiden gehoert: Sie ist eine
-                        Eigenschaft des Funkgeraets, nicht einer
-                        einzelnen Verbindung. Ohne sie bleibt WLAN per
-                        rfkill gesperrt, und der Access Point darf
-                        nicht auf 5 GHz senden.
-
-                        Die Laendernamen fuellt das JavaScript ueber
-                        Intl.DisplayNames in der Sprache des Nutzers -
-                        deshalb steht hier nur ein leeres Auswahlfeld
-                        und keine Liste mit 250 Eintraegen.
-                    #}
-                    <div class="mb-3">
-                        <label
-                            for="settings-wifi-country"
-                            class="form-label fw-semibold"
-                        >
-                            {{ t.settings_wifi_country_title }}
-                        </label>
-                        <div class="d-flex gap-2">
-                            <select
-                                id="settings-wifi-country"
-                                class="form-select"
-                            ></select>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
                             <button
+                                class="accordion-button collapsed"
                                 type="button"
-                                class="btn btn-outline-secondary text-nowrap"
-                                id="btn-save-wifi-country"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#settings-gruppe-mischpult"
                             >
-                                {{ t.settings_wifi_country_save }}
+                                {{ t.settings_group_console }}
                             </button>
-                        </div>
-                        <small class="text-body-secondary">
-                            {{ t.settings_wifi_country_hint }}
-                        </small>
-                    </div>
+                        </h2>
+                        <div
+                            id="settings-gruppe-mischpult"
+                            class="accordion-collapse collapse"
+                            data-bs-parent="#settings-accordion"
+                        >
+                            <div class="accordion-body">
+                        <!-- Port ------------------------------------------------>
 
-                    <hr>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">
-                            {{ t.settings_home_wifi_title }}
-                        </label>
-                        {#
-                            Kein "nicht eingerichtet" mehr: Die Maske
-                            kann die Verbindung jetzt auch anlegen
-                            (scripts/xrack-net-home.sh), nicht nur
-                            aendern.
-                        #}
-                        <div id="settings-home-fields">
-                            <input
-                                type="text"
-                                id="settings-home-ssid"
-                                class="form-control form-control-sm mb-2"
-                                placeholder="{{ t.label_ssid }}"
-                                maxlength="32"
-                            >
-                            <div class="input-group input-group-sm mb-2">
-                                <input
-                                    type="password"
-                                    id="settings-home-password"
-                                    class="form-control"
-                                    placeholder="{{ t.label_password }}"
-                                    maxlength="63"
-                                >
-                                <button
-                                    type="button"
-                                    class="btn btn-outline-secondary settings-password-toggle"
-                                    data-target="settings-home-password"
-                                    title="{{ t.title_toggle_password }}"
-                                >
-                                    <i class="bi bi-eye"></i>
-                                </button>
-                            </div>
-                            <div class="input-group input-group-sm mb-2">
-                                <input
-                                    type="password"
-                                    id="settings-home-password-confirm"
-                                    class="form-control"
-                                    placeholder="{{ t.label_password_confirm }}"
-                                    maxlength="63"
-                                >
-                                <button
-                                    type="button"
-                                    class="btn btn-outline-secondary settings-password-toggle"
-                                    data-target="settings-home-password-confirm"
-                                    title="{{ t.title_toggle_password }}"
-                                >
-                                    <i class="bi bi-eye"></i>
-                                </button>
-                            </div>
-                            <button id="btn-settings-home-save" class="btn btn-primary btn-sm">
-                                {{ t.btn_save }}
-                            </button>
-                            <div>
-                                <small class="text-body-secondary">{{ t.settings_wifi_hint }}</small>
-                            </div>
-                        </div>
-                    </div>
-
-                    <hr>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">
-                            {{ t.settings_ap_wifi_title }}
-                        </label>
-                        {#
-                            Ohne USB-WLAN-Stick gibt es keinen Access
-                            Point - dann eine klare Ansage statt einer
-                            Eingabemaske, die nirgends hinfuehrt.
-                        #}
-                        <div id="settings-ap-no-hardware" class="text-muted small d-none">
-                            {{ t.settings_ap_no_hardware }}
-                        </div>
-                        <div id="settings-ap-fields">
-                            <input
-                                type="text"
-                                id="settings-ap-ssid"
-                                class="form-control form-control-sm mb-2"
-                                placeholder="{{ t.label_ssid }}"
-                                maxlength="32"
-                            >
-                            <div class="input-group input-group-sm mb-2">
-                                <input
-                                    type="password"
-                                    id="settings-ap-password"
-                                    class="form-control"
-                                    placeholder="{{ t.label_password }}"
-                                    maxlength="63"
-                                >
-                                <button
-                                    type="button"
-                                    class="btn btn-outline-secondary settings-password-toggle"
-                                    data-target="settings-ap-password"
-                                    title="{{ t.title_toggle_password }}"
-                                >
-                                    <i class="bi bi-eye"></i>
-                                </button>
-                            </div>
-                            <div class="input-group input-group-sm mb-2">
-                                <input
-                                    type="password"
-                                    id="settings-ap-password-confirm"
-                                    class="form-control"
-                                    placeholder="{{ t.label_password_confirm }}"
-                                    maxlength="63"
-                                >
-                                <button
-                                    type="button"
-                                    class="btn btn-outline-secondary settings-password-toggle"
-                                    data-target="settings-ap-password-confirm"
-                                    title="{{ t.title_toggle_password }}"
-                                >
-                                    <i class="bi bi-eye"></i>
-                                </button>
-                            </div>
-                            <button id="btn-settings-ap-save" class="btn btn-primary btn-sm">
-                                {{ t.btn_save }}
-                            </button>
-                            <div>
-                                <small class="text-body-secondary">{{ t.settings_wifi_hint }}</small>
-                            </div>
-                        </div>
-                    </div>
-
-                    <hr id="settings-bridge-trenner">
-
-                    {#
-                        Nur sichtbar, wenn der Access Point auch
-                        funkt - sonst gibt es nichts, worueber die
-                        Konsole erreichbar waere.
-                    #}
-                    <div class="mb-3" id="settings-bridge-block">
-                        <label class="form-label fw-semibold">
-                            {{ t.settings_ap_access_title }}
-                        </label>
-                        <div id="settings-bridge-field" class="form-check form-switch">
-                            <input
-                                type="checkbox"
-                                role="switch"
-                                id="settings-bridge-toggle"
-                                class="form-check-input"
-                            >
-                            <label class="form-check-label" for="settings-bridge-toggle">
-                                {{ t.settings_ap_access_title }}
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                {{ t.settings_sample_rate_label }}
                             </label>
-                        </div>
-                        <small class="text-body-secondary">{{ t.settings_bridge_hint }}</small>
-                    </div>
-
-                    <hr id="settings-console-access-trenner">
-
-                    {#
-                        Nur sichtbar, wenn eine WLAN-Verbindung ins
-                        Heimnetz besteht - ohne die gibt es kein
-                        Heimnetz, aus dem heraus etwas erreichbar
-                        waere.
-                    #}
-                    <div class="mb-3" id="settings-console-access-block">
-                        <label class="form-label fw-semibold">
-                            {{ t.settings_console_access_title }}
-                        </label>
-                        <div id="settings-console-access-field" class="form-check form-switch">
-                            <input
-                                type="checkbox"
-                                role="switch"
-                                id="settings-console-access-toggle"
-                                class="form-check-input"
-                            >
-                            <label class="form-check-label" for="settings-console-access-toggle">
-                                {{ t.settings_console_access_title }}
-                            </label>
-                        </div>
-                        <small class="text-body-secondary">{{ t.settings_console_access_hint }}</small>
-
-                        <div id="settings-console-access-ips" class="mt-3 d-none">
-                            <div>
-                                {{ t.settings_app_ip_label }}
-                                <code id="settings-app-ip-value" class="fs-6"></code>
-                            </div>
-                            <small class="text-body-secondary">
-                                {{ t.settings_console_ip_label }}
-                                <code id="settings-console-ip-value"></code>
-                            </small>
-                        </div>
-
-                        <div id="settings-console-access-waiting" class="text-body-secondary small mt-3 d-none">
-                            {{ t.settings_console_access_waiting }}
-                        </div>
-
-
-                        <!--
-                            Rueckfall fuer den Fall, dass Pult und Pi
-                            zusammen an einem Router haengen: Dann
-                            vergibt der Router die Adressen, der Pi hat
-                            keine Vergabeliste, und manche Router lassen
-                            auch den Suchlauf nicht durch.
-                        -->
-                        <div class="mt-3">
-                            <label class="form-label small mb-1" for="settings-console-host">
-                                {{ t.settings_console_host_label }}
-                            </label>
-
-                            <div class="input-group input-group-sm">
-                                <input
-                                    type="text"
-                                    id="settings-console-host"
-                                    class="form-control"
-                                    inputmode="decimal"
-                                    placeholder="{{ t.settings_console_host_placeholder }}"
-                                >
-                                <button
-                                    id="btn-settings-console-host"
-                                    class="btn btn-outline-secondary"
-                                    type="button"
-                                >
+                            <div class="d-flex gap-2">
+                                <select id="settings-sample-rate" class="form-select form-select-sm w-auto">
+                                    <option value="44100">44.1 kHz</option>
+                                    <option value="48000">48 kHz</option>
+                                    <option value="88200">88.2 kHz</option>
+                                    <option value="96000">96 kHz</option>
+                                    <option value="176400">176.4 kHz</option>
+                                    <option value="192000">192 kHz</option>
+                                </select>
+                                <button id="btn-settings-sample-rate-save" class="btn btn-primary btn-sm">
                                     {{ t.btn_save }}
                                 </button>
                             </div>
-
-                            <small class="text-body-secondary d-block mt-1">
-                                {{ t.settings_console_host_hint }}
-                            </small>
-
-                            <div id="settings-console-host-found" class="small mt-1"></div>
+                            <small class="text-body-secondary">{{ t.settings_sample_rate_hint }}</small>
                         </div>
 
-                        <!--
-                            Automatische Sperre der Kanalzuege. Das
-                            Sekundenfeld bleibt sichtbar, wenn der
-                            Schalter aus ist - nur ausgegraut, damit man
-                            den gemerkten Wert weiter sieht.
-                        -->
-                        <div class="mt-3">
+                                <div class="mt-3">
+                                    <label class="form-label small mb-1" for="settings-console-host">
+                                        {{ t.settings_console_host_label }}
+                                    </label>
+
+                                    <div class="input-group input-group-sm">
+                                        <input
+                                            type="text"
+                                            id="settings-console-host"
+                                            class="form-control"
+                                            inputmode="decimal"
+                                            placeholder="{{ t.settings_console_host_placeholder }}"
+                                        >
+                                        <button
+                                            id="btn-settings-console-host"
+                                            class="btn btn-outline-secondary"
+                                            type="button"
+                                        >
+                                            {{ t.btn_save }}
+                                        </button>
+                                    </div>
+
+                                    <small class="text-body-secondary d-block mt-1">
+                                        {{ t.settings_console_host_hint }}
+                                    </small>
+
+                                    <div id="settings-console-host-found" class="small mt-1"></div>
+                                </div>
+
+
+                                <!--
+                                    Automatische Sperre der Kanalzuege. Das
+                                    Sekundenfeld bleibt sichtbar, wenn der
+                                    Schalter aus ist - nur ausgegraut, damit man
+                                    den gemerkten Wert weiter sieht.
+                                -->
+                                <div class="mt-3">
+                                    <div class="form-check form-switch">
+                                        <input
+                                            type="checkbox"
+                                            role="switch"
+                                            id="settings-faders-autolock-toggle"
+                                            class="form-check-input"
+                                        >
+                                        <label
+                                            class="form-check-label"
+                                            for="settings-faders-autolock-toggle"
+                                        >
+                                            {{ t.settings_faders_autolock_title }}
+                                        </label>
+                                    </div>
+
+                                    <div class="input-group input-group-sm mt-2">
+                                        <input
+                                            type="number"
+                                            id="settings-faders-autolock-seconds"
+                                            class="form-control"
+                                            min="5"
+                                            max="3600"
+                                            step="5"
+                                        >
+                                        <span class="input-group-text">
+                                            {{ t.settings_faders_autolock_unit }}
+                                        </span>
+                                        <button
+                                            id="btn-settings-faders-autolock"
+                                            class="btn btn-outline-secondary"
+                                            type="button"
+                                        >
+                                            {{ t.btn_save }}
+                                        </button>
+                                    </div>
+
+                                    <small class="text-body-secondary d-block mt-1">
+                                        {{ t.settings_faders_autolock_hint }}
+                                    </small>
+
+                                    <div id="settings-faders-autolock-result" class="small mt-1"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button
+                                class="accordion-button collapsed"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#settings-gruppe-netzwerk"
+                            >
+                                {{ t.settings_group_network }}
+                            </button>
+                        </h2>
+                        <div
+                            id="settings-gruppe-netzwerk"
+                            class="accordion-collapse collapse"
+                            data-bs-parent="#settings-accordion"
+                        >
+                            <div class="accordion-body">
+                        <!-- WLAN --------------------------------------------->
+
+                        <div id="settings-wlan-unavailable" class="text-muted d-none">
+                            {{ t.settings_wlan_unavailable }}
+                        </div>
+
+                        <div id="settings-wlan-sections">
+
+                            {#
+                                Die Funkregion steht ueber beiden Abschnitten,
+                                weil sie zu beiden gehoert: Sie ist eine
+                                Eigenschaft des Funkgeraets, nicht einer
+                                einzelnen Verbindung. Ohne sie bleibt WLAN per
+                                rfkill gesperrt, und der Access Point darf
+                                nicht auf 5 GHz senden.
+
+                                Die Laendernamen fuellt das JavaScript ueber
+                                Intl.DisplayNames in der Sprache des Nutzers -
+                                deshalb steht hier nur ein leeres Auswahlfeld
+                                und keine Liste mit 250 Eintraegen.
+                            #}
+                            <div class="mb-3">
+                                <label
+                                    for="settings-wifi-country"
+                                    class="form-label fw-semibold"
+                                >
+                                    {{ t.settings_wifi_country_title }}
+                                </label>
+                                <div class="d-flex gap-2">
+                                    <select
+                                        id="settings-wifi-country"
+                                        class="form-select"
+                                    ></select>
+                                    <button
+                                        type="button"
+                                        class="btn btn-outline-secondary text-nowrap"
+                                        id="btn-save-wifi-country"
+                                    >
+                                        {{ t.settings_wifi_country_save }}
+                                    </button>
+                                </div>
+                                <small class="text-body-secondary">
+                                    {{ t.settings_wifi_country_hint }}
+                                </small>
+                            </div>
+
+                            <hr>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">
+                                    {{ t.settings_home_wifi_title }}
+                                </label>
+                                {#
+                                    Kein "nicht eingerichtet" mehr: Die Maske
+                                    kann die Verbindung jetzt auch anlegen
+                                    (scripts/xrack-net-home.sh), nicht nur
+                                    aendern.
+                                #}
+                                <div id="settings-home-fields">
+                                    <input
+                                        type="text"
+                                        id="settings-home-ssid"
+                                        class="form-control form-control-sm mb-2"
+                                        placeholder="{{ t.label_ssid }}"
+                                        maxlength="32"
+                                    >
+                                    <div class="input-group input-group-sm mb-2">
+                                        <input
+                                            type="password"
+                                            id="settings-home-password"
+                                            class="form-control"
+                                            placeholder="{{ t.label_password }}"
+                                            maxlength="63"
+                                        >
+                                        <button
+                                            type="button"
+                                            class="btn btn-outline-secondary settings-password-toggle"
+                                            data-target="settings-home-password"
+                                            title="{{ t.title_toggle_password }}"
+                                        >
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="input-group input-group-sm mb-2">
+                                        <input
+                                            type="password"
+                                            id="settings-home-password-confirm"
+                                            class="form-control"
+                                            placeholder="{{ t.label_password_confirm }}"
+                                            maxlength="63"
+                                        >
+                                        <button
+                                            type="button"
+                                            class="btn btn-outline-secondary settings-password-toggle"
+                                            data-target="settings-home-password-confirm"
+                                            title="{{ t.title_toggle_password }}"
+                                        >
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                    <button id="btn-settings-home-save" class="btn btn-primary btn-sm">
+                                        {{ t.btn_save }}
+                                    </button>
+                                    <div>
+                                        <small class="text-body-secondary">{{ t.settings_wifi_hint }}</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">
+                                    {{ t.settings_ap_wifi_title }}
+                                </label>
+                                {#
+                                    Ohne USB-WLAN-Stick gibt es keinen Access
+                                    Point - dann eine klare Ansage statt einer
+                                    Eingabemaske, die nirgends hinfuehrt.
+                                #}
+                                <div id="settings-ap-no-hardware" class="text-muted small d-none">
+                                    {{ t.settings_ap_no_hardware }}
+                                </div>
+                                <div id="settings-ap-fields">
+                                    <input
+                                        type="text"
+                                        id="settings-ap-ssid"
+                                        class="form-control form-control-sm mb-2"
+                                        placeholder="{{ t.label_ssid }}"
+                                        maxlength="32"
+                                    >
+                                    <div class="input-group input-group-sm mb-2">
+                                        <input
+                                            type="password"
+                                            id="settings-ap-password"
+                                            class="form-control"
+                                            placeholder="{{ t.label_password }}"
+                                            maxlength="63"
+                                        >
+                                        <button
+                                            type="button"
+                                            class="btn btn-outline-secondary settings-password-toggle"
+                                            data-target="settings-ap-password"
+                                            title="{{ t.title_toggle_password }}"
+                                        >
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="input-group input-group-sm mb-2">
+                                        <input
+                                            type="password"
+                                            id="settings-ap-password-confirm"
+                                            class="form-control"
+                                            placeholder="{{ t.label_password_confirm }}"
+                                            maxlength="63"
+                                        >
+                                        <button
+                                            type="button"
+                                            class="btn btn-outline-secondary settings-password-toggle"
+                                            data-target="settings-ap-password-confirm"
+                                            title="{{ t.title_toggle_password }}"
+                                        >
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                    <button id="btn-settings-ap-save" class="btn btn-primary btn-sm">
+                                        {{ t.btn_save }}
+                                    </button>
+                                    <div>
+                                        <small class="text-body-secondary">{{ t.settings_wifi_hint }}</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr id="settings-bridge-trenner">
+
+                            {#
+                                Nur sichtbar, wenn der Access Point auch
+                                funkt - sonst gibt es nichts, worueber die
+                                Konsole erreichbar waere.
+                            #}
+                            <div class="mb-3" id="settings-bridge-block">
+                                <label class="form-label fw-semibold">
+                                    {{ t.settings_ap_access_title }}
+                                </label>
+                                <div id="settings-bridge-field" class="form-check form-switch">
+                                    <input
+                                        type="checkbox"
+                                        role="switch"
+                                        id="settings-bridge-toggle"
+                                        class="form-check-input"
+                                    >
+                                    <label class="form-check-label" for="settings-bridge-toggle">
+                                        {{ t.settings_ap_access_title }}
+                                    </label>
+                                </div>
+                                <small class="text-body-secondary">{{ t.settings_bridge_hint }}</small>
+                            </div>
+
+                            <hr id="settings-console-access-trenner">
+
+                            {#
+                                Nur sichtbar, wenn eine WLAN-Verbindung ins
+                                Heimnetz besteht - ohne die gibt es kein
+                                Heimnetz, aus dem heraus etwas erreichbar
+                                waere.
+                            #}
+                            <div class="mb-3" id="settings-console-access-block">
+                                <label class="form-label fw-semibold">
+                                    {{ t.settings_console_access_title }}
+                                </label>
+                                <div id="settings-console-access-field" class="form-check form-switch">
+                                    <input
+                                        type="checkbox"
+                                        role="switch"
+                                        id="settings-console-access-toggle"
+                                        class="form-check-input"
+                                    >
+                                    <label class="form-check-label" for="settings-console-access-toggle">
+                                        {{ t.settings_console_access_title }}
+                                    </label>
+                                </div>
+                                <small class="text-body-secondary">{{ t.settings_console_access_hint }}</small>
+
+                                <div id="settings-console-access-ips" class="mt-3 d-none">
+                                    <div>
+                                        {{ t.settings_app_ip_label }}
+                                        <code id="settings-app-ip-value" class="fs-6"></code>
+                                    </div>
+                                    <small class="text-body-secondary">
+                                        {{ t.settings_console_ip_label }}
+                                        <code id="settings-console-ip-value"></code>
+                                    </small>
+                                </div>
+
+                                <div id="settings-console-access-waiting" class="text-body-secondary small mt-3 d-none">
+                                    {{ t.settings_console_access_waiting }}
+                                </div>
+
+
+                                <!--
+                                    Rueckfall fuer den Fall, dass Pult und Pi
+                                    zusammen an einem Router haengen: Dann
+                                    vergibt der Router die Adressen, der Pi hat
+                                    keine Vergabeliste, und manche Router lassen
+                                    auch den Suchlauf nicht durch.
+                                -->
+                            </div>
+
+                        </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button
+                                class="accordion-button collapsed"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#settings-gruppe-aufnahme"
+                            >
+                                {{ t.settings_group_recording }}
+                            </button>
+                        </h2>
+                        <div
+                            id="settings-gruppe-aufnahme"
+                            class="accordion-collapse collapse"
+                            data-bs-parent="#settings-accordion"
+                        >
+                            <div class="accordion-body">
+                        <!-- Aufnahmename ----------------------------------------->
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                {{ t.settings_recording_label }}
+                            </label>
+                            <div class="d-flex gap-2">
+                                <input
+                                    type="text"
+                                    id="settings-recording-prefix"
+                                    class="form-control form-control-sm"
+                                    maxlength="40"
+                                >
+                                <button id="btn-settings-recording-save" class="btn btn-primary btn-sm">
+                                    {{ t.btn_save }}
+                                </button>
+                            </div>
+                            <small class="text-body-secondary">{{ t.settings_recording_hint }}</small>
+                        </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button
+                                class="accordion-button collapsed"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#settings-gruppe-geraet"
+                            >
+                                {{ t.settings_group_device }}
+                            </button>
+                        </h2>
+                        <div
+                            id="settings-gruppe-geraet"
+                            class="accordion-collapse collapse"
+                            data-bs-parent="#settings-accordion"
+                        >
+                            <div class="accordion-body">
+                        <!-- Sprache ------------------------------------------->
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                {{ t.settings_language_label }}
+                            </label>
+                            <div class="d-flex gap-2">
+                                <select id="settings-language" class="form-select form-select-sm w-auto">
+                                    <option value="de">Deutsch</option>
+                                    <option value="en">English</option>
+                                </select>
+                                <button id="btn-settings-language-save" class="btn btn-primary btn-sm">
+                                    {{ t.btn_save }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                {{ t.settings_port_label }}
+                            </label>
+                            <div class="d-flex gap-2 align-items-center flex-wrap">
+                                <input
+                                    type="number"
+                                    id="settings-port"
+                                    class="form-control form-control-sm"
+                                    style="width: 8rem;"
+                                    min="1"
+                                    max="65535"
+                                >
+                                <button id="btn-settings-port-save" class="btn btn-primary btn-sm">
+                                    {{ t.btn_save }}
+                                </button>
+                                <button id="btn-settings-restart" class="btn btn-outline-warning btn-sm d-none">
+                                    <i class="bi bi-arrow-clockwise me-1"></i>{{ t.btn_restart_now }}
+                                </button>
+                            </div>
+                            <small class="text-body-secondary">{{ t.settings_port_hint }}</small>
+                        </div>
+
+                        <!-- PIN --------------------------------------------->
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                {{ t.settings_pin_label }}
+                            </label>
+                            <div id="settings-pin-current-field" class="mb-2 d-none">
+                                <input
+                                    type="password"
+                                    id="settings-pin-current"
+                                    class="form-control form-control-sm pin-input"
+                                    style="width: 8rem;"
+                                    inputmode="numeric"
+                                    pattern="[0-9]*"
+                                    maxlength="4"
+                                    autocomplete="off"
+                                    placeholder="{{ t.settings_pin_current_placeholder }}"
+                                >
+                            </div>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <input
+                                    type="password"
+                                    id="settings-pin-new"
+                                    class="form-control form-control-sm pin-input"
+                                    style="width: 8rem;"
+                                    inputmode="numeric"
+                                    pattern="[0-9]*"
+                                    maxlength="4"
+                                    autocomplete="off"
+                                    placeholder="{{ t.settings_pin_new_placeholder }}"
+                                >
+                                <input
+                                    type="password"
+                                    id="settings-pin-new-confirm"
+                                    class="form-control form-control-sm pin-input"
+                                    style="width: 8rem;"
+                                    inputmode="numeric"
+                                    pattern="[0-9]*"
+                                    maxlength="4"
+                                    autocomplete="off"
+                                    placeholder="{{ t.settings_pin_new_confirm_placeholder }}"
+                                >
+                                <button id="btn-settings-pin-save" class="btn btn-primary btn-sm">
+                                    {{ t.btn_save }}
+                                </button>
+                            </div>
+                            <small class="text-body-secondary">{{ t.settings_pin_hint }}</small>
+                        </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button
+                                class="accordion-button collapsed"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#settings-gruppe-wartung"
+                            >
+                                {{ t.settings_group_maintenance }}
+                            </button>
+                        </h2>
+                        <div
+                            id="settings-gruppe-wartung"
+                            class="accordion-collapse collapse"
+                            data-bs-parent="#settings-accordion"
+                        >
+                            <div class="accordion-body">
+                        <!-- Update ------------------------------------------->
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                {{ t.settings_update_title }}
+                            </label>
+
+                            <div class="mb-2">
+                                {{ t.settings_update_version_label }}
+                                <strong id="settings-update-version">-</strong>
+                            </div>
+
+                            <!--
+                                Zwei Wege zum selben Ziel: aus dem Internet oder
+                                vom USB-Stick. Dahinter laeuft derselbe Updater,
+                                deshalb teilen sich beide auch Fortschritts- und
+                                Ergebnisanzeige.
+                            -->
+
+                            <div class="d-flex flex-wrap gap-2 mb-2">
+                                <button
+                                    id="btn-settings-update-online"
+                                    class="btn btn-primary btn-sm"
+                                >
+                                    <i class="bi bi-cloud-arrow-down me-1"></i>
+                                    {{ t.btn_settings_update_online }}
+                                </button>
+
+                                <button
+                                    id="btn-settings-update"
+                                    class="btn btn-outline-primary btn-sm"
+                                    disabled
+                                >
+                                    <i class="bi bi-usb-drive me-1"></i>
+                                    {{ t.btn_settings_update }}
+                                </button>
+                            </div>
+
+                            <div id="settings-update-package" class="small mb-2"></div>
+
+                            <div id="settings-update-progress" class="mt-3 d-none">
+                                <div class="progress" style="height: 8px;">
+                                    <div
+                                        class="progress-bar progress-bar-striped progress-bar-animated"
+                                        style="width: 100%"
+                                    ></div>
+                                </div>
+                                <small id="settings-update-progress-label" class="text-body-secondary"></small>
+                            </div>
+
+                            <div id="settings-update-result" class="mt-3 d-none"></div>
+
+                            <small class="d-block text-body-secondary mt-2">
+                                {{ t.settings_update_hint }}
+                            </small>
+                        </div>
+
+                        <!-- Diagnose ----------------------------------------->
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                {{ t.settings_diagnostics_title }}
+                            </label>
+
                             <div class="form-check form-switch">
                                 <input
                                     type="checkbox"
                                     role="switch"
-                                    id="settings-faders-autolock-toggle"
+                                    id="settings-diagnostics-toggle"
                                     class="form-check-input"
                                 >
-                                <label
-                                    class="form-check-label"
-                                    for="settings-faders-autolock-toggle"
-                                >
-                                    {{ t.settings_faders_autolock_title }}
+                                <label class="form-check-label" for="settings-diagnostics-toggle">
+                                    {{ t.settings_diagnostics_label }}
                                 </label>
                             </div>
 
-                            <div class="input-group input-group-sm mt-2">
-                                <input
-                                    type="number"
-                                    id="settings-faders-autolock-seconds"
-                                    class="form-control"
-                                    min="5"
-                                    max="3600"
-                                    step="5"
+                            <div class="mt-2">
+                                <a
+                                    id="btn-diagnostics-download"
+                                    class="btn btn-outline-secondary btn-sm disabled"
+                                    href="/api/diagnostics/download"
                                 >
-                                <span class="input-group-text">
-                                    {{ t.settings_faders_autolock_unit }}
-                                </span>
-                                <button
-                                    id="btn-settings-faders-autolock"
-                                    class="btn btn-outline-secondary"
-                                    type="button"
-                                >
-                                    {{ t.btn_save }}
-                                </button>
+                                    <i class="bi bi-download me-1"></i>
+                                    {{ t.btn_diagnostics_download }}
+                                </a>
+                                <span id="settings-diagnostics-size" class="text-body-secondary small ms-2"></span>
                             </div>
 
-                            <small class="text-body-secondary d-block mt-1">
-                                {{ t.settings_faders_autolock_hint }}
+                            <small class="d-block text-body-secondary mt-2">
+                                {{ t.settings_diagnostics_hint }}
                             </small>
-
-                            <div id="settings-faders-autolock-result" class="small mt-1"></div>
+                        </div>
+                            </div>
                         </div>
                     </div>
-
                 </div>
-
-                <hr>
-
-                <!-- Update ------------------------------------------->
-
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">
-                        {{ t.settings_update_title }}
-                    </label>
-
-                    <div class="mb-2">
-                        {{ t.settings_update_version_label }}
-                        <strong id="settings-update-version">-</strong>
-                    </div>
-
-                    <!--
-                        Zwei Wege zum selben Ziel: aus dem Internet oder
-                        vom USB-Stick. Dahinter laeuft derselbe Updater,
-                        deshalb teilen sich beide auch Fortschritts- und
-                        Ergebnisanzeige.
-                    -->
-
-                    <div class="d-flex flex-wrap gap-2 mb-2">
-                        <button
-                            id="btn-settings-update-online"
-                            class="btn btn-primary btn-sm"
-                        >
-                            <i class="bi bi-cloud-arrow-down me-1"></i>
-                            {{ t.btn_settings_update_online }}
-                        </button>
-
-                        <button
-                            id="btn-settings-update"
-                            class="btn btn-outline-primary btn-sm"
-                            disabled
-                        >
-                            <i class="bi bi-usb-drive me-1"></i>
-                            {{ t.btn_settings_update }}
-                        </button>
-                    </div>
-
-                    <div id="settings-update-package" class="small mb-2"></div>
-
-                    <div id="settings-update-progress" class="mt-3 d-none">
-                        <div class="progress" style="height: 8px;">
-                            <div
-                                class="progress-bar progress-bar-striped progress-bar-animated"
-                                style="width: 100%"
-                            ></div>
-                        </div>
-                        <small id="settings-update-progress-label" class="text-body-secondary"></small>
-                    </div>
-
-                    <div id="settings-update-result" class="mt-3 d-none"></div>
-
-                    <small class="d-block text-body-secondary mt-2">
-                        {{ t.settings_update_hint }}
-                    </small>
-                </div>
-
-                <hr>
-
-                <!-- Diagnose ----------------------------------------->
-
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">
-                        {{ t.settings_diagnostics_title }}
-                    </label>
-
-                    <div class="form-check form-switch">
-                        <input
-                            type="checkbox"
-                            role="switch"
-                            id="settings-diagnostics-toggle"
-                            class="form-check-input"
-                        >
-                        <label class="form-check-label" for="settings-diagnostics-toggle">
-                            {{ t.settings_diagnostics_label }}
-                        </label>
-                    </div>
-
-                    <div class="mt-2">
-                        <a
-                            id="btn-diagnostics-download"
-                            class="btn btn-outline-secondary btn-sm disabled"
-                            href="/api/diagnostics/download"
-                        >
-                            <i class="bi bi-download me-1"></i>
-                            {{ t.btn_diagnostics_download }}
-                        </a>
-                        <span id="settings-diagnostics-size" class="text-body-secondary small ms-2"></span>
-                    </div>
-
-                    <small class="d-block text-body-secondary mt-2">
-                        {{ t.settings_diagnostics_hint }}
-                    </small>
-                </div>
-
-            </div>
-
             <div class="modal-footer">
                 <button
                     class="btn btn-secondary"
