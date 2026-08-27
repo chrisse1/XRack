@@ -272,15 +272,30 @@ Außerdem wird das automatische Einhängen von USB-Sticks eingerichtet,
 damit der "Auf USB-Stick kopieren"-Button ohne weitere Einrichtung
 funktioniert, sobald ein Stick angeschlossen wird.
 
-Zur WLAN-Einrichtung: Mit **zwei** WLAN-Interfaces (eingebautes plus
-USB-Adapter) richtet der Installer beides ein - die Verbindung ins
-Heimnetz und den eigenen Access Point. Mit **einem** bekommt XRack die
-Heimnetz-Verbindung; für einen Access Point wird ein zweites Funkgerät
-gebraucht. Vorhandene WLAN-Profile (etwa das vom Raspberry Pi Imager
-angelegte `preconfigured`) werden dabei stillgelegt, damit sie sich
-nicht mehr von selbst verbinden und XRacks Profil nicht das Funkgerät
-streitig machen - gelöscht wird nichts, wer sie später braucht, findet
-sie noch vor.
+XRack kann in drei Betriebsarten laufen:
+
+1. XRack und Mischpult per LAN an einem Router
+2. XRack spannt einen Access Point auf, das Mischpult hängt per
+   LAN-Kabel am Pi (dafür wird ein USB-WLAN-Stick gebraucht)
+3. XRack verbindet sich per WLAN mit einem bestehenden Netzwerk, das
+   Mischpult hängt per LAN-Kabel am Pi
+
+Der Installer fragt die WLAN-Verbindung und den Access Point
+**getrennt** ab - beides lässt sich einzeln einrichten oder
+überspringen. Wer überspringt, verliert nichts: Bridge und
+Freigabe-Profil werden immer angelegt, und ein Access Point lässt sich
+später im Einstellungen-Menü nachrüsten, **ohne `install.sh` erneut
+laufen zu lassen**.
+
+Welches Funkgerät wofür zuständig ist, wird nicht gefragt: Das
+eingebaute WLAN geht ins Heimnetz, der USB-Stick spannt den Access
+Point auf. Der eingebaute Chip taugt als Client, aber nur schlecht als
+Access Point - er bricht unter Last ein und kann kein 5 GHz.
+
+Vorhandene WLAN-Profile (etwa das vom Raspberry Pi Imager angelegte
+`preconfigured`) werden stillgelegt, damit sie XRacks Profil nicht das
+Funkgerät streitig machen - gelöscht wird nichts, wer sie später
+braucht, findet sie noch vor.
 
 Danach ist das Webinterface unter `https://<hostname>.local:<port>`
 erreichbar (Standard: `https://xrack.local:8080`). Das Zertifikat ist

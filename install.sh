@@ -69,18 +69,78 @@ confirm_start() {
 
     if [ -t 0 ]; then
 
-        echo "XRack Setup"
+        #
+        # Noch vor der Sprachwahl, deshalb zweisprachig
+        # untereinander. Der Hinweis auf die Netzwerkkonfiguration
+        # gehoert an den Anfang: Wer den Pi gerade per WLAN oder ueber
+        # das eingerichtete Kabelnetz erreicht, soll VOR der
+        # Installation wissen, dass sich daran etwas aendert.
+        #
+        echo "Willkommen zum XRack Setup!"
         echo ""
-        echo "This installer will install XRack on this system"
-        echo "(system packages, Python environment, systemd service)."
+        echo "Dieser Installer installiert XRack auf Ihrem System."
+        echo "Dabei wird eine eventuelle Netzwerkkonfiguration verworfen"
+        echo "und auf die Beduerfnisse von XRack angepasst."
         echo ""
-        read -r -p "Continue? [Y/n]: " XRACK_CONFIRM_START || true
+        echo "This installer will install XRack on this system. Any existing"
+        echo "network configuration will be replaced by XRack's own."
+        echo ""
+        read -r -p "Moechten Sie fortfahren? / Continue? [J/n]: " XRACK_CONFIRM_START || true
 
         if [ "$(lower "${XRACK_CONFIRM_START}")" = "n" ]; then
-            echo "Aborted - nothing was changed."
+            echo "Abgebrochen - es wurde nichts geaendert."
             exit 0
         fi
     fi
+}
+
+#
+# Fuehrt einen Befehl aus und zeigt solange drei nacheinander
+# erscheinende Punkte.
+#
+# Wozu: apt und pip brauchen Minuten und geben dabei nichts aus (ihre
+# Ausgabe ist unterdrueckt, sonst rauscht sie den Ablauf zu). Ein
+# stehender Text sieht dann aus, als haenge das Skript. Die Punkte
+# zeigen, dass noch etwas passiert.
+#
+# $1 = Text davor, Rest = der Befehl.
+#
+mit_punkten() {
+
+    local text="$1"
+    shift
+
+    printf '%s' "${text}"
+
+    #
+    # Nicht interaktiv (z.B. in einer Protokolldatei) waeren die
+    # Punkte nur Zeichensalat - dann einfach ausfuehren.
+    #
+    if [ ! -t 1 ]; then
+        echo ""
+        "$@"
+        return $?
+    fi
+
+    "$@" &
+    local pid=$!
+
+    while kill -0 "${pid}" 2>/dev/null; do
+        for _ in 1 2 3; do
+            kill -0 "${pid}" 2>/dev/null || break
+            printf '.'
+            sleep 1
+        done
+        kill -0 "${pid}" 2>/dev/null || break
+        printf '\b\b\b   \b\b\b'
+    done
+
+    wait "${pid}"
+    local ergebnis=$?
+
+    echo ""
+
+    return ${ergebnis}
 }
 
 #
@@ -174,11 +234,19 @@ valid_wifi_index() {
 #
 install_system_dependencies() {
 
-    echo "$(L "XRack: Systemabhängigkeiten werden installiert (ohne Ausgabe, kann etwas dauern)..." "XRack: Installing system dependencies (no output, this may take a while)...")"
+    #
+    # Zuerst die sudo-Berechtigung im Vordergrund holen: Weiter unten
+    # laeuft apt im Hintergrund (wegen der Punkte), und eine
+    # Passwortabfrage waere dort unsichtbar - das Skript schiene zu
+    # haengen.
+    #
+    sudo -v
 
-    sudo apt-get update -qq
+    systempakete() {
 
-    sudo apt-get install -y -qq \
+        sudo apt-get update -qq
+
+        sudo apt-get install -y -qq \
         python3 \
         python3-venv \
         python3-pip \
@@ -195,18 +263,28 @@ install_system_dependencies() {
         iptables \
         iw \
         hostapd > /dev/null
+    }
 
-    echo "$(L "XRack: Python-Umgebung wird eingerichtet..." "XRack: Setting up Python environment...")"
+    mit_punkten \
+        "$(L "XRack: Systemabhängigkeiten werden installiert" "XRack: Installing system dependencies")" \
+        systempakete
 
-    python3 -m venv .venv
+    #
+    # Die Python-Umgebung in einem Rutsch, damit die Punkte ueber den
+    # ganzen Vorgang laufen und nicht dreimal neu anfangen.
+    #
+    python_umgebung() {
+        python3 -m venv .venv
+        # shellcheck disable=SC1091
+        source .venv/bin/activate
+        pip install --upgrade pip -q
+        pip install -r requirements.txt -q
+        deactivate
+    }
 
-    source .venv/bin/activate
-
-    pip install --upgrade pip -q
-
-    pip install -r requirements.txt -q
-
-    deactivate
+    mit_punkten \
+        "$(L "XRack: Python-Umgebung wird eingerichtet" "XRack: Setting up Python environment")" \
+        python_umgebung
 }
 
 #
@@ -233,7 +311,14 @@ configure_basic_settings() {
         fi
 
         echo ""
-        read -r -p "$(L "Hostname (Standard: xrack, erreichbar als https://<hostname>.local): " "Hostname (default: xrack, reachable as https://<hostname>.local): ")" XRACK_HOSTNAME_INPUT || true
+        #
+        # Bewusst ohne ".local": Das funktioniert nur, wenn im Netz
+        # etwas mDNS aufloest - manche Router und manche Handys tun
+        # das nicht. Wer es kann, findet es trotzdem; wer nicht, wird
+        # sonst mit einer Adresse in die Irre geschickt, die bei ihm
+        # nie geht.
+        #
+        read -r -p "$(L "Hostname (Standard: xrack): " "Hostname (default: xrack): ")" XRACK_HOSTNAME_INPUT || true
 
         if [ -n "${XRACK_HOSTNAME_INPUT}" ]; then
             if [[ "${XRACK_HOSTNAME_INPUT}" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]]; then
@@ -244,7 +329,7 @@ configure_basic_settings() {
         fi
 
         echo ""
-        echo "$(L "Eine 4-stellige PIN schützt das Einstellungen-Menü (Zahnrad-Symbol) vor unbefugtem Zugriff, z.B. durch Bandmitglieder oder Gäste. Sie lässt sich später jederzeit im Einstellungen-Menü selbst ändern." "A 4-digit PIN protects the settings menu (gear icon) from unauthorized access, e.g. by band members or guests. You can change it any time later in the settings menu itself.")"
+        echo "$(L "Eine 4-stellige PIN schützt das Einstellungen-Menü vor unbefugtem Zugriff. Sie lässt sich später jederzeit im Einstellungen-Menü selbst ändern." "A 4-digit PIN protects the settings menu from unauthorized access. You can change it any time later in the settings menu itself.")"
         read_confirmed_secret "$(L "PIN fürs Einstellungen-Menü (4 Ziffern, leer = kein Schutz)" "PIN for the settings menu (4 digits, empty = no protection)")" 4 XRACK_PIN "^[0-9]{4}$"
 
         if [ -z "${XRACK_PIN}" ]; then
@@ -409,10 +494,6 @@ configure_firewall() {
 # gleichzeitig darauf funken wollen.
 #
 
-XRACK_HOSTAPD_CONF="/etc/hostapd/xrack.conf"
-XRACK_HOSTAPD_UNIT="/etc/systemd/system/xrack-hostapd.service"
-XRACK_NM_UNMANAGED="/etc/NetworkManager/conf.d/99-xrack-hostapd.conf"
-
 #
 # Die Bridge anlegen, in der der Access Point lebt.
 #
@@ -455,244 +536,6 @@ setup_ap_bridge() {
 }
 
 #
-# hostapd-Konfiguration schreiben.
-#
-# $1 = Interface, $2 = SSID, $3 = Passwort, $4 = Laendercode (darf
-# leer sein), $5 = hw_mode (a/g), $6 = Kanal
-#
-write_hostapd_conf() {
-
-    HOSTAPD_TMP="$(mktemp)"
-
-    {
-        echo "# Von install.sh erzeugt (XRack) - nicht von Hand aendern."
-        echo "# SSID und Passwort werden ueber das Einstellungen-Menue"
-        echo "# gesetzt (scripts/xrack-net-ap.sh)."
-        echo "interface=$1"
-        echo "bridge=br0"
-        echo "driver=nl80211"
-        echo "ssid=$2"
-
-        #
-        # Ohne Laendercode duerfte hostapd auf 5 GHz gar nicht senden.
-        # "00" ist die Welt-Region und erlaubt dort ebenfalls nichts -
-        # dann bleibt es bei 2,4 GHz ohne Laenderangabe.
-        #
-        if [ -n "$4" ] && [ "$4" != "00" ]; then
-            echo "country_code=$4"
-            echo "ieee80211d=1"
-        fi
-
-        echo "hw_mode=$5"
-        echo "channel=$6"
-        echo "ieee80211n=1"
-        echo "wmm_enabled=1"
-        echo "auth_algs=1"
-        echo "macaddr_acl=0"
-        echo "ignore_broadcast_ssid=0"
-
-        #
-        # WPA2 mit AES (CCMP), ausdruecklich ohne das alte TKIP: Neuere
-        # Handys handeln TKIP mitunter aus und scheitern dann am
-        # Schluesselaustausch.
-        #
-        echo "wpa=2"
-        echo "wpa_key_mgmt=WPA-PSK"
-        echo "rsn_pairwise=CCMP"
-
-        #
-        # Geschuetzte Verwaltungsrahmen angeboten, aber nicht
-        # verlangt (1 = optional): Schutz gegen Abmelde-Angriffe fuer
-        # alles, was es kann, ohne aeltere Geraete auszusperren.
-        #
-        echo "ieee80211w=1"
-
-        echo "wpa_passphrase=$3"
-
-    } > "${HOSTAPD_TMP}"
-
-    sudo install -o root -g root -m 0600 "${HOSTAPD_TMP}" "${XRACK_HOSTAPD_CONF}"
-
-    rm -f "${HOSTAPD_TMP}"
-}
-
-#
-# Den Dienst anlegen und starten; liefert 0, wenn der Access Point
-# danach tatsaechlich funkt.
-#
-# $1 = Interface
-#
-start_xrack_hostapd() {
-
-    sudo systemctl restart xrack-hostapd.service >/dev/null 2>&1 || true
-
-    #
-    # hostapd braucht einen Moment, bis das Interface im AP-Betrieb
-    # ist. Ein sofortiges Nachsehen meldete sonst Fehlschlag, obwohl
-    # gleich darauf alles laeuft.
-    #
-    sleep 4
-
-    if ! systemctl is-active --quiet xrack-hostapd.service; then
-        return 1
-    fi
-
-    #
-    # Zusaetzlich am Interface selbst nachsehen: Der Dienst kann
-    # laufen und hostapd trotzdem im Leerlauf haengen (z.B. weil die
-    # Funkregion den Kanal nicht freigibt).
-    #
-    if ! iw dev "$1" info 2>/dev/null | grep -q "type AP"; then
-        return 1
-    fi
-
-    return 0
-}
-
-#
-# Access Point mit hostapd einrichten.
-#
-# $1 = Interface, $2 = SSID, $3 = Passwort, $4 = Laendercode
-#
-# Liefert 0 bei Erfolg. Bei Fehlschlag wird das Interface wieder an
-# NetworkManager zurueckgegeben, damit der Rueckfallweg greifen kann.
-#
-setup_access_point_hostapd() {
-
-    AP_HW_MODE="g"
-    AP_CHANNEL="6"
-
-    #
-    # 5 GHz bevorzugen, wenn der Adapter und die Funkregion es
-    # hergeben: 2,4 GHz ist in Wohngegenden meist zugestellt, und ein
-    # volles Band erzeugt dasselbe Bild wie eine falsche
-    # Verschluesselung - die Anmeldung geht im Stoernebel unter.
-    #
-    # Geprueft wird an Kanal 36 (5180 MHz), weil der weltweit
-    # ueblichste 5-GHz-Kanal ohne Radarpflicht ist. Ein Kanal zaehlt
-    # nur, wenn er weder "disabled" noch "no IR" ist - "no IR"
-    # heisst, dass dort nicht von sich aus gesendet werden darf, ein
-    # Access Point also gerade nicht erlaubt ist.
-    #
-    if [ -n "$4" ] && [ "$4" != "00" ]; then
-
-        AP_PHY="$(iw dev "$1" info 2>/dev/null | awk '/wiphy/ {print $2}')"
-
-        if [ -n "${AP_PHY}" ]; then
-
-            #
-            # Die Frequenz steht je nach iw-Version als "5180 MHz"
-            # oder als "5180.0 MHz" in der Ausgabe - deshalb sind die
-            # Nachkommastellen hier ausdruecklich erlaubt. Ein
-            # Muster nur fuer die ganzzahlige Schreibweise fand auf
-            # neueren Systemen nie etwas und liess den Access Point
-            # stillschweigend auf 2,4 GHz.
-            #
-            AP_CHAN36="$(iw phy "phy${AP_PHY}" info 2>/dev/null \
-                | grep -E '\* 5180(\.[0-9]+)? MHz' | head -n 1)"
-
-            if [ -n "${AP_CHAN36}" ] \
-               && ! printf '%s' "${AP_CHAN36}" | grep -qE 'disabled|no IR'; then
-
-                AP_HW_MODE="a"
-                AP_CHANNEL="36"
-            fi
-        fi
-    fi
-
-    write_hostapd_conf "$1" "$2" "$3" "$4" "${AP_HW_MODE}" "${AP_CHANNEL}"
-
-    #
-    # Das Interface NetworkManager entziehen. Ohne das wuerde NM sein
-    # wpa_supplicant weiter darauf loslassen - zwei Programme auf
-    # einem Funkgeraet.
-    #
-    sudo mkdir -p "$(dirname "${XRACK_NM_UNMANAGED}")"
-
-    sudo tee "${XRACK_NM_UNMANAGED}" > /dev/null <<EOF
-# Von install.sh erzeugt (XRack): Das Access-Point-Interface gehoert
-# hostapd (siehe /etc/systemd/system/xrack-hostapd.service), nicht
-# NetworkManager. IP, DHCP und NAT macht NetworkManager weiterhin -
-# aber auf der Bridge br0, in der hostapd den Access Point einhaengt.
-[keyfile]
-unmanaged-devices=interface-name:$1
-EOF
-
-    sudo tee "${XRACK_HOSTAPD_UNIT}" > /dev/null <<EOF
-[Unit]
-Description=XRack Access Point (hostapd)
-After=NetworkManager.service
-Wants=NetworkManager.service
-
-[Service]
-Type=simple
-# Ein per rfkill gesperrtes Funkgeraet ist der haeufigste Grund,
-# warum hostapd direkt nach dem Booten nicht startet.
-ExecStartPre=-/usr/sbin/rfkill unblock wlan
-# Die Bridge muss es geben, bevor hostapd sich hineinhaengt. Kurzer
-# Zeitrahmen, damit ein fehlendes Kabel den Start nicht aufhaelt;
-# ein Fehlschlag ist unschaedlich (hostapd legt br0 sonst selbst an).
-ExecStartPre=-/usr/bin/nmcli -w 5 connection up XRack-Bridge
-ExecStart=/usr/sbin/hostapd ${XRACK_HOSTAPD_CONF}
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    sudo systemctl daemon-reload
-
-    #
-    # Debians eigener hostapd-Dienst ist ab Werk maskiert und wuerde
-    # sonst eine zweite Instanz mitbringen - wir benutzen unsere
-    # eigene Unit und lassen seine ausdruecklich aus.
-    #
-    sudo systemctl disable hostapd.service >/dev/null 2>&1 || true
-
-    sudo systemctl enable xrack-hostapd.service >/dev/null 2>&1 || true
-
-    sudo nmcli device set "$1" managed no >/dev/null 2>&1 || true
-    sudo systemctl reload NetworkManager >/dev/null 2>&1 || true
-
-    sudo nmcli -w 10 connection up "XRack-Bridge" >/dev/null 2>&1 || true
-
-    if start_xrack_hostapd "$1"; then
-        return 0
-    fi
-
-    #
-    # Auf 5 GHz nicht hochgekommen - dann zurueck auf 2,4 GHz, statt
-    # den Nutzer ohne Access Point dastehen zu lassen.
-    #
-    if [ "${AP_HW_MODE}" = "a" ]; then
-
-        echo "$(L "XRack: 5 GHz hat nicht funktioniert - Access Point wird auf 2,4 GHz gestellt." "XRack: 5 GHz did not work - switching the access point to 2.4 GHz.")"
-
-        AP_HW_MODE="g"
-        AP_CHANNEL="6"
-
-        write_hostapd_conf "$1" "$2" "$3" "$4" "${AP_HW_MODE}" "${AP_CHANNEL}"
-
-        if start_xrack_hostapd "$1"; then
-            return 0
-        fi
-    fi
-
-    #
-    # hostapd laeuft ueberhaupt nicht. Interface zurueck an
-    # NetworkManager geben, damit der Rueckfallweg (der alte
-    # NM-Hotspot) es wieder benutzen darf.
-    #
-    sudo systemctl disable --now xrack-hostapd.service >/dev/null 2>&1 || true
-    sudo rm -f "${XRACK_NM_UNMANAGED}"
-    sudo systemctl reload NetworkManager >/dev/null 2>&1 || true
-    sudo nmcli device set "$1" managed yes >/dev/null 2>&1 || true
-
-    return 1
-}
-
-#
 # Fremde WLAN-Profile stilllegen.
 #
 # Raspberry Pi OS legt beim Schreiben der Speicherkarte auf Wunsch
@@ -730,41 +573,6 @@ disable_foreign_wifi_profiles() {
 }
 
 #
-# Rueckfallweg: der alte Access Point ueber NetworkManager.
-#
-# Bleibt erhalten, damit auf einem Geraet, auf dem hostapd nicht
-# startet (fehlendes Paket, Treiber ohne AP-Unterstuetzung), nicht
-# gar kein Access Point herauskommt. Er wird genauso in die Bridge
-# eingehaengt wie der hostapd-Weg - dadurch bleiben die
-# Umschalt-Skripte fuer beide Faelle dieselben.
-#
-# $1 = Interface, $2 = SSID, $3 = Passwort
-#
-setup_access_point_nm() {
-
-    sudo nmcli connection delete "XRack-AP" >/dev/null 2>&1 || true
-
-    sudo nmcli connection add type wifi ifname "$1" con-name "XRack-AP" \
-        ssid "$2" mode ap >/dev/null || return 1
-
-    sudo nmcli connection modify "XRack-AP" \
-        master "XRack-Bridge" slave-type bridge \
-        wifi-sec.key-mgmt wpa-psk \
-        wifi-sec.proto rsn \
-        wifi-sec.pairwise ccmp \
-        wifi-sec.group ccmp \
-        wifi-sec.psk "$3" \
-        wifi-sec.psk-flags 0 \
-        connection.autoconnect yes || return 1
-
-    sudo nmcli connection up "XRack-Bridge" >/dev/null 2>&1 || true
-
-    sudo nmcli connection up "XRack-AP" ifname "$1" >/dev/null 2>&1 || return 1
-
-    return 0
-}
-
-#
 # Optional: WLAN einrichten (Heimnetz-Client + eigener Access Point).
 #
 # Für Setups mit zwei WLAN-Interfaces, z.B. Onboard-WLAN als Client
@@ -782,268 +590,235 @@ configure_wifi() {
     XRACK_WLAN_AP_SSID=""
     XRACK_WLAN_BRIDGE=""
     XRACK_WLAN_SHARE_READY=""
+    XRACK_WLAN_COUNTRY=""
 
-    if [ -t 0 ] && command -v nmcli >/dev/null 2>&1; then
+    if ! command -v nmcli >/dev/null 2>&1; then
+        echo ""
+        echo "$(L "Hinweis: nmcli (NetworkManager) nicht gefunden - Netzwerk-Einrichtung übersprungen." "Note: nmcli (NetworkManager) not found - network setup skipped.")"
+        return 0
+    fi
+
+    #
+    # Das Grundgeruest wird IMMER angelegt, unabhaengig von den
+    # Antworten unten: die Bridge br0, ihr eth0-Anschluss und das
+    # Profil fuer die Heimnetz-Freigabe.
+    #
+    # Der Grund ist der Nachruestfall: Wer hier "kein Access Point"
+    # waehlt und es sich spaeter anders ueberlegt, soll das im
+    # Einstellungen-Menue erledigen koennen, ohne install.sh noch
+    # einmal durchlaufen zu lassen. Dafuer muss alles, was root-Rechte
+    # braucht, jetzt schon stehen - anlegen kostet nichts, aktiv wird
+    # davon nichts.
+    #
+    if setup_ap_bridge; then
+        XRACK_WLAN_BRIDGE="ja"
+    else
+        echo "$(L "Warnung: Die Bridge br0 konnte nicht angelegt werden." "Warning: could not create the br0 bridge.")"
+    fi
+
+    if setup_share_profile; then
+        XRACK_WLAN_SHARE_READY="ja"
+    fi
+
+    if [ ! -t 0 ]; then
+        return 0
+    fi
+
+    #
+    # Die drei Betriebsarten einmal erklaeren. Wer das hier liest,
+    # trifft gleich zwei Entscheidungen und sollte wissen, wofuer.
+    #
+    echo ""
+    echo "$(L "Netzwerkkonfiguration" "Network configuration")"
+    echo "$(L "XRack kann in drei Modi betrieben werden:" "XRack can be run in three modes:")"
+    echo ""
+    echo "$(L "1. XRack und Mischpult per LAN an einem Router" "1. XRack and mixer connected by LAN to one router")"
+    echo "$(L "2. XRack spannt einen Access Point auf, das Mischpult hängt per" "2. XRack runs an access point, the mixer is connected to the")"
+    echo "$(L "   LAN-Kabel am Raspberry Pi (dafür wird ein geeigneter" "   Raspberry Pi by LAN cable (this needs a suitable USB Wi-Fi")"
+    echo "$(L "   USB-WLAN-Stick gebraucht)" "   adapter)")"
+    echo "$(L "3. XRack verbindet sich per WLAN mit einem bestehenden Netzwerk," "3. XRack connects to an existing Wi-Fi network, the mixer is")"
+    echo "$(L "   das Mischpult hängt per LAN-Kabel am Raspberry Pi" "   connected to the Raspberry Pi by LAN cable")"
+    echo ""
+    echo "$(L "Sie können jetzt die Optionen 2 und 3 einrichten. Wenn Sie diesen" "You can set up options 2 and 3 now. If you skip this step, all")"
+    echo "$(L "Schritt überspringen, lässt sich alles später im Einstellungen-Menü" "settings can be made later in the settings menu - a second run of")"
+    echo "$(L "nachholen - ein erneuter Lauf von install.sh ist dafür nicht nötig." "install.sh is not needed for that.")"
+    echo ""
+    echo "$(L "!ACHTUNG! Sind Sie gerade per WLAN mit Ihrem Raspberry Pi verbunden," "!CAUTION! If you are currently connected to your Raspberry Pi over")"
+    echo "$(L "sollten Sie die WLAN-Konfiguration unbedingt jetzt durchführen." "Wi-Fi, you should definitely do the Wi-Fi configuration now.")"
+
+    # ----------------------------------------------------------------
+    # Teil 1: Verbindung ins bestehende Netzwerk
+    # ----------------------------------------------------------------
+
+    echo ""
+    read -r -p "$(L "Wollen Sie eine WLAN-Verbindung zu einem bestehenden Netzwerk einrichten? [J/n]: " "Do you want to set up a Wi-Fi connection to an existing network? [Y/n]: ")" XRACK_WLAN_SETUP || true
+
+    if [ "$(lower "${XRACK_WLAN_SETUP}")" != "n" ]; then
+        configure_wifi_client
+    fi
+
+    # ----------------------------------------------------------------
+    # Teil 2: eigener Access Point
+    # ----------------------------------------------------------------
+
+    echo ""
+    read -r -p "$(L "Wollen Sie einen Access Point einrichten? [J/n]: " "Do you want to set up an access point? [Y/n]: ")" XRACK_AP_SETUP || true
+
+    if [ "$(lower "${XRACK_AP_SETUP}")" != "n" ]; then
+        configure_access_point
+    fi
+}
+
+#
+# Teil 1: Verbindung ins bestehende Netzwerk.
+#
+# Welches Funkgeraet das macht, wird nicht mehr gefragt - es ist
+# immer das eingebaute (siehe scripts/xrack-wifi-iface.sh).
+#
+configure_wifi_client() {
+
+    echo ""
+    echo "$(L "WLAN-Einrichtung" "Wi-Fi setup")"
+
+    CLIENT_IFACE="$("${INSTALL_DIR}/scripts/xrack-wifi-iface.sh" client)"
+
+    if [ -z "${CLIENT_IFACE}" ]; then
+        echo "$(L "Kein WLAN-Gerät gefunden - dieser Schritt wird übersprungen." "No Wi-Fi device found - skipping this step.")"
+        return 0
+    fi
+
+    #
+    # Das WLAN-Land muss stimmen, sonst bleibt das Funkgeraet per
+    # rfkill gesperrt. Ohne Angabe wird es uebersprungen.
+    #
+    for attempt in 1 2 3; do
 
         echo ""
-        read -r -p "$(L "WLAN einrichten - Heimnetz-Verbindung + eigener Access Point? [j/N]: " "Set up Wi-Fi - home network connection + your own access point? [y/N]: ")" XRACK_WLAN_SETUP || true
+        read -r -p "$(L "WLAN-Land (2-stelliger ISO-Code, z.B. DE/AT/CH/US/GB, leer = überspringen): " "Wi-Fi country (2-letter ISO code, e.g. DE/AT/CH/US/GB, empty = skip): ")" XRACK_WLAN_COUNTRY_INPUT || true
 
-        if confirm_yes "${XRACK_WLAN_SETUP}"; then
-
-            #
-            # WLAN-Land setzen. Ohne gesetztes Regulierungsgebiet bleibt
-            # WLAN auf frisch aufgesetzten Raspberry Pis oft per rfkill
-            # soft-blockiert (Geräte existieren, sind aber "nicht
-            # verfügbar") - das kostet sonst viel Fehlersuche. Ungültige
-            # Eingaben werden bis zu 3x erneut abgefragt, leer gilt als
-            # bewusstes Überspringen.
-            #
-
-            XRACK_WLAN_COUNTRY=""
-
-            for attempt in 1 2 3; do
-
-                echo ""
-                read -r -p "$(L "WLAN-Land (2-stelliger ISO-Code, z.B. DE/AT/CH/US/GB, leer = überspringen) - nötig, damit WLAN nicht per rfkill blockiert bleibt: " "Wi-Fi country (2-letter ISO code, e.g. DE/AT/CH/US/GB, empty = skip) - needed so Wi-Fi doesn't stay blocked by rfkill: ")" XRACK_WLAN_COUNTRY_INPUT || true
-
-                if [ -z "${XRACK_WLAN_COUNTRY_INPUT}" ]; then
-                    break
-                fi
-
-                XRACK_WLAN_COUNTRY="$(printf '%s' "${XRACK_WLAN_COUNTRY_INPUT}" | tr '[:lower:]' '[:upper:]')"
-
-                if [[ "${XRACK_WLAN_COUNTRY}" =~ ^[A-Z]{2}$ ]]; then
-                    break
-                fi
-
-                echo "$(L "Ungültiger Ländercode (genau 2 Buchstaben) - bitte erneut eingeben." "Invalid country code (exactly 2 letters) - please try again.")"
-                XRACK_WLAN_COUNTRY=""
-            done
-
-            if [ -n "${XRACK_WLAN_COUNTRY}" ]; then
-
-                echo "$(L "XRack: WLAN-Land wird gesetzt (${XRACK_WLAN_COUNTRY})..." "XRack: Setting Wi-Fi country (${XRACK_WLAN_COUNTRY})...")"
-
-                if command -v raspi-config >/dev/null 2>&1; then
-                    sudo raspi-config nonint do_wifi_country "${XRACK_WLAN_COUNTRY}"
-                else
-                    sudo rfkill unblock wifi
-                    sudo iw reg set "${XRACK_WLAN_COUNTRY}" || true
-                    echo "$(L "Hinweis: raspi-config nicht gefunden - WLAN-Land ist damit ggf. nicht dauerhaft gesetzt (nach einem Neustart mit 'rfkill list' prüfen)." "Note: raspi-config not found - the Wi-Fi country may not be set persistently (check with 'rfkill list' after a reboot).")"
-                fi
-            else
-                echo "$(L "WLAN-Land wird übersprungen (WLAN kann per rfkill blockiert bleiben, siehe 'rfkill list')." "Wi-Fi country setup skipped (Wi-Fi may stay blocked by rfkill, see 'rfkill list').")"
-            fi
-
-            mapfile -t WIFI_INTERFACES < <(nmcli -t -f DEVICE,TYPE device status | awk -F: '$2=="wifi"{print $1}')
-
-            if [ "${#WIFI_INTERFACES[@]}" -lt 1 ]; then
-                echo "$(L "Kein WLAN-Interface gefunden - WLAN-Setup übersprungen." "No Wi-Fi interface found - Wi-Fi setup skipped.")"
-            else
-
-                echo ""
-                echo "$(L "Gefundene WLAN-Interfaces:" "Found Wi-Fi interfaces:")"
-                for i in "${!WIFI_INTERFACES[@]}"; do
-                    echo "  $((i + 1))) ${WIFI_INTERFACES[$i]}"
-                done
-
-                CLIENT_IFACE=""
-                AP_IFACE=""
-
-                #
-                # Mit nur einem Funkgerät gibt es nichts auszuwählen:
-                # Es geht ins Heimnetz. Ein Access Point ginge auf
-                # demselben Gerät zwar theoretisch, in der Praxis
-                # aber nur auf demselben Kanal wie das Heimnetz und
-                # mit reihenweise Treiberfehlern - deshalb hier
-                # ausdrücklich nicht.
-                #
-                # Vorher wurde in diesem Fall das GESAMTE WLAN-Setup
-                # übersprungen, also auch die Heimnetz-Verbindung.
-                # Wer nur das eingebaute WLAN hatte, stand danach ohne
-                # jede WLAN-Einrichtung da.
-                #
-                if [ "${#WIFI_INTERFACES[@]}" -eq 1 ]; then
-
-                    CLIENT_IFACE="${WIFI_INTERFACES[0]}"
-
-                    echo ""
-                    echo "$(L "Nur ein WLAN-Interface (${CLIENT_IFACE}) - es wird für das Heimnetz benutzt." "Only one Wi-Fi interface (${CLIENT_IFACE}) - it will be used for the home network.")"
-                    echo "$(L "Für einen eigenen Access Point wird ein zweites gebraucht (z.B. ein USB-WLAN-Stick)." "A separate access point needs a second one (e.g. a USB Wi-Fi adapter).")"
-
-                else
-
-                    for attempt in 1 2 3; do
-
-                        echo ""
-                        read -r -p "$(L "Welches Interface soll sich mit deinem Heimnetz verbinden (Nummer 1-${#WIFI_INTERFACES[@]})? " "Which interface should connect to your home network (number 1-${#WIFI_INTERFACES[@]})? ")" CLIENT_INDEX || true
-                        read -r -p "$(L "Welches Interface soll den Access Point aufspannen (Nummer 1-${#WIFI_INTERFACES[@]})? " "Which interface should run the access point (number 1-${#WIFI_INTERFACES[@]})? ")" AP_INDEX || true
-
-                        if valid_wifi_index "${CLIENT_INDEX}" "${#WIFI_INTERFACES[@]}" \
-                            && valid_wifi_index "${AP_INDEX}" "${#WIFI_INTERFACES[@]}" \
-                            && [ "${CLIENT_INDEX}" != "${AP_INDEX}" ]; then
-
-                            CLIENT_IFACE="${WIFI_INTERFACES[$((CLIENT_INDEX - 1))]}"
-                            AP_IFACE="${WIFI_INTERFACES[$((AP_INDEX - 1))]}"
-                            break
-                        fi
-
-                        echo "$(L "Ungültige oder gleiche Auswahl (gültig: 1-${#WIFI_INTERFACES[@]}, beide unterschiedlich) - bitte erneut eingeben." "Invalid or identical selection (valid: 1-${#WIFI_INTERFACES[@]}, must be different) - please try again.")"
-                    done
-                fi
-
-                if [ -z "${CLIENT_IFACE}" ]; then
-                    echo "$(L "Zu viele Fehlversuche - WLAN-Setup wird übersprungen." "Too many failed attempts - Wi-Fi setup will be skipped.")"
-                else
-
-                    echo ""
-                    read -r -p "$(L "Heimnetz-SSID: " "Home network SSID: ")" HOME_SSID || true
-                    read_confirmed_secret "$(L "Heimnetz-Passwort (mind. 8 Zeichen)" "Home network password (min. 8 characters)")" 8 HOME_PASSWORD
-
-                    AP_SSID=""
-                    AP_PASSWORD=""
-
-                    if [ -n "${AP_IFACE}" ]; then
-
-                        echo ""
-                        read -r -p "$(L "Name des Access Points (Standard: XRack): " "Access point name (default: XRack): ")" AP_SSID_INPUT || true
-                        AP_SSID="${AP_SSID_INPUT:-XRack}"
-                        read_confirmed_secret "$(L "Passwort für den Access Point (mind. 8 Zeichen)" "Access point password (min. 8 characters)")" 8 AP_PASSWORD
-                    fi
-
-                    if [ -z "${HOME_SSID}" ] || [ "${#HOME_PASSWORD}" -lt 8 ]; then
-                        echo "$(L "Heimnetz-SSID fehlt oder Passwort fehlt/zu kurz (mind. 8 Zeichen) - Heimnetz-Verbindung übersprungen." "Home network SSID missing, or password missing/too short (min. 8 characters) - home network connection skipped.")"
-                    else
-
-                        echo "$(L "XRack: Verbinde ${CLIENT_IFACE} mit '${HOME_SSID}'..." "XRack: Connecting ${CLIENT_IFACE} to '${HOME_SSID}'...")"
-                        echo "$(L "Hinweis: Falls du gerade über dieses Interface per WLAN verbunden bist, kann die Verbindung kurz unterbrochen werden." "Note: if you're currently connected over this interface, the connection may briefly drop.")"
-
-                        sudo nmcli connection delete "XRack-Home" >/dev/null 2>&1 || true
-
-                        if sudo nmcli connection add type wifi ifname "${CLIENT_IFACE}" con-name "XRack-Home" \
-                            ssid "${HOME_SSID}" wifi-sec.key-mgmt wpa-psk wifi-sec.psk "${HOME_PASSWORD}" \
-                            connection.autoconnect yes >/dev/null; then
-
-                            XRACK_WLAN_CLIENT_SSID="${HOME_SSID}"
-
-                            #
-                            # Alte WLAN-Profile aus dem Weg raeumen -
-                            # sonst konkurrieren sie mit XRack-Home um
-                            # dasselbe Funkgeraet.
-                            #
-                            disable_foreign_wifi_profiles
-
-                            sudo nmcli connection up "XRack-Home" ifname "${CLIENT_IFACE}" \
-                                || echo "$(L "Warnung: Verbindung zu '${HOME_SSID}' konnte nicht sofort hergestellt werden (SSID/Passwort prüfen)." "Warning: could not connect to '${HOME_SSID}' immediately (check SSID/password).")"
-
-                            #
-                            # Zusätzliche, standardmäßig inaktive Möglichkeit:
-                            # Ethernet-Port über die Heimnetz-Verbindung per NAT
-                            # freigeben, statt zu bridgen - eine echte Bridge über
-                            # eine WLAN-Client-Verbindung funktioniert bei den
-                            # meisten Heim-Routern nicht zuverlässig (kein
-                            # 4-Adress-WDS), siehe scripts/xrack-share-toggle.sh.
-                            # Aktivierung später im Einstellungen-Modal;
-                            # schließt sich dort mit der Ethernet+AP-Bridge aus.
-                            #
-                            # Feste eigene Adressrange (statt NetworkManager
-                            # "ipv4.method shared" die Range frei wählen zu
-                            # lassen) - sonst kann sich das Subnetz je nach
-                            # Reihenfolge/Zustand anderer "shared"-Verbindungen
-                            # (z.B. Access Point) zwischen 10.42.0.0/24 und
-                            # 10.42.1.0/24 verschieben, was die Portweiterleitung
-                            # (scripts/xrack-port-forward.sh) auf eine veraltete
-                            # Konsolen-IP zeigen lässt.
-                            #
-
-                            sudo nmcli connection delete "XRack-Share-eth0" >/dev/null 2>&1 || true
-
-                            if sudo nmcli connection add type ethernet ifname eth0 con-name "XRack-Share-eth0" \
-                                ipv4.method shared ipv4.addresses 10.77.0.1/24 connection.autoconnect no >/dev/null; then
-                                XRACK_WLAN_SHARE_READY="ja"
-                            else
-                                echo "$(L "Warnung: Profil für die Ethernet+Heimnetz-Freigabe konnte nicht angelegt werden." "Warning: could not create the Ethernet+home network sharing profile.")"
-                            fi
-                        else
-                            echo "$(L "Warnung: WLAN-Client-Profil konnte nicht angelegt werden." "Warning: could not create the Wi-Fi client profile.")"
-                        fi
-                    fi
-
-                    if [ -z "${AP_IFACE}" ]; then
-
-                        #
-                        # Kein zweites Funkgerät - dazu wurde oben
-                        # schon alles gesagt.
-                        #
-                        :
-
-                    elif [ "${#AP_PASSWORD}" -lt 8 ]; then
-                        echo "$(L "Access-Point-Passwort fehlt/zu kurz (mind. 8 Zeichen) - Access Point übersprungen." "Access point password missing/too short (min. 8 characters) - access point skipped.")"
-                    else
-
-                        echo "$(L "XRack: Access Point '${AP_SSID}' wird auf ${AP_IFACE} eingerichtet..." "XRack: Setting up access point '${AP_SSID}' on ${AP_IFACE}...")"
-
-                        #
-                        # Der Ländercode entscheidet, ob 5 GHz überhaupt
-                        # erlaubt ist. Wurde oben keiner gesetzt, wird der
-                        # gerade geltende gelesen.
-                        #
-                        AP_COUNTRY="${XRACK_WLAN_COUNTRY}"
-
-                        if [ -z "${AP_COUNTRY}" ]; then
-                            AP_COUNTRY="$(iw reg get 2>/dev/null | awk '/^country/ {print $2}' | tr -d ':' | head -n 1)"
-                        fi
-
-                        if ! setup_ap_bridge; then
-
-                            echo "$(L "Warnung: Die Bridge br0 konnte nicht eingerichtet werden - ohne sie gibt es keinen Access Point." "Warning: could not set up the br0 bridge - without it there is no access point.")"
-
-                        elif setup_access_point_hostapd "${AP_IFACE}" "${AP_SSID}" "${AP_PASSWORD}" "${AP_COUNTRY}"; then
-
-                            XRACK_WLAN_AP_SSID="${AP_SSID}"
-                            XRACK_WLAN_BRIDGE="ja"
-
-                            #
-                            # Ein noch vorhandenes altes Hotspot-Profil aus
-                            # NetworkManager entfernen: Es funkt zwar nicht
-                            # mehr (das Interface gehört jetzt hostapd),
-                            # würde aber in der Oberfläche und in den
-                            # Umschalt-Skripten weiter als Access Point
-                            # gelten.
-                            #
-                            sudo nmcli connection delete "XRack-AP" >/dev/null 2>&1 || true
-
-                            if [ "${AP_HW_MODE}" = "a" ]; then
-                                echo "$(L "XRack: Access Point läuft auf 5 GHz (hostapd)." "XRack: Access point is running on 5 GHz (hostapd).")"
-                            else
-                                echo "$(L "XRack: Access Point läuft auf 2,4 GHz (hostapd)." "XRack: Access point is running on 2.4 GHz (hostapd).")"
-                            fi
-
-                        else
-
-                            echo "$(L "Warnung: hostapd ließ sich nicht starten - es wird der bisherige Weg über NetworkManager versucht." "Warning: hostapd would not start - falling back to the previous NetworkManager approach.")"
-
-                            if setup_access_point_nm "${AP_IFACE}" "${AP_SSID}" "${AP_PASSWORD}"; then
-
-                                XRACK_WLAN_AP_SSID="${AP_SSID}"
-                                XRACK_WLAN_BRIDGE="ja"
-
-                                echo "$(L "XRack: Access Point läuft über NetworkManager (Verbindungsaufbau kann gelegentlich mehrere Versuche brauchen)." "XRack: Access point is running via NetworkManager (connecting may occasionally take several attempts).")"
-                            else
-                                echo "$(L "Warnung: Access Point konnte nicht eingerichtet werden." "Warning: could not set up the access point.")"
-                            fi
-                        fi
-                    fi
-
-                fi
-            fi
-
+        if [ -z "${XRACK_WLAN_COUNTRY_INPUT}" ]; then
+            break
         fi
 
-    elif [ -t 0 ]; then
-        echo ""
-        echo "$(L "Hinweis: nmcli (NetworkManager) nicht gefunden - WLAN-Setup (Heimnetz + Access Point) übersprungen." "Note: nmcli (NetworkManager) not found - Wi-Fi setup (home network + access point) skipped.")"
+        XRACK_WLAN_COUNTRY="$(printf '%s' "${XRACK_WLAN_COUNTRY_INPUT}" | tr '[:lower:]' '[:upper:]')"
+
+        if [[ "${XRACK_WLAN_COUNTRY}" =~ ^[A-Z]{2}$ ]]; then
+            break
+        fi
+
+        echo "$(L "Ungültiger Ländercode (genau 2 Buchstaben) - bitte erneut eingeben." "Invalid country code (exactly 2 letters) - please try again.")"
+        XRACK_WLAN_COUNTRY=""
+    done
+
+    if [ -n "${XRACK_WLAN_COUNTRY}" ]; then
+
+        if command -v raspi-config >/dev/null 2>&1; then
+            sudo raspi-config nonint do_wifi_country "${XRACK_WLAN_COUNTRY}"
+        else
+            sudo rfkill unblock wifi
+            sudo iw reg set "${XRACK_WLAN_COUNTRY}" || true
+        fi
     fi
+
+    echo ""
+    read -r -p "$(L "WLAN-SSID: " "Wi-Fi SSID: ")" HOME_SSID || true
+    read_confirmed_secret "$(L "WLAN-Passwort (mind. 8 Zeichen)" "Wi-Fi password (min. 8 characters)")" 8 HOME_PASSWORD
+
+    if [ -z "${HOME_SSID}" ] || [ "${#HOME_PASSWORD}" -lt 8 ]; then
+        echo "$(L "SSID fehlt oder Passwort fehlt/zu kurz (mind. 8 Zeichen) - WLAN-Verbindung übersprungen." "SSID missing, or password missing/too short (min. 8 characters) - Wi-Fi connection skipped.")"
+        return 0
+    fi
+
+    echo ""
+    echo "$(L "XRack: Verbinde ${CLIENT_IFACE} mit '${HOME_SSID}'..." "XRack: Connecting ${CLIENT_IFACE} to '${HOME_SSID}'...")"
+    echo "$(L "Hinweis: Falls Sie gerade über dieses Interface per WLAN verbunden sind, kann die Verbindung kurz unterbrochen werden." "Note: if you are currently connected over this interface, the connection may briefly drop.")"
+
+    sudo nmcli connection delete "XRack-Home" >/dev/null 2>&1 || true
+
+    if ! sudo nmcli connection add type wifi ifname "${CLIENT_IFACE}" con-name "XRack-Home" \
+        ssid "${HOME_SSID}" wifi-sec.key-mgmt wpa-psk wifi-sec.psk "${HOME_PASSWORD}" \
+        connection.autoconnect yes >/dev/null; then
+
+        echo "$(L "Warnung: WLAN-Profil konnte nicht angelegt werden." "Warning: could not create the Wi-Fi profile.")"
+        return 0
+    fi
+
+    XRACK_WLAN_CLIENT_SSID="${HOME_SSID}"
+
+    #
+    # Alte WLAN-Profile aus dem Weg raeumen - sonst konkurrieren sie
+    # mit XRack-Home um dasselbe Funkgeraet.
+    #
+    disable_foreign_wifi_profiles
+
+    sudo nmcli connection up "XRack-Home" ifname "${CLIENT_IFACE}" \
+        || echo "$(L "Warnung: Verbindung zu '${HOME_SSID}' konnte nicht sofort hergestellt werden (SSID/Passwort prüfen)." "Warning: could not connect to '${HOME_SSID}' immediately (check SSID/password).")"
+}
+
+#
+# Teil 2: eigener Access Point.
+#
+# Die eigentliche Einrichtung macht scripts/xrack-ap-setup.sh -
+# dasselbe Skript, das XRack spaeter aus dem Einstellungen-Menue
+# heraus aufruft. So gibt es nur einen Weg, einen Access Point
+# aufzusetzen, und der ist an beiden Stellen derselbe.
+#
+configure_access_point() {
+
+    AP_IFACE="$("${INSTALL_DIR}/scripts/xrack-wifi-iface.sh" ap)"
+
+    if [ -z "${AP_IFACE}" ]; then
+        echo ""
+        echo "$(L "Kein zweites WLAN-Gerät gefunden - für einen Access Point wird ein USB-WLAN-Stick gebraucht." "No second Wi-Fi device found - an access point needs a USB Wi-Fi adapter.")"
+        echo "$(L "Der Stick lässt sich jederzeit nachrüsten; der Access Point wird dann im Einstellungen-Menü eingerichtet." "You can add the adapter at any time; the access point is then set up in the settings menu.")"
+        return 0
+    fi
+
+    echo ""
+    read -r -p "$(L "Name des Access Points (Standard: XRack): " "Access point name (default: XRack): ")" AP_SSID_INPUT || true
+    AP_SSID="${AP_SSID_INPUT:-XRack}"
+
+    read_confirmed_secret "$(L "Passwort für den Access Point (mind. 8 Zeichen)" "Access point password (min. 8 characters)")" 8 AP_PASSWORD
+
+    if [ "${#AP_PASSWORD}" -lt 8 ]; then
+        echo "$(L "Passwort fehlt/zu kurz (mind. 8 Zeichen) - Access Point übersprungen." "Password missing/too short (min. 8 characters) - access point skipped.")"
+        return 0
+    fi
+
+    echo ""
+    echo "$(L "XRack: Access Point '${AP_SSID}' wird auf ${AP_IFACE} eingerichtet..." "XRack: Setting up access point '${AP_SSID}' on ${AP_IFACE}...")"
+
+    if sudo "${INSTALL_DIR}/scripts/xrack-ap-setup.sh" \
+        "${AP_SSID}" "${AP_PASSWORD}" "${XRACK_WLAN_COUNTRY}"; then
+
+        XRACK_WLAN_AP_SSID="${AP_SSID}"
+    else
+        echo "$(L "Warnung: Access Point konnte nicht eingerichtet werden." "Warning: could not set up the access point.")"
+    fi
+}
+
+#
+# Das Profil fuer "Konsole aus dem Heimnetz erreichbar machen".
+#
+# Feste eigene Adressrange statt NetworkManager die Wahl zu lassen:
+# Sonst kann sich das Subnetz je nach Reihenfolge anderer
+# "shared"-Verbindungen zwischen 10.42.0.0/24 und 10.42.1.0/24
+# verschieben, und die Portweiterleitung
+# (scripts/xrack-port-forward.sh) zeigt auf eine veraltete
+# Konsolen-IP.
+#
+# Angelegt, aber nicht aktiviert - eingeschaltet wird es im
+# Einstellungen-Menue.
+#
+setup_share_profile() {
+
+    sudo nmcli connection delete "XRack-Share-eth0" >/dev/null 2>&1 || true
+
+    sudo nmcli connection add type ethernet ifname eth0 con-name "XRack-Share-eth0" \
+        ipv4.method shared ipv4.addresses 10.77.0.1/24 \
+        connection.autoconnect no >/dev/null || return 1
+
+    return 0
 }
 
 #
@@ -1214,6 +989,8 @@ configure_sudoers() {
         "${INSTALL_DIR}/scripts/xrack-dhcp-lease.sh" \
         "${INSTALL_DIR}/scripts/xrack-link-bounce.sh" \
         "${INSTALL_DIR}/scripts/xrack-bridge-ensure.sh" \
+        "${INSTALL_DIR}/scripts/xrack-wifi-iface.sh" \
+        "${INSTALL_DIR}/scripts/xrack-ap-setup.sh" \
         "${INSTALL_DIR}/scripts/xrack-port-forward.sh" \
         "${INSTALL_DIR}/scripts/xrack-bt-power.sh" \
         "${INSTALL_DIR}/scripts/xrack-bt-pair.sh" \
@@ -1289,8 +1066,9 @@ print_summary() {
     echo ""
     echo "$(L "XRack startet ab jetzt automatisch beim Booten (systemd-Dienst 'xrack')." "XRack will now start automatically on boot (systemd service 'xrack').")"
     echo ""
-    echo "$(L "Webinterface:             https://${XRACK_HOSTNAME}.local:${XRACK_PORT}" "Web interface:            https://${XRACK_HOSTNAME}.local:${XRACK_PORT}")"
-    echo "$(L "                          (alternativ per IP: https://<ip-des-pi>:${XRACK_PORT})" "                          (or by IP: https://<pi-ip>:${XRACK_PORT})")"
+    echo "$(L "Webinterface:             https://<ip-des-pi>:${XRACK_PORT}" "Web interface:            https://<pi-ip>:${XRACK_PORT}")"
+    echo "$(L "                          (oft auch: https://${XRACK_HOSTNAME}.local:${XRACK_PORT} - das können" "                          (often also: https://${XRACK_HOSTNAME}.local:${XRACK_PORT} - but not")"
+    echo "$(L "                          aber nicht alle Router und Geräte auflösen)" "                          every router and device can resolve that)")"
     echo "$(L "Jetzt manuell starten:    sudo systemctl start xrack" "Start manually now:       sudo systemctl start xrack")"
     echo "$(L "Status ansehen:           sudo systemctl status xrack" "Check status:             sudo systemctl status xrack")"
     echo "$(L "Live-Logs ansehen:        journalctl -u xrack -f" "View live logs:           journalctl -u xrack -f")"
@@ -1323,14 +1101,22 @@ print_summary() {
         echo "$(L "WLAN-Access-Point:        '${XRACK_WLAN_AP_SSID}'" "Wi-Fi access point:       '${XRACK_WLAN_AP_SSID}'")"
     fi
 
-    if [ "${XRACK_WLAN_BRIDGE}" = "ja" ]; then
+    if [ -n "${XRACK_WLAN_AP_SSID}" ]; then
         echo "$(L "Access-Point-Netz:        br0, 10.42.0.1 (DHCP von XRack)" "Access point network:     br0, 10.42.0.1 (DHCP served by XRack)")"
-        echo "$(L "Ethernet+AP gebridged:    im Einstellungen-Menü zuschaltbar, aktuell aus" "Ethernet+AP bridged:      can be enabled in the Settings menu, currently off")"
-        echo "$(L "                          (legt eth0/Mischpult mit dem Access Point in ein Netz)" "                          (puts eth0/mixing console on the same network as the access point)")"
+    fi
+
+    if [ "${XRACK_WLAN_BRIDGE}" = "ja" ]; then
+        echo "$(L "Konsole über den Access Point: im Einstellungen-Menü zuschaltbar, aktuell aus" "Console via access point:     can be enabled in the settings menu, currently off")"
     fi
 
     if [ "${XRACK_WLAN_SHARE_READY}" = "ja" ]; then
-        echo "$(L "Ethernet+Heimnetz-Freigabe verfügbar (im Einstellungen-Modal aktivierbar, aktuell aus)." "Ethernet+home network sharing available (enable it in the Settings modal, currently off).")"
+        echo "$(L "Konsole aus dem Heimnetz:     im Einstellungen-Menü zuschaltbar, aktuell aus" "Console from home network:    can be enabled in the settings menu, currently off")"
+    fi
+
+    if [ -z "${XRACK_WLAN_AP_SSID}" ]; then
+        echo ""
+        echo "$(L "Ein Access Point lässt sich jederzeit im Einstellungen-Menü nachrüsten -" "An access point can be added at any time from the settings menu -")"
+        echo "$(L "install.sh muss dafür nicht noch einmal laufen." "install.sh does not need to run again for that.")"
     fi
 
     if [ -n "${XRACK_WLAN_CLIENT_SSID}" ] || [ -n "${XRACK_WLAN_AP_SSID}" ]; then
@@ -1346,28 +1132,25 @@ print_summary() {
 #
 offer_reboot_for_bridge() {
 
-    if [ "${XRACK_WLAN_BRIDGE}" = "ja" ]; then
+    echo ""
+    echo "$(L "Der Raspberry Pi sollte jetzt neu gestartet werden - erst danach" "The Raspberry Pi should be restarted now - only then does")"
+    echo "$(L "zeigt sich, ob alles auch von selbst wieder hochkommt." "everything come back up on its own, as it should.")"
 
-        echo ""
-        echo "$(L "Der Access Point läuft bereits. Ein Neustart ist trotzdem" "The access point is already running. A restart is still")"
-        echo "$(L "empfehlenswert: Nur so zeigt sich, ob er auch von selbst" "recommended: only then will you see whether it comes up on its")"
-        echo "$(L "wieder hochkommt." "own again.")"
-
-        if [ -t 0 ]; then
-
-            echo ""
-            read -r -p "$(L "Jetzt neu starten? [j/N]: " "Restart now? [y/N]: ")" XRACK_REBOOT_NOW || true
-
-            if confirm_yes "${XRACK_REBOOT_NOW}"; then
-                echo "$(L "XRack: Neustart..." "XRack: Restarting...")"
-                sudo reboot
-            else
-                echo "$(L "Bitte bei Gelegenheit manuell neu starten: sudo reboot" "Please restart manually when convenient: sudo reboot")"
-            fi
-        else
-            echo "$(L "Bitte manuell neu starten, sobald es passt: sudo reboot" "Please restart manually whenever it suits you: sudo reboot")"
-        fi
+    if [ ! -t 0 ]; then
+        echo "$(L "Bitte manuell neu starten, sobald es passt: sudo reboot" "Please restart manually whenever it suits you: sudo reboot")"
+        return 0
     fi
+
+    echo ""
+    read -r -p "$(L "Jetzt neu starten? [J/n]: " "Restart now? [Y/n]: ")" XRACK_REBOOT_NOW || true
+
+    if [ "$(lower "${XRACK_REBOOT_NOW}")" = "n" ]; then
+        echo "$(L "Bitte bei Gelegenheit manuell neu starten: sudo reboot" "Please restart manually when convenient: sudo reboot")"
+        return 0
+    fi
+
+    echo "$(L "XRack: Neustart..." "XRack: Restarting...")"
+    sudo reboot
 }
 
 #

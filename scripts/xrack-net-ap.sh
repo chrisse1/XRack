@@ -9,6 +9,11 @@
 # Skript beides. Welcher Weg gilt, entscheidet allein, ob es die
 # hostapd-Konfiguration gibt.
 #
+# Ist noch gar kein Access Point eingerichtet, wird er hier
+# angelegt - dafür gibt es scripts/xrack-ap-setup.sh, dasselbe
+# Skript, das auch install.sh benutzt. So lässt sich ein Access Point
+# jederzeit nachrüsten, ohne install.sh erneut laufen zu lassen.
+#
 # Wird ausschließlich per sudo durch XRack selbst aufgerufen (siehe
 # core/wlan_control.py), nie interaktiv. $1 = SSID, $2 = Passwort.
 #
@@ -46,6 +51,28 @@ fi
 if [ "${#PASSWORD}" -gt 63 ]; then
     echo "Passwort ist zu lang (höchstens 63 Zeichen)." >&2
     exit 1
+fi
+
+# ------------------------------------------------------------------
+# Weg 0: Es gibt noch gar keinen Access Point
+#
+# Genau der Nachruestfall: Bei der Installation wurde "kein Access
+# Point" gewaehlt (oder es steckte noch kein USB-WLAN-Stick), und
+# jetzt soll doch einer her. Dann wird er hier komplett eingerichtet -
+# ohne dass install.sh noch einmal laufen muss.
+# ------------------------------------------------------------------
+
+if [ ! -f "${CONF}" ] \
+   && ! nmcli -t -f NAME connection show 2>/dev/null | grep -qx "XRack-AP"; then
+
+    SETUP="$(dirname "$0")/xrack-ap-setup.sh"
+
+    if [ ! -x "${SETUP}" ]; then
+        echo "Einrichtungsskript fehlt: ${SETUP}" >&2
+        exit 1
+    fi
+
+    exec "${SETUP}" "${SSID}" "${PASSWORD}"
 fi
 
 # ------------------------------------------------------------------

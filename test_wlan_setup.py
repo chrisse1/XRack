@@ -34,14 +34,36 @@ INSTALL = WURZEL / "install.sh"
 #
 quelltext = INSTALL.read_text(encoding="utf-8")
 
-anfang = quelltext.index('XRACK_HOSTAPD_CONF="')
+#
+# Aus install.sh die Funktionen, die dort geblieben sind: die Bridge
+# und das Aufraeumen fremder WLAN-Profile.
+#
+anfang = quelltext.index("setup_ap_bridge() {")
 ende = quelltext.index("configure_wifi() {")
 
 FUNKTIONEN = quelltext[anfang:ende]
 
+#
+# Die eigentliche Access-Point-Einrichtung ist in ein eigenes Skript
+# gewandert, damit sie auch aus dem Einstellungen-Menü heraus
+# aufrufbar ist (Nachrüstfall). Für die Prüfungen unten werden beide
+# zusammengelegt - install.sh liefert die Bridge und das Aufräumen
+# fremder WLAN-Profile, das Skript den Rest.
+#
+AP_SETUP = (WURZEL / "scripts" / "xrack-ap-setup.sh").read_text(encoding="utf-8")
+
+#
+# Aus dem Skript nur die Funktionen übernehmen, nicht seinen
+# Hauptteil - der würde beim Einlesen sofort losrichten.
+#
+FUNKTIONEN += AP_SETUP[
+    AP_SETUP.index("#\n# hostapd-Konfiguration schreiben."):
+    AP_SETUP.index("if setup_access_point_hostapd ")
+]
+
 assert "setup_access_point_hostapd()" in FUNKTIONEN, (
     "Die Access-Point-Funktionen wurden nicht gefunden - hat sich der "
-    "Aufbau von install.sh geändert?"
+    "Aufbau geändert?"
 )
 
 # ----------------------------------------------------------------
@@ -564,6 +586,32 @@ try:
             "".join(f"{g}:wifi\n" for g in geraete) + "eth0:ethernet\n",
             encoding="utf-8",
         )
+
+        #
+        # Nachgestelltes /sys: Daran erkennt xrack-wifi-iface.sh, was
+        # eingebaut ist und was am USB haengt. Die Pfade sind den
+        # echten nachempfunden - beim Stick steckt "usb1" darin, beim
+        # eingebauten Chip der SD-/MMC-Zweig.
+        #
+        sysnet = ordner / "sys-net"
+
+        for nummer, geraet in enumerate(geraete):
+
+            (sysnet / geraet / "wireless").mkdir(parents=True, exist_ok=True)
+
+            if nummer == 0:
+                echt = sysnet / "devices" / "platform" / "soc" / "mmc_host" / "mmc1"
+            else:
+                echt = sysnet / "devices" / "platform" / "scb" / "usb1" / "1-1"
+
+            echt.mkdir(parents=True, exist_ok=True)
+
+            verweis = sysnet / geraet / "device"
+
+            if not verweis.exists():
+                verweis.symlink_to(echt)
+
+        (sysnet / "eth0").mkdir(parents=True, exist_ok=True)
         (ordner / "phy-info").write_text(PHY_5GHZ_NEU, encoding="utf-8")
         (ordner / "moegliche-baender").write_text("a\ng\n", encoding="utf-8")
 
@@ -583,9 +631,6 @@ try:
             "\n".join([
                 "export XRACK_INSTALL_SOURCE_ONLY=1",
                 f"source {INSTALL}",
-                f'XRACK_HOSTAPD_CONF="{ordner}/xrack.conf"',
-                f'XRACK_HOSTAPD_UNIT="{ordner}/xrack-hostapd.service"',
-                f'XRACK_NM_UNMANAGED="{ordner}/nm-unmanaged.conf"',
                 "XRACK_LANGUAGE=de",
                 "configure_wifi",
                 'echo "ERGEBNIS-CLIENT=${XRACK_WLAN_CLIENT_SSID}"',
@@ -597,6 +642,10 @@ try:
 
         umgebung = dict(os.environ)
         umgebung["AP_STATE"] = str(ordner)
+        umgebung["XRACK_SYS_NET"] = str(ordner / "sys-net")
+        umgebung["XRACK_HOSTAPD_CONF"] = str(ordner / "xrack.conf")
+        umgebung["XRACK_HOSTAPD_UNIT"] = str(ordner / "xrack-hostapd.service")
+        umgebung["XRACK_NM_UNMANAGED"] = str(ordner / "nm-unmanaged.conf")
         umgebung["PATH"] = f"{binordner}:{os.environ['PATH']}"
 
         ergebnis = subprocess.run(
@@ -620,11 +669,11 @@ try:
         scratch / "ablauf-zwei",
         ["wlan0", "wlan1"],
         [
-            "j",                # WLAN einrichten?
+            "j",                # WLAN-Verbindung einrichten?
             "DE",               # Land
-            "1", "2",           # Client wlan0, Access Point wlan1
             "MeinHeimnetz",     # SSID
             "heimpasswort", "heimpasswort",
+            "j",                # Access Point einrichten?
             "",                 # AP-Name: Vorgabe (XRack)
             "appasswort", "appasswort",
         ],
@@ -667,10 +716,11 @@ try:
         scratch / "ablauf-eins",
         ["wlan0"],
         [
-            "j",
+            "j",                # WLAN-Verbindung einrichten?
             "DE",
             "MeinHeimnetz",
             "heimpasswort", "heimpasswort",
+            "j",                # Access Point einrichten? (geht nicht)
         ],
     )
 
@@ -695,6 +745,170 @@ try:
     assert "con-name XRack-AP" not in aufrufe, aufrufe
 
     print("OK: Mit einem Funkgeraet kommt wenigstens das Heimnetz")
+
+    # ----------------------------------------------------------------
+    # 12. Wer wofuer zustaendig ist
+    #
+    # Eingebaut = Heimnetz, USB-Stick = Access Point. Das wird nicht
+    # mehr abgefragt: Der eingebaute Chip taugt als Client, aber nur
+    # schlecht als Access Point - die Abfrage hat nur Gelegenheit
+    # gegeben, es falsch einzustellen.
+    # ----------------------------------------------------------------
+
+    def sys_baum_wlan(name, geraete):
+        """geraete: {Name: "usb" oder "intern"}"""
+
+        wurzel = scratch / name
+        (wurzel / "devices" / "usb1").mkdir(parents=True, exist_ok=True)
+        (wurzel / "devices" / "mmc1").mkdir(parents=True, exist_ok=True)
+
+        for geraet, art in geraete.items():
+            (wurzel / geraet / "wireless").mkdir(parents=True, exist_ok=True)
+            ziel = wurzel / "devices" / ("usb1" if art == "usb" else "mmc1")
+            verweis = wurzel / geraet / "device"
+            if not verweis.exists():
+                verweis.symlink_to(ziel)
+
+        return wurzel
+
+    def zustaendig(baum, rolle):
+        return subprocess.run(
+            [str(WURZEL / "scripts" / "xrack-wifi-iface.sh"), rolle],
+            env={**os.environ, "XRACK_SYS_NET": str(baum)},
+            capture_output=True, text=True, timeout=10,
+        ).stdout.strip()
+
+    baum = sys_baum_wlan("zwei", {"wlan0": "intern", "wlan1": "usb"})
+
+    assert zustaendig(baum, "client") == "wlan0", "Heimnetz gehoert dem eingebauten Chip."
+    assert zustaendig(baum, "ap") == "wlan1", "Der Access Point gehoert dem USB-Stick."
+
+    #
+    # Auch wenn der Stick zuerst auftaucht - die Reihenfolge der
+    # Geraetenamen darf nicht entscheiden.
+    #
+    baum = sys_baum_wlan("umgekehrt", {"wlan0": "usb", "wlan1": "intern"})
+
+    assert zustaendig(baum, "client") == "wlan1", zustaendig(baum, "client")
+    assert zustaendig(baum, "ap") == "wlan0", zustaendig(baum, "ap")
+
+    #
+    # Nur das eingebaute: Heimnetz ja, Access Point nein.
+    #
+    baum = sys_baum_wlan("nur-intern", {"wlan0": "intern"})
+
+    assert zustaendig(baum, "client") == "wlan0"
+    assert zustaendig(baum, "ap") == "", (
+        "Auf dem eingebauten Chip darf kein Access Point aufgespannt werden."
+    )
+
+    print("OK: Eingebaut ist Heimnetz, USB ist Access Point")
+
+    # ----------------------------------------------------------------
+    # 13. WLAN uebersprungen, Access Point trotzdem
+    #
+    # Die beiden Fragen sind getrennt - wer keinen Heimnetz-Anschluss
+    # will, soll trotzdem einen Access Point bekommen koennen.
+    # ----------------------------------------------------------------
+
+    ausgabe, dateien = wlan_einrichten(
+        scratch / "nur-ap",
+        ["wlan0", "wlan1"],
+        [
+            "n",                # keine WLAN-Verbindung
+            "j",                # aber ein Access Point
+            "Buehne",
+            "appasswort", "appasswort",
+        ],
+    )
+
+    assert "ERGEBNIS-CLIENT=" in ausgabe and "ERGEBNIS-CLIENT=Mein" not in ausgabe
+    assert "ERGEBNIS-AP=Buehne" in ausgabe, ausgabe[-2000:]
+
+    conf = dateien["conf"].read_text(encoding="utf-8")
+
+    assert "ssid=Buehne" in conf, conf
+
+    print("OK: Ohne Heimnetz-WLAN laesst sich trotzdem ein Access Point einrichten")
+
+    # ----------------------------------------------------------------
+    # 14. Beides uebersprungen - das Geruest steht trotzdem
+    #
+    # Das ist die Voraussetzung fuers Nachruesten: Wer hier alles
+    # ueberspringt, soll spaeter im Einstellungen-Menue umschalten
+    # koennen, ohne install.sh erneut laufen zu lassen.
+    # ----------------------------------------------------------------
+
+    ausgabe, dateien = wlan_einrichten(
+        scratch / "nichts", ["wlan0", "wlan1"], ["n", "n"],
+    )
+
+    assert "ERGEBNIS-BRIDGE=ja" in ausgabe, ausgabe[-2000:]
+
+    aufrufe = dateien["nmcli"].read_text(encoding="utf-8")
+
+    for pflicht in ("con-name XRack-Bridge", "con-name XRack-Bridge-eth0",
+                    "con-name XRack-Share-eth0"):
+        assert pflicht in aufrufe, (
+            f"{pflicht} fehlt - dann laesst sich spaeter nichts umschalten:\n{aufrufe}"
+        )
+
+    print("OK: Auch ohne Antworten steht das Geruest zum Nachruesten")
+
+    # ----------------------------------------------------------------
+    # 15. Der Nachruestfall selbst
+    #
+    # Im Einstellungen-Menue einen Access Point setzen, obwohl noch
+    # keiner eingerichtet ist: xrack-net-ap.sh muss dann an
+    # xrack-ap-setup.sh weiterreichen, statt "nicht eingerichtet" zu
+    # melden.
+    # ----------------------------------------------------------------
+
+    ordner = scratch / "nachruesten"
+    ordner.mkdir(parents=True)
+
+    binordner = ordner / "bin"
+    binordner.mkdir()
+
+    for name, inhalt in (
+        ("nmcli", FAKE_NMCLI), ("systemctl", FAKE_SYSTEMCTL),
+        ("iw", FAKE_IW), ("rfkill", FAKE_STILL), ("sleep", FAKE_STILL),
+    ):
+        datei = binordner / name
+        datei.write_text(inhalt, encoding="utf-8")
+        datei.chmod(0o755)
+
+    (ordner / "connections").write_text("XRack-Home\n", encoding="utf-8")
+    (ordner / "phy-info").write_text(PHY_5GHZ_NEU, encoding="utf-8")
+    (ordner / "moegliche-baender").write_text("a\ng\n", encoding="utf-8")
+
+    sysnet = sys_baum_wlan("nachruesten-sys", {"wlan0": "intern", "wlan1": "usb"})
+
+    ergebnis = subprocess.run(
+        [str(WURZEL / "scripts" / "xrack-net-ap.sh"), "SpaeterAP", "spaetgeheim"],
+        env={
+            **os.environ,
+            "AP_STATE": str(ordner),
+            "XRACK_SYS_NET": str(sysnet),
+            "XRACK_HOSTAPD_CONF": str(ordner / "xrack.conf"),
+            "XRACK_HOSTAPD_UNIT": str(ordner / "unit"),
+            "XRACK_NM_UNMANAGED": str(ordner / "nm.conf"),
+            "PATH": f"{binordner}:{os.environ['PATH']}",
+        },
+        capture_output=True, text=True, timeout=60,
+    )
+
+    assert ergebnis.returncode == 0, (
+        f"Nachruesten fehlgeschlagen: {ergebnis.stdout} {ergebnis.stderr}"
+    )
+
+    conf = (ordner / "xrack.conf").read_text(encoding="utf-8")
+
+    assert "ssid=SpaeterAP" in conf, conf
+    assert "wpa_passphrase=spaetgeheim" in conf, conf
+    assert "interface=wlan1" in conf, "Auch beim Nachruesten der USB-Stick."
+
+    print("OK: Ein Access Point laesst sich ohne install.sh nachruesten")
 
     print("Alle Tests erfolgreich.")
 
