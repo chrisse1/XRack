@@ -12,6 +12,19 @@ class WartungMixin:
     Teil von Application - siehe core/application/__init__.py.
     """
 
+    def netzwerk_selbsttest(self) -> str:
+        """
+        Der Netzwerk-Selbsttest als Klartext.
+
+        Wird bei jedem Aufruf frisch erhoben - der Sinn ist ja, den
+        Zustand von JETZT zu sehen.
+        """
+
+        from core.network_report import NetworkReport
+
+        return NetworkReport(self).erzeugen()
+
+
     def get_update_info(self) -> dict:
         """
         Beschreibt fürs Einstellungen-Modal, ob ein Update bereitliegt,

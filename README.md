@@ -239,6 +239,24 @@ am Pi nötig.
   Nutzerdaten sind davon nicht betroffen: Aufnahmen, Musik, PIN,
   Einstellungen und `.venv` stehen in der `.gitignore` und werden von
   git gar nicht verfolgt.
+- **Netzwerk-Selbsttest**: Ein Knopf unter *Wartung*, der Funkgeräte,
+  Access Point, Heimnetz und Mischpult in einem Durchgang prüft - und
+  darunter benennt, was nicht zusammenpasst (fehlende Funkregion,
+  Access Point auf dem eingebauten Chip, 2,4 GHz trotz 5-GHz-Stick,
+  beide Zugangswege gleichzeitig an). Die Ausgabe lässt sich kopieren
+  und weitergeben.
+
+- **Wenn die Oberfläche klemmt**: Das Update lässt sich auch ohne sie
+  einspielen - derselbe Weg, den der Knopf nimmt:
+
+  ```
+  sudo ~/XRack/scripts/xrack-update.py ~/XRack pi 8080 \
+       --repository chrisse1/XRack --branch main
+  ```
+
+  Der Port muss der tatsächlich eingestellte sein (`config/local.yaml`),
+  sonst hält der Updater den Neustart für gescheitert und rollt zurück.
+
 - **Update-Rückschritt**: Enthält die ZIP auf dem Stick eine ältere
   Version als die installierte, fragt XRack vor dem Start nach und
   nennt beide Nummern. Wer ablehnt, hat nichts verändert; der Updater

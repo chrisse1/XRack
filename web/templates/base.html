@@ -1019,6 +1019,47 @@
                             </small>
                         </div>
 
+                        {#
+                            Netzwerk-Selbsttest. Sammelt in einem
+                            Durchgang alles, was man zum Einkreisen
+                            eines Netzwerkproblems braucht, und sagt
+                            dazu, was daran nicht stimmt.
+                        #}
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                {{ t.settings_selftest_title }}
+                            </label>
+
+                            <div class="d-flex gap-2">
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-secondary btn-sm"
+                                    id="btn-network-selftest"
+                                >
+                                    <i class="bi bi-clipboard-pulse me-1"></i>
+                                    {{ t.settings_selftest_run }}
+                                </button>
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-secondary btn-sm d-none"
+                                    id="btn-network-selftest-copy"
+                                >
+                                    <i class="bi bi-clipboard me-1"></i>
+                                    {{ t.settings_selftest_copy }}
+                                </button>
+                            </div>
+
+                            <pre
+                                id="settings-selftest-output"
+                                class="small mt-2 p-2 border rounded d-none"
+                                style="max-height: 22rem; overflow: auto;"
+                            ></pre>
+
+                            <small class="d-block text-body-secondary mt-2">
+                                {{ t.settings_selftest_hint }}
+                            </small>
+                        </div>
+
                         <!-- Diagnose ----------------------------------------->
 
                         <div class="mb-3">
