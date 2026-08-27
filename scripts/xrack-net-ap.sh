@@ -15,13 +15,15 @@
 # jederzeit nachrüsten, ohne install.sh erneut laufen zu lassen.
 #
 # Wird ausschließlich per sudo durch XRack selbst aufgerufen (siehe
-# core/wlan_control.py), nie interaktiv. $1 = SSID, $2 = Passwort.
+# core/wlan_control.py), nie interaktiv. $1 = SSID, $2 = Passwort,
+# $3 = Funkregion (optional).
 #
 
 set -e
 
 SSID="$1"
 PASSWORD="$2"
+COUNTRY="$3"
 
 CONF="/etc/hostapd/xrack.conf"
 UNIT="xrack-hostapd.service"
@@ -53,6 +55,14 @@ if [ "${#PASSWORD}" -gt 63 ]; then
     exit 1
 fi
 
+#
+# Region zuerst - sie entscheidet mit darüber, auf welchem Band der
+# Access Point ueberhaupt funken darf.
+#
+if [ -n "${COUNTRY}" ]; then
+    "$(dirname "$0")/xrack-wifi-country.sh" "${COUNTRY}" || true
+fi
+
 # ------------------------------------------------------------------
 # Weg 0: Es gibt noch gar keinen Access Point
 #
@@ -72,7 +82,13 @@ if [ ! -f "${CONF}" ] \
         exit 1
     fi
 
-    exec "${SETUP}" "${SSID}" "${PASSWORD}"
+    #
+    # Die Funkregion wird mitgegeben, statt sie in ap-setup aus
+    # "iw reg get" zu lesen: Ist noch gar keine gesetzt, liefert das
+    # dort die Weltregion 00 - und die laesst hostapd nicht auf 5 GHz.
+    # Der Access Point saesse dann still auf 2,4 GHz fest.
+    #
+    exec "${SETUP}" "${SSID}" "${PASSWORD}" "${COUNTRY}"
 fi
 
 # ------------------------------------------------------------------

@@ -792,12 +792,17 @@ frage_wlan_land() {
         return 0
     fi
 
-    if command -v raspi-config >/dev/null 2>&1; then
-        sudo raspi-config nonint do_wifi_country "${XRACK_WLAN_COUNTRY}"
-    else
-        sudo rfkill unblock wifi
-        sudo iw reg set "${XRACK_WLAN_COUNTRY}" || true
-    fi
+    #
+    # Denselben Weg gehen wie spaeter das Einstellungen-Menue: ein
+    # Skript, eine Stelle. Sonst setzt der Installer die Region anders
+    # als die Oberflaeche, und Unterschiede faellt niemandem auf,
+    # bevor etwas nicht funktioniert.
+    #
+    # Ueber bash aufgerufen, weil das chmod erst spaeter kommt
+    # (configure_sudoers) - aus einem entpackten Archiv haette die
+    # Datei hier sonst womoeglich kein Ausfuehrungsrecht.
+    sudo bash "${INSTALL_DIR}/scripts/xrack-wifi-country.sh" \
+        "${XRACK_WLAN_COUNTRY}" || true
 }
 
 #
@@ -1078,6 +1083,7 @@ configure_sudoers() {
         "${INSTALL_DIR}/scripts/xrack-bridge-ensure.sh" \
         "${INSTALL_DIR}/scripts/xrack-wired-restore.sh" \
         "${INSTALL_DIR}/scripts/xrack-wifi-iface.sh" \
+        "${INSTALL_DIR}/scripts/xrack-wifi-country.sh" \
         "${INSTALL_DIR}/scripts/xrack-ap-setup.sh" \
         "${INSTALL_DIR}/scripts/xrack-port-forward.sh" \
         "${INSTALL_DIR}/scripts/xrack-bt-power.sh" \

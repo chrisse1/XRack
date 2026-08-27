@@ -10,6 +10,7 @@ Prozessargumente übergeben (nie über eine Shell zusammengebaut).
 """
 
 import logging
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -369,6 +370,7 @@ class WlanControl:
                 "ap_hardware": False,
                 "ap_active": False,
                 "home_active": False,
+                "country": None,
                 "bridge_configured": False,
                 "bridge_enabled": False,
                 "console_access_configured": False,
@@ -440,6 +442,14 @@ class WlanControl:
             # deutlich, statt eine Eingabemaske anzubieten, die
             # nirgends hinfuehrt.
             #
+            #
+            # Die Funkregion. Ohne sie bleibt das Funkgeraet auf
+            # Raspberry Pi OS per rfkill gesperrt, und hostapd darf
+            # nicht auf 5 GHz senden - beides faellt sonst erst auf,
+            # wenn nichts funktioniert.
+            #
+            "country": self.wifi_country(),
+
             "ap_hardware": ap_hardware,
 
             #
@@ -539,19 +549,84 @@ class WlanControl:
 
         return result.stdout.strip() or None
 
-    def set_home_wifi(self, ssid: str, password: str) -> tuple[bool, str]:
+    def wifi_country(self) -> str | None:
+        """
+        Die gesetzte Funkregion als ISO-Laendercode, oder None.
+
+        Gelesen wird der Kernel ueber "iw reg get". "00" ist die
+        Weltregion und heisst "nicht gesetzt" - sie sperrt 5 GHz und
+        laesst das Funkgeraet auf Raspberry Pi OS per rfkill gesperrt.
+        Deshalb wird sie hier wie "nichts" behandelt: Die Oberflaeche
+        soll in dem Fall zum Setzen auffordern, nicht "00" anzeigen.
+        """
+
+        try:
+
+            ergebnis = subprocess.run(
+                ["iw", "reg", "get"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+        except Exception:
+            return None
+
+        for zeile in ergebnis.stdout.splitlines():
+
+            if not zeile.startswith("country"):
+                continue
+
+            teile = zeile.split()
+
+            if len(teile) < 2:
+                continue
+
+            code = teile[1].rstrip(":")
+
+            return None if code == "00" else code
+
+        return None
+
+    def set_wifi_country(self, code: str) -> tuple[bool, str]:
+        """
+        Setzt die Funkregion.
+
+        Laeuft ueber xrack-net-home.sh, nicht ueber ein eigenes
+        Skript: Ein eigener sudoers-Eintrag entstuende erst bei einem
+        erneuten Lauf von install.sh, und die Einstellung waere auf
+        jeder bestehenden Installation tot. Siehe den Kopf von
+        scripts/xrack-wifi-country.sh.
+        """
+
+        code = (code or "").strip().upper()
+
+        if not re.fullmatch(r"[A-Z]{2}", code):
+            return False, "Ungültiger Ländercode (erwartet werden zwei Buchstaben)."
+
+        return self._run_script("xrack-net-home.sh", "--country", code)
+
+    def set_home_wifi(
+        self, ssid: str, password: str, country: str = ""
+    ) -> tuple[bool, str]:
         """
         Setzt SSID/Passwort der Heimnetz-Verbindung neu.
         """
 
-        return self._run_script("xrack-net-home.sh", ssid, password)
+        return self._run_script(
+            "xrack-net-home.sh", ssid, password, (country or "").strip().upper()
+        )
 
-    def set_ap_wifi(self, ssid: str, password: str) -> tuple[bool, str]:
+    def set_ap_wifi(
+        self, ssid: str, password: str, country: str = ""
+    ) -> tuple[bool, str]:
         """
         Setzt SSID/Passwort des Access Points neu.
         """
 
-        erfolg, meldung = self._run_script("xrack-net-ap.sh", ssid, password)
+        erfolg, meldung = self._run_script(
+            "xrack-net-ap.sh", ssid, password, (country or "").strip().upper()
+        )
 
         #
         # Auch im Fehlerfall verwerfen: Das Skript stellt bei einem

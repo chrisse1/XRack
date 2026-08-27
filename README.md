@@ -299,7 +299,17 @@ Freigabe-Profil werden immer angelegt, und sowohl der Access Point als
 auch die WLAN-Verbindung lassen sich später im Einstellungen-Menü
 nachrüsten, **ohne `install.sh` erneut laufen zu lassen**.
 
-Das Einstellungen-Menü zeigt deshalb nur, was gerade Sinn ergibt: Die
+Ganz oben im WLAN-Bereich steht das **WLAN-Land** - die Funkregion.
+Sie gehört zu keiner der beiden Verbindungen, sondern zum Funkgerät:
+Ohne sie bleibt WLAN auf Raspberry Pi OS per `rfkill` gesperrt, und
+der Access Point darf nicht auf 5 GHz senden. Der Installer fragt sie
+nur, wenn man dort WLAN oder einen Access Point einrichtet - wer
+beides überspringt und später nachrüstet, setzt sie hier. Die
+Ländernamen übersetzt der Browser selbst; ändert man die Region,
+während ein Access Point läuft, wird dessen Konfiguration
+mitgezogen und er neu gestartet.
+
+Das Einstellungen-Menü zeigt sonst nur, was gerade Sinn ergibt: Die
 Eingabemaske **WLAN-Client** steht immer, denn sie legt die Verbindung
 notfalls selbst an. Unter **Access Point** steht die Eingabemaske nur,
 wenn ein USB-WLAN-Stick steckt - sonst ein Hinweis, dass keiner erkannt

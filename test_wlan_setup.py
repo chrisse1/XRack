@@ -961,7 +961,207 @@ try:
 
     print("OK: Ein Access Point laesst sich ohne install.sh nachruesten")
 
-    print("Alle Tests erfolgreich.")
-
+    
 finally:
     shutil.rmtree(scratch, ignore_errors=True)
+
+
+# ====================================================================
+# Funkregion (WLAN-Land)
+#
+# Ohne gesetzte Region bleibt das Funkgeraet auf Raspberry Pi OS per
+# rfkill gesperrt, und hostapd darf nicht auf 5 GHz senden. Bis 1.7.1
+# fragte nur install.sh danach, und auch nur dann, wenn man dort WLAN
+# oder einen Access Point eingerichtet hat - wer beides uebersprungen
+# hat, konnte anschliessend zwar beides nachruesten, aber ohne Region.
+# ====================================================================
+
+import os
+import subprocess
+import tempfile
+from pathlib import Path
+
+SKRIPTE = Path(__file__).parent / "scripts"
+
+
+def _attrappen(ordner: Path, protokoll: Path) -> Path:
+    """
+    Legt Attrappen fuer raspi-config, iw, rfkill und systemctl an, die
+    ihren Aufruf nur protokollieren.
+    """
+
+    binordner = ordner / "bin"
+    binordner.mkdir()
+
+    for name in ("raspi-config", "iw", "rfkill", "systemctl", "install"):
+
+        pfad = binordner / name
+
+        if name == "install":
+            #
+            # install wird wirklich gebraucht (die hostapd-Datei wird
+            # geschrieben), aber ohne root-Eigentuemer.
+            #
+            pfad.write_text(
+                "#!/bin/sh\n"
+                f'echo "install $*" >> "{protokoll}"\n'
+                #
+                # install -o root -g root -m 0600 QUELLE ZIEL - die
+                # sechs Optionsteile weg, dann bleiben Quelle und Ziel.
+                #
+                'shift 6\n'
+                'cp "$1" "$2"\n'
+            )
+        else:
+            pfad.write_text(
+                "#!/bin/sh\n"
+                f'echo "{name} $*" >> "{protokoll}"\n'
+                "exit 0\n"
+            )
+
+        pfad.chmod(0o755)
+
+    return binordner
+
+
+def _lauf(argumente, binordner, cwd=None):
+
+    umgebung = dict(os.environ)
+    umgebung["PATH"] = f"{binordner}:{umgebung['PATH']}"
+
+    return subprocess.run(
+        argumente,
+        capture_output=True,
+        text=True,
+        env=umgebung,
+        cwd=cwd,
+    )
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    ordner = Path(tmp)
+    protokoll = ordner / "protokoll.txt"
+    protokoll.touch()
+
+    binordner = _attrappen(ordner, protokoll)
+
+    # ----------------------------------------------------------------
+    # Der gute Fall: zweistelliger Code wird gesetzt
+    # ----------------------------------------------------------------
+
+    ergebnis = _lauf(
+        [str(SKRIPTE / "xrack-wifi-country.sh"), "de"], binordner
+    )
+
+    assert ergebnis.returncode == 0, ergebnis.stderr
+
+    zeilen = protokoll.read_text()
+
+    assert "raspi-config nonint do_wifi_country DE" in zeilen, (
+        f"Region wurde nicht gesetzt (und nicht in Grossbuchstaben): {zeilen}"
+    )
+
+    print("OK: Die Funkregion wird gesetzt, Kleinschreibung wird umgewandelt")
+
+    # ----------------------------------------------------------------
+    # Unfug wird abgewiesen, bevor er beim System landet
+    # ----------------------------------------------------------------
+
+    protokoll.write_text("")
+
+    for unfug in ("", "D", "DEU", "D1", "../x", "DE; rm -rf /"):
+
+        ergebnis = _lauf(
+            [str(SKRIPTE / "xrack-wifi-country.sh"), unfug], binordner
+        )
+
+        assert ergebnis.returncode != 0, (
+            f"'{unfug}' wurde als Laendercode angenommen."
+        )
+
+    assert protokoll.read_text() == "", (
+        f"Trotz Ablehnung wurde etwas ausgefuehrt: {protokoll.read_text()}"
+    )
+
+    print("OK: Ungueltige Laendercodes werden abgewiesen, ohne etwas auszufuehren")
+
+
+# ====================================================================
+# Ein bestehender Access Point bekommt die neue Region auch mit
+#
+# Ohne diesen Schritt bliebe das Umstellen folgenlos: Der Access Point
+# funkte weiter auf 2,4 GHz, und die Einstellung behauptete, es sei
+# alles gesetzt.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    ordner = Path(tmp)
+    protokoll = ordner / "protokoll.txt"
+    protokoll.touch()
+
+    binordner = _attrappen(ordner, protokoll)
+
+    #
+    # Das Skript schreibt an einem festen Ort (/etc/hostapd/xrack.conf).
+    # Fuer den Test wird eine Kopie mit umgebogenem Pfad benutzt.
+    #
+    quelle = (SKRIPTE / "xrack-wifi-country.sh").read_text()
+
+    conf = ordner / "xrack.conf"
+    conf.write_text(
+        "interface=wlan1\n"
+        "ssid=XRack\n"
+        "hw_mode=g\n"
+        "channel=6\n"
+    )
+
+    kopie = ordner / "xrack-wifi-country.sh"
+    kopie.write_text(
+        quelle.replace('CONF="/etc/hostapd/xrack.conf"', f'CONF="{conf}"')
+    )
+    kopie.chmod(0o755)
+
+    ergebnis = _lauf([str(kopie), "AT"], binordner)
+
+    assert ergebnis.returncode == 0, ergebnis.stderr
+
+    inhalt = conf.read_text()
+
+    assert "country_code=AT" in inhalt, (
+        f"Region fehlt in der hostapd-Konfiguration:\n{inhalt}"
+    )
+    assert "ieee80211d=1" in inhalt, (
+        f"Ohne ieee80211d bleibt die Regionsangabe wirkungslos:\n{inhalt}"
+    )
+    assert inhalt.count("country_code=") == 1, (
+        f"Region doppelt eingetragen:\n{inhalt}"
+    )
+    assert "ssid=XRack" in inhalt, (
+        f"Der Rest der Konfiguration wurde beschaedigt:\n{inhalt}"
+    )
+
+    assert "systemctl restart xrack-hostapd.service" in protokoll.read_text(), (
+        "Der Access Point wurde nicht neu gestartet - die neue Region "
+        "wuerde erst beim naechsten Neustart gelten."
+    )
+
+    #
+    # Und ein zweites Mal: Eine schon vorhandene Zeile wird ersetzt,
+    # nicht verdoppelt.
+    #
+    _lauf([str(kopie), "CH"], binordner)
+
+    inhalt = conf.read_text()
+
+    assert "country_code=CH" in inhalt and "country_code=AT" not in inhalt, (
+        f"Alte Region blieb stehen:\n{inhalt}"
+    )
+    assert inhalt.count("ieee80211d=") == 1, (
+        f"ieee80211d wurde verdoppelt:\n{inhalt}"
+    )
+
+    print("OK: Ein bestehender Access Point uebernimmt die neue Region")
+
+print("Alle Tests erfolgreich.")

@@ -3457,6 +3457,18 @@ function applyWlanSettings(wlan) {
     sections.classList.remove("d-none");
 
     //
+    // Die Laenderliste einmal aufbauen, dann nur noch den Wert
+    // setzen. Ist keine Region gesetzt, meldet das Backend null -
+    // dann steht das Feld auf "Noch nicht gesetzt", und der Hinweis
+    // darunter sagt, was daran haengt.
+    //
+    baueLaenderListe();
+
+    const landFeld = document.getElementById("settings-wifi-country");
+
+    if (landFeld) landFeld.value = wlan.country || "";
+
+    //
     // WLAN-Client: Die Maske steht immer. Sie kann die Verbindung
     // jetzt auch anlegen, nicht nur ändern - "noch nicht
     // eingerichtet" wäre also eine Sackgasse, die keine ist.
@@ -3817,6 +3829,8 @@ async function saveRecordingPrefix() {
 // WLAN: Heimnetz / Access Point / Bridge
 // ------------------------------------------------------------
 
+document.getElementById("btn-save-wifi-country")
+    .addEventListener("click", saveWifiCountry);
 document.getElementById("btn-settings-home-save").addEventListener("click", saveHomeWifi);
 document.getElementById("btn-settings-ap-save").addEventListener("click", saveApWifi);
 document.getElementById("settings-bridge-toggle").addEventListener("change", toggleBridge);
@@ -3840,6 +3854,120 @@ function togglePasswordVisibility(button) {
         icon.classList.remove("bi-eye-slash");
         icon.classList.add("bi-eye");
     }
+}
+
+//
+// WLAN-Land (Funkregion)
+//
+// Gehoert zu keiner der beiden Verbindungen, sondern zum Funkgeraet:
+// Ohne gesetzte Region bleibt WLAN auf Raspberry Pi OS per rfkill
+// gesperrt, und hostapd darf nicht auf 5 GHz senden. Bis 1.7.1 wurde
+// sie nur von install.sh gefragt - wer dort weder WLAN noch Access
+// Point eingerichtet hat, konnte beides zwar nachruesten, aber ohne
+// Region.
+//
+// Die Codes stehen hier, die Namen macht der Browser: Intl.DisplayNames
+// uebersetzt sie in die Sprache des Nutzers. Sonst stuenden hier 250
+// Laendernamen zweimal, in DE und EN.
+//
+const WLAN_LAENDER = [
+    "AD","AE","AF","AG","AL","AM","AO","AR","AT","AU","AW","AZ","BA","BB",
+    "BD","BE","BF","BG","BH","BI","BJ","BN","BO","BR","BS","BT","BW","BY",
+    "BZ","CA","CD","CF","CG","CH","CI","CL","CM","CN","CO","CR","CU","CV",
+    "CY","CZ","DE","DJ","DK","DM","DO","DZ","EC","EE","EG","ER","ES","ET",
+    "FI","FJ","FM","FR","GA","GB","GD","GE","GH","GM","GN","GQ","GR","GT",
+    "GW","GY","HK","HN","HR","HT","HU","ID","IE","IL","IN","IQ","IR","IS",
+    "IT","JM","JO","JP","KE","KG","KH","KI","KM","KN","KP","KR","KW","KZ",
+    "LA","LB","LC","LI","LK","LR","LS","LT","LU","LV","LY","MA","MC","MD",
+    "ME","MG","MH","MK","ML","MM","MN","MO","MR","MT","MU","MV","MW","MX",
+    "MY","MZ","NA","NE","NG","NI","NL","NO","NP","NR","NZ","OM","PA","PE",
+    "PG","PH","PK","PL","PT","PW","PY","QA","RO","RS","RU","RW","SA","SB",
+    "SC","SD","SE","SG","SI","SK","SL","SM","SN","SO","SR","SS","ST","SV",
+    "SY","SZ","TD","TG","TH","TJ","TL","TM","TN","TO","TR","TT","TV","TW",
+    "TZ","UA","UG","US","UY","UZ","VA","VC","VE","VN","VU","WS","YE","ZA",
+    "ZM","ZW",
+];
+
+let laenderListeGebaut = false;
+
+function baueLaenderListe() {
+
+    if (laenderListeGebaut) return;
+
+    const feld = document.getElementById("settings-wifi-country");
+    if (!feld) return;
+
+    //
+    // Intl.DisplayNames gibt es seit Jahren in allen gaengigen
+    // Browsern. Fehlt es doch, bleibt der Code selbst stehen - besser
+    // eine Liste aus Kuerzeln als gar keine.
+    //
+    let namen = null;
+
+    try {
+        namen = new Intl.DisplayNames([document.documentElement.lang || "de"],
+                                      { type: "region" });
+    } catch (error) {
+        namen = null;
+    }
+
+    const eintraege = WLAN_LAENDER.map((code) => ({
+        code,
+        text: (() => {
+            try {
+                return namen ? `${namen.of(code)} (${code})` : code;
+            } catch (error) {
+                return code;
+            }
+        })(),
+    }));
+
+    //
+    // Nach dem angezeigten Namen sortieren, nicht nach dem Code -
+    // sonst steht die Liste in einer Reihenfolge, die zu den
+    // sichtbaren Namen nicht passt.
+    //
+    eintraege.sort((a, b) => a.text.localeCompare(b.text));
+
+    const leer = document.createElement("option");
+    leer.value = "";
+    leer.textContent = I18N.settings_wifi_country_none;
+    feld.appendChild(leer);
+
+    for (const eintrag of eintraege) {
+        const option = document.createElement("option");
+        option.value = eintrag.code;
+        option.textContent = eintrag.text;
+        feld.appendChild(option);
+    }
+
+    laenderListeGebaut = true;
+}
+
+async function saveWifiCountry() {
+
+    const code = document.getElementById("settings-wifi-country").value;
+
+    if (!code) return;
+
+    const response = await fetch("/api/settings/wifi/country", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ country: code })
+    });
+
+    const result = await response.json();
+
+    if (!result.success) {
+        alert(
+            I18N.alert_wifi_country_failed
+                .replace("{message}", result.message || "")
+        );
+        return;
+    }
+
+    alert(I18N.alert_wifi_country_saved);
+    await loadSettings();
 }
 
 async function saveHomeWifi() {

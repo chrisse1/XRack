@@ -189,6 +189,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "wird einer gebraucht - das eingebaute WLAN ist für den "
             "Heimnetz-Anschluss zuständig."
         ),
+        "settings_wifi_country_title": "WLAN-Land",
+        "settings_wifi_country_hint": (
+            "Gilt für beide Funkgeräte. Ohne Angabe bleibt das WLAN "
+            "gesperrt, und der Access Point kann kein 5 GHz."
+        ),
+        "settings_wifi_country_none": "Noch nicht gesetzt",
+        "settings_wifi_country_save": "Land speichern",
+        "alert_wifi_country_saved": "WLAN-Land gespeichert.",
+        "alert_wifi_country_failed": "WLAN-Land konnte nicht gesetzt werden: {message}",
         "settings_home_wifi_title": "WLAN-Client",
         "settings_ap_wifi_title": "Access Point",
         "settings_ap_access_title": (
@@ -607,6 +616,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "one - the built-in Wi-Fi is used for the home network "
             "connection."
         ),
+        "settings_wifi_country_title": "Wi-Fi country",
+        "settings_wifi_country_hint": (
+            "Applies to both radios. Without it Wi-Fi stays blocked, and "
+            "the access point cannot use 5 GHz."
+        ),
+        "settings_wifi_country_none": "Not set yet",
+        "settings_wifi_country_save": "Save country",
+        "alert_wifi_country_saved": "Wi-Fi country saved.",
+        "alert_wifi_country_failed": "Could not set the Wi-Fi country: {message}",
         "settings_home_wifi_title": "Wi-Fi client",
         "settings_ap_wifi_title": "Access Point",
         "settings_ap_access_title": (

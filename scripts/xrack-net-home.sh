@@ -8,17 +8,46 @@
 # erneut laufen zu lassen.
 #
 # Wird ausschließlich per sudo durch XRack selbst aufgerufen (siehe
-# core/wlan_control.py), nie interaktiv. $1 = SSID, $2 = Passwort.
+# core/wlan_control.py), nie interaktiv.
+#
+#   $1 = SSID, $2 = Passwort, $3 = Funkregion (optional)
+#   --country XX   nur die Funkregion setzen, sonst nichts
+#
+# Die Funkregion hängt hier mit dran, weil sie über den vorhandenen
+# sudoers-Eintrag laufen muss (siehe scripts/xrack-wifi-country.sh) -
+# ein eigener Eintrag entstünde erst bei einem erneuten Lauf von
+# install.sh.
 #
 
 set -e
 
+LAND_SKRIPT="$(dirname "$0")/xrack-wifi-country.sh"
+
+#
+# Nur die Funkregion setzen. Das ist der Weg für jemanden, der bei der
+# Installation weder WLAN noch Access Point eingerichtet hat: Ohne
+# Region bleibt das Funkgerät gesperrt, und dann liefe auch das
+# Anlegen einer Verbindung ins Leere.
+#
+if [ "$1" = "--country" ]; then
+    exec "${LAND_SKRIPT}" "$2"
+fi
+
 SSID="$1"
 PASSWORD="$2"
+COUNTRY="$3"
 
 if [ -z "${SSID}" ] || [ "${#PASSWORD}" -lt 8 ]; then
     echo "SSID fehlt oder Passwort zu kurz (mind. 8 Zeichen)." >&2
     exit 1
+fi
+
+#
+# Region vor dem Verbinden setzen, nicht danach: Ein per rfkill
+# gesperrtes Funkgerät nimmt die Verbindung gar nicht erst an.
+#
+if [ -n "${COUNTRY}" ]; then
+    "${LAND_SKRIPT}" "${COUNTRY}" || true
 fi
 
 #
