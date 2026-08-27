@@ -241,6 +241,29 @@ class Application(
         self._port_forward_thread.start()
 
         #
+        # Die systemd-Unit des Access Points auf den Stand des Codes
+        # bringen.
+        #
+        # Sie wird sonst nur beim Anlegen des Access Points
+        # geschrieben. Ein Update bringt zwar den neuen Text mit,
+        # fasst die Datei in /etc aber nicht an - neue
+        # ExecStartPre-Zeilen erreichen ein laufendes Geraet also nie.
+        #
+        # Genau hier ist der richtige Ort: nach einem Update laeuft
+        # dieser Code neu, waehrend der Updater selbst noch der alte
+        # war (xrack-update.py startet sich vor dem Kopieren neu).
+        #
+        # Darf folgenlos scheitern - ohne Access Point gibt es nichts
+        # zu tun, und ein Fehlschlag soll den Start nicht aufhalten.
+        #
+        try:
+            self.wlan_control.ensure_hostapd_unit()
+        except Exception as exc:
+            self.logger.warning(
+                "Access-Point-Unit konnte nicht geprüft werden: %s", exc
+            )
+
+        #
         # Diagnose-Aufzeichnung. Erst hier angelegt, weil sie auf
         # Recorder/Player zugreift, um deren Zustand mitzuschreiben.
         # Der Schalter ist absichtlich persistiert: Der Fehler, für den

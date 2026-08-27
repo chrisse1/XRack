@@ -189,6 +189,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "wird einer gebraucht - das eingebaute WLAN ist für den "
             "Heimnetz-Anschluss zuständig."
         ),
+        "confirm_update_downgrade": (
+            "Das Paket enthält Version {package}, installiert ist "
+            "{installed}.\n\nDas wäre ein Rückschritt - neuere "
+            "Funktionen und Korrekturen gingen dabei verloren. Wirklich "
+            "fortfahren?"
+        ),
         "settings_wifi_country_title": "WLAN-Land",
         "settings_wifi_country_hint": (
             "Gilt für beide Funkgeräte. Ohne Angabe bleibt das WLAN "
@@ -615,6 +621,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "No USB Wi-Fi adapter detected. A separate access point needs "
             "one - the built-in Wi-Fi is used for the home network "
             "connection."
+        ),
+        "confirm_update_downgrade": (
+            "The package contains version {package}, installed is "
+            "{installed}.\n\nThis would be a downgrade - newer features "
+            "and fixes would be lost. Continue anyway?"
         ),
         "settings_wifi_country_title": "Wi-Fi country",
         "settings_wifi_country_hint": (

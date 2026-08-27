@@ -10,6 +10,7 @@ Prozessargumente übergeben (nie über eine Shell zusammengebaut).
 """
 
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -548,6 +549,106 @@ class WlanControl:
             return None
 
         return result.stdout.strip() or None
+
+    #
+    # Wo die systemd-Unit des Access Points liegt und wo die erwartete
+    # Fassung steht. Beides ueberschreibbar, damit der Test nicht an
+    # /etc herummacht.
+    #
+    HOSTAPD_UNIT = Path(
+        os.environ.get(
+            "XRACK_HOSTAPD_UNIT", "/etc/systemd/system/xrack-hostapd.service"
+        )
+    )
+
+    UNIT_MARKE = "# XRack-Unit-Version:"
+
+    def _erwartete_unit_version(self) -> str | None:
+        """
+        Die Fassung, die der aktuelle Code erwartet.
+
+        Gelesen aus scripts/xrack-ap-setup.sh, nicht hier noch einmal
+        hingeschrieben: Sonst gaebe es zwei Zahlen, die auseinander
+        laufen koennen, und der Fehler faellt erst auf dem Geraet auf.
+        """
+
+        skript = Path("scripts") / "xrack-ap-setup.sh"
+
+        try:
+
+            for zeile in skript.read_text().splitlines():
+
+                if zeile.startswith("XRACK_UNIT_VERSION="):
+                    return zeile.split("=", 1)[1].strip().strip('"')
+
+        except OSError:
+            pass
+
+        return None
+
+    def _installierte_unit_version(self) -> str | None:
+        """Die Fassung, die gerade in /etc liegt. None = keine Marke."""
+
+        try:
+
+            for zeile in self.HOSTAPD_UNIT.read_text().splitlines():
+
+                if zeile.startswith(self.UNIT_MARKE):
+                    return zeile[len(self.UNIT_MARKE):].strip()
+
+        except OSError:
+            return None
+
+        return None
+
+    def ensure_hostapd_unit(self) -> bool:
+        """
+        Sorgt dafuer, dass die installierte systemd-Unit zum Code passt.
+
+        Gebraucht wird das, weil die Unit sonst nur beim Anlegen des
+        Access Points geschrieben wird. Ein Update bringt den neuen
+        Text zwar mit, fasst die Datei in /etc aber nicht an - neue
+        ExecStartPre-Zeilen erreichen ein laufendes Geraet also nie.
+
+        Der Aufruf im Updater hat dafuer nicht gereicht:
+        xrack-update.py startet sich vor dem Kopieren neu, es laeuft
+        also stets die alte Fassung des Updaters, die den Aufruf noch
+        gar nicht kennt. Deshalb prueft XRack hier selbst - nach dem
+        Update, mit dem neuen Code.
+
+        Liefert True, wenn etwas aufgefrischt wurde.
+        """
+
+        #
+        # Ohne Access Point gibt es keine Unit, die veralten koennte.
+        #
+        if not self.HOSTAPD_UNIT.exists():
+            return False
+
+        erwartet = self._erwartete_unit_version()
+
+        if erwartet is None:
+            return False
+
+        if self._installierte_unit_version() == erwartet:
+            return False
+
+        self.logger.info(
+            "Access-Point-Unit ist veraltet (installiert: %s, erwartet: %s) "
+            "- wird aufgefrischt.",
+            self._installierte_unit_version() or "ohne Marke",
+            erwartet,
+        )
+
+        erfolg, meldung = self._run_script("xrack-net-ap.sh", "--refresh-unit")
+
+        if not erfolg:
+            self.logger.warning(
+                "Access-Point-Unit konnte nicht aufgefrischt werden: %s",
+                meldung,
+            )
+
+        return erfolg
 
     def wifi_country(self) -> str | None:
         """

@@ -1492,4 +1492,132 @@ with tempfile.TemporaryDirectory() as tmp:
 
     print("OK: Ohne Access Point legt --refresh-unit nichts an")
 
+
+
+# ====================================================================
+# Die Unit frischt sich nach einem Update selbst auf
+#
+# Der Anlauf in 1.7.4 hat nicht funktioniert: Der Aufruf steckte in
+# xrack-update.py, und das startet sich ueber os.path.abspath(__file__)
+# neu - allerdings VOR dem Kopieren. Es laeuft also stets die alte
+# Fassung des Updaters, die den Aufruf gar nicht kennt. Auf dem Geraet
+# blieb die Unit deshalb unveraendert.
+#
+# Jetzt prueft XRack beim Start selbst. Das ist der einzige Zeitpunkt,
+# an dem nach einem Update sicher der NEUE Code laeuft.
+# ====================================================================
+
+import logging as _logging
+
+from core.wlan_control import WlanControl
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    wurzel = Path(tmp)
+    unit = wurzel / "xrack-hostapd.service"
+
+    erwartet = WlanControl._erwartete_unit_version(
+        WlanControl.__new__(WlanControl)
+    )
+
+    assert erwartet is not None, (
+        "XRACK_UNIT_VERSION steht nicht in scripts/xrack-ap-setup.sh - "
+        "ohne die Zahl kann nichts verglichen werden."
+    )
+
+    #
+    # Die Zahl steht nur an EINER Stelle (im Shell-Skript) und wird von
+    # dort gelesen. Sonst gaebe es zwei, die auseinanderlaufen koennen.
+    #
+    assert f"# XRack-Unit-Version: ${{XRACK_UNIT_VERSION}}" in (
+        SKRIPTE / "xrack-ap-setup.sh"
+    ).read_text(), "Die Unit bekommt die Marke nicht eingesetzt."
+
+    class Attrappe(WlanControl):
+        """WlanControl ohne echte Skriptaufrufe."""
+
+        HOSTAPD_UNIT = unit
+
+        def __init__(self):
+            self.logger = _logging.getLogger("XRack-Test")
+            self.aufrufe = []
+
+        def _run_script(self, name, *args):
+            self.aufrufe.append((name, args))
+            #
+            # Wie das echte Skript: schreibt die Unit mit der Marke.
+            #
+            unit.write_text(
+                f"# XRack-Unit-Version: {erwartet}\n[Service]\n"
+            )
+            return True, ""
+
+    # ---- 1. Veraltete Unit (ohne Marke - der Stand bis 1.7.4) -------
+
+    unit.write_text("[Service]\nExecStart=/usr/sbin/hostapd /etc/hostapd/xrack.conf\n")
+
+    steuerung = Attrappe()
+
+    assert steuerung.ensure_hostapd_unit() is True, (
+        "Eine Unit ohne Versionsmarke wurde nicht aufgefrischt - genau "
+        "der Fall, der auf dem Geraet stehenblieb."
+    )
+    assert steuerung.aufrufe == [("xrack-net-ap.sh", ("--refresh-unit",))], (
+        f"Falscher Weg gewaehlt: {steuerung.aufrufe}"
+    )
+
+    print("OK: Eine veraltete Access-Point-Unit wird beim Start aufgefrischt")
+
+    # ---- 2. Schon aktuell: nichts tun -------------------------------
+
+    steuerung = Attrappe()
+
+    assert steuerung.ensure_hostapd_unit() is False
+    assert steuerung.aufrufe == [], (
+        "Die Unit wird bei jedem Start neu geschrieben: "
+        f"{steuerung.aufrufe}"
+    )
+
+    print("OK: Eine aktuelle Unit wird beim Start nicht angefasst")
+
+    # ---- 3. Kein Access Point: nichts tun ---------------------------
+
+    unit.unlink()
+
+    steuerung = Attrappe()
+
+    assert steuerung.ensure_hostapd_unit() is False
+    assert steuerung.aufrufe == [], (
+        "Ohne Access Point wurde trotzdem etwas angestossen: "
+        f"{steuerung.aufrufe}"
+    )
+
+    print("OK: Ohne Access Point wird beim Start nichts angestossen")
+
+
+# ====================================================================
+# Und der Weg dorthin steht offen: xrack-net-ap.sh reicht
+# --refresh-unit durch, ohne ueber die SSID-Pruefung zu stolpern.
+#
+# Der Umweg ueber dieses Skript ist noetig, weil nur es einen
+# sudoers-Eintrag mit Platzhalter hat.
+# ====================================================================
+
+quelle_ap = (SKRIPTE / "xrack-net-ap.sh").read_text()
+
+durchreichung = quelle_ap.index('if [ "${SSID}" = "--refresh-unit" ]')
+ssid_pruefung = quelle_ap.index('if [ -z "${SSID}" ]')
+
+assert durchreichung < ssid_pruefung, (
+    "Die Durchreichung steht hinter der SSID-Pruefung - sie wuerde nie "
+    "erreicht, weil die Pruefung vorher abbricht."
+)
+
+assert "xrack-net-ap.sh *" in (Path(__file__).parent / "install.sh").read_text(), (
+    "Ohne den Platzhalter im sudoers-Eintrag kann XRack die "
+    "Auffrischung nicht anstossen."
+)
+
+print("OK: Der Weg zum Auffrischen ist offen (Durchreichung vor der Pruefung)")
+
 print("Alle Tests erfolgreich.")

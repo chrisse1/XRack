@@ -25,6 +25,23 @@ SSID="$1"
 PASSWORD="$2"
 COUNTRY="$3"
 
+#
+# --refresh-unit: nur die systemd-Unit auffrischen, sonst nichts.
+#
+# Durchgereicht an xrack-ap-setup.sh. Der Umweg ueber dieses Skript
+# ist Absicht: Es hat in /etc/sudoers.d/xrack einen Eintrag mit
+# Platzhalter ("xrack-net-ap.sh *"), xrack-ap-setup.sh dagegen nicht.
+# XRack kann die Auffrischung damit auch auf einer bestehenden
+# Installation anstossen, ohne dass install.sh erneut laufen muss.
+#
+# Steht vor den Pruefungen auf SSID und Passwort: Fuer das
+# Auffrischen gibt es beides nicht, und die Pruefung wuerde hier
+# sonst abbrechen.
+#
+if [ "${SSID}" = "--refresh-unit" ]; then
+    exec "$(dirname "$0")/xrack-ap-setup.sh" --refresh-unit
+fi
+
 CONF="/etc/hostapd/xrack.conf"
 UNIT="xrack-hostapd.service"
 

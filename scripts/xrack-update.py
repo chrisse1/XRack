@@ -216,6 +216,58 @@ def chown_tree(path: Path, user: str) -> None:
         pass
 
 
+def gelesene_version(wurzel: Path) -> tuple[int, ...] | None:
+    """
+    Die Versionsnummer aus config/default.yaml als Zahlenfolge.
+
+    Bewusst von Hand geparst statt mit PyYAML: Dieses Skript laeuft
+    ausserhalb der virtuellen Umgebung und darf nichts voraussetzen,
+    was dort vielleicht fehlt (siehe Kopf der Datei).
+
+    None, wenn sich nichts Verwertbares findet - dann wird nicht
+    verglichen, statt auf einer Vermutung einen Abbruch zu bauen.
+    """
+
+    datei = wurzel / "config" / "default.yaml"
+
+    try:
+        zeilen = datei.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+
+    in_abschnitt = False
+
+    for zeile in zeilen:
+
+        #
+        # Nur die Version unter "application:" - "version" koennte
+        # spaeter auch anderswo auftauchen.
+        #
+        if zeile.startswith("application:"):
+            in_abschnitt = True
+            continue
+
+        if zeile and not zeile[0].isspace():
+            in_abschnitt = False
+
+        if not in_abschnitt:
+            continue
+
+        blank = zeile.strip()
+
+        if not blank.startswith("version:"):
+            continue
+
+        roh = blank.split(":", 1)[1].strip().strip('"').strip("'")
+
+        try:
+            return tuple(int(teil) for teil in roh.split("."))
+        except ValueError:
+            return None
+
+    return None
+
+
 def find_source_directory(extracted: Path) -> Path | None:
     """
     GitHub-ZIPs enthalten einen einzelnen Ordner (z.B. "XRack-main").
@@ -528,6 +580,7 @@ def run_update(
     service_user: str,
     port: int,
     branch: str = "",
+    allow_downgrade: bool = False,
 ) -> int:
     """
     `branch` ist nur beim Weg über das Internet gesetzt - nur dort ist
@@ -582,6 +635,43 @@ def run_update(
             return 1
 
     log(f"Quellverzeichnis: {source_dir}")
+
+    # ------------------------------------------------------------
+    # 1b. Rueckschritt abfangen
+    #
+    # Der Updater nimmt jede ZIP - auch eine aeltere. Genau das ist
+    # im Betrieb passiert: eine alte Datei lag noch auf dem Stick,
+    # und das Update hat den Stand still um Monate zurueckgedreht.
+    # Auffallen kann das kaum, denn ein alter Stand laeuft ja, er
+    # kann nur weniger.
+    #
+    # Abgebrochen wird, bevor irgendetwas ueberschrieben ist.
+    # --allow-downgrade laesst es trotzdem zu - das setzt die
+    # Oberflaeche, wenn der Nutzer die Rueckfrage bejaht hat.
+    # ------------------------------------------------------------
+
+    neue_version = gelesene_version(source_dir)
+    alte_version = gelesene_version(install_dir)
+
+    if (
+        not allow_downgrade
+        and neue_version is not None
+        and alte_version is not None
+        and neue_version < alte_version
+    ):
+
+        neu_text = ".".join(str(t) for t in neue_version)
+        alt_text = ".".join(str(t) for t in alte_version)
+
+        log(f"Rueckschritt abgelehnt: {alt_text} -> {neu_text}")
+
+        write_status(
+            "failed",
+            "fehler",
+            f"Das Paket enthält Version {neu_text}, installiert ist "
+            f"{alt_text}. Es wurde nichts verändert.",
+        )
+        return 1
 
     # ------------------------------------------------------------
     # 2. Änderungen erkennen, die ein reines Kopieren nicht abdeckt
@@ -850,6 +940,13 @@ def main() -> int:
     parser.add_argument("--repository", default="")
     parser.add_argument("--branch", default="main")
 
+    #
+    # Einen Rueckschritt auf eine aeltere Version ausdruecklich
+    # zulassen. Setzt die Oberflaeche, wenn der Nutzer die Rueckfrage
+    # bejaht hat - von sich aus geht der Updater nie zurueck.
+    #
+    parser.add_argument("--allow-downgrade", action="store_true")
+
     parser.add_argument("--detached", action="store_true", help=argparse.SUPPRESS)
 
     arguments = parser.parse_args()
@@ -915,6 +1012,7 @@ def main() -> int:
                 arguments.service_user,
                 str(port),
                 *weitergabe,
+                *(["--allow-downgrade"] if arguments.allow_downgrade else []),
                 "--detached",
             ],
             stdout=subprocess.DEVNULL,
@@ -953,6 +1051,7 @@ def main() -> int:
         arguments.service_user,
         port,
         branch=arguments.branch if arguments.repository else "",
+        allow_downgrade=arguments.allow_downgrade,
     )
 
 
