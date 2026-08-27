@@ -65,6 +65,18 @@ class NetzwerkMixin:
         return self.wlan_control.set_ap_wifi(ssid, password)
 
 
+    def set_wifi_country(self, code: str) -> tuple[bool, str]:
+        """
+        Setzt die WLAN-Funkregion.
+
+        Sie gehoert weder zum Client noch zum Access Point, sondern
+        zum Funkgeraet: Ohne sie bleibt es auf Raspberry Pi OS per
+        rfkill gesperrt, und hostapd darf nicht auf 5 GHz senden.
+        """
+
+        return self.wlan_control.set_wifi_country(code)
+
+
     def search_console(self) -> dict:
         """
         Sucht das Mischpult neu - alles, was XRack dafür tun kann, in

@@ -19,6 +19,12 @@ class SampleRateSelection(BaseModel):
     sample_rate: int
 
 
+class WifiCountry(BaseModel):
+    """Funkregion als zweistelliger ISO-Laendercode."""
+
+    country: str
+
+
 class WifiCredentials(BaseModel):
     ssid: str
     password: str
@@ -214,6 +220,22 @@ def set_ap_wifi(
         credentials.ssid,
         credentials.password,
     )
+
+    return {
+        "success": success,
+        "message": message,
+    }
+
+
+@router.post("/api/settings/wifi/country")
+def set_wifi_country(
+    auswahl: WifiCountry,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.set_wifi_country(auswahl.country)
 
     return {
         "success": success,

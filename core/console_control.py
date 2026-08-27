@@ -38,6 +38,29 @@ FAMILY_X32 = "x32"
 FAMILY_XAIR = "xair"
 
 #
+# Wie viele Kanalzuege das Pult selbst hat.
+#
+# Das ist ausdruecklich NICHT die Kanalzahl des Audiointerfaces. Die
+# Fader laufen ueber Netzwerk, nicht ueber das USB-Audiokabel - ein
+# Pult hat seine Kanaele also auch dann, wenn gar kein Interface
+# angeschlossen ist. Frueher stand hier die Interface-Kanalzahl als
+# Ersatzwert; ohne gewaehltes Interface waren es null, und die
+# Fader-Karte meldete "keine Verbindung", obwohl das Pult antwortete.
+#
+# Die X-Air-Serie hat /ch/01 bis /ch/16 plus den Aux-Rueckweg
+# /rtn/aux, der als Kanalpaar "17+18" erscheint - deshalb 18. Beim X32
+# sind es durchgehend 32 echte Kanaele.
+#
+# Bewusst nicht nach Modell aufgeschluesselt: Der XR12 hat zwar nur
+# zwoelf Eingaenge, aber ob sein OSC-Baum deshalb kuerzer ist, ist
+# ungeprueft - die Serie teilt sich eine Firmware. Ein geratener
+# Sonderfall waere hier schlechter als vier Kanalzuege, die ein
+# XR12-Besitzer als leer erkennt.
+#
+CHANNELS_X32 = 32
+CHANNELS_XAIR = 18
+
+#
 # Antwortzeit im lokalen Netz liegt weit darunter - kurz genug, dass ein
 # stummes Pult die Weboberfläche nicht hängen lässt.
 #
@@ -720,6 +743,24 @@ class ConsoleControl:
         self._linked = set()
 
         return None
+
+    def channel_count(self, host: str) -> int:
+        """
+        Wie viele Kanalzuege das Pult hat - 0, wenn keines antwortet.
+
+        Das ersetzt die frueher benutzte Kanalzahl des
+        Audiointerfaces. Die beiden haben nichts miteinander zu tun:
+        Die Fader laufen ueber Netzwerk, das Interface ueber USB. Wer
+        ohne Interface (oder mit einem anderen) am Pult sitzt, soll
+        trotzdem alle Kanalzuege sehen.
+        """
+
+        family = self.detect(host)
+
+        if family is None:
+            return 0
+
+        return CHANNELS_X32 if family == FAMILY_X32 else CHANNELS_XAIR
 
     def _fader_follows_link(self, host: str) -> bool:
         """

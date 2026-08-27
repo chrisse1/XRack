@@ -182,6 +182,12 @@ am Pi nötig.
   angefasst wurde - ob überhaupt und nach wie vielen Sekunden, stellt
   man in den Einstellungen ein.
 
+  Wie viele Kanalzüge die Karte zeigt, sagt das Pult selbst (X-Air: 16
+  Kanäle plus Aux-Rückweg, X32: 32). Das Audiointerface hat damit
+  nichts zu tun - die Fader laufen über Netzwerk, nicht über das
+  USB-Audiokabel. Die Karte funktioniert deshalb auch ohne
+  angeschlossenes Interface.
+
   Die Konsole findet XRack selbst: über die eigene DHCP-Vergabeliste,
   wenn das Pult am Pi hängt, sonst per OSC-Rundruf im Netz - so wie
   X32-Edit und X-AIR-Edit ihre Pulte auch finden. Damit ist der Fall
@@ -289,9 +295,28 @@ Ausschalten zurück.
 Der Installer fragt die WLAN-Verbindung und den Access Point
 **getrennt** ab - beides lässt sich einzeln einrichten oder
 überspringen. Wer überspringt, verliert nichts: Bridge und
-Freigabe-Profil werden immer angelegt, und ein Access Point lässt sich
-später im Einstellungen-Menü nachrüsten, **ohne `install.sh` erneut
-laufen zu lassen**.
+Freigabe-Profil werden immer angelegt, und sowohl der Access Point als
+auch die WLAN-Verbindung lassen sich später im Einstellungen-Menü
+nachrüsten, **ohne `install.sh` erneut laufen zu lassen**.
+
+Ganz oben im WLAN-Bereich steht das **WLAN-Land** - die Funkregion.
+Sie gehört zu keiner der beiden Verbindungen, sondern zum Funkgerät:
+Ohne sie bleibt WLAN auf Raspberry Pi OS per `rfkill` gesperrt, und
+der Access Point darf nicht auf 5 GHz senden. Der Installer fragt sie
+nur, wenn man dort WLAN oder einen Access Point einrichtet - wer
+beides überspringt und später nachrüstet, setzt sie hier. Die
+Ländernamen übersetzt der Browser selbst; ändert man die Region,
+während ein Access Point läuft, wird dessen Konfiguration
+mitgezogen und er neu gestartet.
+
+Das Einstellungen-Menü zeigt sonst nur, was gerade Sinn ergibt: Die
+Eingabemaske **WLAN-Client** steht immer, denn sie legt die Verbindung
+notfalls selbst an. Unter **Access Point** steht die Eingabemaske nur,
+wenn ein USB-WLAN-Stick steckt - sonst ein Hinweis, dass keiner erkannt
+wurde. Die beiden Schalter "Konsole über XRacks Access Point erreichbar
+machen" und "Konsole aus dem Heimnetz erreichbar machen" erscheinen
+erst, wenn der Access Point tatsächlich funkt beziehungsweise eine
+WLAN-Verbindung besteht.
 
 Welches Funkgerät wofür zuständig ist, wird nicht gefragt: Das
 eingebaute WLAN geht ins Heimnetz, der USB-Stick spannt den Access
@@ -302,6 +327,14 @@ Vorhandene WLAN-Profile (etwa das vom Raspberry Pi Imager angelegte
 `preconfigured`) werden stillgelegt, damit sie XRacks Profil nicht das
 Funkgerät streitig machen - gelöscht wird nichts, wer sie später
 braucht, findet sie noch vor.
+
+Zum Namen: XRack installiert `avahi-daemon` mit, damit
+`<hostname>.local` im Netz auflösbar ist, und schickt den Hostnamen im
+DHCP-Antrag mit, damit auch der Router ihn lernt (bei einer FRITZ!Box
+etwa als `xrack` bzw. `xrack.fritz.box`). Ob ein `.local`-Name
+ankommt, hängt allerdings am **anfragenden** Gerät: Windows und iOS
+können mDNS, ältere Android-Versionen nicht. Die IP funktioniert
+immer.
 
 Danach ist das Webinterface unter `https://<hostname>.local:<port>`
 erreichbar (Standard: `https://xrack.local:8080`). Das Zertifikat ist

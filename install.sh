@@ -262,7 +262,8 @@ install_system_dependencies() {
         ntfs-3g \
         iptables \
         iw \
-        hostapd > /dev/null
+        hostapd \
+        avahi-daemon > /dev/null
     }
 
     mit_punkten \
@@ -386,9 +387,24 @@ configure_hostname_and_avahi() {
         echo -e "127.0.1.1\t${XRACK_HOSTNAME}" | sudo tee -a /etc/hosts > /dev/null
     fi
 
+    #
+    # avahi beantwortet Anfragen nach "<hostname>.local" im lokalen
+    # Netz. Das Paket wird seit dieser Fassung ausdruecklich
+    # mitinstalliert - vorher hat XRack nur eingeschaltet, was
+    # zufaellig schon da war, und auf einem schlanken System war das
+    # eben nichts. Der Hinweis unten bleibt fuer den Fall, dass die
+    # Installation des Pakets scheitert.
+    #
     if command -v avahi-daemon >/dev/null 2>&1; then
+
         sudo systemctl enable avahi-daemon >/dev/null 2>&1 || true
         sudo systemctl restart avahi-daemon
+
+        #
+        # avahi liest den Hostnamen beim Start. Er wurde gerade eben
+        # geaendert - ohne den Neustart oben meldete sich der Pi
+        # weiter unter dem alten Namen.
+        #
     else
         echo "$(L "Hinweis: avahi-daemon nicht gefunden - '${XRACK_HOSTNAME}.local' wird im Netzwerk nicht auffindbar sein." "Note: avahi-daemon not found - '${XRACK_HOSTNAME}.local' won't be discoverable on the network.")"
     fi
@@ -776,12 +792,17 @@ frage_wlan_land() {
         return 0
     fi
 
-    if command -v raspi-config >/dev/null 2>&1; then
-        sudo raspi-config nonint do_wifi_country "${XRACK_WLAN_COUNTRY}"
-    else
-        sudo rfkill unblock wifi
-        sudo iw reg set "${XRACK_WLAN_COUNTRY}" || true
-    fi
+    #
+    # Denselben Weg gehen wie spaeter das Einstellungen-Menue: ein
+    # Skript, eine Stelle. Sonst setzt der Installer die Region anders
+    # als die Oberflaeche, und Unterschiede faellt niemandem auf,
+    # bevor etwas nicht funktioniert.
+    #
+    # Ueber bash aufgerufen, weil das chmod erst spaeter kommt
+    # (configure_sudoers) - aus einem entpackten Archiv haette die
+    # Datei hier sonst womoeglich kein Ausfuehrungsrecht.
+    sudo bash "${INSTALL_DIR}/scripts/xrack-wifi-country.sh" \
+        "${XRACK_WLAN_COUNTRY}" || true
 }
 
 #
@@ -864,8 +885,18 @@ setup_wired_profile() {
     #
     if ! nmcli -t -f NAME connection show | grep -qx "XRack-Wired-eth0"; then
 
+        #
+        # "dhcp-send-hostname yes" ist ohnehin die Vorgabe, steht hier
+        # aber ausdruecklich: Nur so lernt der Router den Namen und
+        # kann ihn selbst aufloesen (bei einer FRITZ!Box etwa als
+        # "xrack" bzw. "xrack.fritz.box"). Das ist der zweite Weg zum
+        # Geraet, unabhaengig von ".local" - und der einzige, der auch
+        # ohne mDNS auf dem anfragenden Geraet funktioniert.
+        #
         sudo nmcli connection add type ethernet ifname eth0 con-name "XRack-Wired-eth0" \
-            ipv4.method auto connection.autoconnect yes >/dev/null || return 1
+            ipv4.method auto \
+            ipv4.dhcp-send-hostname yes \
+            connection.autoconnect yes >/dev/null || return 1
     fi
 
     return 0
@@ -1052,6 +1083,7 @@ configure_sudoers() {
         "${INSTALL_DIR}/scripts/xrack-bridge-ensure.sh" \
         "${INSTALL_DIR}/scripts/xrack-wired-restore.sh" \
         "${INSTALL_DIR}/scripts/xrack-wifi-iface.sh" \
+        "${INSTALL_DIR}/scripts/xrack-wifi-country.sh" \
         "${INSTALL_DIR}/scripts/xrack-ap-setup.sh" \
         "${INSTALL_DIR}/scripts/xrack-port-forward.sh" \
         "${INSTALL_DIR}/scripts/xrack-bt-power.sh" \

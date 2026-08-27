@@ -535,13 +535,56 @@
 
                 <div id="settings-wlan-sections">
 
+                    {#
+                        Die Funkregion steht ueber beiden Abschnitten,
+                        weil sie zu beiden gehoert: Sie ist eine
+                        Eigenschaft des Funkgeraets, nicht einer
+                        einzelnen Verbindung. Ohne sie bleibt WLAN per
+                        rfkill gesperrt, und der Access Point darf
+                        nicht auf 5 GHz senden.
+
+                        Die Laendernamen fuellt das JavaScript ueber
+                        Intl.DisplayNames in der Sprache des Nutzers -
+                        deshalb steht hier nur ein leeres Auswahlfeld
+                        und keine Liste mit 250 Eintraegen.
+                    #}
+                    <div class="mb-3">
+                        <label
+                            for="settings-wifi-country"
+                            class="form-label fw-semibold"
+                        >
+                            {{ t.settings_wifi_country_title }}
+                        </label>
+                        <div class="d-flex gap-2">
+                            <select
+                                id="settings-wifi-country"
+                                class="form-select"
+                            ></select>
+                            <button
+                                type="button"
+                                class="btn btn-outline-secondary text-nowrap"
+                                id="btn-save-wifi-country"
+                            >
+                                {{ t.settings_wifi_country_save }}
+                            </button>
+                        </div>
+                        <small class="text-body-secondary">
+                            {{ t.settings_wifi_country_hint }}
+                        </small>
+                    </div>
+
+                    <hr>
+
                     <div class="mb-3">
                         <label class="form-label fw-semibold">
                             {{ t.settings_home_wifi_title }}
                         </label>
-                        <div id="settings-home-not-configured" class="text-muted small d-none">
-                            {{ t.settings_not_configured }}
-                        </div>
+                        {#
+                            Kein "nicht eingerichtet" mehr: Die Maske
+                            kann die Verbindung jetzt auch anlegen
+                            (scripts/xrack-net-home.sh), nicht nur
+                            aendern.
+                        #}
                         <div id="settings-home-fields">
                             <input
                                 type="text"
@@ -599,8 +642,13 @@
                         <label class="form-label fw-semibold">
                             {{ t.settings_ap_wifi_title }}
                         </label>
-                        <div id="settings-ap-not-configured" class="text-muted small d-none">
-                            {{ t.settings_not_configured }}
+                        {#
+                            Ohne USB-WLAN-Stick gibt es keinen Access
+                            Point - dann eine klare Ansage statt einer
+                            Eingabemaske, die nirgends hinfuehrt.
+                        #}
+                        <div id="settings-ap-no-hardware" class="text-muted small d-none">
+                            {{ t.settings_ap_no_hardware }}
                         </div>
                         <div id="settings-ap-fields">
                             <input
@@ -653,15 +701,17 @@
                         </div>
                     </div>
 
-                    <hr>
+                    <hr id="settings-bridge-trenner">
 
-                    <div class="mb-3">
+                    {#
+                        Nur sichtbar, wenn der Access Point auch
+                        funkt - sonst gibt es nichts, worueber die
+                        Konsole erreichbar waere.
+                    #}
+                    <div class="mb-3" id="settings-bridge-block">
                         <label class="form-label fw-semibold">
                             {{ t.settings_ap_access_title }}
                         </label>
-                        <div id="settings-bridge-not-configured" class="text-muted small d-none">
-                            {{ t.settings_not_configured }}
-                        </div>
                         <div id="settings-bridge-field" class="form-check form-switch">
                             <input
                                 type="checkbox"
@@ -676,15 +726,18 @@
                         <small class="text-body-secondary">{{ t.settings_bridge_hint }}</small>
                     </div>
 
-                    <hr>
+                    <hr id="settings-console-access-trenner">
 
-                    <div class="mb-3">
+                    {#
+                        Nur sichtbar, wenn eine WLAN-Verbindung ins
+                        Heimnetz besteht - ohne die gibt es kein
+                        Heimnetz, aus dem heraus etwas erreichbar
+                        waere.
+                    #}
+                    <div class="mb-3" id="settings-console-access-block">
                         <label class="form-label fw-semibold">
                             {{ t.settings_console_access_title }}
                         </label>
-                        <div id="settings-console-access-not-configured" class="text-muted small d-none">
-                            {{ t.settings_not_configured }}
-                        </div>
                         <div id="settings-console-access-field" class="form-check form-switch">
                             <input
                                 type="checkbox"

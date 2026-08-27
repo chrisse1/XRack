@@ -184,10 +184,21 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "NetworkManager (nmcli) nicht gefunden - WLAN-Einstellungen "
             "nicht verfügbar."
         ),
-        "settings_not_configured": (
-            "Noch nicht eingerichtet (install.sh mit WLAN-Setup ausführen)."
+        "settings_ap_no_hardware": (
+            "Kein USB-WLAN-Stick erkannt. Für einen eigenen Access Point "
+            "wird einer gebraucht - das eingebaute WLAN ist für den "
+            "Heimnetz-Anschluss zuständig."
         ),
-        "settings_home_wifi_title": "Heimnetz (Client)",
+        "settings_wifi_country_title": "WLAN-Land",
+        "settings_wifi_country_hint": (
+            "Gilt für beide Funkgeräte. Ohne Angabe bleibt das WLAN "
+            "gesperrt, und der Access Point kann kein 5 GHz."
+        ),
+        "settings_wifi_country_none": "Noch nicht gesetzt",
+        "settings_wifi_country_save": "Land speichern",
+        "alert_wifi_country_saved": "WLAN-Land gespeichert.",
+        "alert_wifi_country_failed": "WLAN-Land konnte nicht gesetzt werden: {message}",
+        "settings_home_wifi_title": "WLAN-Client",
         "settings_ap_wifi_title": "Access Point",
         "settings_ap_access_title": (
             "Konsole über XRacks Access Point erreichbar machen"
@@ -600,10 +611,21 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "NetworkManager (nmcli) not found - Wi-Fi settings "
             "unavailable."
         ),
-        "settings_not_configured": (
-            "Not set up yet (run install.sh with Wi-Fi setup)."
+        "settings_ap_no_hardware": (
+            "No USB Wi-Fi adapter detected. A separate access point needs "
+            "one - the built-in Wi-Fi is used for the home network "
+            "connection."
         ),
-        "settings_home_wifi_title": "Home network (client)",
+        "settings_wifi_country_title": "Wi-Fi country",
+        "settings_wifi_country_hint": (
+            "Applies to both radios. Without it Wi-Fi stays blocked, and "
+            "the access point cannot use 5 GHz."
+        ),
+        "settings_wifi_country_none": "Not set yet",
+        "settings_wifi_country_save": "Save country",
+        "alert_wifi_country_saved": "Wi-Fi country saved.",
+        "alert_wifi_country_failed": "Could not set the Wi-Fi country: {message}",
+        "settings_home_wifi_title": "Wi-Fi client",
         "settings_ap_wifi_title": "Access Point",
         "settings_ap_access_title": (
             "Make console reachable via XRack's access point"

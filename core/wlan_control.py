@@ -10,6 +10,7 @@ Prozessargumente übergeben (nie über eine Shell zusammengebaut).
 """
 
 import logging
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -169,6 +170,65 @@ class WlanControl:
 
         return self._ap_ssid
 
+    def ap_hardware_present(self) -> bool:
+        """
+        True, wenn ein Funkgerät für einen Access Point da ist - also
+        ein zweites, per USB angeschlossenes.
+
+        Dieselbe Regel wie in scripts/xrack-wifi-iface.sh (dort wird
+        sie für install.sh und die Einrichtung gebraucht, hier für die
+        Anzeige): Das eingebaute WLAN geht ins Heimnetz, der USB-Stick
+        spannt den Access Point auf. Ändert sich die Regel, muss sie
+        an beiden Stellen geändert werden.
+
+        Gelesen wird der Kernel statt NetworkManager, denn genau
+        dieses Gerät wird NetworkManager ja entzogen, sobald hostapd
+        es übernimmt.
+        """
+
+        if not SYS_NET.exists():
+            return False
+
+        for geraet in sorted(SYS_NET.iterdir()):
+
+            if not (geraet / "wireless").exists():
+                continue
+
+            try:
+                ziel = (geraet / "device").resolve()
+            except OSError:
+                continue
+
+            if "/usb" in str(ziel):
+                return True
+
+        return False
+
+    def ap_running(self) -> bool:
+        """
+        True, wenn der Access Point tatsächlich funkt.
+
+        Zwei Wege, weil es zwei geben kann: hostapd (der Normalfall)
+        und das alte NetworkManager-Profil (der Rückfallweg, siehe
+        scripts/xrack-ap-setup.sh).
+        """
+
+        try:
+
+            ergebnis = subprocess.run(
+                ["systemctl", "is-active", "--quiet", "xrack-hostapd.service"],
+                capture_output=True,
+                timeout=5,
+            )
+
+            if ergebnis.returncode == 0:
+                return True
+
+        except Exception:
+            pass
+
+        return "XRack-AP" in self.active_connection_names()
+
     def console_port_bridged(self) -> bool | None:
         """
         True, wenn die Netzwerkbuchse tatsächlich in der Bridge hängt.
@@ -307,6 +367,10 @@ class WlanControl:
                 "available": False,
                 "home_ssid": None,
                 "ap_ssid": None,
+                "ap_hardware": False,
+                "ap_active": False,
+                "home_active": False,
+                "country": None,
                 "bridge_configured": False,
                 "bridge_enabled": False,
                 "console_access_configured": False,
@@ -347,6 +411,9 @@ class WlanControl:
         #
         console_access_enabled = SHARE_CONNECTION in active
 
+        ap_hardware = self.ap_hardware_present()
+        ap_active = self.ap_running() if ap_hardware else False
+
         console_ip = None
 
         if bridge_enabled:
@@ -368,6 +435,35 @@ class WlanControl:
                 else None
             ),
             "ap_ssid": self.ap_ssid(),
+
+            #
+            # Steckt ueberhaupt ein USB-WLAN-Stick? Ohne den gibt es
+            # keinen Access Point, und die Oberflaeche sagt das
+            # deutlich, statt eine Eingabemaske anzubieten, die
+            # nirgends hinfuehrt.
+            #
+            #
+            # Die Funkregion. Ohne sie bleibt das Funkgeraet auf
+            # Raspberry Pi OS per rfkill gesperrt, und hostapd darf
+            # nicht auf 5 GHz senden - beides faellt sonst erst auf,
+            # wenn nichts funktioniert.
+            #
+            "country": self.wifi_country(),
+
+            "ap_hardware": ap_hardware,
+
+            #
+            # Funkt er auch gerade? Davon haengt ab, ob "Konsole ueber
+            # XRacks Access Point" ueberhaupt sinnvoll ist.
+            #
+            "ap_active": ap_active,
+
+            #
+            # Und besteht eine Verbindung ins Heimnetz? Ohne die gibt
+            # es nichts, worueber die Konsole aus dem Heimnetz
+            # erreichbar waere.
+            #
+            "home_active": "XRack-Home" in active,
             "bridge_configured": (
                 BRIDGE_PORT_CONNECTION in names
                 and BRIDGE_CONNECTION in names
@@ -453,19 +549,84 @@ class WlanControl:
 
         return result.stdout.strip() or None
 
-    def set_home_wifi(self, ssid: str, password: str) -> tuple[bool, str]:
+    def wifi_country(self) -> str | None:
+        """
+        Die gesetzte Funkregion als ISO-Laendercode, oder None.
+
+        Gelesen wird der Kernel ueber "iw reg get". "00" ist die
+        Weltregion und heisst "nicht gesetzt" - sie sperrt 5 GHz und
+        laesst das Funkgeraet auf Raspberry Pi OS per rfkill gesperrt.
+        Deshalb wird sie hier wie "nichts" behandelt: Die Oberflaeche
+        soll in dem Fall zum Setzen auffordern, nicht "00" anzeigen.
+        """
+
+        try:
+
+            ergebnis = subprocess.run(
+                ["iw", "reg", "get"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+        except Exception:
+            return None
+
+        for zeile in ergebnis.stdout.splitlines():
+
+            if not zeile.startswith("country"):
+                continue
+
+            teile = zeile.split()
+
+            if len(teile) < 2:
+                continue
+
+            code = teile[1].rstrip(":")
+
+            return None if code == "00" else code
+
+        return None
+
+    def set_wifi_country(self, code: str) -> tuple[bool, str]:
+        """
+        Setzt die Funkregion.
+
+        Laeuft ueber xrack-net-home.sh, nicht ueber ein eigenes
+        Skript: Ein eigener sudoers-Eintrag entstuende erst bei einem
+        erneuten Lauf von install.sh, und die Einstellung waere auf
+        jeder bestehenden Installation tot. Siehe den Kopf von
+        scripts/xrack-wifi-country.sh.
+        """
+
+        code = (code or "").strip().upper()
+
+        if not re.fullmatch(r"[A-Z]{2}", code):
+            return False, "Ungültiger Ländercode (erwartet werden zwei Buchstaben)."
+
+        return self._run_script("xrack-net-home.sh", "--country", code)
+
+    def set_home_wifi(
+        self, ssid: str, password: str, country: str = ""
+    ) -> tuple[bool, str]:
         """
         Setzt SSID/Passwort der Heimnetz-Verbindung neu.
         """
 
-        return self._run_script("xrack-net-home.sh", ssid, password)
+        return self._run_script(
+            "xrack-net-home.sh", ssid, password, (country or "").strip().upper()
+        )
 
-    def set_ap_wifi(self, ssid: str, password: str) -> tuple[bool, str]:
+    def set_ap_wifi(
+        self, ssid: str, password: str, country: str = ""
+    ) -> tuple[bool, str]:
         """
         Setzt SSID/Passwort des Access Points neu.
         """
 
-        erfolg, meldung = self._run_script("xrack-net-ap.sh", ssid, password)
+        erfolg, meldung = self._run_script(
+            "xrack-net-ap.sh", ssid, password, (country or "").strip().upper()
+        )
 
         #
         # Auch im Fehlerfall verwerfen: Das Skript stellt bei einem
