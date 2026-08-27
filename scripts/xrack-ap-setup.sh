@@ -40,6 +40,13 @@ XRACK_HOSTAPD_CONF="${XRACK_HOSTAPD_CONF:-/etc/hostapd/xrack.conf}"
 XRACK_HOSTAPD_UNIT="${XRACK_HOSTAPD_UNIT:-/etc/systemd/system/xrack-hostapd.service}"
 XRACK_NM_UNMANAGED="${XRACK_NM_UNMANAGED:-/etc/NetworkManager/conf.d/99-xrack-hostapd.conf}"
 
+#
+# Der Abgleich der Geraetenamen, den die Unit vor jedem Start
+# aufruft. Absoluter Pfad, weil systemd kein Arbeitsverzeichnis
+# mitbringt.
+#
+XRACK_BIND_SKRIPT="$(cd "$(dirname "$0")" && pwd)/xrack-wifi-bind.sh"
+
 if [ -z "${AP_SSID}" ] || [ "${#AP_PASSWORD}" -lt 8 ]; then
     echo "SSID fehlt oder Passwort zu kurz (mind. 8 Zeichen)." >&2
     exit 1
@@ -259,6 +266,11 @@ Type=simple
 # Ein per rfkill gesperrtes Funkgeraet ist der haeufigste Grund,
 # warum hostapd direkt nach dem Booten nicht startet.
 ExecStartPre=-/usr/sbin/rfkill unblock wlan
+# wlan0/wlan1 werden nach Reihenfolge vergeben, nicht fest je Geraet -
+# beim Booten koennen Stick und eingebautes WLAN die Plaetze tauschen.
+# Deshalb vor jedem Start abgleichen, welcher Name gerade zu welcher
+# Rolle gehoert (siehe scripts/xrack-wifi-bind.sh).
+ExecStartPre=-${XRACK_BIND_SKRIPT}
 # Die Bridge muss es geben, bevor hostapd sich hineinhaengt. Kurzer
 # Zeitrahmen, damit ein fehlendes Kabel den Start nicht aufhaelt;
 # ein Fehlschlag ist unschaedlich (hostapd legt br0 sonst selbst an).

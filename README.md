@@ -318,6 +318,14 @@ machen" und "Konsole aus dem Heimnetz erreichbar machen" erscheinen
 erst, wenn der Access Point tatsächlich funkt beziehungsweise eine
 WLAN-Verbindung besteht.
 
+`wlan0` und `wlan1` werden in der Reihenfolge vergeben, in der die
+Geräte auftauchen - nicht fest je Gerät. Beim Booten kann der Stick
+deshalb `wlan0` werden und das eingebaute WLAN `wlan1`. XRack gleicht
+die Namen vor jedem Start des Access Points wieder mit den Rollen ab
+(`scripts/xrack-wifi-bind.sh`); der NetworkManager-Eintrag für das
+unverwaltete Gerät steht dafür auf der MAC-Adresse statt auf dem
+Namen.
+
 Welches Funkgerät wofür zuständig ist, wird nicht gefragt: Das
 eingebaute WLAN geht ins Heimnetz, der USB-Stick spannt den Access
 Point auf. Der eingebaute Chip taugt als Client, aber nur schlecht als

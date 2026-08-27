@@ -1164,4 +1164,236 @@ with tempfile.TemporaryDirectory() as tmp:
 
     print("OK: Ein bestehender Access Point uebernimmt die neue Region")
 
+
+
+# ====================================================================
+# Vertauschte Funkgeraete-Namen (wlan0/wlan1)
+#
+# Aus dem Betrieb gemeldet: Beim Booten kann der USB-Stick wlan0
+# werden und das eingebaute WLAN wlan1 - die Namen werden nach
+# Reihenfolge vergeben, nicht fest je Geraet.
+#
+# Bis 1.7.2 stand an drei Stellen ein fester Name, der dabei falsch
+# wird: die hostapd-Zeile "interface=", die NetworkManager-Datei mit
+# dem unverwalteten Geraet und connection.interface-name des Profils
+# "XRack-Home". Nach einem Tausch haette der Access Point auf dem
+# eingebauten Chip laufen sollen (kein 5 GHz), und die
+# Heimnetz-Verbindung waere gar nicht mehr hochgekommen.
+# ====================================================================
+
+def _funkbaum(wurzel: Path, geraete: dict) -> Path:
+    """
+    Stellt /sys/class/net nach. `geraete` bildet Name -> ("usb"|"platform", MAC).
+    """
+
+    sysnet = wurzel / "sys" / "class" / "net"
+    sysnet.mkdir(parents=True)
+
+    for name, (art, mac) in geraete.items():
+
+        geraet = sysnet / name
+        geraet.mkdir()
+        (geraet / "wireless").mkdir()
+        (geraet / "address").write_text(f"{mac}\n")
+
+        #
+        # xrack-wifi-iface.sh entscheidet am Ziel des "device"-Verweises:
+        # fuehrt er in den USB-Zweig, ist es ein Stick.
+        #
+        ziel = wurzel / ("bus/usb/devices/1-1" if art == "usb"
+                         else "devices/platform/soc/mmc")
+        ziel.mkdir(parents=True, exist_ok=True)
+        (geraet / "device").symlink_to(ziel)
+
+    return sysnet
+
+
+def _nmcli_attrappe(binordner: Path, protokoll: Path, profil_iface: str):
+    """
+    nmcli-Attrappe, die "XRack-Home" kennt und Aenderungen mitschreibt.
+    """
+
+    zustand = binordner / "home_iface.txt"
+    zustand.write_text(profil_iface)
+
+    pfad = binordner / "nmcli"
+    pfad.write_text(f"""#!/bin/sh
+echo "nmcli $*" >> "{protokoll}"
+
+case "$*" in
+    *"-t -f NAME connection show"*)
+        echo "XRack-Home"
+        echo "XRack-Bridge"
+        ;;
+    *"-g connection.interface-name connection show XRack-Home"*)
+        cat "{zustand}"
+        ;;
+    *"connection modify XRack-Home connection.interface-name"*)
+        # letztes Argument ist der neue Name
+        for letztes in "$@"; do :; done
+        printf '%s' "$letztes" > "{zustand}"
+        ;;
+esac
+exit 0
+""")
+    pfad.chmod(0o755)
+
+    return zustand
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    wurzel = Path(tmp)
+    protokoll = wurzel / "protokoll.txt"
+    protokoll.touch()
+
+    binordner = _attrappen(wurzel, protokoll)
+
+    #
+    # Der Tausch: Der Stick ist wlan0, das eingebaute WLAN wlan1 -
+    # also genau andersherum als beim Einrichten.
+    #
+    sysnet = _funkbaum(wurzel, {
+        "wlan0": ("usb", "aa:bb:cc:dd:ee:ff"),
+        "wlan1": ("platform", "11:22:33:44:55:66"),
+    })
+
+    #
+    # Der Stand von vorher: alles zeigt auf die alte Verteilung.
+    #
+    conf = wurzel / "xrack.conf"
+    conf.write_text(
+        "interface=wlan1\n"
+        "bridge=br0\n"
+        "ssid=XRack\n"
+        "country_code=DE\n"
+        "hw_mode=a\n"
+        "channel=36\n"
+    )
+
+    nm_datei = wurzel / "99-xrack-hostapd.conf"
+    nm_datei.write_text("[keyfile]\nunmanaged-devices=interface-name:wlan1\n")
+
+    home_zustand = _nmcli_attrappe(binordner, protokoll, "wlan0")
+
+    umgebung = dict(os.environ)
+    umgebung["PATH"] = f"{binordner}:{umgebung['PATH']}"
+    umgebung["XRACK_SYS_NET"] = str(sysnet)
+    umgebung["XRACK_HOSTAPD_CONF"] = str(conf)
+    umgebung["XRACK_NM_UNMANAGED"] = str(nm_datei)
+
+    ergebnis = subprocess.run(
+        [str(SKRIPTE / "xrack-wifi-bind.sh")],
+        capture_output=True, text=True, env=umgebung,
+    )
+
+    assert ergebnis.returncode == 0, (
+        f"Der Abgleich darf hostapd nie am Starten hindern: {ergebnis.stderr}"
+    )
+
+    # ---- 1. hostapd zeigt auf den Stick -----------------------------
+
+    inhalt = conf.read_text()
+
+    assert "interface=wlan0" in inhalt, (
+        f"Der Access Point liefe auf dem eingebauten Chip:\n{inhalt}"
+    )
+    assert "hw_mode=a" in inhalt and "country_code=DE" in inhalt, (
+        f"Der Rest der Konfiguration wurde beschaedigt:\n{inhalt}"
+    )
+
+    # ---- 2. NetworkManager haelt sich an die MAC, nicht den Namen ---
+
+    nm_inhalt = nm_datei.read_text()
+
+    assert "unmanaged-devices=mac:aa:bb:cc:dd:ee:ff" in nm_inhalt, (
+        f"Falsches Geraet unverwaltet - das eingebaute WLAN kaeme nicht "
+        f"mehr hoch:\n{nm_inhalt}"
+    )
+    assert "interface-name" not in nm_inhalt, (
+        "Ueber den Namen bleibt der Eintrag anfaellig fuer genau diesen "
+        f"Tausch:\n{nm_inhalt}"
+    )
+
+    # ---- 3. Das Heimnetz-Profil zeigt auf das eingebaute WLAN -------
+
+    assert home_zustand.read_text() == "wlan1", (
+        "XRack-Home zeigt weiter auf den Stick - die Heimnetz-Verbindung "
+        f"kaeme nicht zustande (steht: {home_zustand.read_text()})."
+    )
+
+    print("OK: Vertauschte Funkgeraete-Namen werden an allen drei Stellen "
+          "nachgezogen")
+
+    # ----------------------------------------------------------------
+    # Und ein zweiter Lauf aendert nichts mehr - sonst schriebe der
+    # ExecStartPre bei jedem Start die Dateien neu und liesse
+    # NetworkManager jedes Mal neu laden.
+    # ----------------------------------------------------------------
+
+    protokoll.write_text("")
+
+    subprocess.run(
+        [str(SKRIPTE / "xrack-wifi-bind.sh")],
+        capture_output=True, text=True, env=umgebung,
+    )
+
+    assert "general reload" not in protokoll.read_text(), (
+        "NetworkManager wird ohne Not neu geladen: " + protokoll.read_text()
+    )
+
+    print("OK: Steht alles richtig, wird nichts angefasst")
+
+
+# ====================================================================
+# Ohne Stick bleibt die Konfiguration unangetastet
+#
+# Sonst wuerde ein abgezogener Stick die Zeile "interface=" leeren
+# oder auf das eingebaute WLAN umbiegen - und beim Wiedereinstecken
+# stuende dort Unsinn.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    wurzel = Path(tmp)
+    protokoll = wurzel / "protokoll.txt"
+    protokoll.touch()
+
+    binordner = _attrappen(wurzel, protokoll)
+
+    sysnet = _funkbaum(wurzel, {"wlan0": ("platform", "11:22:33:44:55:66")})
+
+    conf = wurzel / "xrack.conf"
+    conf.write_text("interface=wlan1\nssid=XRack\nhw_mode=a\n")
+
+    nm_datei = wurzel / "99-xrack-hostapd.conf"
+    nm_datei.write_text("[keyfile]\nunmanaged-devices=mac:aa:bb:cc:dd:ee:ff\n")
+
+    _nmcli_attrappe(binordner, protokoll, "wlan0")
+
+    umgebung = dict(os.environ)
+    umgebung["PATH"] = f"{binordner}:{umgebung['PATH']}"
+    umgebung["XRACK_SYS_NET"] = str(sysnet)
+    umgebung["XRACK_HOSTAPD_CONF"] = str(conf)
+    umgebung["XRACK_NM_UNMANAGED"] = str(nm_datei)
+
+    ergebnis = subprocess.run(
+        [str(SKRIPTE / "xrack-wifi-bind.sh")],
+        capture_output=True, text=True, env=umgebung,
+    )
+
+    assert ergebnis.returncode == 0, ergebnis.stderr
+
+    assert "interface=wlan1" in conf.read_text(), (
+        "Ohne Stick wurde die AP-Konfiguration veraendert:\n"
+        + conf.read_text()
+    )
+
+    assert "mac:aa:bb:cc:dd:ee:ff" in nm_datei.read_text(), (
+        "Ohne Stick wurde der NetworkManager-Eintrag veraendert:\n"
+        + nm_datei.read_text()
+    )
+
+    print("OK: Ohne Stick bleibt die Access-Point-Konfiguration stehen")
+
 print("Alle Tests erfolgreich.")
