@@ -169,6 +169,65 @@ class WlanControl:
 
         return self._ap_ssid
 
+    def ap_hardware_present(self) -> bool:
+        """
+        True, wenn ein Funkgerät für einen Access Point da ist - also
+        ein zweites, per USB angeschlossenes.
+
+        Dieselbe Regel wie in scripts/xrack-wifi-iface.sh (dort wird
+        sie für install.sh und die Einrichtung gebraucht, hier für die
+        Anzeige): Das eingebaute WLAN geht ins Heimnetz, der USB-Stick
+        spannt den Access Point auf. Ändert sich die Regel, muss sie
+        an beiden Stellen geändert werden.
+
+        Gelesen wird der Kernel statt NetworkManager, denn genau
+        dieses Gerät wird NetworkManager ja entzogen, sobald hostapd
+        es übernimmt.
+        """
+
+        if not SYS_NET.exists():
+            return False
+
+        for geraet in sorted(SYS_NET.iterdir()):
+
+            if not (geraet / "wireless").exists():
+                continue
+
+            try:
+                ziel = (geraet / "device").resolve()
+            except OSError:
+                continue
+
+            if "/usb" in str(ziel):
+                return True
+
+        return False
+
+    def ap_running(self) -> bool:
+        """
+        True, wenn der Access Point tatsächlich funkt.
+
+        Zwei Wege, weil es zwei geben kann: hostapd (der Normalfall)
+        und das alte NetworkManager-Profil (der Rückfallweg, siehe
+        scripts/xrack-ap-setup.sh).
+        """
+
+        try:
+
+            ergebnis = subprocess.run(
+                ["systemctl", "is-active", "--quiet", "xrack-hostapd.service"],
+                capture_output=True,
+                timeout=5,
+            )
+
+            if ergebnis.returncode == 0:
+                return True
+
+        except Exception:
+            pass
+
+        return "XRack-AP" in self.active_connection_names()
+
     def console_port_bridged(self) -> bool | None:
         """
         True, wenn die Netzwerkbuchse tatsächlich in der Bridge hängt.
@@ -307,6 +366,9 @@ class WlanControl:
                 "available": False,
                 "home_ssid": None,
                 "ap_ssid": None,
+                "ap_hardware": False,
+                "ap_active": False,
+                "home_active": False,
                 "bridge_configured": False,
                 "bridge_enabled": False,
                 "console_access_configured": False,
@@ -347,6 +409,9 @@ class WlanControl:
         #
         console_access_enabled = SHARE_CONNECTION in active
 
+        ap_hardware = self.ap_hardware_present()
+        ap_active = self.ap_running() if ap_hardware else False
+
         console_ip = None
 
         if bridge_enabled:
@@ -368,6 +433,27 @@ class WlanControl:
                 else None
             ),
             "ap_ssid": self.ap_ssid(),
+
+            #
+            # Steckt ueberhaupt ein USB-WLAN-Stick? Ohne den gibt es
+            # keinen Access Point, und die Oberflaeche sagt das
+            # deutlich, statt eine Eingabemaske anzubieten, die
+            # nirgends hinfuehrt.
+            #
+            "ap_hardware": ap_hardware,
+
+            #
+            # Funkt er auch gerade? Davon haengt ab, ob "Konsole ueber
+            # XRacks Access Point" ueberhaupt sinnvoll ist.
+            #
+            "ap_active": ap_active,
+
+            #
+            # Und besteht eine Verbindung ins Heimnetz? Ohne die gibt
+            # es nichts, worueber die Konsole aus dem Heimnetz
+            # erreichbar waere.
+            #
+            "home_active": "XRack-Home" in active,
             "bridge_configured": (
                 BRIDGE_PORT_CONNECTION in names
                 and BRIDGE_CONNECTION in names

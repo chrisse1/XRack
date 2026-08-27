@@ -3422,6 +3422,27 @@ async function saveSettingsPin() {
     await loadSettings();
 }
 
+//
+// Blendet einen ganzen Abschnitt des Einstellungen-Menüs ein oder
+// aus - Überschrift, Schalter und die Trennlinie davor.
+//
+function zeigeAbschnitt(kennung, sichtbar) {
+
+    const block = document.getElementById(`${kennung}-block`);
+    const trenner = document.getElementById(`${kennung}-trenner`);
+    const feld = document.getElementById(`${kennung}-field`);
+
+    if (block) block.classList.toggle("d-none", !sichtbar);
+    if (trenner) trenner.classList.toggle("d-none", !sichtbar);
+
+    //
+    // Das Feld selbst bleibt sichtbar, sobald der Block es ist - die
+    // frühere Unterscheidung "eingerichtet / nicht eingerichtet"
+    // steckt jetzt in der Sichtbarkeit des ganzen Blocks.
+    //
+    if (feld) feld.classList.remove("d-none");
+}
+
 function applyWlanSettings(wlan) {
     const unavailable = document.getElementById("settings-wlan-unavailable");
     const sections = document.getElementById("settings-wlan-sections");
@@ -3435,43 +3456,62 @@ function applyWlanSettings(wlan) {
     unavailable.classList.add("d-none");
     sections.classList.remove("d-none");
 
-    toggleConfiguredSection("home", wlan.home_ssid);
+    //
+    // WLAN-Client: Die Maske steht immer. Sie kann die Verbindung
+    // jetzt auch anlegen, nicht nur ändern - "noch nicht
+    // eingerichtet" wäre also eine Sackgasse, die keine ist.
+    //
     if (wlan.home_ssid) {
         document.getElementById("settings-home-ssid").value = wlan.home_ssid;
         document.getElementById("settings-home-password").value = "";
         document.getElementById("settings-home-password-confirm").value = "";
     }
 
-    toggleConfiguredSection("ap", wlan.ap_ssid);
+    //
+    // Access Point: nur mit USB-WLAN-Stick. Ohne den führt die Maske
+    // nirgendwo hin, und dann ist eine klare Ansage ehrlicher.
+    //
+    document
+        .getElementById("settings-ap-no-hardware")
+        .classList.toggle("d-none", wlan.ap_hardware);
+
+    document
+        .getElementById("settings-ap-fields")
+        .classList.toggle("d-none", !wlan.ap_hardware);
+
     if (wlan.ap_ssid) {
         document.getElementById("settings-ap-ssid").value = wlan.ap_ssid;
         document.getElementById("settings-ap-password").value = "";
         document.getElementById("settings-ap-password-confirm").value = "";
     }
 
-    const bridgeNotConfigured = document.getElementById("settings-bridge-not-configured");
-    const bridgeField = document.getElementById("settings-bridge-field");
+    //
+    // Die beiden Umschalter werden ganz ausgeblendet, wenn sie keinen
+    // Sinn ergeben - samt Überschrift und Trennlinie.
+    //
+    // "Konsole über XRacks Access Point" braucht einen laufenden
+    // Access Point; ohne den gibt es nichts, worüber die Konsole
+    // erreichbar wäre. "Konsole aus dem Heimnetz" braucht umgekehrt
+    // eine bestehende WLAN-Verbindung - sonst gibt es kein Heimnetz,
+    // aus dem heraus jemand zugreifen könnte.
+    //
+    zeigeAbschnitt(
+        "settings-bridge",
+        wlan.ap_active && wlan.bridge_configured,
+    );
 
     if (wlan.bridge_configured) {
-        bridgeNotConfigured.classList.add("d-none");
-        bridgeField.classList.remove("d-none");
         document.getElementById("settings-bridge-toggle").checked = wlan.bridge_enabled;
-    } else {
-        bridgeNotConfigured.classList.remove("d-none");
-        bridgeField.classList.add("d-none");
     }
 
-    const accessNotConfigured = document.getElementById("settings-console-access-not-configured");
-    const accessField = document.getElementById("settings-console-access-field");
+    zeigeAbschnitt(
+        "settings-console-access",
+        wlan.home_active && wlan.console_access_configured,
+    );
 
     if (wlan.console_access_configured) {
-        accessNotConfigured.classList.add("d-none");
-        accessField.classList.remove("d-none");
         document.getElementById("settings-console-access-toggle").checked =
             wlan.console_access_enabled;
-    } else {
-        accessNotConfigured.classList.remove("d-none");
-        accessField.classList.add("d-none");
     }
 
     //
@@ -3654,13 +3694,6 @@ async function saveFadersAutolock() {
     } finally {
         button.disabled = false;
     }
-}
-
-function toggleConfiguredSection(prefix, configured) {
-    document.getElementById(`settings-${prefix}-not-configured`)
-        .classList.toggle("d-none", Boolean(configured));
-    document.getElementById(`settings-${prefix}-fields`)
-        .classList.toggle("d-none", !configured);
 }
 
 // ------------------------------------------------------------

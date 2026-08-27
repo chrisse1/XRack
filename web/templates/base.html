@@ -539,9 +539,12 @@
                         <label class="form-label fw-semibold">
                             {{ t.settings_home_wifi_title }}
                         </label>
-                        <div id="settings-home-not-configured" class="text-muted small d-none">
-                            {{ t.settings_not_configured }}
-                        </div>
+                        {#
+                            Kein "nicht eingerichtet" mehr: Die Maske
+                            kann die Verbindung jetzt auch anlegen
+                            (scripts/xrack-net-home.sh), nicht nur
+                            aendern.
+                        #}
                         <div id="settings-home-fields">
                             <input
                                 type="text"
@@ -599,8 +602,13 @@
                         <label class="form-label fw-semibold">
                             {{ t.settings_ap_wifi_title }}
                         </label>
-                        <div id="settings-ap-not-configured" class="text-muted small d-none">
-                            {{ t.settings_not_configured }}
+                        {#
+                            Ohne USB-WLAN-Stick gibt es keinen Access
+                            Point - dann eine klare Ansage statt einer
+                            Eingabemaske, die nirgends hinfuehrt.
+                        #}
+                        <div id="settings-ap-no-hardware" class="text-muted small d-none">
+                            {{ t.settings_ap_no_hardware }}
                         </div>
                         <div id="settings-ap-fields">
                             <input
@@ -653,15 +661,17 @@
                         </div>
                     </div>
 
-                    <hr>
+                    <hr id="settings-bridge-trenner">
 
-                    <div class="mb-3">
+                    {#
+                        Nur sichtbar, wenn der Access Point auch
+                        funkt - sonst gibt es nichts, worueber die
+                        Konsole erreichbar waere.
+                    #}
+                    <div class="mb-3" id="settings-bridge-block">
                         <label class="form-label fw-semibold">
                             {{ t.settings_ap_access_title }}
                         </label>
-                        <div id="settings-bridge-not-configured" class="text-muted small d-none">
-                            {{ t.settings_not_configured }}
-                        </div>
                         <div id="settings-bridge-field" class="form-check form-switch">
                             <input
                                 type="checkbox"
@@ -676,15 +686,18 @@
                         <small class="text-body-secondary">{{ t.settings_bridge_hint }}</small>
                     </div>
 
-                    <hr>
+                    <hr id="settings-console-access-trenner">
 
-                    <div class="mb-3">
+                    {#
+                        Nur sichtbar, wenn eine WLAN-Verbindung ins
+                        Heimnetz besteht - ohne die gibt es kein
+                        Heimnetz, aus dem heraus etwas erreichbar
+                        waere.
+                    #}
+                    <div class="mb-3" id="settings-console-access-block">
                         <label class="form-label fw-semibold">
                             {{ t.settings_console_access_title }}
                         </label>
-                        <div id="settings-console-access-not-configured" class="text-muted small d-none">
-                            {{ t.settings_not_configured }}
-                        </div>
                         <div id="settings-console-access-field" class="form-check form-switch">
                             <input
                                 type="checkbox"

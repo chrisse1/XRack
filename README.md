@@ -289,9 +289,18 @@ Ausschalten zurück.
 Der Installer fragt die WLAN-Verbindung und den Access Point
 **getrennt** ab - beides lässt sich einzeln einrichten oder
 überspringen. Wer überspringt, verliert nichts: Bridge und
-Freigabe-Profil werden immer angelegt, und ein Access Point lässt sich
-später im Einstellungen-Menü nachrüsten, **ohne `install.sh` erneut
-laufen zu lassen**.
+Freigabe-Profil werden immer angelegt, und sowohl der Access Point als
+auch die WLAN-Verbindung lassen sich später im Einstellungen-Menü
+nachrüsten, **ohne `install.sh` erneut laufen zu lassen**.
+
+Das Einstellungen-Menü zeigt deshalb nur, was gerade Sinn ergibt: Die
+Eingabemaske **WLAN-Client** steht immer, denn sie legt die Verbindung
+notfalls selbst an. Unter **Access Point** steht die Eingabemaske nur,
+wenn ein USB-WLAN-Stick steckt - sonst ein Hinweis, dass keiner erkannt
+wurde. Die beiden Schalter "Konsole über XRacks Access Point erreichbar
+machen" und "Konsole aus dem Heimnetz erreichbar machen" erscheinen
+erst, wenn der Access Point tatsächlich funkt beziehungsweise eine
+WLAN-Verbindung besteht.
 
 Welches Funkgerät wofür zuständig ist, wird nicht gefragt: Das
 eingebaute WLAN geht ins Heimnetz, der USB-Stick spannt den Access
