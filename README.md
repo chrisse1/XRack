@@ -280,6 +280,12 @@ XRack kann in drei Betriebsarten laufen:
 3. XRack verbindet sich per WLAN mit einem bestehenden Netzwerk, das
    Mischpult hängt per LAN-Kabel am Pi
 
+Die Netzwerkbuchse (eth0) läuft im Normalfall als ganz gewöhnlicher
+DHCP-Client - das ist Betriebsart 1. Dafür legt der Installer das
+Profil `XRack-Wired-eth0` an; die beiden Umschalter im
+Einstellungen-Menü legen es vorübergehend still und holen es beim
+Ausschalten zurück.
+
 Der Installer fragt die WLAN-Verbindung und den Access Point
 **getrennt** ab - beides lässt sich einzeln einrichten oder
 überspringen. Wer überspringt, verliert nichts: Bridge und

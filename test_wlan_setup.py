@@ -864,7 +864,36 @@ try:
             f"{pflicht} fehlt - dann laesst sich spaeter nichts umschalten:\n{aufrufe}"
         )
 
+    #
+    # Und der Fall, der im Feld zugeschlagen hat: Genau so wurde
+    # installiert - frischer Pi, weder WLAN noch Access Point. Danach
+    # war er per Kabel nicht mehr erreichbar und tauchte im Router
+    # nicht mehr auf.
+    #
+    # Der Grund: NetworkManager erzeugt seine automatische
+    # Kabelverbindung nur, solange fuer das Geraet gar kein Profil
+    # passt. Die beiden XRack-Profile oben (beide "autoconnect no")
+    # beenden das - und dann bringt niemand mehr die Buchse hoch.
+    #
+    assert "con-name XRack-Wired-eth0" in aufrufe, (
+        f"Es gibt kein Profil, das die Netzwerkbuchse normal hochbringt - "
+        f"der Pi waere nach dem Neustart per Kabel nicht erreichbar:\n{aufrufe}"
+    )
+
+    kabelzeile = [
+        zeile for zeile in aufrufe.splitlines()
+        if "con-name XRack-Wired-eth0" in zeile
+    ]
+
+    assert all("ipv4.method auto" in z for z in kabelzeile), (
+        f"Die Kabelverbindung holt sich keine Adresse per DHCP: {kabelzeile}"
+    )
+    assert all("connection.autoconnect yes" in z for z in kabelzeile), (
+        f"Die Kabelverbindung kommt nicht von selbst hoch: {kabelzeile}"
+    )
+
     print("OK: Auch ohne Antworten steht das Geruest zum Nachruesten")
+    print("OK: Die Netzwerkbuchse bleibt ganz normal per DHCP erreichbar")
 
     # ----------------------------------------------------------------
     # 15. Der Nachruestfall selbst

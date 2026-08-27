@@ -72,9 +72,19 @@ case "$1 $2 $3" in
 esac
 
 if [ "$1" = "-t" ] && [ "$3" = "NAME,DEVICE" ]; then
+    #
+    # Mit "--active" nur die laufenden - echtes nmcli macht genau
+    # diesen Unterschied, und davon haengt ab, ob ein Skript die
+    # Buchse als belegt ansieht.
+    #
+    quelle="$NM_STATE/connections"
+    for a in "$@"; do
+        [ "$a" = "--active" ] && quelle="$NM_STATE/active"
+    done
     while read -r name; do
+        [ -n "$name" ] || continue
         echo "$name:$(prop_lesen "$name" device)"
-    done < "$NM_STATE/connections"
+    done < "$quelle"
     exit 0
 fi
 
@@ -158,7 +168,7 @@ class Netzwerk:
         self.pfad = verzeichnis
         (self.pfad / "props").mkdir(parents=True)
 
-        verbindungen = ["XRack-Home", "XRack-Share-eth0"]
+        verbindungen = ["XRack-Home", "XRack-Share-eth0", "XRack-Wired-eth0"]
 
         aktiv = ["XRack-Home"]
 
@@ -919,6 +929,82 @@ cp "$quelle" "$ziel"
     )
 
     print("OK: Die Freigabe sieht beim Umschalten nach der Bridge")
+
+    # ----------------------------------------------------------------
+    # 16. Nach dem Ausschalten muss die Buchse wieder normal laufen
+    #
+    # Der Fehler, der das noetig gemacht hat: NetworkManager erzeugt
+    # seine automatische Kabelverbindung nur, solange fuer das Geraet
+    # gar kein Profil passt. Sobald XRack eigene anlegt (Bridge und
+    # Freigabe, beide mit "autoconnect no"), hoert das auf. Ohne ein
+    # drittes Profil mit "autoconnect yes" bleibt die Buchse danach
+    # ohne aktives Profil liegen - keine Adresse, im Router nicht zu
+    # sehen. Ein frisch aufgesetzter Pi war so per Kabel nicht mehr
+    # erreichbar.
+    # ----------------------------------------------------------------
+
+    def kabelprofil_aktiv(netz) -> bool:
+        return "XRack-Wired-eth0" in netz.aktiv()
+
+    for skript, wie in (
+        ("xrack-bridge-toggle.sh", "Bridge"),
+        ("xrack-share-toggle.sh", "Freigabe"),
+    ):
+
+        netz = Netzwerk(scratch / f"kabel-zurueck-{skript}")
+        netz.aktiviere("XRack-Bridge")
+        netz.aktiviere("XRack-Wired-eth0")
+
+        assert netz.schalte(skript, "on").returncode == 0
+
+        assert not kabelprofil_aktiv(netz), (
+            f"{wie} an: Die normale Kabelverbindung laeuft weiter - "
+            f"beide wollen eth0."
+        )
+        assert netz.lies("XRack-Wired-eth0", "autoconnect") == "no", (
+            f"{wie} an: Die Kabelverbindung wuerde sich eth0 beim "
+            f"naechsten Start zurueckholen."
+        )
+
+        assert netz.schalte(skript, "off").returncode == 0
+
+        assert netz.lies("XRack-Wired-eth0", "autoconnect") == "yes", (
+            f"{wie} aus: Die Buchse bleibt ohne selbsttaetiges Profil "
+            f"liegen - nach einem Neustart waere der Pi per Kabel nicht "
+            f"mehr erreichbar."
+        )
+        assert kabelprofil_aktiv(netz), (
+            f"{wie} aus: Die Buchse wurde nicht wieder hochgefahren."
+        )
+
+    print("OK: Nach dem Ausschalten laeuft die Buchse wieder normal")
+
+    # ----------------------------------------------------------------
+    # 17. Auf einem Geraet ohne dieses Profil wird es angelegt
+    #
+    # Damit niemand fuer die Korrektur install.sh erneut durchlaufen
+    # lassen muss.
+    # ----------------------------------------------------------------
+
+    netz = Netzwerk(scratch / "kabel-fehlt-noch")
+
+    #
+    # Zustand vor dieser Fassung: Das Profil gibt es noch gar nicht.
+    #
+    (netz.pfad / "connections").write_text(
+        "XRack-Home\nXRack-Share-eth0\nXRack-Bridge\nXRack-Bridge-eth0\n",
+        encoding="utf-8",
+    )
+
+    assert netz.schalte("xrack-share-toggle.sh", "off").returncode == 0
+
+    aufrufe = (netz.pfad / "calls").read_text(encoding="utf-8")
+
+    assert "con-name XRack-Wired-eth0" in aufrufe, (
+        f"Das fehlende Kabelprofil wurde nicht angelegt:\n{aufrufe}"
+    )
+
+    print("OK: Ein fehlendes Kabelprofil wird nachgelegt")
 
     print("Alle Tests erfolgreich.")
 

@@ -55,6 +55,13 @@ if [ "${MODE}" = "on" ]; then
         "${ENSURE}" || true
     fi
 
+    #
+    # Die normale Kabelverbindung stilllegen, solange die Freigabe
+    # läuft - sonst holt sie sich eth0 beim nächsten Start zurück.
+    #
+    nmcli connection down "XRack-Wired-eth0" >/dev/null 2>&1 || true
+    nmcli connection modify "XRack-Wired-eth0" connection.autoconnect no 2>/dev/null || true
+
     ETH0_CON="$(nmcli -t -f NAME,DEVICE connection show | awk -F: '$2=="eth0"{print $1; exit}')"
 
     if [ -n "${ETH0_CON}" ] && [ "${ETH0_CON}" != "XRack-Share-eth0" ]; then
@@ -81,6 +88,16 @@ elif [ "${MODE}" = "off" ]; then
 
     nmcli connection down "XRack-Share-eth0" >/dev/null 2>&1 || true
     nmcli connection modify "XRack-Share-eth0" connection.autoconnect no 2>/dev/null || true
+
+    #
+    # Zurück in den Normalbetrieb - ohne das bliebe die Buchse ohne
+    # aktives Profil liegen. Siehe xrack-wired-restore.sh.
+    #
+    ZURUECK="$(dirname "$0")/xrack-wired-restore.sh"
+
+    if [ -x "${ZURUECK}" ]; then
+        "${ZURUECK}" || true
+    fi
 
 else
     echo "Unbekannter Modus: ${MODE} (erwartet: on oder off)" >&2

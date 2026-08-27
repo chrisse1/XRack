@@ -44,6 +44,20 @@ fi
 # Adresse, nicht nur "aktiv" laut NetworkManager. Das prüft
 # xrack-bridge-ensure.sh; dort steht auch, warum das nötig ist.
 #
+#
+# Die normale Kabelverbindung wieder aufnehmen (Betriebsart "Pult und
+# Pi am selben Router"). Das gemeinsame Skript dafür ist
+# xrack-wired-restore.sh - beide Umschalter brauchen es.
+#
+kabel_zurueck() {
+
+    ZURUECK="$(dirname "$0")/xrack-wired-restore.sh"
+
+    if [ -x "${ZURUECK}" ]; then
+        "${ZURUECK}" || true
+    fi
+}
+
 bridge_sicherstellen() {
 
     ENSURE="$(dirname "$0")/xrack-bridge-ensure.sh"
@@ -63,9 +77,14 @@ if [ "${MODE}" = "on" ]; then
     nmcli connection modify "XRack-Share-eth0" connection.autoconnect no 2>/dev/null || true
 
     #
-    # Ein anderes, mitgeliefertes eth0-Profil ("Wired connection 1")
-    # würde sich das Interface beim nächsten Start zurückholen.
+    # Die normale Kabelverbindung stilllegen, solange eth0 in der
+    # Bridge hängt - sie würde sich das Interface sonst beim nächsten
+    # Start zurückholen. Dasselbe für ein mitgeliefertes Profil
+    # ("Wired connection 1").
     #
+    nmcli connection down "XRack-Wired-eth0" >/dev/null 2>&1 || true
+    nmcli connection modify "XRack-Wired-eth0" connection.autoconnect no 2>/dev/null || true
+
     ETH0_CON="$(nmcli -t -f NAME,DEVICE connection show | awk -F: '$2=="eth0"{print $1; exit}')"
 
     if [ -n "${ETH0_CON}" ] && [ "${ETH0_CON}" != "XRack-Bridge-eth0" ]; then
@@ -98,6 +117,13 @@ elif [ "${MODE}" = "off" ]; then
     # hinein.
     #
     bridge_sicherstellen
+
+    #
+    # Und die Buchse zurück in den Normalbetrieb: ohne das bliebe sie
+    # ohne aktives Profil liegen - keine Adresse, im Router nicht zu
+    # sehen. Siehe xrack-wired-restore.sh.
+    #
+    kabel_zurueck
 
 else
     echo "Unbekannter Modus: ${MODE} (erwartet: on oder off)" >&2

@@ -620,6 +620,13 @@ configure_wifi() {
         XRACK_WLAN_SHARE_READY="ja"
     fi
 
+    #
+    # Zuletzt, damit es auch dann steht, wenn oben etwas schiefging.
+    #
+    if ! setup_wired_profile; then
+        echo "$(L "Warnung: Das Profil für die normale Kabelverbindung konnte nicht angelegt werden." "Warning: could not create the profile for the normal wired connection.")"
+    fi
+
     if [ ! -t 0 ]; then
         return 0
     fi
@@ -834,6 +841,36 @@ configure_access_point() {
 # Angelegt, aber nicht aktiviert - eingeschaltet wird es im
 # Einstellungen-Menue.
 #
+setup_wired_profile() {
+
+    #
+    # Das Standardprofil fuer die Netzwerkbuchse: ganz normaler
+    # DHCP-Client. Das ist Betriebsart 1 aus der Erklaerung oben -
+    # XRack und Mischpult haengen zusammen an einem Router.
+    #
+    # Warum das sein MUSS, und zwar immer:
+    #
+    # NetworkManager erzeugt seine automatische Kabelverbindung nur,
+    # solange fuer das Geraet gar kein Profil passt. Sobald XRack
+    # welche anlegt (die Bridge und die Freigabe, beide bewusst mit
+    # "autoconnect no"), hoert das auf - und dann bringt niemand mehr
+    # die Buchse hoch. Ein frisch aufgesetzter Pi war danach per
+    # Kabel nicht mehr erreichbar und tauchte auch im Router nicht
+    # mehr auf. Genau das ist passiert.
+    #
+    # Deshalb legt XRack die normale Kabelverbindung selbst an, mit
+    # "autoconnect yes". Die Umschalt-Skripte legen sie beim
+    # Umschalten still und holen sie beim Zurueckschalten wieder.
+    #
+    if ! nmcli -t -f NAME connection show | grep -qx "XRack-Wired-eth0"; then
+
+        sudo nmcli connection add type ethernet ifname eth0 con-name "XRack-Wired-eth0" \
+            ipv4.method auto connection.autoconnect yes >/dev/null || return 1
+    fi
+
+    return 0
+}
+
 setup_share_profile() {
 
     sudo nmcli connection delete "XRack-Share-eth0" >/dev/null 2>&1 || true
@@ -1013,6 +1050,7 @@ configure_sudoers() {
         "${INSTALL_DIR}/scripts/xrack-dhcp-lease.sh" \
         "${INSTALL_DIR}/scripts/xrack-link-bounce.sh" \
         "${INSTALL_DIR}/scripts/xrack-bridge-ensure.sh" \
+        "${INSTALL_DIR}/scripts/xrack-wired-restore.sh" \
         "${INSTALL_DIR}/scripts/xrack-wifi-iface.sh" \
         "${INSTALL_DIR}/scripts/xrack-ap-setup.sh" \
         "${INSTALL_DIR}/scripts/xrack-port-forward.sh" \
