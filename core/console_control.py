@@ -44,6 +44,75 @@ FAMILY_XAIR = "xair"
 TIMEOUT = 0.3
 
 MIN_DB = -90.0
+
+#
+# ------------------------------------------------------------------
+# Snapshots (X-Air) bzw. Szenen (X32)
+# ------------------------------------------------------------------
+#
+# Beide Familien koennen einen gespeicherten Gesamtzustand aufrufen,
+# nennen ihn aber verschieden und sprechen ihn ueber verschiedene
+# Adressen an.
+#
+# Belegt sind diese Adressen ueber eine im Feld benutzte Bibliothek
+# (wrodie/behringer-mixer) und die offizielle OSC-Beschreibung:
+#
+#   X-Air:  /-snap/load   (int)  Snapshot aufrufen
+#           /-snap/index  (int)  aktuell geladener Snapshot
+#   X32:    /-action/goscene       (int)  Szene aufrufen
+#           /-show/prepos/current  (int)  aktuelle Szene
+#
+# Die Namen der einzelnen Plaetze sind dagegen NICHT belegt - die
+# Adressen unten sind der ueblicherweise verwendete Aufbau. Deshalb
+# ist das Auslesen der Namen so gebaut, dass es folgenlos scheitern
+# darf: Antwortet das Pult darauf nicht, zeigt die Oberflaeche eben
+# nur Nummern. Das Aufrufen selbst haengt nicht daran.
+#
+SNAPSHOT_LOAD = {
+    FAMILY_XAIR: "/-snap/load",
+    FAMILY_X32: "/-action/goscene",
+}
+
+SNAPSHOT_CURRENT = {
+    FAMILY_XAIR: "/-snap/index",
+    FAMILY_X32: "/-show/prepos/current",
+}
+
+#
+# {} wird durch die Platznummer ersetzt - beim X-Air zweistellig
+# ("01"), beim X32 dreistellig ("000") und dort ab 0 gezaehlt.
+#
+SNAPSHOT_NAME = {
+    FAMILY_XAIR: "/-snap/{:02d}/name",
+    FAMILY_X32: "/-show/showfile/scene/{:03d}/name",
+}
+
+SNAPSHOT_COUNT = {
+    FAMILY_XAIR: 64,
+    FAMILY_X32: 100,
+}
+
+#
+# Der X32 zaehlt seine Szenen ab 0, der X-Air seine Snapshots ab 1.
+#
+SNAPSHOT_FIRST = {
+    FAMILY_XAIR: 1,
+    FAMILY_X32: 0,
+}
+
+#
+# So viele Plaetze werden angetastet, bevor das Auslesen der Namen
+# aufgegeben wird. Antwortet das Pult auf keinen davon, kennt es die
+# Namensadresse nicht - dann kosten weitere 60 Versuche nur Zeit
+# (jeder einzelne laeuft in seine Zeitueberschreitung).
+#
+SNAPSHOT_NAME_PROBES = 3
+
+#
+# Wie lange die gelesene Liste gilt. Snapshots aendern sich selten,
+# und die Liste zu holen kostet je nach Pult bis zu hundert Abfragen.
+#
+SNAPSHOT_CACHE_SECONDS = 60.0
 MAX_DB = 10.0
 
 #
@@ -458,6 +527,13 @@ class ConsoleControl:
         #
         self._pair_link: dict[int, tuple[float, bool]] = {}
 
+        #
+        # Gelesene Snapshot-Liste, mit Zeitstempel: Sie zu holen
+        # kostet je nach Pult bis zu hundert Abfragen.
+        #
+        self._snapshots: list[dict] | None = None
+        self._snapshots_read = 0.0
+
     def _request(self, host: str, port: int, message: bytes) -> bytes | None:
         """
         Schickt eine Nachricht und wartet auf genau eine Antwort.
@@ -512,6 +588,8 @@ class ConsoleControl:
         self._discovered = None
         self._last_discovery = 0.0
         self._pair_link = {}
+        self._snapshots = None
+        self._snapshots_read = 0.0
 
     def discover(self, force: bool = False) -> str | None:
         """
@@ -781,6 +859,125 @@ class ConsoleControl:
         wert = self._read(host, address, "/config/name", str)
 
         return wert.strip() if wert else ""
+
+    # ----------------------------------------------------------------
+    # Snapshots (X-Air) bzw. Szenen (X32)
+    # ----------------------------------------------------------------
+
+    def get_snapshots(self, host: str, force: bool = False) -> list[dict] | None:
+        """
+        Liest die Liste der gespeicherten Snapshots.
+
+        Liefert Eintraege aus {"index", "name", "current"} - oder
+        None, wenn das Pult ueberhaupt nicht antwortet.
+
+        Zwei Dinge sind hier wichtig:
+
+        Erstens kostet das viele Abfragen - 64 beim X-Air, 100 beim
+        X32. Deshalb wird die Liste gemerkt und nur alle 60 Sekunden
+        neu geholt; `force` ueberspringt das.
+
+        Zweitens ist die Adresse fuer die Namen nicht sicher belegt
+        (siehe Kommentar bei SNAPSHOT_NAME). Schweigen die ersten
+        Plaetze, wird das Auslesen der Namen abgebrochen und es bleibt
+        bei den Nummern. Ohne diesen Abbruch liefe jede weitere
+        Abfrage in ihre eigene Zeitueberschreitung - beim X32 waeren
+        das dreissig Sekunden, in denen die Oberflaeche stillsteht.
+        """
+
+        jetzt = time.monotonic()
+
+        if (
+            not force
+            and self._snapshots is not None
+            and jetzt - self._snapshots_read < SNAPSHOT_CACHE_SECONDS
+        ):
+            return self._snapshots
+
+        family = self.detect(host)
+
+        if family is None or self._port is None:
+            return None
+
+        aktuell = self._read(host, SNAPSHOT_CURRENT[family], "", int)
+
+        erster = SNAPSHOT_FIRST[family]
+        anzahl = SNAPSHOT_COUNT[family]
+        muster = SNAPSHOT_NAME[family]
+
+        namen_lesbar = True
+        ergebnis: list[dict] = []
+
+        for nummer in range(erster, erster + anzahl):
+
+            name = None
+
+            if namen_lesbar:
+
+                name = self._read(host, muster.format(nummer), "", str)
+
+                #
+                # Nach den ersten Versuchen entscheiden: Kam auf
+                # keinen einzigen eine Antwort, kennt das Pult diese
+                # Adresse nicht.
+                #
+                if (
+                    name is None
+                    and len(ergebnis) + 1 >= SNAPSHOT_NAME_PROBES
+                    and all(eintrag["name"] is None for eintrag in ergebnis)
+                ):
+                    namen_lesbar = False
+
+            ergebnis.append({
+                "index": nummer,
+                "name": (name or "").strip() or None,
+                "current": aktuell is not None and nummer == aktuell,
+            })
+
+        self._snapshots = ergebnis
+        self._snapshots_read = jetzt
+
+        return ergebnis
+
+    def load_snapshot(self, host: str, index: int) -> bool:
+        """
+        Ruft einen gespeicherten Snapshot auf.
+
+        Das ist der eingreifendste Befehl, den XRack ans Pult schickt:
+        Er stellt in einem Zug alle Regler, Stummschaltungen und
+        Klangeinstellungen um. Die Rueckfrage davor gehoert deshalb in
+        die Oberflaeche - hier wird nur noch ausgefuehrt.
+        """
+
+        family = self.detect(host)
+
+        if family is None or self._port is None:
+            return False
+
+        erster = SNAPSHOT_FIRST[family]
+
+        if not erster <= index < erster + SNAPSHOT_COUNT[family]:
+            self.logger.warning("Snapshot %s gibt es nicht.", index)
+            return False
+
+        self.logger.info("Snapshot %s wird geladen.", index)
+
+        erfolg = self._send(
+            host, self._port, encode(SNAPSHOT_LOAD[family], int(index))
+        )
+
+        #
+        # Nach dem Laden stimmt nichts Gemerktes mehr: Der Snapshot
+        # kann Kopplungen anders setzen, und in der gemerkten Liste
+        # steht noch der alte "aktuell"-Eintrag.
+        #
+        if erfolg:
+            self._linked = set()
+            self._pair_link = {}
+            self._snapshots = None
+            self._snapshots_read = 0.0
+
+        return erfolg
 
     def _write(self, host: str, addresses: list[str], endung: str, wert) -> bool:
         """

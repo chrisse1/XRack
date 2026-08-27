@@ -742,6 +742,14 @@ function toggleFaderLock() {
     //
     if (fadersUnlocked) loadFaders();
 
+    applySnapshotLock();
+
+    //
+    // Beim Entsperren die Liste auffrischen: Am Pult kann inzwischen
+    // ein Snapshot dazugekommen oder ein anderer geladen worden sein.
+    //
+    if (fadersUnlocked) loadSnapshots();
+
     resetFaderAutolock();
 }
 
@@ -1251,6 +1259,7 @@ async function searchConsole() {
 
         await loadFaders();
         await loadSettings();
+        await loadSnapshots(true);
 
         alert(
             data.found
@@ -1266,6 +1275,173 @@ async function searchConsole() {
         button.innerHTML = `<i class="bi bi-search"></i>`;
     }
 }
+
+// ------------------------------------------------------------
+// Snapshots des Pults
+//
+// Ein Snapshot stellt am Mischpult alles auf einmal um - Regler,
+// Stummschaltungen, Klang. Deshalb haengt er an derselben Sperre wie
+// die Regler und fragt vor dem Laden nach.
+//
+// Die Liste kommt nicht mit jedem Sekundentakt: Sie zu holen kostet
+// das Pult je nach Modell bis zu hundert Abfragen. Geholt wird
+// deshalb einmal beim Laden der Seite und danach nur noch, wenn
+// jemand die Karte entsperrt oder gerade einen Snapshot geladen hat.
+// ------------------------------------------------------------
+
+let faderSnapshots = [];
+
+function snapshotBeschriftung(eintrag) {
+    return eintrag.name
+        || I18N.faders_snapshot_unnamed.replace("{n}", eintrag.index);
+}
+
+async function loadSnapshots(force = false) {
+    const box = document.getElementById("faders-snapshots");
+    const select = document.getElementById("faders-snapshot-select");
+
+    if (!box || !select) return;
+
+    let data;
+
+    try {
+        const response = await fetch(
+            "/api/console/snapshots" + (force ? "?force=true" : "")
+        );
+        data = await response.json();
+    } catch (error) {
+        console.error("Snapshots konnten nicht geladen werden:", error);
+        box.classList.add("d-none");
+        return;
+    }
+
+    faderSnapshots = data.available ? (data.snapshots || []) : [];
+
+    //
+    // Ohne Snapshots gar nicht erst anzeigen - eine leere Auswahl
+    // waere nur eine Frage ohne Antwort.
+    //
+    box.classList.toggle("d-none", faderSnapshots.length === 0);
+
+    if (faderSnapshots.length === 0) return;
+
+    //
+    // Die Auswahl nur neu aufbauen, wenn sie sich geaendert hat -
+    // sonst springt sie einem beim Auffrischen unter der Hand weg.
+    //
+    const signatur = faderSnapshots
+        .map((eintrag) => `${eintrag.index}|${eintrag.name || ""}`)
+        .join(";");
+
+    if (select.dataset.signature !== signatur) {
+
+        const vorher = select.value;
+
+        select.dataset.signature = signatur;
+        select.innerHTML = "";
+
+        faderSnapshots.forEach((eintrag) => {
+            const option = document.createElement("option");
+            option.value = eintrag.index;
+            option.textContent = snapshotBeschriftung(eintrag);
+            select.appendChild(option);
+        });
+
+        select.value = vorher || "";
+    }
+
+    //
+    // Ohne eigene Wahl auf dem stehen, der am Pult geladen ist.
+    //
+    if (!select.value) {
+        const aktuell = faderSnapshots.find((eintrag) => eintrag.current);
+        select.value = aktuell ? aktuell.index : faderSnapshots[0].index;
+    }
+
+    applySnapshotLock();
+}
+
+//
+// Die Sperre gilt fuer Auswahl UND Knopf: Eine Auswahl, die sich
+// verstellen laesst, aber nichts tut, waere nur verwirrend.
+//
+function applySnapshotLock() {
+    const select = document.getElementById("faders-snapshot-select");
+    const button = document.getElementById("btn-faders-snapshot-load");
+
+    if (!select || !button) return;
+
+    const bedienbar = fadersUnlocked && faderSnapshots.length > 0;
+
+    select.disabled = !bedienbar;
+    button.disabled = !bedienbar;
+}
+
+async function loadSelectedSnapshot() {
+    const select = document.getElementById("faders-snapshot-select");
+    const button = document.getElementById("btn-faders-snapshot-load");
+
+    if (!select || !select.value) return;
+
+    const index = Number(select.value);
+
+    const eintrag = faderSnapshots.find((s) => s.index === index);
+    const bezeichnung = eintrag ? snapshotBeschriftung(eintrag) : index;
+
+    if (!confirm(I18N.confirm_snapshot_load.replace("{name}", bezeichnung))) {
+        return;
+    }
+
+    button.disabled = true;
+
+    try {
+        const response = await fetch("/api/console/snapshot/load", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ index }),
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+            alert(
+                I18N.alert_snapshot_failed
+                    .replace("{message}", result.message || "")
+            );
+            return;
+        }
+
+        alert(I18N.alert_snapshot_loaded.replace("{name}", bezeichnung));
+
+        //
+        // Das Pult braucht einen Moment, bis alles steht - danach die
+        // Regler und die Liste (wegen des aktuellen Platzes) neu
+        // lesen.
+        //
+        setTimeout(() => {
+            loadFaders();
+            loadSnapshots(true);
+        }, 1500);
+
+    } catch (error) {
+        console.error("Snapshot konnte nicht geladen werden:", error);
+        alert(I18N.alert_snapshot_failed.replace("{message}", ""));
+    } finally {
+        applySnapshotLock();
+    }
+}
+
+document
+    .getElementById("btn-faders-snapshot-load")
+    .addEventListener("click", loadSelectedSnapshot);
+
+//
+// Beim Bedienen die Selbstsperre neu anlaufen lassen - wer gerade
+// einen Snapshot aussucht, ist beschaeftigt.
+//
+document
+    .getElementById("faders-snapshot-select")
+    .addEventListener("change", resetFaderAutolock);
 
 async function loadFaders() {
 
@@ -1486,6 +1662,12 @@ document.addEventListener("pointercancel", finishFaderDrag);
 //
 loadFaders();
 faderPollTimer = setInterval(loadFaders, FADER_POLL_INTERVAL);
+
+//
+// Die Snapshot-Liste einmal beim Laden - danach nur noch auf Anlass
+// (siehe loadSnapshots).
+//
+loadSnapshots();
 
 // ============================================================
 // 8. RECORDING INFO LOADING

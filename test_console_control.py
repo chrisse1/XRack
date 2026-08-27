@@ -29,6 +29,7 @@ from core.console_control import (
     decode,
     encode,
     fader_to_db,
+    SNAPSHOT_NAME_PROBES,
 )
 
 # ----------------------------------------------------------------
@@ -338,6 +339,20 @@ class FakeConsole:
         self.answer_chlink = True
         self.fdrmute: int | None = None
 
+        #
+        # Snapshots: Nummer -> Name. Was hier nicht steht, beantwortet
+        # die Attrappe mit leerem Namen - so wie ein Pult einen
+        # unbenutzten Platz meldet.
+        #
+        self.snapshots: dict[int, str] = {}
+        self.snapshot_index = 0
+
+        #
+        # Manche Pulte kennen die Namensadresse womoeglich gar nicht.
+        # Damit laesst sich genau das nachstellen.
+        #
+        self.answer_snapshot_names = True
+
         self._running = True
         self._thread = threading.Thread(target=self._serve, daemon=True)
         self._thread.start()
@@ -390,6 +405,17 @@ class FakeConsole:
 
                 pair = address[len("/config/chlink/"):]
                 reply = encode(address, self.chlink.get(pair, 0))
+
+            elif address == "/-snap/index":
+                reply = encode(address, self.snapshot_index)
+
+            elif address.startswith("/-snap/") and address.endswith("/name"):
+
+                if not self.answer_snapshot_names:
+                    continue
+
+                nummer = int(address[len("/-snap/"):-len("/name")])
+                reply = encode(address, self.snapshots.get(nummer, ""))
 
             elif address == "/config/linkcfg/fdrmute":
 
@@ -1193,7 +1219,171 @@ try:
 
     print("OK: Eine fehlgeschlagene Kopplung wird nicht gemerkt")
 
+    # ----------------------------------------------------------------
+    # Snapshots: auflisten und laden
+    #
+    # Die Adressen dafuer sind belegt (siehe Kommentar in
+    # core/console_control.py), die fuer die NAMEN dagegen nicht -
+    # deshalb steht hier ausdruecklich auch der Fall, dass das Pult
+    # darauf gar nicht antwortet.
+    # ----------------------------------------------------------------
+
+    console.snapshots = {1: "Soundcheck", 2: "", 3: "Konzert"}
+    console.snapshot_index = 3
+
+    control.detect_reset()
+    control._family = FAMILY_XAIR
+    control._port = console.port
+    control._detected_for = "127.0.0.1"
+
+    snapshots = control.get_snapshots("127.0.0.1")
+
+    assert snapshots is not None, "Keine Antwort vom Pult."
+    assert len(snapshots) == 64, f"X-Air hat 64 Snapshots, bekommen: {len(snapshots)}"
+
+    assert snapshots[0] == {"index": 1, "name": "Soundcheck", "current": False}, (
+        snapshots[0]
+    )
+
+    #
+    # Ein unbenutzter Platz hat keinen Namen - und einen leeren
+    # Namen zurueckzugeben waere schlechter, als ehrlich None zu
+    # sagen: Die Oberflaeche kann dann "Snapshot 2" anzeigen.
+    #
+    assert snapshots[1]["name"] is None, snapshots[1]
+
+    assert snapshots[2] == {"index": 3, "name": "Konzert", "current": True}, (
+        snapshots[2]
+    )
+
+    print("OK: Snapshots werden mit Namen und aktuellem Platz gelesen")
+
+    # ----------------------------------------------------------------
+    # Die Liste wird gemerkt - sie zu holen kostet 64 Abfragen
+    # ----------------------------------------------------------------
+
+    vorher = len(console.received)
+
+    control.get_snapshots("127.0.0.1")
+
+    assert len(console.received) == vorher, (
+        f"Die gemerkte Liste wurde nicht benutzt - {len(console.received) - vorher} "
+        f"zusaetzliche Abfragen."
+    )
+
+    control.get_snapshots("127.0.0.1", force=True)
+
+    assert len(console.received) > vorher, (
+        "Mit force muss trotzdem neu gelesen werden."
+    )
+
+    print("OK: Die Liste wird gemerkt, force liest neu")
+
+    # ----------------------------------------------------------------
+    # Kennt das Pult die Namensadresse nicht, wird nach wenigen
+    # Versuchen aufgegeben
+    #
+    # Ohne diesen Abbruch liefe jede der 64 Abfragen in ihre eigene
+    # Zeitueberschreitung - bei 0,3 s pro Abfrage waeren das fast
+    # zwanzig Sekunden Stillstand.
+    # ----------------------------------------------------------------
+
+    console.answer_snapshot_names = False
+    console.received.clear()
+
+    control.detect_reset()
+    control._family = FAMILY_XAIR
+    control._port = console.port
+    control._detected_for = "127.0.0.1"
+
+    snapshots = control.get_snapshots("127.0.0.1")
+
+    assert snapshots is not None
+    assert len(snapshots) == 64, "Die Plaetze muss es trotzdem alle geben."
+    assert all(eintrag["name"] is None for eintrag in snapshots)
+
+    namensabfragen = [
+        adresse for adresse, _ in console.received
+        if adresse.startswith("/-snap/") and adresse.endswith("/name")
+    ]
+
+    assert len(namensabfragen) <= SNAPSHOT_NAME_PROBES, (
+        f"Es wurde weitergefragt, obwohl niemand antwortet: "
+        f"{len(namensabfragen)} Abfragen"
+    )
+
+    print("OK: Schweigt das Pult zu den Namen, wird nach wenigen Versuchen aufgegeben")
+
+    console.answer_snapshot_names = True
+
+    # ----------------------------------------------------------------
+    # Laden: die richtige Adresse mit der richtigen Nummer
+    # ----------------------------------------------------------------
+
+    console.received.clear()
+
+    assert control.load_snapshot("127.0.0.1", 7) is True
+
+    time.sleep(0.1)
+
+    geladen = [
+        (adresse, argumente) for adresse, argumente in console.received
+        if adresse == "/-snap/load"
+    ]
+
+    assert geladen == [("/-snap/load", [7])], (
+        f"Falsche Adresse oder falscher Wert: {console.received}"
+    )
+
+    print("OK: Laden schickt /-snap/load mit der Nummer")
+
+    # ----------------------------------------------------------------
+    # Nummern, die es nicht gibt, gar nicht erst schicken
+    # ----------------------------------------------------------------
+
+    console.received.clear()
+
+    assert control.load_snapshot("127.0.0.1", 0) is False, (
+        "Der X-Air zaehlt ab 1 - 0 gibt es nicht."
+    )
+    assert control.load_snapshot("127.0.0.1", 65) is False
+
+    time.sleep(0.1)
+
+    assert console.received == [], (
+        f"Es wurde trotzdem etwas geschickt: {console.received}"
+    )
+
+    print("OK: Unmoegliche Snapshot-Nummern werden nicht geschickt")
+
+    # ----------------------------------------------------------------
+    # Nach dem Laden ist die gemerkte Liste hinfaellig
+    #
+    # Der Snapshot kann Kopplungen anders setzen, und "aktuell" zeigt
+    # sonst weiter auf den alten Platz.
+    # ----------------------------------------------------------------
+
+    control.get_snapshots("127.0.0.1")
+
+    console.snapshot_index = 7
+    console.received.clear()
+
+    control.load_snapshot("127.0.0.1", 7)
+
+    frisch = control.get_snapshots("127.0.0.1")
+
+    assert frisch is not None
+    assert frisch[6]["current"] is True, (
+        "Nach dem Laden zeigt die Liste noch den alten aktuellen Platz."
+    )
+
+    print("OK: Nach dem Laden wird die Liste neu gelesen")
+
 finally:
     console.stop()
 
+#
+# Bewusst ausserhalb des finally: Im finally wuerde die Meldung auch
+# dann erscheinen, wenn gerade eine Pruefung fehlgeschlagen ist.
+#
 print("Alle Tests erfolgreich.")

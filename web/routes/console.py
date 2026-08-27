@@ -35,6 +35,10 @@ class ConsoleHostSelection(BaseModel):
     ip: str = ""
 
 
+class SnapshotSelection(BaseModel):
+    index: int
+
+
 class MuteSelection(BaseModel):
     channel: int
     muted: bool
@@ -47,6 +51,29 @@ class FaderSelection(BaseModel):
     # kein -inf.
     #
     db: float | None
+
+
+@router.get("/api/console/snapshots")
+def console_snapshots(request: Request, force: bool = False):
+    """
+    Die gespeicherten Snapshots des Pults.
+    """
+
+    return request.app.state.application.get_console_snapshots(force=force)
+
+
+@router.post("/api/console/snapshot/load")
+def load_console_snapshot(auswahl: SnapshotSelection, request: Request):
+    """
+    Ruft einen Snapshot auf. Die Rückfrage davor macht die
+    Oberfläche - hier wird nur noch ausgeführt.
+    """
+
+    success, message = request.app.state.application.load_console_snapshot(
+        auswahl.index
+    )
+
+    return {"success": success, "message": message}
 
 
 @router.post("/api/console/search")

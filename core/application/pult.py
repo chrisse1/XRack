@@ -63,6 +63,62 @@ class PultMixin:
         return self.console_control.discover(), channels, "discovered"
 
 
+    # ----------------------------------------------------------------
+    # Snapshots (X-Air) bzw. Szenen (X32)
+    # ----------------------------------------------------------------
+
+    def get_console_snapshots(self, force: bool = False) -> dict:
+        """
+        Die gespeicherten Snapshots des Pults zur Auswahl.
+        """
+
+        host, _, _ = self._console_host_and_channels()
+
+        if not host:
+            return {"available": False, "snapshots": []}
+
+        snapshots = self.console_control.get_snapshots(host, force=force)
+
+        if snapshots is None:
+            return {"available": False, "snapshots": []}
+
+        #
+        # Unbenutzte Plaetze weglassen - eine Auswahlliste mit 64
+        # Eintraegen, von denen drei etwas bedeuten, ist keine Hilfe.
+        #
+        # Kennt das Pult die Namensadresse nicht, hat KEIN Platz einen
+        # Namen. Dann waere die Liste leer, und die Funktion gaebe es
+        # praktisch nicht - deshalb in dem Fall alle Plaetze zeigen,
+        # nur eben mit Nummern statt Namen.
+        #
+        benannt = [eintrag for eintrag in snapshots if eintrag["name"]]
+
+        return {
+            "available": True,
+            "snapshots": benannt if benannt else snapshots,
+            "named": bool(benannt),
+        }
+
+    def load_console_snapshot(self, index: int) -> tuple[bool, str]:
+        """
+        Ruft einen Snapshot auf dem Pult auf.
+        """
+
+        host, _, _ = self._console_host_and_channels()
+
+        if not host:
+            return False, "Kein Mischpult erreichbar."
+
+        try:
+            index = int(index)
+        except (TypeError, ValueError):
+            return False, "Ungültige Snapshot-Nummer."
+
+        if not self.console_control.load_snapshot(host, index):
+            return False, "Der Snapshot konnte nicht geladen werden."
+
+        return True, ""
+
     def get_faders_autolock(self) -> dict:
         """
         Ob und nach wie vielen Sekunden Ruhe sich die Fader-Karte

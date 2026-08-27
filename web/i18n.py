@@ -206,6 +206,16 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "UDP 10024 für X-AIR-Edit/Mixing Station). Schließt sich "
             "mit dem Access-Point-Weg darüber aus."
         ),
+        "faders_snapshot_label": "Snapshot",
+        "faders_snapshot_load": "Laden",
+        "faders_snapshot_none": "Keine Snapshots gefunden",
+        "faders_snapshot_unnamed": "Snapshot {n}",
+        "confirm_snapshot_load": (
+            "Snapshot \"{name}\" wirklich laden? Das stellt am Mischpult "
+            "alle Regler, Stummschaltungen und Klangeinstellungen um."
+        ),
+        "alert_snapshot_loaded": "Snapshot \"{name}\" wurde geladen.",
+        "alert_snapshot_failed": "Snapshot konnte nicht geladen werden: {message}",
         "faders_search": "Mischpult erneut suchen",
         "alert_console_search_found": "Mischpult gefunden: {ip}",
         "alert_console_search_none": (
@@ -612,6 +622,16 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "X32-Edit, UDP 10024 for X-AIR-Edit/Mixing Station). "
             "Mutually exclusive with the access point route above."
         ),
+        "faders_snapshot_label": "Snapshot",
+        "faders_snapshot_load": "Load",
+        "faders_snapshot_none": "No snapshots found",
+        "faders_snapshot_unnamed": "Snapshot {n}",
+        "confirm_snapshot_load": (
+            "Really load snapshot \"{name}\"? This changes every fader, "
+            "mute and sound setting on the mixer."
+        ),
+        "alert_snapshot_loaded": "Snapshot \"{name}\" loaded.",
+        "alert_snapshot_failed": "Could not load the snapshot: {message}",
         "faders_search": "Search for mixer again",
         "alert_console_search_found": "Mixer found: {ip}",
         "alert_console_search_none": (

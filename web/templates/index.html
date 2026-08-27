@@ -413,6 +413,40 @@
                 {{ t.faders_no_connection }}
             </div>
 
+            {#
+                Snapshots des Pults. Sitzt ueber den Reglern, weil es
+                das Grobe ist: erst den Gesamtzustand waehlen, dann
+                einzelne Kanaele nachziehen.
+
+                Gesperrt wie die Regler selbst - ein Snapshot stellt
+                das ganze Pult um, das ist der eingreifendste Befehl
+                der Karte.
+            #}
+            <div id="faders-snapshots" class="d-flex align-items-center gap-2 mb-3 d-none">
+
+                <label class="flex-shrink-0 small" for="faders-snapshot-select">
+                    {{ t.faders_snapshot_label }}
+                </label>
+
+                <select
+                    id="faders-snapshot-select"
+                    class="form-select form-select-sm"
+                    style="min-width: 0;"
+                    disabled
+                ></select>
+
+                <button
+                    type="button"
+                    id="btn-faders-snapshot-load"
+                    class="btn btn-outline-primary btn-sm flex-shrink-0"
+                    disabled
+                >
+                    <i class="bi bi-box-arrow-in-down me-1"></i>
+                    {{ t.faders_snapshot_load }}
+                </button>
+
+            </div>
+
             <div id="faders-grid" class="d-none"></div>
 
             <small id="faders-hint" class="text-body-secondary d-block mt-2 d-none">

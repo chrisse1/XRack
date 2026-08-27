@@ -299,6 +299,23 @@ sudo systemctl status xrack    # Status prüfen
 journalctl -u xrack -f         # Live-Logs ansehen
 ```
 
+### Snapshots vom Mischpult laden
+
+In der Kanalfader-Karte lassen sich die am Pult gespeicherten
+Snapshots (beim X32: Szenen) auswählen und aufrufen. Das ist der
+eingreifendste Befehl, den XRack ans Pult schickt - er stellt in einem
+Zug alle Regler, Stummschaltungen und Klangeinstellungen um. Deshalb
+hängt er an derselben Sperre wie die Regler und fragt vorher nach.
+
+Die Adressen dafür sind belegt (X-Air `/-snap/load`, X32
+`/-action/goscene`), die für die **Namen** der einzelnen Plätze
+dagegen nicht - dort ist der übliche Aufbau eingebaut. Antwortet ein
+Pult darauf nicht, zeigt die Auswahl statt Namen einfach die Nummern;
+das Laden funktioniert unabhängig davon. Die Liste wird nicht laufend
+abgefragt (das kostet je nach Pult bis zu hundert Abfragen), sondern
+beim Laden der Seite, beim Entsperren der Karte und nach einem
+geladenen Snapshot.
+
 ### Der Access Point
 
 Wer XRack ohne Router vor Ort betreibt, lässt es sein eigenes WLAN
