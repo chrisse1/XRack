@@ -70,6 +70,14 @@ if ! nmcli -t -f NAME connection show | grep -qx "XRack-Home"; then
         connection.autoconnect yes >/dev/null || exit 1
 fi
 
+#
+# Vor dem Auslesen abgleichen: Im Profil kann ein Geraetename stehen,
+# der seit dem letzten Booten einem anderen Funkgeraet gehoert (siehe
+# xrack-wifi-bind.sh). Ungeprueft weiterverwendet, wuerde die
+# Heimnetz-Verbindung auf dem USB-Stick landen.
+#
+"$(dirname "$0")/xrack-wifi-bind.sh" || true
+
 IFACE="$(nmcli -g connection.interface-name connection show "XRack-Home")"
 
 nmcli connection modify "XRack-Home" \

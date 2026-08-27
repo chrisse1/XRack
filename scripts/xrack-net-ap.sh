@@ -63,6 +63,14 @@ if [ -n "${COUNTRY}" ]; then
     "$(dirname "$0")/xrack-wifi-country.sh" "${COUNTRY}" || true
 fi
 
+#
+# Geraetenamen abgleichen, bevor irgendetwas geschrieben wird: Steht
+# in der hostapd-Konfiguration ein Name, der inzwischen dem
+# eingebauten WLAN gehoert, wuerde der Access Point auf dem falschen
+# Chip landen (siehe xrack-wifi-bind.sh).
+#
+"$(dirname "$0")/xrack-wifi-bind.sh" || true
+
 # ------------------------------------------------------------------
 # Weg 0: Es gibt noch gar keinen Access Point
 #

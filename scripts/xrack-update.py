@@ -645,6 +645,34 @@ def run_update(
             if script.suffix in (".sh", ".py"):
                 script.chmod(0o755)
 
+        #
+        # Die systemd-Unit des Access Points neu schreiben.
+        #
+        # Sie wird sonst ausschliesslich beim Anlegen des Access
+        # Points geschrieben (xrack-ap-setup.sh). Eine bestehende
+        # Installation bekaeme neue ExecStartPre-Zeilen also nie zu
+        # sehen - zum Beispiel den Abgleich der Geraetenamen, der
+        # verhindert, dass nach einem Neustart der Access Point auf
+        # dem eingebauten Chip landet.
+        #
+        # Tut nichts, wenn gar kein Access Point eingerichtet ist,
+        # und darf folgenlos scheitern: Ein Update soll daran nicht
+        # haengenbleiben.
+        #
+        try:
+
+            subprocess.run(
+                [
+                    str(install_dir / "scripts" / "xrack-ap-setup.sh"),
+                    "--refresh-unit",
+                ],
+                capture_output=True,
+                timeout=30,
+            )
+
+        except Exception as exc:
+            log(f"Access-Point-Unit nicht aktualisiert: {exc}")
+
     except Exception as exc:
         log(f"Übertragen fehlgeschlagen: {exc}")
         return rollback(

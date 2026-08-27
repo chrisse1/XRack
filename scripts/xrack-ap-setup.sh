@@ -31,6 +31,23 @@ AP_PASSWORD="$2"
 AP_COUNTRY="$3"
 
 #
+# Zwei Betriebsarten:
+#
+#   (ohne)           Access Point komplett einrichten
+#   --refresh-unit   nur die systemd-Unit neu schreiben
+#
+# Die zweite braucht weder SSID noch Passwort noch einen
+# angesteckten Stick - die Konfiguration bleibt ja, wie sie ist.
+# Deshalb werden die Vorpruefungen dafuer uebersprungen.
+#
+NUR_UNIT="nein"
+
+if [ "${1:-}" = "--refresh-unit" ]; then
+    NUR_UNIT="ja"
+fi
+
+
+#
 # Die Zielpfade. Ueberschreibbar, damit der Test die Einrichtung
 # einmal komplett durchspielen kann, ohne am System zu schrauben -
 # sonst liesse sich genau der Teil nicht pruefen, den man auf dem
@@ -40,45 +57,56 @@ XRACK_HOSTAPD_CONF="${XRACK_HOSTAPD_CONF:-/etc/hostapd/xrack.conf}"
 XRACK_HOSTAPD_UNIT="${XRACK_HOSTAPD_UNIT:-/etc/systemd/system/xrack-hostapd.service}"
 XRACK_NM_UNMANAGED="${XRACK_NM_UNMANAGED:-/etc/NetworkManager/conf.d/99-xrack-hostapd.conf}"
 
-if [ -z "${AP_SSID}" ] || [ "${#AP_PASSWORD}" -lt 8 ]; then
-    echo "SSID fehlt oder Passwort zu kurz (mind. 8 Zeichen)." >&2
-    exit 1
-fi
+#
+# Der Abgleich der Geraetenamen, den die Unit vor jedem Start
+# aufruft. Absoluter Pfad, weil systemd kein Arbeitsverzeichnis
+# mitbringt.
+#
+XRACK_BIND_SKRIPT="$(cd "$(dirname "$0")" && pwd)/xrack-wifi-bind.sh"
 
-#
-# Zeilenumbrueche wuerden in der hostapd-Konfiguration eine neue
-# Einstellung erzeugen - der Rest der Zeile landete dann als Befehl
-# in der Datei.
-#
-case "${AP_SSID}${AP_PASSWORD}" in
-    *[$'\n\r']*)
-        echo "SSID oder Passwort enthaelt einen Zeilenumbruch." >&2
+if [ "${NUR_UNIT}" = "nein" ]; then
+
+    if [ -z "${AP_SSID}" ] || [ "${#AP_PASSWORD}" -lt 8 ]; then
+        echo "SSID fehlt oder Passwort zu kurz (mind. 8 Zeichen)." >&2
         exit 1
-        ;;
-esac
+    fi
 
-if [ "${#AP_SSID}" -gt 32 ] || [ "${#AP_PASSWORD}" -gt 63 ]; then
-    echo "SSID (max. 32) oder Passwort (max. 63) ist zu lang." >&2
-    exit 1
-fi
+    #
+    # Zeilenumbrueche wuerden in der hostapd-Konfiguration eine neue
+    # Einstellung erzeugen - der Rest der Zeile landete dann als Befehl
+    # in der Datei.
+    #
+    case "${AP_SSID}${AP_PASSWORD}" in
+        *[$'\n\r']*)
+            echo "SSID oder Passwort enthaelt einen Zeilenumbruch." >&2
+            exit 1
+            ;;
+    esac
 
-#
-# Welches Funkgeraet? Immer das per USB angeschlossene - siehe
-# xrack-wifi-iface.sh.
-#
-AP_IFACE="$("$(dirname "$0")/xrack-wifi-iface.sh" ap)"
+    if [ "${#AP_SSID}" -gt 32 ] || [ "${#AP_PASSWORD}" -gt 63 ]; then
+        echo "SSID (max. 32) oder Passwort (max. 63) ist zu lang." >&2
+        exit 1
+    fi
 
-if [ -z "${AP_IFACE}" ]; then
-    echo "Kein zweites WLAN-Geraet gefunden - fuer einen Access Point wird ein USB-WLAN-Stick gebraucht." >&2
-    exit 1
-fi
+    #
+    # Welches Funkgeraet? Immer das per USB angeschlossene - siehe
+    # xrack-wifi-iface.sh.
+    #
+    AP_IFACE="$("$(dirname "$0")/xrack-wifi-iface.sh" ap)"
 
-#
-# Ohne Laenderangabe darf hostapd auf 5 GHz gar nicht senden. Wurde
-# keine mitgegeben, die gerade geltende lesen.
-#
-if [ -z "${AP_COUNTRY}" ]; then
-    AP_COUNTRY="$(iw reg get 2>/dev/null | awk '/^country/ {print $2}' | tr -d ':' | head -n 1)"
+    if [ -z "${AP_IFACE}" ]; then
+        echo "Kein zweites WLAN-Geraet gefunden - fuer einen Access Point wird ein USB-WLAN-Stick gebraucht." >&2
+        exit 1
+    fi
+
+    #
+    # Ohne Laenderangabe darf hostapd auf 5 GHz gar nicht senden. Wurde
+    # keine mitgegeben, die gerade geltende lesen.
+    #
+    if [ -z "${AP_COUNTRY}" ]; then
+        AP_COUNTRY="$(iw reg get 2>/dev/null | awk '/^country/ {print $2}' | tr -d ':' | head -n 1)"
+    fi
+
 fi
 
 
@@ -187,6 +215,75 @@ start_xrack_hostapd() {
 # Liefert 0 bei Erfolg. Bei Fehlschlag wird das Interface wieder an
 # NetworkManager zurueckgegeben, damit der Rueckfallweg greifen kann.
 #
+#
+# Die systemd-Unit schreiben.
+#
+# Eigene Funktion, weil sie an zwei Stellen gebraucht wird: beim
+# Einrichten des Access Points und beim Nachziehen nach einem Update
+# (--refresh-unit). Ohne das zweite bekaeme eine bestehende
+# Installation neue ExecStartPre-Zeilen nie zu sehen - die Unit wird
+# sonst nur beim Anlegen geschrieben.
+#
+write_hostapd_unit() {
+
+    tee "${XRACK_HOSTAPD_UNIT}" > /dev/null <<EOF
+[Unit]
+Description=XRack Access Point (hostapd)
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+# Ein per rfkill gesperrtes Funkgeraet ist der haeufigste Grund,
+# warum hostapd direkt nach dem Booten nicht startet.
+ExecStartPre=-/usr/sbin/rfkill unblock wlan
+# wlan0/wlan1 werden nach Reihenfolge vergeben, nicht fest je Geraet -
+# beim Booten koennen Stick und eingebautes WLAN die Plaetze tauschen.
+# Deshalb vor jedem Start abgleichen, welcher Name gerade zu welcher
+# Rolle gehoert (siehe scripts/xrack-wifi-bind.sh).
+ExecStartPre=-${XRACK_BIND_SKRIPT}
+# Die Bridge muss es geben, bevor hostapd sich hineinhaengt. Kurzer
+# Zeitrahmen, damit ein fehlendes Kabel den Start nicht aufhaelt;
+# ein Fehlschlag ist unschaedlich (hostapd legt br0 sonst selbst an).
+ExecStartPre=-/usr/bin/nmcli -w 5 connection up XRack-Bridge
+ExecStart=/usr/sbin/hostapd ${XRACK_HOSTAPD_CONF}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl disable hostapd.service >/dev/null 2>&1 || true
+    systemctl enable xrack-hostapd.service >/dev/null 2>&1 || true
+}
+
+#
+# --refresh-unit: Nur die systemd-Unit neu schreiben, sonst nichts
+# anfassen.
+#
+# Gebraucht nach einem Update. Die Unit wird sonst ausschliesslich
+# beim Anlegen des Access Points geschrieben - eine bestehende
+# Installation bekaeme neue ExecStartPre-Zeilen also nie zu sehen,
+# und der Abgleich der Geraetenamen liefe dort nie an. Aufgerufen
+# wird das von scripts/xrack-update.py.
+#
+# Steht hinter write_hostapd_unit und den Pfad-Variablen, weil Bash
+# das Skript von oben nach unten liest - weiter oben waere die
+# Funktion noch nicht bekannt.
+#
+if [ "${1:-}" = "--refresh-unit" ]; then
+
+    if [ ! -f "${XRACK_HOSTAPD_CONF}" ]; then
+        # Kein Access Point eingerichtet - dann gibt es nichts zu tun.
+        exit 0
+    fi
+
+    write_hostapd_unit
+    exit 0
+fi
+
 setup_access_point_hostapd() {
 
     AP_HW_MODE="g"
@@ -248,39 +345,7 @@ setup_access_point_hostapd() {
 unmanaged-devices=interface-name:$1
 EOF
 
-    tee "${XRACK_HOSTAPD_UNIT}" > /dev/null <<EOF
-[Unit]
-Description=XRack Access Point (hostapd)
-After=NetworkManager.service
-Wants=NetworkManager.service
-
-[Service]
-Type=simple
-# Ein per rfkill gesperrtes Funkgeraet ist der haeufigste Grund,
-# warum hostapd direkt nach dem Booten nicht startet.
-ExecStartPre=-/usr/sbin/rfkill unblock wlan
-# Die Bridge muss es geben, bevor hostapd sich hineinhaengt. Kurzer
-# Zeitrahmen, damit ein fehlendes Kabel den Start nicht aufhaelt;
-# ein Fehlschlag ist unschaedlich (hostapd legt br0 sonst selbst an).
-ExecStartPre=-/usr/bin/nmcli -w 5 connection up XRack-Bridge
-ExecStart=/usr/sbin/hostapd ${XRACK_HOSTAPD_CONF}
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    systemctl daemon-reload
-
-    #
-    # Debians eigener hostapd-Dienst ist ab Werk maskiert und wuerde
-    # sonst eine zweite Instanz mitbringen - wir benutzen unsere
-    # eigene Unit und lassen seine ausdruecklich aus.
-    #
-    systemctl disable hostapd.service >/dev/null 2>&1 || true
-
-    systemctl enable xrack-hostapd.service >/dev/null 2>&1 || true
+    write_hostapd_unit
 
     nmcli device set "$1" managed no >/dev/null 2>&1 || true
     systemctl reload NetworkManager >/dev/null 2>&1 || true

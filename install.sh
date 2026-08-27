@@ -1084,6 +1084,7 @@ configure_sudoers() {
         "${INSTALL_DIR}/scripts/xrack-wired-restore.sh" \
         "${INSTALL_DIR}/scripts/xrack-wifi-iface.sh" \
         "${INSTALL_DIR}/scripts/xrack-wifi-country.sh" \
+        "${INSTALL_DIR}/scripts/xrack-wifi-bind.sh" \
         "${INSTALL_DIR}/scripts/xrack-ap-setup.sh" \
         "${INSTALL_DIR}/scripts/xrack-port-forward.sh" \
         "${INSTALL_DIR}/scripts/xrack-bt-power.sh" \
