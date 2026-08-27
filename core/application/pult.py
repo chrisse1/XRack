@@ -44,23 +44,30 @@ class PultMixin:
            von der Konsole.
         """
 
-        channels = (
-            self.selected_audio_device.channels
-            if self.selected_audio_device is not None
-            else 0
-        )
-
         manual = (self.state_store.get("console_ip_manual") or "").strip()
 
         if manual:
-            return manual, channels, "manual"
+            host, source = manual, "manual"
 
-        lease = self.wlan_control.get_status().get("console_ip")
+        else:
 
-        if lease:
-            return lease, channels, "lease"
+            lease = self.wlan_control.get_status().get("console_ip")
 
-        return self.console_control.discover(), channels, "discovered"
+            if lease:
+                host, source = lease, "lease"
+            else:
+                host, source = self.console_control.discover(), "discovered"
+
+        #
+        # Die Kanalzahl kommt vom Pult selbst, nicht vom
+        # Audiointerface. Frueher stand hier die Interface-Kanalzahl -
+        # ohne gewaehltes Interface war sie null, und die Fader-Karte
+        # meldete "keine Verbindung", obwohl das Pult erreichbar war
+        # und sogar seine Snapshots lieferte.
+        #
+        channels = self.console_control.channel_count(host) if host else 0
+
+        return host, channels, source
 
 
     # ----------------------------------------------------------------
@@ -340,7 +347,12 @@ class PultMixin:
 
         host, channels, source = self._console_host_and_channels()
 
-        if not host or channels <= 0:
+        #
+        # Keine Adresse heisst: kein Steuerweg. Eine Adresse, aber
+        # keine Kanalzahl heisst: Der Weg steht, das Pult schweigt -
+        # denn die Kanalzahl kommt jetzt vom Pult selbst.
+        #
+        if not host:
             return {
                 "available": False,
                 "reason": "no_connection",
@@ -349,7 +361,11 @@ class PultMixin:
                 "channels": [],
             }
 
-        result = self.console_control.get_channels(host, channels)
+        result = (
+            self.console_control.get_channels(host, channels)
+            if channels > 0
+            else None
+        )
 
         if result is None:
             return {

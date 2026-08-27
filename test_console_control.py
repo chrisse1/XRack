@@ -435,6 +435,16 @@ class FakeConsole:
         self.socket.close()
 
 
+class FakeStoreKanaele:
+    """Zustandsspeicher ohne Eintraege - die Pult-IP kommt aus der Vergabeliste."""
+
+    def get(self, key, default=None):
+        return default
+
+    def set(self, key, value):
+        pass
+
+
 console = FakeConsole()
 
 try:
@@ -1016,17 +1026,23 @@ try:
 
     def stub(manual="", lease=None, discovered=None, channels=18):
         return types.SimpleNamespace(
-            selected_audio_device=(
-                types.SimpleNamespace(channels=channels)
-                if channels
-                else None
-            ),
+            #
+            # Steht hier bewusst noch drin, obwohl die Kanalzahl es
+            # nicht mehr benutzt: So faellt auf, falls sie je wieder
+            # von hier gezogen wird.
+            #
+            selected_audio_device=None,
             state_store=FakeStore({"console_ip_manual": manual}),
             wlan_control=types.SimpleNamespace(
                 get_status=lambda: {"console_ip": lease}
             ),
             console_control=types.SimpleNamespace(
                 discover=lambda: discovered,
+                #
+                # Die Kanalzahl kommt vom Pult - erreichbar heisst
+                # channels, nicht erreichbar heisst 0.
+                #
+                channel_count=lambda host: channels if host else 0,
                 #
                 # set_console_host() verwirft das Gemerkte - hinter
                 # einer neuen Adresse kann ein anderes Pult stecken.
@@ -1173,6 +1189,7 @@ try:
             set_link=lambda host, channels, start, linked: (
                 gesetzt.append((start, linked)) or True
             ),
+            channel_count=lambda host: 18,
         ),
         logger=logging.getLogger("XRack-Test"),
     )
@@ -1378,6 +1395,94 @@ try:
     )
 
     print("OK: Nach dem Laden wird die Liste neu gelesen")
+
+    # ----------------------------------------------------------------
+    # Die Kanalzahl kommt vom Pult, nicht vom Audiointerface
+    #
+    # Rueckfall-Test zu einem Fehler aus dem Feld: Pult per Rundruf im
+    # selben Netz gefunden, Snapshots erschienen - die Kanalzuege
+    # nicht. Grund war, dass die Kanalzahl aus dem gewaehlten
+    # Audiointerface stammte. Ohne angestecktes Interface war sie
+    # null, und die Karte meldete "keine Verbindung", obwohl das Pult
+    # gerade geantwortet hatte.
+    #
+    # Die beiden haben nichts miteinander zu tun: Die Fader laufen
+    # ueber Netzwerk, das Interface ueber USB.
+    # ----------------------------------------------------------------
+
+    import types
+
+    from core.application import Application
+
+    control.detect_reset()
+    control._family = FAMILY_XAIR
+    control._port = console.port
+    control._detected_for = "127.0.0.1"
+
+    assert control.channel_count("127.0.0.1") == 18, (
+        "Ein X-Air hat 16 Kanaele plus Aux-Rueckweg."
+    )
+
+    def pult_stub(interface_kanaele):
+        """Application-Attrappe mit und ohne gewaehltes Audiointerface."""
+
+        zeug = types.SimpleNamespace(
+            selected_audio_device=(
+                types.SimpleNamespace(channels=interface_kanaele)
+                if interface_kanaele
+                else None
+            ),
+            state_store=FakeStoreKanaele(),
+            wlan_control=types.SimpleNamespace(
+                get_status=lambda: {"console_ip": "127.0.0.1"}
+            ),
+            console_control=control,
+            logger=logging.getLogger("XRack-Test"),
+        )
+
+        zeug._console_host_and_channels = (
+            lambda: Application._console_host_and_channels(zeug)
+        )
+
+        return zeug
+
+    mit = Application.get_console_channels(pult_stub(18))
+    ohne = Application.get_console_channels(pult_stub(0))
+
+    assert mit["available"] is True, mit
+    assert ohne["available"] is True, (
+        "Ohne gewaehltes Audiointerface fehlen die Kanalzuege - genau "
+        f"der gemeldete Fehler: {ohne}"
+    )
+
+    beschriftungen = [zug["label"] for zug in ohne["channels"]]
+
+    assert beschriftungen == [zug["label"] for zug in mit["channels"]], (
+        "Das Audiointerface darf die Kanalzuege nicht veraendern."
+    )
+    assert beschriftungen[-2:] == ["17+18", "Main"], beschriftungen
+
+    print(
+        "OK: Die Kanalzuege haengen am Pult, nicht am Audiointerface "
+        f"({len(beschriftungen)} Zuege mit und ohne Interface)"
+    )
+
+    # ----------------------------------------------------------------
+    # Und die Fallunterscheidung bleibt ehrlich: Adresse bekannt, Pult
+    # stumm -> "antwortet nicht", nicht "kein Zugangsweg". Sonst
+    # schickt die Oberflaeche den Nutzer in die Einstellungen, obwohl
+    # dort alles richtig steht.
+    # ----------------------------------------------------------------
+
+    control.detect_reset()
+
+    stumm = Application.get_console_channels(pult_stub(0))
+
+    assert stumm["available"] is False
+    assert stumm["reason"] == "no_response", stumm
+    assert stumm["host"] == "127.0.0.1", stumm
+
+    print("OK: Stummes Pult meldet 'antwortet nicht', nicht 'kein Zugangsweg'")
 
 finally:
     console.stop()

@@ -182,6 +182,12 @@ am Pi nötig.
   angefasst wurde - ob überhaupt und nach wie vielen Sekunden, stellt
   man in den Einstellungen ein.
 
+  Wie viele Kanalzüge die Karte zeigt, sagt das Pult selbst (X-Air: 16
+  Kanäle plus Aux-Rückweg, X32: 32). Das Audiointerface hat damit
+  nichts zu tun - die Fader laufen über Netzwerk, nicht über das
+  USB-Audiokabel. Die Karte funktioniert deshalb auch ohne
+  angeschlossenes Interface.
+
   Die Konsole findet XRack selbst: über die eigene DHCP-Vergabeliste,
   wenn das Pult am Pi hängt, sonst per OSC-Rundruf im Netz - so wie
   X32-Edit und X-AIR-Edit ihre Pulte auch finden. Damit ist der Fall
