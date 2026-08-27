@@ -892,6 +892,17 @@ try:
         f"Die Kabelverbindung kommt nicht von selbst hoch: {kabelzeile}"
     )
 
+    #
+    # Ohne den Hostnamen im DHCP-Antrag lernt der Router ihn nicht -
+    # dann ist der Pi nur ueber die IP zu erreichen. Das ist der
+    # zweite Weg zum Geraet, unabhaengig von ".local", und der
+    # einzige, der auch ohne mDNS auf dem anfragenden Geraet
+    # funktioniert.
+    #
+    assert all("ipv4.dhcp-send-hostname yes" in z for z in kabelzeile), (
+        f"Der Router erfaehrt den Hostnamen nicht: {kabelzeile}"
+    )
+
     print("OK: Auch ohne Antworten steht das Geruest zum Nachruesten")
     print("OK: Die Netzwerkbuchse bleibt ganz normal per DHCP erreichbar")
 

@@ -262,7 +262,8 @@ install_system_dependencies() {
         ntfs-3g \
         iptables \
         iw \
-        hostapd > /dev/null
+        hostapd \
+        avahi-daemon > /dev/null
     }
 
     mit_punkten \
@@ -386,9 +387,24 @@ configure_hostname_and_avahi() {
         echo -e "127.0.1.1\t${XRACK_HOSTNAME}" | sudo tee -a /etc/hosts > /dev/null
     fi
 
+    #
+    # avahi beantwortet Anfragen nach "<hostname>.local" im lokalen
+    # Netz. Das Paket wird seit dieser Fassung ausdruecklich
+    # mitinstalliert - vorher hat XRack nur eingeschaltet, was
+    # zufaellig schon da war, und auf einem schlanken System war das
+    # eben nichts. Der Hinweis unten bleibt fuer den Fall, dass die
+    # Installation des Pakets scheitert.
+    #
     if command -v avahi-daemon >/dev/null 2>&1; then
+
         sudo systemctl enable avahi-daemon >/dev/null 2>&1 || true
         sudo systemctl restart avahi-daemon
+
+        #
+        # avahi liest den Hostnamen beim Start. Er wurde gerade eben
+        # geaendert - ohne den Neustart oben meldete sich der Pi
+        # weiter unter dem alten Namen.
+        #
     else
         echo "$(L "Hinweis: avahi-daemon nicht gefunden - '${XRACK_HOSTNAME}.local' wird im Netzwerk nicht auffindbar sein." "Note: avahi-daemon not found - '${XRACK_HOSTNAME}.local' won't be discoverable on the network.")"
     fi
@@ -864,8 +880,18 @@ setup_wired_profile() {
     #
     if ! nmcli -t -f NAME connection show | grep -qx "XRack-Wired-eth0"; then
 
+        #
+        # "dhcp-send-hostname yes" ist ohnehin die Vorgabe, steht hier
+        # aber ausdruecklich: Nur so lernt der Router den Namen und
+        # kann ihn selbst aufloesen (bei einer FRITZ!Box etwa als
+        # "xrack" bzw. "xrack.fritz.box"). Das ist der zweite Weg zum
+        # Geraet, unabhaengig von ".local" - und der einzige, der auch
+        # ohne mDNS auf dem anfragenden Geraet funktioniert.
+        #
         sudo nmcli connection add type ethernet ifname eth0 con-name "XRack-Wired-eth0" \
-            ipv4.method auto connection.autoconnect yes >/dev/null || return 1
+            ipv4.method auto \
+            ipv4.dhcp-send-hostname yes \
+            connection.autoconnect yes >/dev/null || return 1
     fi
 
     return 0

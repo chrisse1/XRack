@@ -303,6 +303,14 @@ Vorhandene WLAN-Profile (etwa das vom Raspberry Pi Imager angelegte
 Funkgerät streitig machen - gelöscht wird nichts, wer sie später
 braucht, findet sie noch vor.
 
+Zum Namen: XRack installiert `avahi-daemon` mit, damit
+`<hostname>.local` im Netz auflösbar ist, und schickt den Hostnamen im
+DHCP-Antrag mit, damit auch der Router ihn lernt (bei einer FRITZ!Box
+etwa als `xrack` bzw. `xrack.fritz.box`). Ob ein `.local`-Name
+ankommt, hängt allerdings am **anfragenden** Gerät: Windows und iOS
+können mDNS, ältere Android-Versionen nicht. Die IP funktioniert
+immer.
+
 Danach ist das Webinterface unter `https://<hostname>.local:<port>`
 erreichbar (Standard: `https://xrack.local:8080`). Das Zertifikat ist
 selbstsigniert (ein "echtes", vom Browser automatisch akzeptiertes
