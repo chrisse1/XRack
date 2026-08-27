@@ -3083,6 +3083,13 @@ let updatePollTimer = null;
 let updatePackageName = "";
 
 //
+// Version im gefundenen Paket und die gerade installierte -
+// gebraucht fuer die Rueckfrage vor einem Rueckschritt.
+//
+let updatePackageVersion = "";
+let installedVersion = "";
+
+//
 // Steht auf true, sobald ein abgeschlossenes Update-Ergebnis im Modal
 // steht. Beim Schliessen wird es quittiert - sonst begruesst einen
 // "Update erfolgreich" noch Tage spaeter.
@@ -3100,6 +3107,8 @@ async function loadUpdateInfo() {
 
         document.getElementById("settings-update-version").textContent = data.version || "-";
         updatePackageName = data.package || "";
+        updatePackageVersion = data.package_version || "";
+        installedVersion = data.version || "";
 
         if (data.package) {
             packageBox.className = "small mb-2 text-success";
@@ -3224,6 +3233,45 @@ function restoreUpdateButtons() {
     if (usb) usb.disabled = !updatePackageName;
 }
 
+//
+// Vergleicht zwei Versionsangaben ("1.7.5") Zahl fuer Zahl.
+//
+// Nicht als Text vergleichen: "1.10.0" waere dort kleiner als "1.9.0",
+// weil "1" vor "9" kommt.
+//
+function istAelter(a, b) {
+
+    const zahlen = (text) => text.split(".").map((teil) => parseInt(teil, 10));
+
+    const links = zahlen(a);
+    const rechts = zahlen(b);
+
+    //
+    // Unlesbare Angabe - dann lieber nicht vergleichen, als
+    // faelschlich einen Rueckschritt zu melden.
+    //
+    // Die Pruefung steht VOR dem Auffuellen mit Nullen: "x || 0"
+    // macht aus NaN eine 0, und danach saehe "kaputt" wie "0" aus -
+    // also aelter als alles. Der erste Anlauf hatte genau den Fehler.
+    //
+    if (!links.length || !rechts.length) return false;
+    if (links.some(Number.isNaN) || rechts.some(Number.isNaN)) return false;
+
+    for (let i = 0; i < Math.max(links.length, rechts.length); i++) {
+
+        //
+        // Fehlende Stellen zaehlen als 0: "1.7" ist dasselbe wie
+        // "1.7.0".
+        //
+        const x = i < links.length ? links[i] : 0;
+        const y = i < rechts.length ? rechts[i] : 0;
+
+        if (x !== y) return x < y;
+    }
+
+    return false;
+}
+
 async function startUpdate(source) {
     if (source === "usb" && !updatePackageName) return;
 
@@ -3232,6 +3280,37 @@ async function startUpdate(source) {
         : I18N.settings_update_confirm.replace("{name}", updatePackageName);
 
     if (!confirm(frage)) return;
+
+    //
+    // Rueckschritt abfangen, bevor irgendetwas passiert.
+    //
+    // Anlass war ein Fall aus dem Betrieb: Auf dem Stick lag noch eine
+    // alte ZIP, und das Update hat den Stand still um Monate
+    // zurueckgedreht. Auffallen kann das kaum - ein alter Stand
+    // laeuft ja, er kann nur weniger.
+    //
+    // Nur beim USB-Weg: Aus dem Internet kommt immer der aktuelle
+    // Stand des Zweigs, und dessen Version kennt die Oberflaeche vor
+    // dem Herunterladen gar nicht. Dort faengt der Updater selbst ab
+    // (scripts/xrack-update.py).
+    //
+    let allowDowngrade = false;
+
+    if (
+        source === "usb"
+        && updatePackageVersion
+        && installedVersion
+        && istAelter(updatePackageVersion, installedVersion)
+    ) {
+
+        const rueckfrage = I18N.confirm_update_downgrade
+            .replace("{package}", updatePackageVersion)
+            .replace("{installed}", installedVersion);
+
+        if (!confirm(rueckfrage)) return;
+
+        allowDowngrade = true;
+    }
 
     const result = document.getElementById("settings-update-result");
 
@@ -3244,7 +3323,7 @@ async function startUpdate(source) {
         response = await (await fetch("/api/update/start", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ source }),
+            body: JSON.stringify({ source, allow_downgrade: allowDowngrade }),
         })).json();
     } catch (error) {
         console.error("Update konnte nicht gestartet werden:", error);

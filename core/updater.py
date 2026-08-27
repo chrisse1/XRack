@@ -18,6 +18,7 @@ Dienstes liefe, würde sich mitten im Dateitausch selbst abschießen.
 import json
 import logging
 import subprocess
+import zipfile
 from pathlib import Path
 
 from core.usb_storage import UsbStorage
@@ -73,13 +74,69 @@ class Updater:
                 "usb_connected": self.usb_storage.connected,
                 "package": "",
                 "size": 0,
+                "package_version": "",
             }
 
         return {
             "usb_connected": True,
             "package": package.name,
             "size": package.stat().st_size,
+            #
+            # Damit die Oberflaeche vor einem Rueckschritt warnen kann,
+            # bevor der Nutzer den Knopf drueckt.
+            #
+            "package_version": self.paket_version(package),
         }
+
+    def paket_version(self, package: Path) -> str:
+        """
+        Die Version, die in einer Update-ZIP steckt - leer, wenn sie
+        sich nicht ermitteln laesst.
+
+        Gelesen wird nur die eine Datei aus dem Archiv, ohne es
+        auszupacken: Das passiert bei jedem Aufruf des
+        Einstellungen-Menues, und ein Paket kann einige Megabyte
+        gross sein.
+        """
+
+        try:
+
+            with zipfile.ZipFile(package) as archiv:
+
+                treffer = [
+                    name for name in archiv.namelist()
+                    if name.endswith("config/default.yaml")
+                ]
+
+                if not treffer:
+                    return ""
+
+                #
+                # Der kuerzeste Pfad ist der oberste - bei GitHub-ZIPs
+                # also der im Wurzelverzeichnis des Projekts.
+                #
+                inhalt = archiv.read(min(treffer, key=len)).decode(
+                    "utf-8", errors="replace"
+                )
+
+        except Exception:
+            return ""
+
+        in_abschnitt = False
+
+        for zeile in inhalt.splitlines():
+
+            if zeile.startswith("application:"):
+                in_abschnitt = True
+                continue
+
+            if zeile and not zeile[0].isspace():
+                in_abschnitt = False
+
+            if in_abschnitt and zeile.strip().startswith("version:"):
+                return zeile.split(":", 1)[1].strip().strip('"').strip("'")
+
+        return ""
 
     def start(
         self,
@@ -88,6 +145,7 @@ class Updater:
         source: str = "usb",
         repository: str = "",
         branch: str = "main",
+        allow_downgrade: bool = False,
     ) -> tuple[bool, str]:
         """
         Startet das Update im Hintergrund. Liefert (Erfolg, Meldung) -
@@ -135,6 +193,11 @@ class Updater:
             service_user,
             str(port),
             *quelle,
+            #
+            # Nur wenn der Nutzer die Rueckfrage bejaht hat - von sich
+            # aus geht der Updater nie auf eine aeltere Version zurueck.
+            #
+            *(["--allow-downgrade"] if allow_downgrade else []),
         ]
 
         try:

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
+
 class UpdateSelection(BaseModel):
     #
     # "usb" (ZIP-Datei vom Stick) oder "github" (aus dem Internet).
@@ -14,6 +15,12 @@ class UpdateSelection(BaseModel):
     # noch gar keine Quelle mitschickt, weiter funktioniert.
     #
     source: str = "usb"
+
+    #
+    # Ein Rueckschritt auf eine aeltere Version. Setzt die Oberflaeche
+    # nur, wenn der Nutzer die Rueckfrage bejaht hat.
+    #
+    allow_downgrade: bool = False
 
 
 @router.get("/api/update/info")
@@ -41,7 +48,9 @@ def update_start(request: Request, selection: UpdateSelection):
 
     application = request.app.state.application
 
-    success, message = application.start_update(selection.source)
+    success, message = application.start_update(
+        selection.source, allow_downgrade=selection.allow_downgrade
+    )
 
     return {
         "success": success,

@@ -239,6 +239,12 @@ am Pi nötig.
   Nutzerdaten sind davon nicht betroffen: Aufnahmen, Musik, PIN,
   Einstellungen und `.venv` stehen in der `.gitignore` und werden von
   git gar nicht verfolgt.
+- **Update-Rückschritt**: Enthält die ZIP auf dem Stick eine ältere
+  Version als die installierte, fragt XRack vor dem Start nach und
+  nennt beide Nummern. Wer ablehnt, hat nichts verändert; der Updater
+  weist einen Rückschritt zusätzlich selbst ab, bevor er etwas
+  überschreibt.
+
 - **Diagnose-Aufzeichnung**: Ein Schalter in den Einstellungen, der im
   Hintergrund mitschreibt, wie es XRack und dem Netzwerk geht - und was
   XRack im selben Moment gerade tat. Gedacht für Fehler, die nur

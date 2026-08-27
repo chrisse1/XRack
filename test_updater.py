@@ -747,8 +747,192 @@ try:
 
     print("OK: Ein laufendes Update laesst sich nicht vorab quittieren")
 
-    print("Alle Tests erfolgreich.")
-
+    
 finally:
 
     shutil.rmtree(scratch, ignore_errors=True)
+
+
+# ====================================================================
+# Rueckschritt auf eine aeltere Version
+#
+# Aus dem Betrieb: Auf dem USB-Stick lag noch eine alte ZIP, und das
+# Update hat den Stand still um Monate zurueckgedreht. Auffallen kann
+# das kaum - ein alter Stand laeuft ja, er kann nur weniger.
+# ====================================================================
+
+import subprocess as _sp
+import sys as _sys
+import tempfile as _tf
+import shutil as _sh
+import zipfile as _zip
+from pathlib import Path as _P
+
+UPDATE_SKRIPT = _P(__file__).parent / "scripts" / "xrack-update.py"
+
+
+def _projekt(wurzel: _P, version: str) -> _P:
+    """Ein Minimal-XRack, gerade genug fuer die Pruefungen des Updaters."""
+
+    wurzel.mkdir(parents=True, exist_ok=True)
+    (wurzel / "main.py").write_text("# XRack\n")
+    (wurzel / "config").mkdir(exist_ok=True)
+    (wurzel / "config" / "default.yaml").write_text(
+        "application:\n"
+        '  name: "XRack"\n'
+        f'  version: "{version}"\n'
+        '  language: "de"\n'
+        "\nserver:\n  port: 8080\n"
+    )
+    for name in ("requirements.txt", "install.sh"):
+        (wurzel / name).write_text("x\n")
+
+    #
+    # Ordner brauchen eine Datei darin: Leere Verzeichnisse landen
+    # nicht in einer ZIP, und der Updater prueft, ob sie nach dem
+    # Auspacken da sind.
+    #
+    for name in ("core", "web", "writer", "reader", "recorder", "player", "audio"):
+        (wurzel / name).mkdir(exist_ok=True)
+        (wurzel / name / "__init__.py").write_text("")
+
+    return wurzel
+
+
+# ---- Das Auslesen der Version aus der ZIP ---------------------------
+
+from core.updater import Updater
+
+with _tf.TemporaryDirectory() as tmp:
+
+    wurzel = _P(tmp)
+    quelle = _projekt(wurzel / "XRack-main", "1.7.5")
+
+    paket = wurzel / "XRack-main.zip"
+
+    with _zip.ZipFile(paket, "w") as archiv:
+        for datei in quelle.rglob("*"):
+            if datei.is_file():
+                archiv.write(datei, datei.relative_to(wurzel))
+
+    #
+    # Nicht "updater" nennen: So heisst weiter oben schon das per
+    # importlib geladene Skript-Modul, und das wird gleich noch
+    # gebraucht.
+    #
+    leser = Updater.__new__(Updater)
+
+    assert leser.paket_version(paket) == "1.7.5", (
+        f"Version nicht aus der ZIP gelesen: {leser.paket_version(paket)!r}"
+    )
+
+    #
+    # Kaputte oder fremde ZIP: leer statt Absturz - sonst waere das
+    # Einstellungen-Menue nicht mehr zu oeffnen.
+    #
+    fremd = wurzel / "fremd.zip"
+    with _zip.ZipFile(fremd, "w") as archiv:
+        archiv.writestr("liesmich.txt", "nichts von XRack")
+
+    assert leser.paket_version(fremd) == ""
+
+    kaputt = wurzel / "kaputt.zip"
+    kaputt.write_bytes(b"das ist keine ZIP")
+
+    assert leser.paket_version(kaputt) == ""
+
+    print("OK: Die Version wird aus der ZIP gelesen, Unbrauchbares faellt weich")
+
+
+# ---- Der Abbruch im Updater selbst ----------------------------------
+#
+# run_update() direkt aufgerufen, nicht ueber die Kommandozeile: Ohne
+# --detached uebergibt main() nur an einen systemd-Task und endet
+# sofort - der Ablauf liefe dort gar nicht.
+
+def _paket(wurzel: _P, name: str, version: str) -> _P:
+    quelle = _projekt(wurzel / "XRack-main", version)
+    ziel = wurzel / name
+
+    with _zip.ZipFile(ziel, "w") as archiv:
+        for datei in quelle.rglob("*"):
+            if datei.is_file():
+                archiv.write(datei, datei.relative_to(wurzel))
+
+    _sh.rmtree(quelle)
+    return ziel
+
+
+with _tf.TemporaryDirectory() as tmp:
+
+    wurzel = _P(tmp)
+
+    #
+    # Installiert ist 1.7.5, das Paket bringt 1.2.0 - genau der Fall,
+    # der im Betrieb passiert ist.
+    #
+    installiert = _projekt(wurzel / "installiert", "1.7.5")
+    paket = _paket(wurzel, "alt.zip", "1.2.0")
+
+    updater.WORK_DIR = wurzel / "arbeit"
+    updater.EXTRACT_DIR = updater.WORK_DIR / "new"
+    updater.STATUS_FILE = updater.WORK_DIR / "status.json"
+    updater.LOG_FILE = updater.WORK_DIR / "update.log"
+    updater.BACKUP_DIR = updater.WORK_DIR / "backup"
+    updater.WORK_DIR.mkdir(parents=True, exist_ok=True)
+
+    vorher = (installiert / "config" / "default.yaml").read_text()
+
+    ergebnis = updater.run_update(paket, installiert, "pi", 8080)
+
+    assert ergebnis != 0, (
+        "Der Rueckschritt wurde angenommen - genau der gemeldete Fehler."
+    )
+
+    import json as _json
+
+    status = _json.loads(updater.STATUS_FILE.read_text(encoding="utf-8"))
+
+    assert status["state"] == "failed", status
+    assert "1.2.0" in status["message"] and "1.7.5" in status["message"], (
+        f"Die Meldung nennt die beiden Versionen nicht: {status['message']!r}"
+    )
+
+    assert (installiert / "config" / "default.yaml").read_text() == vorher, (
+        "Es wurde trotz Abbruch schon etwas ueberschrieben."
+    )
+
+    print("OK: Ein Rueckschritt wird abgelehnt, bevor etwas ueberschrieben ist")
+
+    # ---- Ausdruecklich erlaubt: der Abbruch bleibt aus --------------
+
+    updater.STATUS_FILE.unlink(missing_ok=True)
+
+    updater.run_update(paket, installiert, "pi", 8080, allow_downgrade=True)
+
+    status = _json.loads(updater.STATUS_FILE.read_text(encoding="utf-8"))
+
+    assert "installiert ist" not in status.get("message", ""), (
+        f"Trotz allow_downgrade abgelehnt: {status}"
+    )
+
+    print("OK: Mit allow_downgrade laesst sich der Rueckschritt erzwingen")
+
+    # ---- Neuere Version: kein Thema --------------------------------
+
+    installiert2 = _projekt(wurzel / "installiert2", "1.7.5")
+    paket_neu = _paket(wurzel, "neu.zip", "1.8.0")
+
+    updater.STATUS_FILE.unlink(missing_ok=True)
+
+    updater.run_update(paket_neu, installiert2, "pi", 8080)
+
+    status = _json.loads(updater.STATUS_FILE.read_text(encoding="utf-8"))
+
+    assert "installiert ist" not in status.get("message", ""), (
+        f"Ein Fortschritt wurde als Rueckschritt behandelt: {status}"
+    )
+
+    print("OK: Ein Update auf eine neuere Version laeuft unveraendert weiter")
+
+print("Alle Tests erfolgreich.")

@@ -31,7 +31,9 @@ class WartungMixin:
         return info
 
 
-    def start_update(self, source: str = "usb") -> tuple[bool, str]:
+    def start_update(
+        self, source: str = "usb", allow_downgrade: bool = False
+    ) -> tuple[bool, str]:
         """
         Startet das Update - entweder aus dem Internet ("github") oder
         von dem auf dem USB-Stick gefundenen Paket ("usb").
@@ -56,6 +58,7 @@ class WartungMixin:
             source=source,
             repository=self.config.data.update.repository,
             branch=self.config.data.update.branch,
+            allow_downgrade=allow_downgrade,
         )
 
 
