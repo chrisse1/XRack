@@ -62,11 +62,15 @@ MIN_DB = -90.0
 #   X32:    /-action/goscene       (int)  Szene aufrufen
 #           /-show/prepos/current  (int)  aktuelle Szene
 #
-# Die Namen der einzelnen Plaetze sind dagegen NICHT belegt - die
-# Adressen unten sind der ueblicherweise verwendete Aufbau. Deshalb
-# ist das Auslesen der Namen so gebaut, dass es folgenlos scheitern
-# darf: Antwortet das Pult darauf nicht, zeigt die Oberflaeche eben
-# nur Nummern. Das Aufrufen selbst haengt nicht daran.
+# Fuer die Namen der einzelnen Plaetze gab es keine Quelle - dort
+# steht der ueblicherweise verwendete Aufbau. Am XR18 hat er sich
+# inzwischen im Betrieb bestaetigt (die Namen erscheinen), fuer den
+# X32 ist er weiterhin ungeprueft.
+#
+# Das Auslesen der Namen bleibt deshalb so gebaut, dass es folgenlos
+# scheitern darf: Antwortet ein Pult darauf nicht, zeigt die
+# Oberflaeche eben nur Nummern. Das Aufrufen selbst haengt nicht
+# daran.
 #
 SNAPSHOT_LOAD = {
     FAMILY_XAIR: "/-snap/load",

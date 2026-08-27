@@ -308,9 +308,10 @@ Zug alle Regler, Stummschaltungen und Klangeinstellungen um. Deshalb
 hängt er an derselben Sperre wie die Regler und fragt vorher nach.
 
 Die Adressen dafür sind belegt (X-Air `/-snap/load`, X32
-`/-action/goscene`), die für die **Namen** der einzelnen Plätze
-dagegen nicht - dort ist der übliche Aufbau eingebaut. Antwortet ein
-Pult darauf nicht, zeigt die Auswahl statt Namen einfach die Nummern;
+`/-action/goscene`). Für die **Namen** der einzelnen Plätze gab es
+keine Quelle; dort ist der übliche Aufbau eingebaut, der sich am XR18
+im Betrieb bestätigt hat - für den X32 ist er ungeprüft. Antwortet ein
+Pult nicht darauf, zeigt die Auswahl statt Namen einfach die Nummern;
 das Laden funktioniert unabhängig davon. Die Liste wird nicht laufend
 abgefragt (das kostet je nach Pult bis zu hundert Abfragen), sondern
 beim Laden der Seite, beim Entsperren der Karte und nach einem
