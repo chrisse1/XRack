@@ -55,6 +55,27 @@ fi
 #
 XRACK_HOSTAPD_CONF="${XRACK_HOSTAPD_CONF:-/etc/hostapd/xrack.conf}"
 XRACK_HOSTAPD_UNIT="${XRACK_HOSTAPD_UNIT:-/etc/systemd/system/xrack-hostapd.service}"
+
+#
+# Stand der systemd-Unit.
+#
+# Hochzaehlen, sobald sich am Inhalt der Unit etwas aendert. XRack
+# vergleicht diese Zahl beim Start mit der Marke in der installierten
+# Unit und laesst sie neu schreiben, wenn sie zurueckliegt (siehe
+# core/wlan_control.py).
+#
+# Warum es das braucht: Die Unit wurde frueher nur beim Anlegen des
+# Access Points geschrieben. Ein Update brachte zwar den neuen Text
+# mit, fasste die installierte Datei aber nie an - neue
+# ExecStartPre-Zeilen erreichten ein laufendes Geraet also nie. Der
+# Aufruf im Updater half nicht: xrack-update.py startet sich vor dem
+# Kopieren neu, es laeuft also stets die alte Fassung des Updaters.
+# Deshalb prueft XRack selbst, nach dem Update, mit dem neuen Code.
+#
+# 1 = urspruengliche Unit
+# 2 = mit ExecStartPre fuer xrack-wifi-bind.sh (Namensabgleich)
+#
+XRACK_UNIT_VERSION="2"
 XRACK_NM_UNMANAGED="${XRACK_NM_UNMANAGED:-/etc/NetworkManager/conf.d/99-xrack-hostapd.conf}"
 
 #
@@ -227,6 +248,7 @@ start_xrack_hostapd() {
 write_hostapd_unit() {
 
     tee "${XRACK_HOSTAPD_UNIT}" > /dev/null <<EOF
+# XRack-Unit-Version: ${XRACK_UNIT_VERSION}
 [Unit]
 Description=XRack Access Point (hostapd)
 After=NetworkManager.service
