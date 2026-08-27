@@ -153,23 +153,21 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "alert_music_files_delete_failed": "Dateien konnten nicht gelöscht werden.",
 
         # Einstellungen-Modal
+        # Einstellungen-Modal: die fuenf Themengruppen
+        "settings_group_console": "Mischpult",
+        "settings_group_network": "Netzwerk",
+        "settings_group_recording": "Aufnahme",
+        "settings_group_device": "Gerät",
+        "settings_group_maintenance": "Wartung",
         "settings_icon_title": "Einstellungen",
         "modal_settings_title": "Einstellungen",
         "settings_language_label": "Sprache",
         "settings_sample_rate_label": "Mischpult-Samplerate",
-        "settings_sample_rate_hint": (
-            "Die tatsächlich am Mischpult/Interface eingestellte "
-            "Samplerate - XRack kann sie nicht automatisch erkennen. "
-            "Falsch eingestellt klingt Musik/Aufnahme zu schnell oder "
-            "zu langsam."
-        ),
+        "settings_sample_rate_hint": "Muss zur Einstellung am Mischpult passen - sonst klingt alles zu schnell oder zu langsam.",
         "settings_port_label": "Port",
         "settings_port_hint": "Wird erst nach einem Neustart wirksam.",
         "settings_recording_label": "Aufnahmename",
-        "settings_recording_hint": (
-            "Aufnahmen werden fortlaufend nummeriert benannt, z.B. "
-            '"Soundcheck-1", "Soundcheck-2", ...'
-        ),
+        "settings_recording_hint": "Aufnahmen werden fortlaufend nummeriert.",
         "btn_save": "Speichern",
         "btn_restart_now": "Jetzt neu starten",
         "confirm_restart": (
@@ -184,11 +182,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "NetworkManager (nmcli) nicht gefunden - WLAN-Einstellungen "
             "nicht verfügbar."
         ),
-        "settings_ap_no_hardware": (
-            "Kein USB-WLAN-Stick erkannt. Für einen eigenen Access Point "
-            "wird einer gebraucht - das eingebaute WLAN ist für den "
-            "Heimnetz-Anschluss zuständig."
-        ),
+        "settings_ap_no_hardware": "Kein USB-WLAN-Stick erkannt.",
         "confirm_update_downgrade": (
             "Das Paket enthält Version {package}, installiert ist "
             "{installed}.\n\nDas wäre ein Rückschritt - neuere "
@@ -196,10 +190,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "fortfahren?"
         ),
         "settings_wifi_country_title": "WLAN-Land",
-        "settings_wifi_country_hint": (
-            "Gilt für beide Funkgeräte. Ohne Angabe bleibt das WLAN "
-            "gesperrt, und der Access Point kann kein 5 GHz."
-        ),
+        "settings_wifi_country_hint": "Gilt für beide Funkgeräte. Ohne Angabe bleibt WLAN gesperrt.",
         "settings_wifi_country_none": "Noch nicht gesetzt",
         "settings_wifi_country_save": "Land speichern",
         "alert_wifi_country_saved": "WLAN-Land gespeichert.",
@@ -209,20 +200,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_ap_access_title": (
             "Konsole über XRacks Access Point erreichbar machen"
         ),
-        "settings_bridge_hint": (
-            "Verbindet ein per Kabel angeschlossenes Mischpult mit "
-            "XRacks eigenem Access Point - die Apps verbinden sich "
-            "dafür mit dem WLAN von XRack."
-        ),
+        "settings_bridge_hint": "Das Pult an der Netzwerkbuchse wird über den Access Point erreichbar.",
         "settings_console_access_title": (
             "Konsole aus dem Heimnetz erreichbar machen"
         ),
-        "settings_console_access_hint": (
-            "Die per Kabel angeschlossene Konsole wird über XRacks "
-            "eigene IP im Heimnetz ansprechbar (UDP 10023 für X32-Edit, "
-            "UDP 10024 für X-AIR-Edit/Mixing Station). Schließt sich "
-            "mit dem Access-Point-Weg darüber aus."
-        ),
+        "settings_console_access_hint": "Das Pult an der Netzwerkbuchse wird aus dem Heimnetz erreichbar - für X32-Edit, X-AIR-Edit und Mixing Station.",
         "faders_snapshot_label": "Snapshot",
         "faders_snapshot_load": "Laden",
         "faders_snapshot_none": "Keine Snapshots gefunden",
@@ -249,13 +231,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_console_ip_label": "Konsole am Pi:",
         "settings_console_host_label": "IP des Mischpults",
         "settings_console_host_placeholder": "automatisch",
-        "settings_console_host_hint": (
-            "Leer lassen, wenn das Pult am Pi hängt oder im Netz "
-            "gefunden wird. Eintragen, wenn Pult und Pi zusammen an "
-            "einem Router hängen und die Kanalzüge trotzdem keine "
-            "Verbindung melden - manche Router lassen den Suchlauf "
-            "nicht durch."
-        ),
+        "settings_console_host_hint": "Nur nötig, wenn der Router den Suchlauf blockiert. Leer = automatisch.",
         "settings_console_host_invalid": "Das ist keine gültige IPv4-Adresse.",
         "settings_console_host_manual": "Wird benutzt: {ip} (von Hand eingetragen)",
         "settings_console_host_lease": "Wird benutzt: {ip} (am Pi angemeldet)",
@@ -263,11 +239,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_console_host_none": "Kein Mischpult gefunden.",
         "settings_faders_autolock_title": "Kanalzüge automatisch sperren",
         "settings_faders_autolock_unit": "Sekunden",
-        "settings_faders_autolock_hint": (
-            "Die Kanalzüge sperren sich wieder, wenn so lange keiner "
-            "angefasst wurde. Jede Berührung setzt die Zeit zurück, "
-            "mitten im Ziehen schnappt die Sperre also nicht zu."
-        ),
+        "settings_faders_autolock_hint": "5 bis 3600 Sekunden.",
         "settings_faders_autolock_saved": "Gespeichert.",
         "pair_link_confirm": (
             "Kanäle {a} und {b} am Pult koppeln?\n\n"
@@ -284,14 +256,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Update aus dem Internet oder über USB-Stick
         "settings_update_title": "Update",
         "settings_update_version_label": "Installierte Version:",
-        "settings_update_hint": (
-            "Aus dem Internet holt XRack den aktuellen Stand selbst. "
-            "Ohne Internet: ZIP-Datei von GitHub herunterladen, ins "
-            "Wurzelverzeichnis eines USB-Sticks legen und den Stick "
-            "anstecken. In beiden Fällen bleiben Aufnahmen, Musik und "
-            "alle Einstellungen erhalten - und falls danach etwas nicht "
-            "läuft, holt XRack den vorherigen Stand automatisch zurück."
-        ),
+        "settings_update_hint": "ZIP von GitHub auf einen USB-Stick legen, oder direkt aus dem Internet laden.",
         "btn_settings_update_online": "Aus dem Internet",
         "settings_update_confirm_online": (
             "XRack jetzt aus dem Internet aktualisieren?\n\n"
@@ -329,13 +294,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Diagnose-Aufzeichnung
         "settings_diagnostics_title": "Diagnose-Aufzeichnung",
         "settings_diagnostics_label": "Aufzeichnung läuft mit",
-        "settings_diagnostics_hint": (
-            "Schreibt im Hintergrund mit, wie es XRack und dem Netzwerk "
-            "geht - gedacht für Fehler, die nur sporadisch auftreten. "
-            "Bleibt über einen Neustart hinweg eingeschaltet. Die Datei "
-            "wird automatisch begrenzt und überschreibt sich, wenn sie "
-            "zu groß wird."
-        ),
+        "settings_diagnostics_hint": "Schreibt Zustand und Netzwerk für die Fehlersuche mit.",
         "btn_diagnostics_download": "Aufzeichnung herunterladen",
         "settings_diagnostics_empty": "Noch nichts aufgezeichnet.",
 
@@ -587,22 +546,21 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "alert_music_files_delete_failed": "The files could not be deleted.",
 
         # Settings modal
+        # Settings modal: the five topic groups
+        "settings_group_console": "Mixing console",
+        "settings_group_network": "Network",
+        "settings_group_recording": "Recording",
+        "settings_group_device": "Device",
+        "settings_group_maintenance": "Maintenance",
         "settings_icon_title": "Settings",
         "modal_settings_title": "Settings",
         "settings_language_label": "Language",
         "settings_sample_rate_label": "Mixer sample rate",
-        "settings_sample_rate_hint": (
-            "The sample rate actually set on the console/interface - "
-            "XRack cannot detect it automatically. If set wrong, "
-            "music/recordings will sound too fast or too slow."
-        ),
+        "settings_sample_rate_hint": "Must match the setting on the console - otherwise everything plays too fast or too slow.",
         "settings_port_label": "Port",
         "settings_port_hint": "Takes effect after a restart.",
         "settings_recording_label": "Recording name",
-        "settings_recording_hint": (
-            'Recordings are numbered consecutively, e.g. "Soundcheck-1", '
-            '"Soundcheck-2", ...'
-        ),
+        "settings_recording_hint": "Recordings are numbered consecutively.",
         "btn_save": "Save",
         "btn_restart_now": "Restart now",
         "confirm_restart": (
@@ -617,21 +575,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "NetworkManager (nmcli) not found - Wi-Fi settings "
             "unavailable."
         ),
-        "settings_ap_no_hardware": (
-            "No USB Wi-Fi adapter detected. A separate access point needs "
-            "one - the built-in Wi-Fi is used for the home network "
-            "connection."
-        ),
+        "settings_ap_no_hardware": "No USB Wi-Fi adapter detected.",
         "confirm_update_downgrade": (
             "The package contains version {package}, installed is "
             "{installed}.\n\nThis would be a downgrade - newer features "
             "and fixes would be lost. Continue anyway?"
         ),
         "settings_wifi_country_title": "Wi-Fi country",
-        "settings_wifi_country_hint": (
-            "Applies to both radios. Without it Wi-Fi stays blocked, and "
-            "the access point cannot use 5 GHz."
-        ),
+        "settings_wifi_country_hint": "Applies to both radios. Without it Wi-Fi stays blocked.",
         "settings_wifi_country_none": "Not set yet",
         "settings_wifi_country_save": "Save country",
         "alert_wifi_country_saved": "Wi-Fi country saved.",
@@ -641,20 +592,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_ap_access_title": (
             "Make console reachable via XRack's access point"
         ),
-        "settings_bridge_hint": (
-            "Connects a mixing console plugged in via Ethernet with "
-            "XRack's own access point - apps connect to XRack's Wi-Fi "
-            "to reach it."
-        ),
+        "settings_bridge_hint": "The console on the Ethernet port becomes reachable via the access point.",
         "settings_console_access_title": (
             "Make console reachable from home network"
         ),
-        "settings_console_access_hint": (
-            "The console plugged in via Ethernet becomes reachable "
-            "through XRack's own home network IP (UDP 10023 for "
-            "X32-Edit, UDP 10024 for X-AIR-Edit/Mixing Station). "
-            "Mutually exclusive with the access point route above."
-        ),
+        "settings_console_access_hint": "The console on the Ethernet port becomes reachable from the home network - for X32-Edit, X-AIR-Edit and Mixing Station.",
         "faders_snapshot_label": "Snapshot",
         "faders_snapshot_load": "Load",
         "faders_snapshot_none": "No snapshots found",
@@ -679,12 +621,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_console_ip_label": "Console at the Pi:",
         "settings_console_host_label": "Mixer IP address",
         "settings_console_host_placeholder": "automatic",
-        "settings_console_host_hint": (
-            "Leave empty if the console is attached to the Pi or gets "
-            "found on the network. Fill it in if console and Pi are "
-            "both on a router and the channel strips still report no "
-            "connection - some routers do not pass the search through."
-        ),
+        "settings_console_host_hint": "Only needed if the router blocks the search. Empty = automatic.",
         "settings_console_host_invalid": "That is not a valid IPv4 address.",
         "settings_console_host_manual": "In use: {ip} (entered by hand)",
         "settings_console_host_lease": "In use: {ip} (registered at the Pi)",
@@ -692,11 +629,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_console_host_none": "No mixer found.",
         "settings_faders_autolock_title": "Lock channel strips automatically",
         "settings_faders_autolock_unit": "seconds",
-        "settings_faders_autolock_hint": (
-            "The channel strips lock again once none has been touched "
-            "for that long. Every touch resets the timer, so the lock "
-            "never snaps shut mid-drag."
-        ),
+        "settings_faders_autolock_hint": "5 to 3600 seconds.",
         "settings_faders_autolock_saved": "Saved.",
         "pair_link_confirm": (
             "Link channels {a} and {b} on the console?\n\n"
@@ -713,14 +646,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Update from the internet or via USB stick
         "settings_update_title": "Update",
         "settings_update_version_label": "Installed version:",
-        "settings_update_hint": (
-            "From the internet, XRack fetches the current version "
-            "itself. Without internet: download the ZIP from GitHub, "
-            "put it in the root folder of a USB stick and plug the "
-            "stick in. Either way, recordings, music and all settings "
-            "are kept - and if something does not work afterwards, "
-            "XRack automatically restores the previous version."
-        ),
+        "settings_update_hint": "Put a ZIP from GitHub on a USB stick, or load it straight from the internet.",
         "btn_settings_update_online": "From the internet",
         "settings_update_confirm_online": (
             "Update XRack from the internet now?\n\n"
@@ -757,12 +683,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Diagnostic recording
         "settings_diagnostics_title": "Diagnostic recording",
         "settings_diagnostics_label": "Recording is running",
-        "settings_diagnostics_hint": (
-            "Records in the background how XRack and the network are "
-            "doing - meant for problems that only show up now and then. "
-            "Stays on across a restart. The file size is capped and "
-            "older entries are overwritten once it gets too large."
-        ),
+        "settings_diagnostics_hint": "Records state and network for troubleshooting.",
         "btn_diagnostics_download": "Download recording",
         "settings_diagnostics_empty": "Nothing recorded yet.",
 
