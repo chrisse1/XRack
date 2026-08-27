@@ -817,6 +817,7 @@ try:
         [
             "n",                # keine WLAN-Verbindung
             "j",                # aber ein Access Point
+            "DE",               # Land - wird auch auf diesem Weg gefragt
             "Buehne",
             "appasswort", "appasswort",
         ],
@@ -828,6 +829,16 @@ try:
     conf = dateien["conf"].read_text(encoding="utf-8")
 
     assert "ssid=Buehne" in conf, conf
+
+    #
+    # Ohne Funkregion faehrt der Access Point bestenfalls auf dem
+    # zugestellten 2,4-GHz-Band. Auf diesem Weg wurde bisher gar
+    # nicht danach gefragt - die WLAN-Frage war ja verneint.
+    #
+    assert "country_code=DE" in conf, (
+        f"Die Funkregion ist beim Access Point nicht angekommen:\n{conf}"
+    )
+    assert "hw_mode=a" in conf, "Mit Funkregion sollte 5 GHz drin sein."
 
     print("OK: Ohne Heimnetz-WLAN laesst sich trotzdem ein Access Point einrichten")
 

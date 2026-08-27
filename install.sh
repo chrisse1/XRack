@@ -687,38 +687,7 @@ configure_wifi_client() {
         return 0
     fi
 
-    #
-    # Das WLAN-Land muss stimmen, sonst bleibt das Funkgeraet per
-    # rfkill gesperrt. Ohne Angabe wird es uebersprungen.
-    #
-    for attempt in 1 2 3; do
-
-        echo ""
-        read -r -p "$(L "WLAN-Land (2-stelliger ISO-Code, z.B. DE/AT/CH/US/GB, leer = überspringen): " "Wi-Fi country (2-letter ISO code, e.g. DE/AT/CH/US/GB, empty = skip): ")" XRACK_WLAN_COUNTRY_INPUT || true
-
-        if [ -z "${XRACK_WLAN_COUNTRY_INPUT}" ]; then
-            break
-        fi
-
-        XRACK_WLAN_COUNTRY="$(printf '%s' "${XRACK_WLAN_COUNTRY_INPUT}" | tr '[:lower:]' '[:upper:]')"
-
-        if [[ "${XRACK_WLAN_COUNTRY}" =~ ^[A-Z]{2}$ ]]; then
-            break
-        fi
-
-        echo "$(L "Ungültiger Ländercode (genau 2 Buchstaben) - bitte erneut eingeben." "Invalid country code (exactly 2 letters) - please try again.")"
-        XRACK_WLAN_COUNTRY=""
-    done
-
-    if [ -n "${XRACK_WLAN_COUNTRY}" ]; then
-
-        if command -v raspi-config >/dev/null 2>&1; then
-            sudo raspi-config nonint do_wifi_country "${XRACK_WLAN_COUNTRY}"
-        else
-            sudo rfkill unblock wifi
-            sudo iw reg set "${XRACK_WLAN_COUNTRY}" || true
-        fi
-    fi
+    frage_wlan_land
 
     echo ""
     read -r -p "$(L "WLAN-SSID: " "Wi-Fi SSID: ")" HOME_SSID || true
@@ -756,6 +725,59 @@ configure_wifi_client() {
 }
 
 #
+# Das WLAN-Land.
+#
+# Ohne richtige Funkregion bleibt das Funkgeraet per rfkill gesperrt,
+# und dem Access Point fehlen die 5-GHz-Kanaele - er laeuft dann
+# bestenfalls auf dem zugestellten 2,4-GHz-Band.
+#
+# Gefragt wird nur einmal, egal ueber welchen der beiden Zweige man
+# hier ankommt: Wer die WLAN-Verbindung eingerichtet hat, hat es
+# schon beantwortet. Wer sie uebersprungen und nur einen Access Point
+# gewaehlt hat, wird hier gefragt - sonst haette genau dieser Weg
+# keine Funkregion, und das faellt erst auf, wenn der Access Point
+# nicht so funkt wie er soll.
+#
+frage_wlan_land() {
+
+    if [ -n "${XRACK_WLAN_COUNTRY}" ]; then
+        return 0
+    fi
+
+    local attempt eingabe
+
+    for attempt in 1 2 3; do
+
+        echo ""
+        read -r -p "$(L "WLAN-Land (2-stelliger ISO-Code, z.B. DE/AT/CH/US/GB, leer = überspringen): " "Wi-Fi country (2-letter ISO code, e.g. DE/AT/CH/US/GB, empty = skip): ")" eingabe || true
+
+        if [ -z "${eingabe}" ]; then
+            return 0
+        fi
+
+        XRACK_WLAN_COUNTRY="$(printf '%s' "${eingabe}" | tr '[:lower:]' '[:upper:]')"
+
+        if [[ "${XRACK_WLAN_COUNTRY}" =~ ^[A-Z]{2}$ ]]; then
+            break
+        fi
+
+        echo "$(L "Ungültiger Ländercode (genau 2 Buchstaben) - bitte erneut eingeben." "Invalid country code (exactly 2 letters) - please try again.")"
+        XRACK_WLAN_COUNTRY=""
+    done
+
+    if [ -z "${XRACK_WLAN_COUNTRY}" ]; then
+        return 0
+    fi
+
+    if command -v raspi-config >/dev/null 2>&1; then
+        sudo raspi-config nonint do_wifi_country "${XRACK_WLAN_COUNTRY}"
+    else
+        sudo rfkill unblock wifi
+        sudo iw reg set "${XRACK_WLAN_COUNTRY}" || true
+    fi
+}
+
+#
 # Teil 2: eigener Access Point.
 #
 # Die eigentliche Einrichtung macht scripts/xrack-ap-setup.sh -
@@ -773,6 +795,8 @@ configure_access_point() {
         echo "$(L "Der Stick lässt sich jederzeit nachrüsten; der Access Point wird dann im Einstellungen-Menü eingerichtet." "You can add the adapter at any time; the access point is then set up in the settings menu.")"
         return 0
     fi
+
+    frage_wlan_land
 
     echo ""
     read -r -p "$(L "Name des Access Points (Standard: XRack): " "Access point name (default: XRack): ")" AP_SSID_INPUT || true
