@@ -110,6 +110,22 @@ class NetworkReport:
 
         return gefunden
 
+    #
+    # Die Zeilen, die aus /etc/hostapd/xrack.conf stammen. Steht auch
+    # nur eine davon im Ergebnis, wurde die Datei gelesen. Kommt
+    # dagegen ausschliesslich die Unit-Marke zurueck, stammt die aus
+    # einer anderen Datei - dann wissen wir ueber den Access Point
+    # selbst nichts.
+    #
+    KONF_SCHLUESSEL = ("interface", "hw_mode", "channel", "country_code",
+                       "ieee80211d", "bridge")
+
+    @classmethod
+    def konfiguration_gelesen(cls, ap_konf: dict) -> bool:
+        """Kam etwas aus der hostapd-Konfiguration zurueck?"""
+
+        return any(schluessel in ap_konf for schluessel in cls.KONF_SCHLUESSEL)
+
     def ap_konfiguration(self) -> dict:
         """
         Die Werte aus /etc/hostapd/xrack.conf - ueber sudo, weil die
@@ -164,6 +180,36 @@ class NetworkReport:
                 "gesperrt bleiben, und der Access Point darf nicht auf 5 GHz "
                 "senden. Im Einstellungen-Menü unter Netzwerk das WLAN-Land "
                 "setzen."
+            )
+
+        # --- Konnten wir den Access Point ueberhaupt nachsehen? ------
+
+        #
+        # Ohne diesen Befund haette der Bericht "Nichts Auffälliges
+        # gefunden" gemeldet, obwohl die halbe Access-Point-Seite
+        # fehlte: Alle folgenden Pruefungen haengen an ap_konf, und was
+        # leer ist, faellt nicht auf. Ein Selbsttest, der bei fehlenden
+        # Daten Entwarnung gibt, ist schlimmer als keiner.
+        #
+        if wlan.get("ap_active") and not self.konfiguration_gelesen(ap_konf):
+            gefunden.append(
+                "Der Access Point läuft, seine Einstellungen konnten aber "
+                "nicht gelesen werden. Deshalb fehlen oben Funkgerät, Band, "
+                "Kanal und Ländercode - und die Prüfungen, die daran hängen, "
+                "konnten nicht laufen. Meist fehlt der sudo-Eintrag für "
+                "scripts/xrack-net-ap.sh; dann hilft ein erneuter Lauf von "
+                "install.sh."
+            )
+
+        #
+        # Nur wenn die Datei auch wirklich gelesen wurde - sonst waere
+        # das wieder eine Aussage ueber Nichtgesehenes.
+        #
+        if self.konfiguration_gelesen(ap_konf) and not ap_konf.get("country_code"):
+            gefunden.append(
+                "Im Access Point ist kein Ländercode hinterlegt. Ohne ihn "
+                "bleibt 5 GHz gesperrt. Nach dem Setzen des WLAN-Landes den "
+                "Access Point einmal neu speichern."
             )
 
         # --- Access Point auf dem richtigen Funkgeraet? --------------
@@ -268,14 +314,31 @@ class NetworkReport:
         z(f"  Läuft:         {'ja' if wlan.get('ap_active') else 'nein'}")
         z(f"  Name (SSID):   {wlan.get('ap_ssid') or '-'}")
 
-        if ap_konf:
+        #
+        # "nicht gesetzt" darf nur dastehen, wenn wirklich nachgesehen
+        # wurde. Sonst behauptet der Bericht etwas ueber eine Datei,
+        # die er nie geoeffnet hat - genau das ist passiert: Er meldete
+        # "Ländercode: nicht gesetzt" und "Funkgerät: ?" bei einem
+        # Access Point, in dem DE und wlan1 eingetragen waren. Ein
+        # Selbsttest, der Nichtwissen als Befund ausgibt, schickt auf
+        # die falsche Faehrte.
+        #
+        if self.konfiguration_gelesen(ap_konf):
+
             band = {"a": "5 GHz", "g": "2,4 GHz"}.get(ap_konf.get("hw_mode", ""), "?")
+
             z(f"  Funkgerät:     {ap_konf.get('interface', '?')}")
             z(f"  Band/Kanal:    {band}, Kanal {ap_konf.get('channel', '?')}")
             z(f"  Ländercode:    {ap_konf.get('country_code', 'nicht gesetzt')}")
-            z(f"  Unit-Stand:    {ap_konf.get('unit_version', 'ohne Marke')}")
+
+        elif ap_konf:
+            z("  Konfiguration: nicht lesbar")
+
         else:
             z("  Konfiguration: nicht lesbar oder nicht eingerichtet")
+
+        if ap_konf:
+            z(f"  Unit-Stand:    {ap_konf.get('unit_version', 'ohne Marke')}")
 
         z("")
 

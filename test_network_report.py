@@ -12,6 +12,8 @@ Zwei Dinge muss er koennen, und beide sind hier festgehalten:
 """
 
 import logging
+import os
+import subprocess
 import sys
 import tempfile
 import types
@@ -228,6 +230,164 @@ with tempfile.TemporaryDirectory() as tmp:
     assert "BEFUND" in text, text
 
     print("OK: Auch ein fehlgeschlagener sudo-Aufruf kippt den Bericht nicht")
+
+
+# ====================================================================
+# Nichtwissen darf nicht als Befund durchgehen
+#
+# Der Fall aus dem Betrieb: Der Access Point lief einwandfrei, aber
+# scripts/xrack-net-ap.sh --report kam nicht an /etc/hostapd/xrack.conf
+# heran. Zurueck kam nur die Unit-Marke - aus einer anderen Datei. Der
+# Bericht meldete daraufhin "Funkgerät: ?", "Ländercode: nicht
+# gesetzt" und darunter "Nichts Auffälliges gefunden". Beides war
+# falsch, und das zweite war das schlimmere.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    wurzel = Path(tmp)
+    sysnet = funkbaum(wurzel, {
+        "wlan0": ("platform", "11:22:33:44:55:66"),
+        "wlan1": ("usb", "aa:bb:cc:dd:ee:ff"),
+    })
+
+    # Genau das, was der Pi geliefert hat: nur die Unit-Marke.
+    text = bericht(anwendung(GESUND), sysnet, {"unit_version": "2"}).erzeugen()
+
+    assert "nicht gesetzt" not in text, (
+        "Ueber eine nicht gelesene Datei darf der Bericht nichts behaupten:\n"
+        + text
+    )
+    assert "Funkgerät:" not in text, text
+    assert "Konfiguration: nicht lesbar" in text, text
+
+    # Die Unit-Marke kam ja durch, die gehoert weiter hin.
+    assert "Unit-Stand:    2" in text, text
+
+    befund = text[text.index("BEFUND"):]
+
+    assert "Nichts Auffälliges gefunden." not in befund, (
+        "Bei fehlenden Daten darf kein Freibrief erteilt werden:\n" + befund
+    )
+    assert "nicht gelesen werden" in befund, befund
+
+    print("OK: Unlesbare AP-Konfiguration wird als solche gemeldet, nicht als "
+          "'nicht gesetzt' und nicht als Entwarnung")
+
+    #
+    # Laeuft der Access Point gar nicht, ist eine fehlende
+    # Konfiguration nichts Besonderes - dann darf der Befund auch
+    # nicht meckern.
+    #
+    aus = {**GESUND, "ap_active": False, "ap_hardware": False}
+    befund = bericht(anwendung(aus), sysnet, {}).erzeugen()
+    befund = befund[befund.index("BEFUND"):]
+
+    assert "nicht gelesen werden" not in befund, befund
+
+    print("OK: Bei ausgeschaltetem Access Point bleibt der Befund still")
+
+    #
+    # Gelesen, aber ohne Ländercode: Das ist eine echte Aussage - und
+    # der Grund, warum 5 GHz gesperrt bleibt.
+    #
+    text = bericht(anwendung(GESUND), sysnet,
+                   {"interface": "wlan1", "hw_mode": "a",
+                    "channel": "36", "unit_version": "2"}).erzeugen()
+
+    assert "Ländercode:    nicht gesetzt" in text, text
+    assert "kein Ländercode hinterlegt" in text, text
+
+    print("OK: Fehlender Ländercode wird gemeldet, wenn er wirklich fehlt")
+
+
+# ====================================================================
+# Und das Skript dahinter: liefert es die Werte auch aus?
+#
+# Der eigentliche Fehler sass nicht in Python, sondern in
+# scripts/xrack-net-ap.sh: Die --report-Verzweigung benutzte ${CONF},
+# bevor die Variable gesetzt war. "[ -f "" ]" trifft nie zu, also kam
+# aus der hostapd-Datei nichts zurueck, waehrend die systemd-Zeile
+# durchkam - deren Pfad stand fest im Zweig. Deshalb wird hier das
+# Skript selbst aufgerufen.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    wurzel = Path(tmp)
+
+    conf = wurzel / "xrack.conf"
+    conf.write_text(
+        "interface=wlan1\n"
+        "bridge=br0\n"
+        "ssid=XRack\n"
+        "country_code=DE\n"
+        "ieee80211d=1\n"
+        "hw_mode=a\n"
+        "channel=36\n"
+        "wpa=2\n"
+        "wpa_passphrase=streng-geheim-1234\n"
+    )
+
+    unit = wurzel / "xrack-hostapd.service"
+    unit.write_text(
+        "[Unit]\n"
+        "# XRack-Unit-Version: 2\n"
+        "Description=XRack Access Point\n"
+    )
+
+    umgebung = {
+        **os.environ,
+        "XRACK_HOSTAPD_CONF": str(conf),
+        "XRACK_HOSTAPD_UNIT": str(unit),
+    }
+
+    lauf = subprocess.run(
+        ["bash", str(Path("scripts/xrack-net-ap.sh").resolve()), "--report"],
+        capture_output=True, text=True, env=umgebung, timeout=30,
+    )
+
+    assert lauf.returncode == 0, (lauf.returncode, lauf.stderr)
+
+    ausgabe = lauf.stdout
+
+    for erwartet in ("interface=wlan1", "country_code=DE", "hw_mode=a",
+                     "channel=36", "# XRack-Unit-Version: 2"):
+        assert erwartet in ausgabe, (
+            f"'{erwartet}' fehlt in der Ausgabe von --report:\n{ausgabe}"
+        )
+
+    #
+    # Und das Passwort bleibt drin. Die Datei wird gefiltert und nicht
+    # durchgereicht - der Bericht landet spaeter in einer Textdatei
+    # und womoeglich in einem Forum.
+    #
+    assert "wpa_passphrase" not in ausgabe and "streng-geheim" not in ausgabe, (
+        "Das WLAN-Passwort darf den Selbsttest nicht verlassen:\n" + ausgabe
+    )
+
+    print("OK: xrack-net-ap.sh --report liefert die Werte - und nicht das "
+          "Passwort")
+
+    #
+    # Der Weg von der Skriptausgabe in den Bericht, ohne Attrappe
+    # dazwischen: ap_konfiguration() muss daraus die Werte lesen.
+    #
+    leer = wurzel / "sys" / "class" / "net"
+    leer.mkdir(parents=True)
+
+    echt = NetworkReport(anwendung(GESUND), sys_net=leer)
+    echt._lauf = lambda befehl, timeout=10.0: ausgabe.strip()
+
+    werte = echt.ap_konfiguration()
+
+    assert werte.get("interface") == "wlan1", werte
+    assert werte.get("country_code") == "DE", werte
+    assert werte.get("channel") == "36", werte
+    assert werte.get("unit_version") == "2", werte
+    assert "wpa_passphrase" not in werte, werte
+
+    print("OK: Der Bericht liest die Skriptausgabe richtig aus")
 
 
 print("Alle Selbsttest-Tests erfolgreich.")
