@@ -243,8 +243,10 @@ am Pi nötig.
   Access Point, Heimnetz und Mischpult in einem Durchgang prüft - und
   darunter benennt, was nicht zusammenpasst (fehlende Funkregion,
   Access Point auf dem eingebauten Chip, 2,4 GHz trotz 5-GHz-Stick,
-  beide Zugangswege gleichzeitig an). Die Ausgabe lässt sich kopieren
-  und weitergeben.
+  beide Zugangswege gleichzeitig an). Werte, die er nicht lesen kann,
+  meldet er als nicht lesbar statt als nicht gesetzt - und gibt dann
+  auch keine Entwarnung. Die Ausgabe lässt sich kopieren und
+  weitergeben; das WLAN-Passwort steht nicht darin.
 
 - **Wenn die Oberfläche klemmt**: Das Update lässt sich auch ohne sie
   einspielen - derselbe Weg, den der Knopf nimmt:

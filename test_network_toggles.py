@@ -630,11 +630,21 @@ cp "$quelle" "$ziel"
             datei.write_text(quelltext, encoding="utf-8")
             datei.chmod(0o755)
 
+        #
+        # Das Skript wird kopiert, damit "$(dirname $0)" hier
+        # hinzeigt - der Pfad zur hostapd-Datei kommt dagegen ueber
+        # XRACK_HOSTAPD_CONF.
+        #
+        # Frueher wurde dafuer die Zeile CONF="/etc/hostapd/xrack.conf"
+        # im Text ersetzt. Das ging genau so lange gut, bis die Zeile
+        # sich aenderte: Danach traf die Ersetzung nicht mehr, das
+        # Skript arbeitete stillschweigend auf dem echten /etc-Pfad -
+        # und der Test prueft nichts mehr von dem, was er zu pruefen
+        # vorgibt. Die Umgebungsvariable kann nicht danebengehen.
+        #
         skript = ordner / "net-ap.sh"
         skript.write_text(
-            (SKRIPTE / "xrack-net-ap.sh").read_text(encoding="utf-8").replace(
-                'CONF="/etc/hostapd/xrack.conf"', f'CONF="{conf}"'
-            ),
+            (SKRIPTE / "xrack-net-ap.sh").read_text(encoding="utf-8"),
             encoding="utf-8",
         )
         skript.chmod(0o755)
@@ -642,6 +652,7 @@ cp "$quelle" "$ziel"
         umgebung = dict(os.environ)
         umgebung["NM_STATE"] = str(ordner)
         umgebung["XRACK_TEST_CONF"] = str(conf)
+        umgebung["XRACK_HOSTAPD_CONF"] = str(conf)
         umgebung["PATH"] = f"{binordner}:{os.environ['PATH']}"
 
         return skript, conf, umgebung

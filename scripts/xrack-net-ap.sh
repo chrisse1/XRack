@@ -26,6 +26,23 @@ PASSWORD="$2"
 COUNTRY="$3"
 
 #
+# Pfade stehen vor den Verzweigungen, nicht dahinter.
+#
+# Das ist kein Schoenheitsfehler: --report stand frueher weiter oben
+# und benutzte ${CONF}, bevor es gesetzt war. "[ -f "" ]" trifft nie
+# zu, also fehlten im Netzwerk-Selbsttest genau die Werte aus dieser
+# Datei - Funkgeraet, Band, Kanal, Laendercode -, waehrend die
+# systemd-Zeile durchkam, weil deren Pfad fest eingetragen war. Der
+# Bericht sah vollstaendig aus und war es nicht.
+#
+# XRACK_HOSTAPD_CONF ist ueberschreibbar, damit der Test das ohne
+# Zugriff auf /etc pruefen kann - wie in xrack-ap-setup.sh.
+#
+CONF="${XRACK_HOSTAPD_CONF:-/etc/hostapd/xrack.conf}"
+UNIT="xrack-hostapd.service"
+XRACK_HOSTAPD_UNIT="${XRACK_HOSTAPD_UNIT:-/etc/systemd/system/xrack-hostapd.service}"
+
+#
 # --refresh-unit: nur die systemd-Unit auffrischen, sonst nichts.
 #
 # Durchgereicht an xrack-ap-setup.sh. Der Umweg ueber dieses Skript
@@ -65,16 +82,13 @@ if [ "${SSID}" = "--report" ]; then
             "${CONF}" 2>/dev/null || true
     fi
 
-    if [ -f /etc/systemd/system/xrack-hostapd.service ]; then
-        grep -E "^# XRack-Unit-Version:" \
-            /etc/systemd/system/xrack-hostapd.service 2>/dev/null || true
+    if [ -f "${XRACK_HOSTAPD_UNIT}" ]; then
+        grep -E "^# XRack-Unit-Version:" "${XRACK_HOSTAPD_UNIT}" 2>/dev/null || true
     fi
 
     exit 0
 fi
 
-CONF="/etc/hostapd/xrack.conf"
-UNIT="xrack-hostapd.service"
 
 if [ -z "${SSID}" ] || [ "${#PASSWORD}" -lt 8 ]; then
     echo "SSID fehlt oder Passwort zu kurz (mind. 8 Zeichen)." >&2
