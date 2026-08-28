@@ -1053,6 +1053,220 @@ EOF
 }
 
 #
+# Lichtsteuerung: DMX über OLA (Open Lighting Architecture).
+#
+# XRack erzeugt das DMX-Signal nicht selbst. Ein DMX-Bild muss alle
+# 23 Millisekunden neu geschrieben werden, mit einer Pause ("Break")
+# von mindestens 88 Mikrosekunden davor - harte Echtzeit. Im selben
+# Python-Prozess, der ALSA-Audio liest und den Webserver bedient,
+# wäre jede Aufnahme und jeder Seitenaufruf eine mögliche Ursache
+# für sichtbares Flackern.
+#
+# Deshalb dasselbe Muster wie beim WLAN (hostapd) und bei Bluetooth
+# (bluetoothd): Ein ausgereifter Systemdienst übernimmt den
+# zeitkritischen Teil, XRack schickt ihm nur Kanalwerte (siehe
+# core/dmx_control.py).
+#
+# Kein sudoers-Eintrag nötig: olad läuft unter eigenem Benutzer, das
+# USB-Kabel wird über eine udev-Regel freigegeben, und XRack spricht
+# den Dienst über HTTP auf localhost an.
+#
+# Alles hier ist bewusst nicht abbrechend. Fehlt das Paket oder
+# klappt etwas nicht, läuft XRack ohne Licht weiter - Aufnahme und
+# Wiedergabe dürfen davon nie betroffen sein.
+#
+configure_dmx() {
+
+    echo "$(L "XRack: Lichtsteuerung (DMX über OLA) wird eingerichtet..." "XRack: Setting up lighting control (DMX via OLA)...")"
+
+    #
+    # In einem eigenen Schritt und nicht in der großen Paketliste:
+    # Wäre "ola" dort nicht verfügbar, schlüge die Installation
+    # aller Systempakete fehl - wegen des Lichts.
+    #
+    if ! sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ola >/dev/null 2>&1; then
+
+        echo "$(L "Hinweis: Paket 'ola' nicht installierbar - Lichtsteuerung nicht verfügbar." "Note: package 'ola' could not be installed - lighting control unavailable.")"
+        return 0
+    fi
+
+    #
+    # Das USB-DMX-Kabel freigeben.
+    #
+    # Alle gängigen Kabel dieser Preisklasse hängen an einem
+    # FTDI-Chip (FT232R und Verwandte). Das ola-Paket bringt eigene
+    # udev-Regeln mit und steckt seinen Benutzer in die Gruppen
+    # dialout und plugdev; diese Regel hier ist die Rückversicherung
+    # für Nachbauten, die dort nicht aufgeführt sind.
+    #
+    sudo tee /etc/udev/rules.d/99-xrack-dmx.rules > /dev/null <<'EOF'
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", GROUP="plugdev", MODE="0660"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", GROUP="plugdev", MODE="0660"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6015", GROUP="plugdev", MODE="0660"
+EOF
+
+    sudo udevadm control --reload-rules
+    sudo udevadm trigger --subsystem-match=usb >/dev/null 2>&1 || true
+
+    #
+    # Wie heißt der Dienst? Das Debian-Paket hat lange nur ein
+    # SysV-Startskript mitgebracht und erst seit Anfang 2026 eine
+    # systemd-Unit. Je nach Stand des Betriebssystems heißt sie
+    # "olad" oder "ola" - deshalb nachsehen statt raten.
+    #
+    DMX_UNIT=""
+
+    for kandidat in olad.service ola.service; do
+
+        if systemctl list-unit-files "${kandidat}" 2>/dev/null | grep -q "^${kandidat}"; then
+            DMX_UNIT="${kandidat}"
+            break
+        fi
+    done
+
+    if [ -z "${DMX_UNIT}" ]; then
+        echo "$(L "Hinweis: OLA-Dienst nicht gefunden - Licht bleibt aus, XRack läuft normal weiter." "Note: OLA service not found - lighting stays off, XRack runs normally.")"
+        return 0
+    fi
+
+    sudo systemctl enable "${DMX_UNIT}" >/dev/null 2>&1 || true
+    sudo systemctl start "${DMX_UNIT}" >/dev/null 2>&1 || true
+
+    #
+    # Wo liegen die Plugin-Einstellungen? Auch das ist je nach
+    # Paketstand verschieden. Beim ersten Start legt olad die
+    # Dateien selbst an, deshalb wird danach noch einmal gesucht.
+    #
+    DMX_CONF_DIR=""
+
+    for versuch in 1 2; do
+
+        for kandidat in /etc/ola /var/lib/ola/conf "$(getent passwd olad 2>/dev/null | cut -d: -f6)/.ola"; do
+
+            if [ -n "${kandidat}" ] && [ -d "${kandidat}" ]; then
+                DMX_CONF_DIR="${kandidat}"
+                break
+            fi
+        done
+
+        [ -n "${DMX_CONF_DIR}" ] && break
+
+        sleep 2
+    done
+
+    if [ -z "${DMX_CONF_DIR}" ]; then
+        echo "$(L "Hinweis: OLA-Konfiguration nicht gefunden - das DMX-Plugin muss von Hand aktiviert werden." "Note: OLA configuration not found - the DMX plugin has to be enabled manually.")"
+        return 0
+    fi
+
+    #
+    # Genau ein Plugin darf sich das Kabel greifen.
+    #
+    #   ftdidmx    - für "dumme" FTDI-Kabel ohne eigenen Prozessor,
+    #                bei denen der Rechner das Timing macht. Das ist
+    #                unser Fall (Open DMX USB und Nachbauten).
+    #   usbserial  - für Kabel MIT eigenem Prozessor (Enttec USB Pro).
+    #   opendmx    - dasselbe wie ftdidmx, aber über ein eigenes
+    #                Kernelmodul.
+    #
+    # Alle drei erkennen dieselbe Hardware. Bleiben mehrere aktiv,
+    # streiten sie sich darum, wer das Kabel bekommt - und das
+    # Ergebnis hängt davon ab, wer zuerst da war.
+    #
+    ola_plugin_schalten "${DMX_CONF_DIR}/ola-ftdidmx.conf"   true
+    ola_plugin_schalten "${DMX_CONF_DIR}/ola-usbserial.conf" false
+    ola_plugin_schalten "${DMX_CONF_DIR}/ola-opendmx.conf"   false
+
+    restrict_ola_to_loopback "${DMX_UNIT}"
+
+    sudo systemctl restart "${DMX_UNIT}" >/dev/null 2>&1 || true
+}
+
+#
+# Eine Plugin-Einstellung in einer OLA-Konfigurationsdatei setzen.
+#
+# Die Dateien gehören dem olad-Benutzer, deshalb läuft alles über
+# sudo und der Besitzer wird danach wiederhergestellt - sonst könnte
+# olad seine eigene Konfiguration beim nächsten Start nicht mehr
+# schreiben.
+#
+ola_plugin_schalten() {
+
+    datei="$1"
+    wert="$2"
+
+    if sudo test -f "${datei}"; then
+
+        sudo sed -i "s/^[[:space:]]*enabled[[:space:]]*=.*/enabled = ${wert}/" "${datei}"
+
+        if ! sudo grep -q "^enabled" "${datei}"; then
+            echo "enabled = ${wert}" | sudo tee -a "${datei}" > /dev/null
+        fi
+
+    else
+        echo "enabled = ${wert}" | sudo tee "${datei}" > /dev/null
+    fi
+
+    sudo chown olad:olad "${datei}" 2>/dev/null || true
+}
+
+#
+# Die Weboberfläche von OLA auf localhost beschränken.
+#
+# olad bringt eine eigene, ungeschützte Weboberfläche mit (Port
+# 9090) - über sie spricht XRack den Dienst an. Ohne Einschränkung
+# wäre sie aber auch aus dem ganzen Netzwerk erreichbar: eine
+# zweite Oberfläche neben XRacks eigener, ohne PIN, mit der jeder
+# das Licht übernehmen könnte.
+#
+# "-i 127.0.0.1" bindet sie an die Loopback-Adresse. Die vorhandene
+# Startzeile wird dafür ausgelesen und ergänzt, statt sie neu zu
+# erfinden - je nach Paketstand steht dort Verschiedenes.
+#
+restrict_ola_to_loopback() {
+
+    unit="$1"
+
+    unit_datei="$(systemctl show -p FragmentPath --value "${unit}" 2>/dev/null)"
+
+    if [ -z "${unit_datei}" ] || [ ! -f "${unit_datei}" ]; then
+        echo "$(L "Hinweis: OLA-Startzeile nicht gefunden - die OLA-Weboberfläche (Port 9090) bleibt im Netzwerk erreichbar." "Note: OLA start command not found - the OLA web interface (port 9090) stays reachable on the network.")"
+        return 0
+    fi
+
+    start_zeile="$(grep -m1 '^ExecStart=' "${unit_datei}" | sed 's/^ExecStart=//')"
+
+    if [ -z "${start_zeile}" ]; then
+        echo "$(L "Hinweis: OLA-Startzeile nicht lesbar - die OLA-Weboberfläche (Port 9090) bleibt im Netzwerk erreichbar." "Note: OLA start command unreadable - the OLA web interface (port 9090) stays reachable on the network.")"
+        return 0
+    fi
+
+    #
+    # Steht die Bindung schon drin, nichts tun - sonst stünde sie
+    # nach einem zweiten Installationslauf doppelt da.
+    #
+    case "${start_zeile}" in
+        *"-i 127.0.0.1"*) return 0 ;;
+    esac
+
+    #
+    # Überschreibbar, damit der Test das prüfen kann, ohne an
+    # /etc zu rühren - wie XRACK_HOSTAPD_CONF anderswo.
+    #
+    systemd_dir="${XRACK_SYSTEMD_DIR:-/etc/systemd/system}"
+
+    sudo mkdir -p "${systemd_dir}/${unit}.d"
+
+    sudo tee "${systemd_dir}/${unit}.d/xrack.conf" > /dev/null <<EOF
+[Service]
+ExecStart=
+ExecStart=${start_zeile} -i 127.0.0.1
+EOF
+
+    sudo systemctl daemon-reload
+}
+
+#
 # sudo-Berechtigung für Herunterfahren, Dienst-Neustart und die
 # WLAN-Einstellungen (Webinterface -> Einstellungen) einrichten.
 #
@@ -1273,6 +1487,7 @@ configure_firewall
 configure_wifi
 configure_bluetooth
 configure_usb_automount
+configure_dmx
 configure_sudoers
 configure_systemd_service
 print_summary

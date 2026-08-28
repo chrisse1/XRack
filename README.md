@@ -87,6 +87,15 @@ the Pi itself.
   now and then - it stays on across restarts, and the log can be
   downloaded straight from the settings dialog.
 
+- **DMX lighting control** (groundwork, not usable yet): the installer
+  sets up OLA (Open Lighting Architecture) as a system service so a
+  USB-to-DMX cable can be driven without XRack having to generate the
+  time-critical DMX signal inside its own process. Nothing is visible
+  in the web interface yet - fixtures, scenes and the music-driven
+  light show follow in later steps. Lighting never affects recording or
+  playback: if the service or the cable is missing, XRack simply runs
+  without light.
+
 ### Requirements
 
 Tested hardware:
@@ -271,6 +280,20 @@ am Pi nötig.
   sporadisch auftreten: Der Schalter bleibt über einen Neustart hinweg
   an, und die Aufzeichnung lässt sich direkt aus dem
   Einstellungsdialog herunterladen.
+
+- **DMX-Lichtsteuerung** (Grundlage, noch nicht nutzbar): Die
+  Installation richtet OLA (Open Lighting Architecture) als
+  Systemdienst ein, damit ein USB-DMX-Kabel angesteuert werden kann,
+  ohne dass XRack das zeitkritische DMX-Signal im eigenen Prozess
+  erzeugen muss - dasselbe Muster wie beim WLAN (hostapd) und bei
+  Bluetooth (bluetoothd). Im Webinterface ist davon noch nichts zu
+  sehen; Lampen, Szenen und die musikgesteuerte Lichtshow folgen in
+  weiteren Schritten. Licht stört Aufnahme und Wiedergabe nie: Fehlt
+  der Dienst oder das Kabel, läuft XRack einfach ohne Licht.
+
+  Angesteuert werden USB-DMX-Kabel mit FTDI-Chip (FT232R und
+  Verwandte) - das verbreitetste und günstigste Genre, dazu gehören
+  Enttecs "Open DMX USB" und die üblichen Nachbauten.
 
 ### Voraussetzungen
 
