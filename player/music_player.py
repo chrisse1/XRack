@@ -518,9 +518,28 @@ class MusicPlayer:
 
                 self.backend.write(data)
 
+            #
+            # Den Pausen-Zustand merken, BEVOR geschlossen wird.
+            #
+            # close() beendet ffmpeg und wartet bis zu zwei Sekunden
+            # auf dessen Ende (player/track_decoder.py). Wuerde unten
+            # erneut self._paused gelesen, koennte in dieser Zeit
+            # "Fortsetzen" eingetroffen sein - dann stuende dort
+            # schon wieder False, die Pausen-Behandlung fiele aus,
+            # und _play_track liefe auf das break am Ende: naechster
+            # Titel statt Weiterspielen. Genau das ist im Betrieb
+            # passiert, je nachdem wie schnell jemand nach Pause auf
+            # Fortsetzen geklickt hat.
+            #
+            # Kam das Fortsetzen waehrend des Schliessens, ist
+            # _pause_event bereits gesetzt - wait() kehrt sofort
+            # zurueck, und es geht an der gemerkten Stelle weiter.
+            #
+            war_pausiert = self._paused
+
             self.decoder.close()
 
-            if self._playing and self._paused:
+            if self._playing and war_pausiert:
 
                 self._pause_event.wait()
 

@@ -285,6 +285,106 @@ try:
 
     musikspieler_modul.probe_tags = original_probe_tags
 
+    # ------------------------------------------------------------
+    # Fortsetzen waehrend der Dekoder noch schliesst
+    #
+    # Aus dem Betrieb gemeldet: Pause, dann Fortsetzen - und statt
+    # weiterzuspielen sprang XRack zum naechsten Titel. Mal so, mal
+    # so, je nachdem wie schnell nach der Pause geklickt wurde.
+    #
+    # Der Grund: _play_track fragte ERST NACH dem Schliessen des
+    # Dekoders, ob pausiert wurde. Das Schliessen beendet ffmpeg und
+    # wartet bis zu zwei Sekunden auf dessen Ende - traf "Fortsetzen"
+    # in dieser Zeit ein, stand _paused schon wieder auf False, die
+    # Pausen-Behandlung fiel aus, und die Funktion lief auf ihr break
+    # am Ende: naechster Titel.
+    #
+    # Hier wird der Worker gezielt in genau diesem Fenster
+    # festgehalten.
+    # ------------------------------------------------------------
+
+    class SchliessBremse:
+        """Wie FakeDecoder, aber close() Nummer 2 laesst sich anhalten."""
+
+        def __init__(self):
+            self._open = False
+            self.geoeffnet = []
+            self.schliessungen = 0
+            self.im_close = threading.Event()
+            self.weiter = threading.Event()
+
+        def open(self, path, channels, rate, start_position=0.0):
+            self.geoeffnet.append((Path(path).name, round(start_position, 2)))
+            self._open = True
+            return True
+
+        def read(self, chunk_size):
+            if not self._open:
+                return None
+            time.sleep(0.01)
+            return b"\x00" * 64
+
+        def close(self):
+            self._open = False
+            self.schliessungen += 1
+
+            if self.schliessungen == 2:
+                #
+                # Der Worker steht jetzt zwischen Leseschleife und
+                # Pausen-Frage - das Fenster, um das es geht.
+                #
+                self.im_close.set()
+                self.weiter.wait(timeout=10)
+
+    (with_dir / "zweiter.mp3").write_bytes(b"fake")
+
+    bremse = SchliessBremse()
+
+    player6 = MusicPlayer(FakeBackend(), MusicLibrary(with_dir))
+    player6.decoder = bremse
+
+    assert player6.play_folder(device, with_dir, start_channel=0, rate=48000)
+
+    time.sleep(0.3)
+
+    titel_vorher = player6.current_track
+    assert titel_vorher, "Es laeuft gar kein Titel."
+
+    player6.pause()
+
+    assert bremse.im_close.wait(timeout=5), (
+        "Der Worker hat das Fenster nicht erreicht - der Test sagt dann "
+        "nichts aus."
+    )
+
+    # Genau jetzt: Fortsetzen, waehrend der Dekoder noch schliesst.
+    player6.resume()
+
+    bremse.weiter.set()
+
+    time.sleep(0.6)
+
+    titel_nachher = player6.current_track
+    oeffnungen = list(bremse.geoeffnet)
+
+    run_with_timeout(player6.stop, label="stop() nach Pausen-Wettlauf")
+
+    assert titel_nachher == titel_vorher, (
+        f"Nach dem Fortsetzen laeuft '{titel_nachher}' statt "
+        f"'{titel_vorher}' - es wurde zum naechsten Titel gesprungen."
+    )
+
+    assert len(oeffnungen) >= 2, oeffnungen
+
+    assert oeffnungen[1][1] > 0, (
+        f"Der Titel wurde von vorn geoeffnet statt an der Pausenstelle: "
+        f"{oeffnungen}"
+    )
+
+    print("OK: Fortsetzen waehrend des Schliessens spielt denselben Titel "
+          "weiter")
+
+
 finally:
     import shutil
     shutil.rmtree(with_dir, ignore_errors=True)
