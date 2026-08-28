@@ -197,6 +197,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "alert_wifi_country_failed": "WLAN-Land konnte nicht gesetzt werden: {message}",
         "settings_home_wifi_title": "WLAN-Client",
         "settings_ap_wifi_title": "Access Point",
+        "settings_lan_mode_title": "Mischpult im selben Netzwerk (LAN)",
+        "settings_lan_mode_hint": (
+            "Pult und XRack hängen am selben Router. Access Point und "
+            "WLAN-Verbindung laufen weiter."
+        ),
+        "confirm_lan_mode": (
+            "In den LAN-Modus wechseln? Der gerade aktive Zugangsweg zum "
+            "Mischpult wird dabei abgeschaltet."
+        ),
         "settings_ap_access_title": (
             "Konsole über XRacks Access Point erreichbar machen"
         ),
@@ -597,6 +606,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "alert_wifi_country_failed": "Could not set the Wi-Fi country: {message}",
         "settings_home_wifi_title": "Wi-Fi client",
         "settings_ap_wifi_title": "Access Point",
+        "settings_lan_mode_title": "Console on the same network (LAN)",
+        "settings_lan_mode_hint": (
+            "Console and XRack are on the same router. Access point and "
+            "Wi-Fi connection keep running."
+        ),
+        "confirm_lan_mode": (
+            "Switch to LAN mode? The currently active route to the console "
+            "will be turned off."
+        ),
         "settings_ap_access_title": (
             "Make console reachable via XRack's access point"
         ),

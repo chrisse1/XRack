@@ -3586,19 +3586,31 @@ function applyWlanSettings(wlan) {
     // eine bestehende WLAN-Verbindung - sonst gibt es kein Heimnetz,
     // aus dem heraus jemand zugreifen könnte.
     //
-    zeigeAbschnitt(
-        "settings-bridge",
-        wlan.ap_active && wlan.bridge_configured,
-    );
+    //
+    // Die drei Zugangswege zum Pult. Immer genau einer ist an, und der
+    // LAN-Modus ist der, in dem die beiden anderen aus sind.
+    //
+    const apWeg = wlan.ap_active && wlan.bridge_configured;
+    const heimnetzWeg = wlan.home_active && wlan.console_access_configured;
+
+    //
+    // Den LAN-Schalter nur zeigen, wenn es ueberhaupt eine Alternative
+    // gibt. Ohne Access Point und ohne WLAN-Verbindung ist der
+    // LAN-Modus der einzig moegliche Zustand - ein Schalter ohne Wahl
+    // waere dann nur Beiwerk.
+    //
+    zeigeAbschnitt("settings-lan", apWeg || heimnetzWeg);
+
+    document.getElementById("settings-lan-toggle").checked =
+        !wlan.bridge_enabled && !wlan.console_access_enabled;
+
+    zeigeAbschnitt("settings-bridge", apWeg);
 
     if (wlan.bridge_configured) {
         document.getElementById("settings-bridge-toggle").checked = wlan.bridge_enabled;
     }
 
-    zeigeAbschnitt(
-        "settings-console-access",
-        wlan.home_active && wlan.console_access_configured,
-    );
+    zeigeAbschnitt("settings-console-access", heimnetzWeg);
 
     if (wlan.console_access_configured) {
         document.getElementById("settings-console-access-toggle").checked =
@@ -3992,6 +4004,7 @@ document.getElementById("btn-save-wifi-country")
     .addEventListener("click", saveWifiCountry);
 document.getElementById("btn-settings-home-save").addEventListener("click", saveHomeWifi);
 document.getElementById("btn-settings-ap-save").addEventListener("click", saveApWifi);
+document.getElementById("settings-lan-toggle").addEventListener("change", toggleLanMode);
 document.getElementById("settings-bridge-toggle").addEventListener("change", toggleBridge);
 document.getElementById("settings-console-access-toggle")
     .addEventListener("change", toggleConsoleAccess);
@@ -4174,6 +4187,51 @@ async function submitWifiChange(url, ssid, password) {
 
     alert(I18N.settings_saved);
     await loadSettings();
+}
+
+//
+// LAN-Modus: Pult und XRack am selben Netzwerk.
+//
+// Kein eigener Zustand, sondern der, in dem keiner der beiden anderen
+// Wege laeuft. Deshalb gibt es nur eine Richtung: einschalten. Wer ihn
+// ausschalten will, schaltet stattdessen einen der anderen ein - der
+// Schalter springt dann von selbst zurueck.
+//
+async function toggleLanMode(event) {
+
+    if (!event.target.checked) {
+        //
+        // Ausschalten ergaebe keinen Zustand: "kein LAN-Modus" waere
+        // weder der eine noch der andere Weg. Also zurueckstellen und
+        // nichts tun.
+        //
+        event.target.checked = true;
+        return;
+    }
+
+    if (!confirm(I18N.confirm_lan_mode)) {
+        event.target.checked = false;
+        return;
+    }
+
+    const antwort = await fetch("/api/settings/lan_mode", { method: "POST" });
+    const ergebnis = await antwort.json();
+
+    if (!ergebnis.success) {
+        alert(I18N.alert_settings_change_failed.replace("{message}", ergebnis.message || ""));
+        event.target.checked = false;
+        return;
+    }
+
+    alert(I18N.settings_saved);
+
+    // Die beiden anderen Schalter haben sich dabei mit geaendert.
+    await loadSettings();
+
+    //
+    // Die Konsole ist jetzt unter einer anderen Adresse zu erreichen.
+    //
+    recheckConsoleAfterSwitch();
 }
 
 async function toggleBridge(event) {

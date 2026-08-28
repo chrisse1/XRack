@@ -173,6 +173,49 @@ class NetzwerkMixin:
         return self.wlan_control.set_share(False)
 
 
+    def set_lan_mode(self) -> tuple[bool, str]:
+        """
+        Schaltet in den LAN-Modus: Pult und XRack haengen am selben
+        Netzwerk, XRack sucht das Pult dort per Rundruf.
+
+        Es gibt dafuer nichts einzuschalten - der LAN-Modus IST der
+        Zustand, in dem keiner der beiden anderen Wege aktiv ist. Hier
+        wird deshalb nur abgeschaltet, was gerade laeuft.
+
+        Access Point und WLAN-Verbindung bleiben davon unberuehrt; nur
+        die Netzwerkbuchse wandert zurueck auf ihr normales Profil.
+
+        Ueber die vorhandenen Methoden statt direkt ueber wlan_control:
+        set_console_access(False) raeumt zusaetzlich die
+        Portweiterleitung ab, solange die Konsolen-IP noch bekannt ist.
+        """
+
+        zustand = self.wlan_control.get_status()
+
+        ergebnisse = []
+
+        if zustand.get("bridge_enabled"):
+            ergebnisse.append(self.set_bridge(False))
+
+        if zustand.get("console_access_enabled"):
+            ergebnisse.append(self.set_console_access(False))
+
+        if not ergebnisse:
+            #
+            # Schon im LAN-Modus - kein Grund, am Netzwerk zu ruehren.
+            #
+            return True, ""
+
+        fehler = [meldung for erfolg, meldung in ergebnisse if not erfolg]
+
+        if fehler:
+            return False, " ".join(fehler)
+
+        self.logger.info("LAN-Modus: Netzwerkbuchse zurueck auf ihr Profil.")
+
+        return True, ""
+
+
     def _port_forward_loop(self) -> None:
         """
         Gleicht die Portweiterleitung regelmäßig ab (siehe

@@ -716,6 +716,43 @@
                                 </div>
                             </div>
 
+                            <hr id="settings-lan-trenner">
+
+                            {#
+                                Der LAN-Modus: Pult und XRack am
+                                selben Netzwerk.
+
+                                Er ist kein eigener Zustand, den man
+                                einschaltet, sondern der, in dem keiner
+                                der beiden anderen laeuft. Der Schalter
+                                macht das nur sichtbar - und schaltet
+                                beim Einschalten den gerade aktiven Weg
+                                ab. Ausschalten laesst er sich nicht
+                                direkt; das geschieht, indem man einen
+                                der anderen einschaltet.
+
+                                Sichtbar nur, wenn es ueberhaupt eine
+                                Alternative gibt - sonst waere es ein
+                                Schalter ohne Wahl.
+                            #}
+                            <div class="mb-3" id="settings-lan-block">
+                                <label class="form-label fw-semibold">
+                                    {{ t.settings_lan_mode_title }}
+                                </label>
+                                <div id="settings-lan-field" class="form-check form-switch">
+                                    <input
+                                        type="checkbox"
+                                        role="switch"
+                                        id="settings-lan-toggle"
+                                        class="form-check-input"
+                                    >
+                                    <label class="form-check-label" for="settings-lan-toggle">
+                                        {{ t.settings_lan_mode_title }}
+                                    </label>
+                                </div>
+                                <small class="text-body-secondary">{{ t.settings_lan_mode_hint }}</small>
+                            </div>
+
                             <hr id="settings-bridge-trenner">
 
                             {#
