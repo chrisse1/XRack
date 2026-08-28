@@ -180,9 +180,39 @@ class MusicPlayer:
             rate=rate,
         )
 
+    #
+    # Wie lange stop() hoechstens auf das Ende des Worker-Threads
+    # wartet, und wie lange ein neuer Start auf einen alten Thread
+    # wartet.
+    #
+    # Warum ueberhaupt eine Grenze: Der Worker liest vor jedem Titel
+    # die Metadaten (probe_tags/probe_duration in
+    # player/track_decoder.py) - zwei ffprobe-Aufrufe mit je zehn
+    # Sekunden eigener Zeitgrenze. Steckt er gerade darin, kann er
+    # nicht sofort anhalten. Frueher wartete stop() unbegrenzt mit;
+    # der Stop-Knopf wirkte dann bis zu zwanzig Sekunden tot.
+    #
+    # Das Warten ist beim Stoppen falsch und beim Starten richtig:
+    # Anhalten soll sofort wirken, und dass der Thread ein paar
+    # Sekunden spaeter zu Ende laeuft, stoert niemanden - _playing
+    # steht ja bereits auf False, er schreibt nichts mehr ans
+    # Audiogeraet. Einen neuen Titel zu beginnen muss dagegen warten,
+    # sonst liefen zwei Worker auf demselben Geraet.
+    #
+    # Eine halbe Sekunde reicht dem Normalfall reichlich: Steckt der
+    # Worker in der Leseschleife, endet er in Millisekunden. Laenger
+    # zu warten hilft nur dem Fall, den wir gerade nicht mehr abwarten
+    # wollen.
+    STOP_JOIN_TIMEOUT = 0.5
+    START_JOIN_TIMEOUT = 25.0
+
     def stop(self) -> None:
         """
         Stoppt die Wiedergabe.
+
+        Kehrt zurueck, sobald feststeht, dass nichts mehr abgespielt
+        wird - nicht erst, wenn der Worker-Thread auch wirklich zu
+        Ende ist (siehe STOP_JOIN_TIMEOUT).
         """
 
         if not self.playing:
@@ -200,11 +230,57 @@ class MusicPlayer:
 
         self.decoder.close()
 
-        if self._thread is not None:
+        if self._thread is None:
+            return
 
-            self._thread.join()
+        self._thread.join(timeout=self.STOP_JOIN_TIMEOUT)
 
+        if self._thread.is_alive():
+
+            #
+            # Der Thread haengt noch in einer Metadaten-Abfrage. Er
+            # endet von selbst, sobald sie zurueckkommt. Die Referenz
+            # bleibt stehen, damit ein neuer Start ihn abwarten kann.
+            #
+            self.logger.info(
+                "Musikspieler: Wiedergabe beendet, der Lese-Thread "
+                "laeuft noch kurz nach (vermutlich eine "
+                "Metadaten-Abfrage)."
+            )
+
+            return
+
+        self._thread = None
+
+    def _warte_auf_alten_thread(self) -> bool:
+        """
+        Wartet, bis ein noch laufender Worker-Thread zu Ende ist.
+
+        Wird vor jedem Start gebraucht: Zwei Worker auf demselben
+        Audiogeraet wuerden sich gegenseitig die Ausgabe zerschneiden.
+        Liefert False, wenn der alte Thread nicht rechtzeitig endet -
+        dann wird nicht gestartet, statt das Risiko einzugehen.
+        """
+
+        if self._thread is None or not self._thread.is_alive():
             self._thread = None
+            return True
+
+        self._thread.join(timeout=self.START_JOIN_TIMEOUT)
+
+        if self._thread.is_alive():
+
+            self.logger.error(
+                "Musikspieler: Der vorherige Lese-Thread laeuft nach "
+                "%.0f s immer noch - es wird nichts Neues gestartet.",
+                self.START_JOIN_TIMEOUT,
+            )
+
+            return False
+
+        self._thread = None
+
+        return True
 
     def pause(self) -> None:
         """
@@ -302,6 +378,14 @@ class MusicPlayer:
         ):
             return False
 
+        #
+        # Erst sicherstellen, dass kein alter Worker mehr laeuft -
+        # stop() wartet darauf bewusst nicht mehr (siehe dort).
+        #
+        if not self._warte_auf_alten_thread():
+            self.backend.close()
+            return False
+
         self._playing = True
 
         self._thread = threading.Thread(
@@ -348,6 +432,16 @@ class MusicPlayer:
             track = self._playlist[self._index]
 
             self._current_track = track.name
+
+            #
+            # Zwischen der Pruefung oben und hier kann stop() gelaufen
+            # sein. Dann diesen Titel gar nicht erst einlesen - die
+            # beiden ffprobe-Aufrufe kosten sonst bis zu zwanzig
+            # Sekunden fuer nichts, und genau die haengen den Thread
+            # ueber das Ende der Wiedergabe hinaus.
+            #
+            if not self._playing:
+                break
 
             tags = probe_tags(track)
             self._current_track_title = tags["title"]

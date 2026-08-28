@@ -198,8 +198,97 @@ try:
     run_with_timeout(player4.stop, label="stop() nach Raten-Test")
     print("OK: Übergebene Samplerate wird verwendet, nicht hartcodiert")
 
+
+
+    # ================================================================
+    # 4. stop() wartet nicht auf eine laufende Metadaten-Abfrage
+    #
+    # Der Grund, warum dieser Test frueher unter Last fehlschlug - und
+    # ein echter Fehler, nicht bloss ein Testproblem:
+    #
+    # Der Worker liest vor jedem Titel Titel/Interpret und Dauer ueber
+    # ffprobe (probe_tags/probe_duration, je 10 s Zeitgrenze). stop()
+    # wartete mit join() OHNE Zeitgrenze auf den Thread - steckte der
+    # gerade in einer dieser Abfragen, wirkte der Stop-Knopf bis zu
+    # zwanzig Sekunden tot.
+    #
+    # Anhalten muss sofort wirken. Dass der Thread ein paar Sekunden
+    # spaeter zu Ende laeuft, stoert nicht: _playing steht bereits auf
+    # False, er schreibt nichts mehr ans Audiogeraet.
+    # ================================================================
+
+    import player.music_player as musikspieler_modul
+
+    original_probe_tags = musikspieler_modul.probe_tags
+
+
+    #
+    # Eine langsame Abfrage nachstellen. Sechs Sekunden sind kein
+    # Fehlverhalten - sie liegen weit innerhalb der Zeitgrenze, die
+    # sich probe_tags selbst setzt.
+    #
+    def langsame_probe(pfad):
+        time.sleep(6)
+        return original_probe_tags(pfad)
+
+    musikspieler_modul.probe_tags = langsame_probe
+
+    player5 = MusicPlayer(FakeBackend(), library)
+    player5.decoder = FakeDecoder()
+
+    assert player5.play_file(device, with_dir / "song.mp3", start_channel=0, rate=48000)
+
+    # Der Worker steckt jetzt in der langsamen Abfrage.
+    time.sleep(0.2)
+
+    beginn = time.monotonic()
+    player5.stop()
+    gebraucht = time.monotonic() - beginn
+
+    assert not player5.playing, "Nach stop() muesste die Wiedergabe aus sein."
+
+    assert gebraucht < 3, (
+        f"stop() hat {gebraucht:.1f}s gebraucht - es wartet wieder auf die "
+        "laufende Metadaten-Abfrage. Der Stop-Knopf wirkt dann tot."
+    )
+
+    print(f"OK: stop() kehrt trotz laufender Metadaten-Abfrage zurueck "
+          f"({gebraucht:.1f}s)")
+
+    # ------------------------------------------------------------
+    # ... und ein neuer Start wartet den alten Thread trotzdem ab.
+    #
+    # Das ist die Kehrseite: stop() laesst den Thread laufen, also
+    # muss das Starten dafuer sorgen, dass nicht zwei Worker
+    # gleichzeitig auf dasselbe Audiogeraet schreiben.
+    # ------------------------------------------------------------
+
+    alter_thread = player5._thread
+
+    assert alter_thread is not None and alter_thread.is_alive(), (
+        "Fuer diese Pruefung muss der alte Thread noch laufen - sonst "
+        "sagt sie nichts aus."
+    )
+
+    musikspieler_modul.probe_tags = original_probe_tags
+
+    assert player5.play_file(device, with_dir / "song.mp3", start_channel=0, rate=48000)
+
+    assert not alter_thread.is_alive(), (
+        "Der neue Titel startete, obwohl der alte Lese-Thread noch lief - "
+        "zwei Worker auf demselben Geraet zerschneiden die Ausgabe."
+    )
+
+    run_with_timeout(player5.stop, label="stop() nach Neustart")
+
+    print("OK: Ein neuer Start wartet den alten Lese-Thread ab")
+
+    musikspieler_modul.probe_tags = original_probe_tags
+
 finally:
     import shutil
     shutil.rmtree(with_dir, ignore_errors=True)
+
+
 
 print("Alle Tests erfolgreich.")
