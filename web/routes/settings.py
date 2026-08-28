@@ -285,6 +285,27 @@ def set_console_access(
     }
 
 
+@router.post("/api/settings/lan_mode")
+def set_lan_mode(request: Request):
+    """
+    Schaltet in den LAN-Modus.
+
+    Ohne Rumpf, denn es gibt nichts zu waehlen: Der LAN-Modus ist der
+    Zustand, in dem keiner der beiden anderen Zugangswege aktiv ist.
+    Ausschalten laesst er sich deshalb nur, indem man einen der
+    anderen einschaltet.
+    """
+
+    application = request.app.state.application
+
+    success, message = application.set_lan_mode()
+
+    return {
+        "success": success,
+        "message": message,
+    }
+
+
 @router.post("/api/settings/faders-autolock")
 def settings_faders_autolock(
     selection: FadersAutolockSelection,

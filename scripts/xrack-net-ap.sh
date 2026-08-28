@@ -42,6 +42,37 @@ if [ "${SSID}" = "--refresh-unit" ]; then
     exec "$(dirname "$0")/xrack-ap-setup.sh" --refresh-unit
 fi
 
+#
+# --report: Die Teile der Access-Point-Konfiguration ausgeben, an die
+# XRack selbst nicht herankommt.
+#
+# /etc/hostapd/xrack.conf enthaelt das WLAN-Passwort im Klartext und
+# ist deshalb nur fuer root lesbar (siehe xrack-ap-info.sh). Fuer den
+# Selbsttest werden daraus Interface, Band, Kanal und Laendercode
+# gebraucht - das Passwort ausdruecklich nicht, deshalb wird hier
+# gefiltert statt die Datei durchzureichen.
+#
+# Wieder ueber dieses Skript und nicht als eigenes: Nur "xrack-net-ap.sh *"
+# hat einen sudoers-Eintrag mit Platzhalter. Ein neues Skript braeuchte
+# einen neuen Eintrag, und den schreibt nur install.sh - der Selbsttest
+# waere auf jeder bestehenden Installation tot, also genau dort, wo man
+# ihn braucht.
+#
+if [ "${SSID}" = "--report" ]; then
+
+    if [ -f "${CONF}" ]; then
+        grep -E "^(interface|country_code|hw_mode|channel|ieee80211d|bridge)=" \
+            "${CONF}" 2>/dev/null || true
+    fi
+
+    if [ -f /etc/systemd/system/xrack-hostapd.service ]; then
+        grep -E "^# XRack-Unit-Version:" \
+            /etc/systemd/system/xrack-hostapd.service 2>/dev/null || true
+    fi
+
+    exit 0
+fi
+
 CONF="/etc/hostapd/xrack.conf"
 UNIT="xrack-hostapd.service"
 

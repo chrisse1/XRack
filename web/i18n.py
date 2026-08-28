@@ -197,6 +197,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "alert_wifi_country_failed": "WLAN-Land konnte nicht gesetzt werden: {message}",
         "settings_home_wifi_title": "WLAN-Client",
         "settings_ap_wifi_title": "Access Point",
+        "settings_lan_mode_title": "Mischpult im selben Netzwerk (LAN)",
+        "settings_lan_mode_hint": (
+            "Pult und XRack hängen am selben Router. Access Point und "
+            "WLAN-Verbindung laufen weiter."
+        ),
+        "confirm_lan_mode": (
+            "In den LAN-Modus wechseln? Der gerade aktive Zugangsweg zum "
+            "Mischpult wird dabei abgeschaltet."
+        ),
         "settings_ap_access_title": (
             "Konsole über XRacks Access Point erreichbar machen"
         ),
@@ -292,6 +301,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_update_failed": "Update fehlgeschlagen.",
 
         # Diagnose-Aufzeichnung
+        "settings_selftest_title": "Netzwerk-Selbsttest",
+        "settings_selftest_run": "Selbsttest ausführen",
+        "settings_selftest_copy": "Kopieren",
+        "settings_selftest_hint": (
+            "Prüft Funkgeräte, Access Point, Heimnetz und Mischpult auf einmal."
+        ),
+        "alert_selftest_copied": "In die Zwischenablage kopiert.",
+        "alert_selftest_failed": "Selbsttest konnte nicht ausgeführt werden.",
         "settings_diagnostics_title": "Diagnose-Aufzeichnung",
         "settings_diagnostics_label": "Aufzeichnung läuft mit",
         "settings_diagnostics_hint": "Schreibt Zustand und Netzwerk für die Fehlersuche mit.",
@@ -589,6 +606,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "alert_wifi_country_failed": "Could not set the Wi-Fi country: {message}",
         "settings_home_wifi_title": "Wi-Fi client",
         "settings_ap_wifi_title": "Access Point",
+        "settings_lan_mode_title": "Console on the same network (LAN)",
+        "settings_lan_mode_hint": (
+            "Console and XRack are on the same router. Access point and "
+            "Wi-Fi connection keep running."
+        ),
+        "confirm_lan_mode": (
+            "Switch to LAN mode? The currently active route to the console "
+            "will be turned off."
+        ),
         "settings_ap_access_title": (
             "Make console reachable via XRack's access point"
         ),
@@ -681,6 +707,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_update_failed": "Update failed.",
 
         # Diagnostic recording
+        "settings_selftest_title": "Network self-test",
+        "settings_selftest_run": "Run self-test",
+        "settings_selftest_copy": "Copy",
+        "settings_selftest_hint": (
+            "Checks radios, access point, home network and console at once."
+        ),
+        "alert_selftest_copied": "Copied to the clipboard.",
+        "alert_selftest_failed": "Could not run the self-test.",
         "settings_diagnostics_title": "Diagnostic recording",
         "settings_diagnostics_label": "Recording is running",
         "settings_diagnostics_hint": "Records state and network for troubleshooting.",

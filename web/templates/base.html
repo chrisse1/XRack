@@ -716,6 +716,43 @@
                                 </div>
                             </div>
 
+                            <hr id="settings-lan-trenner">
+
+                            {#
+                                Der LAN-Modus: Pult und XRack am
+                                selben Netzwerk.
+
+                                Er ist kein eigener Zustand, den man
+                                einschaltet, sondern der, in dem keiner
+                                der beiden anderen laeuft. Der Schalter
+                                macht das nur sichtbar - und schaltet
+                                beim Einschalten den gerade aktiven Weg
+                                ab. Ausschalten laesst er sich nicht
+                                direkt; das geschieht, indem man einen
+                                der anderen einschaltet.
+
+                                Sichtbar nur, wenn es ueberhaupt eine
+                                Alternative gibt - sonst waere es ein
+                                Schalter ohne Wahl.
+                            #}
+                            <div class="mb-3" id="settings-lan-block">
+                                <label class="form-label fw-semibold">
+                                    {{ t.settings_lan_mode_title }}
+                                </label>
+                                <div id="settings-lan-field" class="form-check form-switch">
+                                    <input
+                                        type="checkbox"
+                                        role="switch"
+                                        id="settings-lan-toggle"
+                                        class="form-check-input"
+                                    >
+                                    <label class="form-check-label" for="settings-lan-toggle">
+                                        {{ t.settings_lan_mode_title }}
+                                    </label>
+                                </div>
+                                <small class="text-body-secondary">{{ t.settings_lan_mode_hint }}</small>
+                            </div>
+
                             <hr id="settings-bridge-trenner">
 
                             {#
@@ -1016,6 +1053,47 @@
 
                             <small class="d-block text-body-secondary mt-2">
                                 {{ t.settings_update_hint }}
+                            </small>
+                        </div>
+
+                        {#
+                            Netzwerk-Selbsttest. Sammelt in einem
+                            Durchgang alles, was man zum Einkreisen
+                            eines Netzwerkproblems braucht, und sagt
+                            dazu, was daran nicht stimmt.
+                        #}
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                {{ t.settings_selftest_title }}
+                            </label>
+
+                            <div class="d-flex gap-2">
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-secondary btn-sm"
+                                    id="btn-network-selftest"
+                                >
+                                    <i class="bi bi-clipboard-pulse me-1"></i>
+                                    {{ t.settings_selftest_run }}
+                                </button>
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-secondary btn-sm d-none"
+                                    id="btn-network-selftest-copy"
+                                >
+                                    <i class="bi bi-clipboard me-1"></i>
+                                    {{ t.settings_selftest_copy }}
+                                </button>
+                            </div>
+
+                            <pre
+                                id="settings-selftest-output"
+                                class="small mt-2 p-2 border rounded d-none"
+                                style="max-height: 22rem; overflow: auto;"
+                            ></pre>
+
+                            <small class="d-block text-body-secondary mt-2">
+                                {{ t.settings_selftest_hint }}
                             </small>
                         </div>
 

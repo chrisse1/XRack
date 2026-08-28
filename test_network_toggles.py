@@ -1006,7 +1006,116 @@ cp "$quelle" "$ziel"
 
     print("OK: Ein fehlendes Kabelprofil wird nachgelegt")
 
-    print("Alle Tests erfolgreich.")
-
+    
 finally:
     shutil.rmtree(scratch, ignore_errors=True)
+
+
+# ====================================================================
+# LAN-Modus
+#
+# Kein eigener Zustand, sondern der, in dem keiner der beiden anderen
+# Zugangswege laeuft. set_lan_mode() schaltet deshalb nur ab, was
+# gerade an ist - und fasst das Netzwerk gar nicht an, wenn ohnehin
+# schon LAN-Modus herrscht.
+# ====================================================================
+
+import logging as _logging
+import types as _types
+
+from core.application import Application
+
+
+def _lan_attrappe(bridge_an: bool, heimnetz_an: bool, erfolg: bool = True):
+    """Anwendung mit protokollierenden Schaltern."""
+
+    aufrufe = []
+
+    zeug = _types.SimpleNamespace(
+        wlan_control=_types.SimpleNamespace(
+            get_status=lambda: {
+                "bridge_enabled": bridge_an,
+                "console_access_enabled": heimnetz_an,
+            },
+            set_bridge=lambda an: (
+                aufrufe.append(("bridge", an)) or (erfolg, "" if erfolg else "Bridge kaputt")
+            ),
+            set_share=lambda an: (
+                aufrufe.append(("share", an)) or (erfolg, "" if erfolg else "Freigabe kaputt")
+            ),
+            set_port_forward=lambda an, ip: aufrufe.append(("forward", an)),
+        ),
+        logger=_logging.getLogger("XRack-Test"),
+        _port_forward_applied_ip="10.77.0.5",
+    )
+
+    zeug.set_bridge = lambda an: Application.set_bridge(zeug, an)
+    zeug.set_console_access = lambda an: Application.set_console_access(zeug, an)
+
+    return zeug, aufrufe
+
+
+# ---- Access-Point-Weg ist an: nur der wird abgeschaltet -------------
+
+app, aufrufe = _lan_attrappe(bridge_an=True, heimnetz_an=False)
+
+erfolg, meldung = Application.set_lan_mode(app)
+
+assert erfolg is True, meldung
+assert ("bridge", False) in aufrufe, aufrufe
+assert not any(name == "share" for name, _ in aufrufe), (
+    f"Die Heimnetz-Freigabe wurde angefasst, obwohl sie aus war: {aufrufe}"
+)
+
+print("OK: LAN-Modus schaltet den Access-Point-Weg ab")
+
+
+# ---- Heimnetz-Weg ist an: Weiterleitung zuerst weg ------------------
+
+app, aufrufe = _lan_attrappe(bridge_an=False, heimnetz_an=True)
+
+erfolg, _ = Application.set_lan_mode(app)
+
+assert erfolg is True
+assert ("share", False) in aufrufe, aufrufe
+
+#
+# Die Portweiterleitung muss VOR der Freigabe fallen - danach ist die
+# Konsolen-IP nicht mehr bekannt, und die Regel bliebe stehen.
+#
+assert aufrufe.index(("forward", False)) < aufrufe.index(("share", False)), (
+    f"Reihenfolge stimmt nicht: {aufrufe}"
+)
+assert app._port_forward_applied_ip is None, (
+    "Die gemerkte Konsolen-IP wurde nicht verworfen."
+)
+
+print("OK: LAN-Modus raeumt die Portweiterleitung vor der Freigabe ab")
+
+
+# ---- Schon im LAN-Modus: gar nichts anfassen ------------------------
+
+app, aufrufe = _lan_attrappe(bridge_an=False, heimnetz_an=False)
+
+erfolg, _ = Application.set_lan_mode(app)
+
+assert erfolg is True
+assert aufrufe == [], (
+    f"Im LAN-Modus wurde trotzdem am Netzwerk gedreht: {aufrufe}"
+)
+
+print("OK: Ist schon LAN-Modus, wird nichts geschaltet")
+
+
+# ---- Scheitert das Abschalten, wird das gemeldet --------------------
+
+app, aufrufe = _lan_attrappe(bridge_an=True, heimnetz_an=False, erfolg=False)
+
+erfolg, meldung = Application.set_lan_mode(app)
+
+assert erfolg is False, "Ein Fehlschlag wurde als Erfolg gemeldet"
+assert "Bridge kaputt" in meldung, meldung
+
+print("OK: Ein fehlgeschlagenes Umschalten meldet einen Fehler")
+
+print("Alle Tests erfolgreich.")
