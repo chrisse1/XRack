@@ -203,6 +203,7 @@ def stand(enabled=True, service=True, adapter=True, overlaps=None) -> dict:
         "roles": ["dimmer", "red", "green", "blue", "pan", "tilt", "generic"],
         "overlaps": overlaps or [],
         "values": {"bar": [255, 0, 0] * 8},
+        "brightness": {"bar": 64},
         "dmx": {"service_running": service, "adapter_present": adapter},
     }
 
@@ -221,6 +222,7 @@ ergebnis = ausfuehren(stand(), """function () {
         regler: lampen.querySelectorAll('input[type=range]').length,
         lampenname: lampen.textContent.indexOf('LED-Bar links') >= 0,
         szene: document.getElementById('light-scenes').textContent.indexOf('Pause') >= 0,
+        helligkeit: lampen.querySelector('input[type=range]').value,
         schalter: document.getElementById('settings-light-toggle').checked,
         warnung_sichtbar: !document.getElementById('light-warning').classList.contains('d-none')
     };
@@ -244,11 +246,65 @@ assert ergebnis["regler"] == 1, (
     f"Erwartet genau einen Helligkeitsregler, gefunden: {ergebnis['regler']}"
 )
 
+#
+# Der Regler muss zeigen, was eingestellt ist. Vorher stand dort fest
+# 255: Nach jedem Ziehen baut sich die Karte neu auf, und der Regler
+# sprang zurueck auf voll - am Geraet genau so aufgefallen.
+#
+assert ergebnis["helligkeit"] == "64", (
+    f"Der Helligkeitsregler zeigt {ergebnis['helligkeit']} statt des "
+    f"eingestellten Werts 64."
+)
+
 assert not ergebnis["warnung_sichtbar"], (
     "Bei laufendem Dienst und steckendem Kabel darf keine Warnung stehen."
 )
 
 print("OK: Die Lichtkarte zeigt aus 24 Kanälen acht Segmente statt 24 Regler")
+print("OK: Der Helligkeitsregler zeigt den eingestellten Wert")
+
+
+# ====================================================================
+# 1b. Eine Lampe mit eigenem Dimmerkanal
+#
+# Der Dimmerkanal wird vom Helligkeitsregler bedient. Ein zweiter
+# Regler daneben, der dasselbe tut und dabei ueberschrieben wird,
+# waere nur verwirrend.
+# ====================================================================
+
+mit_kopf = stand()
+mit_kopf["fixtures"] = [
+    {"id": "k", "name": "Bewegtlicht", "template": "kopf", "address": 40}
+]
+mit_kopf["values"] = {"k": [128, 200, 255, 0, 0, 255]}
+mit_kopf["brightness"] = {"k": 200}
+
+ergebnis = ausfuehren(mit_kopf, """function () {
+    const lampen = document.getElementById('light-fixtures');
+    const regler = lampen.querySelectorAll('input[type=range]');
+
+    return {
+        farbfelder: lampen.querySelectorAll('input[type=color]').length,
+        regler: regler.length,
+        beschriftungen: lampen.textContent
+    };
+}""")
+
+assert ergebnis["farbfelder"] == 1, ergebnis
+
+#
+# Helligkeit + Pan + Tilt = drei. Der Dimmerkanal bekommt keinen
+# eigenen Regler.
+#
+assert ergebnis["regler"] == 3, (
+    f"Erwartet drei Regler (Helligkeit, Pan, Tilt), gefunden: "
+    f"{ergebnis['regler']}"
+)
+
+assert "Pan" in ergebnis["beschriftungen"], ergebnis["beschriftungen"]
+assert "Tilt" in ergebnis["beschriftungen"], ergebnis["beschriftungen"]
+
+print("OK: Bei einer Lampe mit Dimmerkanal gibt es dafür keinen zweiten Regler")
 
 
 # ====================================================================

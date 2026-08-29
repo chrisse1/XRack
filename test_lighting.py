@@ -209,6 +209,38 @@ assert ausgabe[9:12] == [0, 0, 0], "Eine Lampe ohne Zustand muss dunkel bleiben.
 
 print("OK: Fehlende Zustände und kaputte Lampen kippen das Bild nicht")
 
+#
+# Eine Lampe mit eigenem Dimmerkanal: Der muss aufgedreht werden, auch
+# wenn niemand an der Helligkeit gedreht hat. Sonst steht eine Farbe
+# in den Kanaelen, der Dimmer aber auf 0 - und die Lampe bleibt
+# dunkel, ohne dass man sieht, warum.
+#
+ausgabe = fixtures.bild(
+    [{"id": "d", "name": "Par", "template": "rgb-dimmer", "address": 1}],
+    VORLAGEN,
+    {"d": [0, 255, 0, 0]},
+)
+
+assert ausgabe[0] == 255, (
+    f"Der Dimmerkanal muss ohne Zutun aufgedreht sein, steht aber auf "
+    f"{ausgabe[0]}"
+)
+assert ausgabe[1:4] == [255, 0, 0], ausgabe[1:4]
+
+#
+# Und mit halber Helligkeit wird der Dimmer gesetzt, nicht die Farbe.
+#
+ausgabe = fixtures.bild(
+    [{"id": "d", "name": "Par", "template": "rgb-dimmer", "address": 1}],
+    VORLAGEN,
+    {"d": [0, 255, 0, 0]},
+    {"d": 128},
+)
+
+assert ausgabe[0] == 128 and ausgabe[1] == 255, ausgabe[0:4]
+
+print("OK: Lampen mit Dimmerkanal gehen an, ohne dass jemand dreht")
+
 
 # ====================================================================
 # 6. Die Ablage
@@ -403,6 +435,7 @@ class LichtApp(LichtMixin):
         self.lighting_store = store
         self.dmx_control = dmx
         self.light_values = {}
+        self.light_brightness = {}
 
 
 def aufbau(ordner: Path, antwortet: bool = True):
@@ -468,6 +501,43 @@ with tempfile.TemporaryDirectory() as tmp:
     print("OK: Helligkeit wirkt auch ohne Dimmerkanal")
 
     #
+    # Und jetzt der Punkt, an dem die erste Fassung falsch war:
+    # Dimmen rechnet Farbwerte herunter, und das ist nicht umkehrbar.
+    # Wurde die Helligkeit in die gemerkten Werte hineingerechnet,
+    # blieb nach einmal Herunterziehen und Hochziehen dauerhaft die
+    # halbe Farbe stehen. Die gemerkten Werte muessen ungedimmt
+    # bleiben.
+    #
+    assert app.light_values["bar"] == [200, 100, 50], (
+        "Die gemerkten Werte duerfen vom Dimmen nicht angefasst werden: "
+        + str(app.light_values["bar"])
+    )
+
+    app.set_light_fixture_brightness("bar", 255)
+
+    assert dmx.gesendet[-1][9:12] == [200, 100, 50], (
+        "Nach dem Hochziehen muss wieder die volle Farbe stehen: "
+        + str(dmx.gesendet[-1][9:12])
+    )
+
+    print("OK: Herunterdimmen und wieder hochziehen stellt die Farbe her")
+
+    #
+    # Und die Oberflaeche muss den eingestellten Wert wiederfinden -
+    # sonst springt der Regler beim naechsten Aufbau der Karte zurueck
+    # auf voll. Genau das war am Geraet zu sehen.
+    #
+    app.set_light_fixture_brightness("bar", 64)
+
+    assert app.get_lighting_status()["brightness"]["bar"] == 64, (
+        "Der eingestellte Helligkeitswert muss im Status stehen."
+    )
+
+    app.set_light_fixture_brightness("bar", 255)
+
+    print("OK: Die eingestellte Helligkeit steht im Status")
+
+    #
     # Szene ablegen, etwas anderes einstellen, Szene zurueckholen.
     #
     app.set_light_fixture_values("bar", [0, 0, 255])
@@ -486,6 +556,30 @@ with tempfile.TemporaryDirectory() as tmp:
     assert dmx.gesendet[-1][9:12] == [0, 0, 255], dmx.gesendet[-1][9:12]
 
     print("OK: Eine Szene stellt den gespeicherten Stand wieder her")
+
+    #
+    # Die Helligkeit gehoert zur Szene. Ohne sie kaeme eine gedaempfte
+    # Stimmung beim Aufrufen mit voller Helligkeit zurueck.
+    #
+    app.set_light_fixture_values("bar", [0, 255, 0])
+    app.set_light_fixture_brightness("bar", 51)
+
+    erfolg, meldung = app.save_light_scene("Gedaempft")
+    assert erfolg, meldung
+
+    app.set_light_fixture_brightness("bar", 255)
+    assert dmx.gesendet[-1][9:12] == [0, 255, 0]
+
+    gedaempft = [s for s in app.lighting_store.szenen() if s["name"] == "Gedaempft"][0]
+
+    app.activate_light_scene(gedaempft["id"])
+
+    assert dmx.gesendet[-1][9:12] == [0, 51, 0], (
+        "Die Szene muss mit ihrer Helligkeit zurueckkommen: "
+        + str(dmx.gesendet[-1][9:12])
+    )
+
+    print("OK: Eine Szene merkt sich auch die Helligkeit")
 
     #
     # Blackout.

@@ -226,6 +226,7 @@ class LightingStore:
 
         for szene in daten["scenes"]:
             szene.get("values", {}).pop(kennung, None)
+            szene.get("brightness", {}).pop(kennung, None)
 
         self._sichern(daten)
 
@@ -248,7 +249,8 @@ class LightingStore:
         return None
 
     def szene_speichern(self, name: str, zustaende: dict,
-                        kennung: str = "") -> tuple[bool, str, str]:
+                        kennung: str = "",
+                        helligkeiten: dict | None = None) -> tuple[bool, str, str]:
         """
         Den übergebenen Zustand als Szene ablegen.
 
@@ -283,10 +285,23 @@ class LightingStore:
 
             werte[lampen_id] = [fixtures.begrenzen(wert) for wert in liste]
 
+        #
+        # Die Helligkeit gehört mit in die Szene: Sie ist eine eigene
+        # Größe und steckt nicht in den Werten (siehe fixtures.bild).
+        # Ohne sie käme eine gespeicherte Stimmung beim Aufrufen mit
+        # voller Helligkeit zurück.
+        #
+        licht = {
+            lampen_id: fixtures.begrenzen(wert)
+            for lampen_id, wert in (helligkeiten or {}).items()
+            if lampen_id in bekannt
+        }
+
         szene = {
             "id": str(kennung or self._kennung()),
             "name": name,
             "values": werte,
+            "brightness": licht,
         }
 
         daten["scenes"] = [

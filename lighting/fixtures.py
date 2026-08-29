@@ -302,14 +302,27 @@ def hat_dimmer(vorlage: dict) -> bool:
     return "dimmer" in vorlage["channels"]
 
 
-def bild(lampen: list[dict], vorlagen: dict,
-         zustaende: dict) -> list[int]:
+def bild(lampen: list[dict], vorlagen: dict, zustaende: dict,
+         helligkeiten: dict | None = None) -> list[int]:
     """
     Aus allen Lampen ein DMX-Bild bauen.
 
     `zustaende` bildet Lampen-Kennung auf eine Werteliste ab, relativ
     zum ersten Kanal der Lampe. Fehlt eine Lampe darin, bleibt sie
     dunkel.
+
+    `helligkeiten` bildet Lampen-Kennung auf 0-255 ab; fehlt ein
+    Eintrag, gilt volle Helligkeit.
+
+    Warum die Helligkeit erst hier einfließt und nicht schon in den
+    gemerkten Werten steht:
+
+    Dimmen rechnet Farbwerte herunter, und das ist nicht umkehrbar.
+    Wer eine Lampe auf die Hälfte dimmt und wieder hochzieht, hätte
+    sonst dauerhaft die halbe Farbe - aus 200 wird 100, und aus 100
+    wird beim Hochziehen wieder nur 100. Die gemerkten Werte sind
+    deshalb immer die ungedimmten; die Helligkeit ist eine eigene
+    Größe und wird erst beim Senden daraufgelegt.
 
     Zurück kommen immer volle 512 Kanäle. Nicht belegte Kanäle stehen
     auf 0 - wer eine Lampe aus der Einrichtung entfernt, soll sie
@@ -318,6 +331,7 @@ def bild(lampen: list[dict], vorlagen: dict,
     """
 
     ausgabe = [0] * DMX_KANAELE
+    helligkeiten = helligkeiten or {}
 
     for lampe in lampen:
 
@@ -331,6 +345,14 @@ def bild(lampen: list[dict], vorlagen: dict,
 
         start = int(lampe["address"])
         werte = zustaende.get(lampe["id"]) or leere_werte(vorlage)
+
+        #
+        # Immer anwenden, auch bei voller Helligkeit: Bei einer Lampe
+        # mit eigenem Dimmer-Kanal setzt das den Dimmer auf 255. Ohne
+        # diesen Schritt bliebe der auf 0 stehen, und die Lampe wäre
+        # dunkel, obwohl eine Farbe eingestellt ist.
+        #
+        werte = dimmen(vorlage, werte, helligkeiten.get(lampe["id"], 255))
 
         for versatz, rolle in enumerate(vorlage["channels"]):
 

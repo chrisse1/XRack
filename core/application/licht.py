@@ -30,6 +30,7 @@ class LichtMixin:
         stand = self.lighting_store.uebersicht()
 
         stand["values"] = self.light_values
+        stand["brightness"] = self.light_brightness
         stand["dmx"] = self.dmx_control.status()
 
         return stand
@@ -47,6 +48,7 @@ class LichtMixin:
 
         if not enabled:
             self.light_values = {}
+            self.light_brightness = {}
             self.dmx_control.blackout()
 
         return True, ""
@@ -83,6 +85,7 @@ class LichtMixin:
         if erfolg:
 
             self.light_values.pop(kennung, None)
+            self.light_brightness.pop(kennung, None)
             self._licht_senden()
 
         return erfolg, meldung
@@ -127,12 +130,16 @@ class LichtMixin:
         Die Helligkeit einer Lampe ändern, ohne ihre Farbe zu
         verlieren.
 
-        Hat die Lampe einen Dimmerkanal, wird der gesetzt; hat sie
-        keinen - wie die LED-Bar im 24-Kanal-Betrieb -, werden die
-        Farben heruntergerechnet. Siehe lighting/fixtures.dimmen().
-        """
+        Gemerkt wird die Helligkeit getrennt von den Farbwerten und
+        erst beim Senden daraufgelegt (siehe fixtures.bild).
 
-        vorlagen = self.lighting_store.vorlagen()
+        Anders herum wäre es kaputt, und zwar auf eine Art, die man
+        erst spät merkt: Dimmen rechnet Farbwerte herunter, und das
+        ist nicht umkehrbar. Wer eine Lampe halb herunterzieht und
+        wieder hoch, hätte dauerhaft die halbe Farbe. Genauso konnte
+        die Oberfläche den eingestellten Wert nicht wieder anzeigen,
+        weil er nirgends stand - der Regler sprang zurück auf voll.
+        """
 
         lampe = next(
             (l for l in self.lighting_store.lampen() if l["id"] == kennung),
@@ -142,16 +149,7 @@ class LichtMixin:
         if lampe is None:
             return False, "Diese Lampe gibt es nicht."
 
-        vorlage = vorlagen.get(lampe["template"])
-
-        if vorlage is None:
-            return False, "Zu dieser Lampe gibt es keine Vorlage."
-
-        werte = self.light_values.get(kennung) or fixtures.leere_werte(vorlage)
-
-        self.light_values[kennung] = fixtures.dimmen(
-            vorlage, werte, helligkeit
-        )
+        self.light_brightness[kennung] = fixtures.begrenzen(helligkeit)
 
         return self._licht_senden()
 
@@ -159,6 +157,7 @@ class LichtMixin:
         """Alles aus."""
 
         self.light_values = {}
+        self.light_brightness = {}
 
         return self._licht_senden()
 
@@ -171,7 +170,7 @@ class LichtMixin:
         """Den aktuellen Stand als Szene ablegen."""
 
         erfolg, meldung, _ = self.lighting_store.szene_speichern(
-            name, self.light_values, kennung
+            name, self.light_values, kennung, self.light_brightness
         )
 
         return erfolg, meldung
@@ -188,6 +187,13 @@ class LichtMixin:
             lampe: list(werte)
             for lampe, werte in (szene.get("values") or {}).items()
         }
+
+        #
+        # Szenen aus einer älteren Fassung kennen die Helligkeit noch
+        # nicht. Dann gilt volle Helligkeit - das ist der Zustand, in
+        # dem sie damals gespeichert wurden.
+        #
+        self.light_brightness = dict(szene.get("brightness") or {})
 
         return self._licht_senden()
 
@@ -216,6 +222,7 @@ class LichtMixin:
             self.lighting_store.lampen(),
             self.lighting_store.vorlagen(),
             self.light_values,
+            self.light_brightness,
         )
 
         if not self.dmx_control.send(werte):

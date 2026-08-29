@@ -170,6 +170,13 @@ class Application(
         #
         self.light_values: dict = {}
 
+        #
+        # Die Helligkeit je Lampe, getrennt von den Farbwerten: Dimmen
+        # ist nicht umkehrbar, deshalb bleiben die gemerkten Werte
+        # ungedimmt und die Helligkeit kommt erst beim Senden dazu.
+        #
+        self.light_brightness: dict = {}
+
         self._usb_copy_lock = threading.Lock()
 
         self.usb_copy_state = {

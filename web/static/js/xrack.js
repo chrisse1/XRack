@@ -4731,12 +4731,23 @@ function renderLightFixtures(stand) {
         dimmLabel.textContent = I18N.light_brightness;
         dimmZeile.appendChild(dimmLabel);
 
+        //
+        // Der Wert kommt vom Server, nicht aus einer Annahme. Vorher
+        // stand hier fest 255 - der Regler sprang nach jedem Ziehen
+        // zurueck auf voll, weil die Karte nach dem Setzen neu
+        // aufgebaut wird und der eingestellte Wert nirgends stand.
+        //
+        const gemerkt = (lightState && lightState.brightness &&
+                         typeof lightState.brightness[lampe.id] === "number")
+            ? lightState.brightness[lampe.id]
+            : 255;
+
         const dimmer = document.createElement("input");
         dimmer.type = "range";
         dimmer.className = "form-range";
         dimmer.min = 0;
         dimmer.max = 255;
-        dimmer.value = 255;
+        dimmer.value = gemerkt;
         dimmer.addEventListener("change", () => setLightBrightness(lampe.id, parseInt(dimmer.value, 10)));
         dimmZeile.appendChild(dimmer);
 
@@ -4789,6 +4800,12 @@ function renderLightFixtures(stand) {
             gruppe.forEach((index) => {
                 const rolle = vorlage.channels[index];
                 if (istFarbe && LIGHT_COLOR_ROLES.includes(rolle)) return;
+
+                // Den Dimmer-Kanal bedient der Helligkeitsregler
+                // oben. Zwei Regler fuer dieselbe Sache, von denen
+                // einer den anderen ueberschreibt, waere nur
+                // verwirrend.
+                if (rolle === "dimmer") return;
 
                 const beschriftung = document.createElement("div");
                 beschriftung.className = "text-body-secondary";
