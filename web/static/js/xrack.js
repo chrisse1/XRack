@@ -360,7 +360,6 @@ async function setRecordChannels(channels) {
         body: JSON.stringify({ channels })
     });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
@@ -393,7 +392,6 @@ async function loadAudioDevices() {
                 body: JSON.stringify({ device_id: this.value })
             });
             const result = await response.json();
-            console.log(result);
             await refreshDashboard();
         });
         select.dataset.initialized = "true";
@@ -406,7 +404,6 @@ async function rescanAudioDevices() {
 
     const response = await fetch("/api/audio/rescan", { method: "POST" });
     const result = await response.json();
-    console.log(result);
 
     await loadAudioDevices();
     await refreshDashboard();
@@ -428,7 +425,6 @@ async function toggleRecording() {
 async function startRecorder() {
     const response = await fetch("/api/recorder/start", { method: "POST" });
     const result = await response.json();
-    console.log(result);
     selectedRecording = null;
     selectedRecordingInfo = null;
     await refreshDashboard();
@@ -437,7 +433,6 @@ async function startRecorder() {
 async function stopRecorder() {
     const response = await fetch("/api/recorder/stop", { method: "POST" });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
@@ -491,14 +486,12 @@ async function startSoundcheck() {
         body: JSON.stringify({ filename: selectedRecording })
     });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
 async function stopSoundcheck() {
     const response = await fetch("/api/recorder/soundcheck/stop", { method: "POST" });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
@@ -539,14 +532,12 @@ async function toggleLevelCheck() {
 async function startLevelCheck() {
     const response = await fetch("/api/recorder/monitor/start", { method: "POST" });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
 async function stopLevelCheck() {
     const response = await fetch("/api/recorder/monitor/stop", { method: "POST" });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
@@ -1686,7 +1677,6 @@ async function loadRecordingInfo() {
     if (result.success) {
         selectedRecordingInfo = result;
         updateRecorderKindBadge();
-        console.log(result);
     }
 }
 
@@ -2147,7 +2137,6 @@ async function uploadRecordingFiles(event) {
 
     try {
         const result = await uploadRecordingsWithProgress(formData);
-        console.log(result);
 
         if (result.uploaded.length === 0) {
             alert(I18N.alert_no_files_uploaded);
@@ -2435,7 +2424,6 @@ async function setMusicChannelPreference(startChannel) {
         body: JSON.stringify({ start_channel: startChannel })
     });
     const result = await response.json();
-    console.log(result);
 }
 
 function formatTrackLabel(data) {
@@ -2502,14 +2490,12 @@ async function toggleMusicPause() {
 async function pauseMusic() {
     const response = await fetch("/api/music/pause", { method: "POST" });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
 async function resumeMusic() {
     const response = await fetch("/api/music/resume", { method: "POST" });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
@@ -2539,7 +2525,6 @@ async function seekMusic(position) {
         body: JSON.stringify({ position })
     });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
@@ -2559,14 +2544,12 @@ function getSelectedMusicChannel() {
 async function stopMusic() {
     const response = await fetch("/api/music/stop", { method: "POST" });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
 async function skipMusic() {
     const response = await fetch("/api/music/skip", { method: "POST" });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
@@ -2787,7 +2770,6 @@ async function playMusicFolder(path) {
         body: JSON.stringify({ path, start_channel: getSelectedMusicChannel() })
     });
     const result = await response.json();
-    console.log(result);
 
     if (!result.success) {
         alert(I18N.alert_playback_start_failed);
@@ -2805,7 +2787,6 @@ async function playMusicFile(path) {
         body: JSON.stringify({ path, start_channel: getSelectedMusicChannel() })
     });
     const result = await response.json();
-    console.log(result);
 
     if (!result.success) {
         alert(I18N.alert_playback_start_failed);
@@ -2851,7 +2832,6 @@ async function createMusicFolder() {
         body: JSON.stringify({ path: musicCurrentPath, name })
     });
     const result = await response.json();
-    console.log(result);
 
     if (!result.success) {
         alert(I18N.alert_folder_create_failed);
@@ -2926,7 +2906,6 @@ async function uploadMusicFiles(event) {
 
     try {
         const result = await uploadWithProgress(formData);
-        console.log(result);
 
         if (result.count === 0) {
             alert(I18N.alert_no_files_uploaded);
@@ -2958,7 +2937,6 @@ async function shutdownSystem() {
 
     const response = await fetch("/api/system/shutdown", { method: "POST" });
     const result = await response.json();
-    console.log(result);
 
     if (!result.success) {
         alert(I18N.shutdown_failed);
@@ -3880,7 +3858,6 @@ async function restartService() {
 
     const response = await fetch("/api/system/restart", { method: "POST" });
     const result = await response.json();
-    console.log(result);
 
     if (!result.success) {
         alert(I18N.alert_change_failed);
@@ -4557,5 +4534,1300 @@ async function setBluetoothChannelPreference(startChannel) {
         body: JSON.stringify({ start_channel: startChannel })
     });
     const result = await response.json();
-    console.log(result);
 }
+
+
+// ============================================================
+// Licht (DMX)
+// ============================================================
+//
+// Die Karte ist nur da, wenn die Lichtsteuerung in den
+// Einstellungen eingeschaltet wurde. Wer kein DMX hat, soll sie
+// gar nicht erst sehen.
+//
+// Gerechnet wird nichts hier: Welche Werte auf welchen Kanal
+// gehoeren, entscheidet lighting/fixtures.py. Diese Seite schickt
+// nur die Werte je Lampe, relativ zu deren erstem Kanal.
+
+let lightState = null;
+let lightPattern = [];
+
+const LIGHT_COLOR_ROLES = ["red", "green", "blue"];
+
+//
+// Regler feuern bei jeder Mausbewegung. Ungebremst waeren das
+// hunderte Anfragen pro Sekunde an einen Pi, der nebenbei Audio
+// aufnimmt - deshalb wird pro Lampe gesammelt und erst nach einer
+// kurzen Ruhe geschickt.
+//
+const lightSendTimers = {};
+
+//
+// Pegel gehoeren auf eine dB-Skala, nicht auf eine lineare.
+//
+// Linear sieht -40 dBFS - ein voellig normaler Ausspielweg - wie
+// 1 Prozent aus, also wie nichts. Genau daran ist die Show
+// gescheitert: Der Balken schlug nicht aus, und die Stille-Erkennung
+// hielt laufende Musik fuer Stille. Am Pult wird in dB gedacht, hier
+// jetzt auch.
+//
+const LIGHT_METER_MIN_DB = -60;
+
+function lightLinearZuDb(wert) {
+    if (!wert || wert <= 0) return LIGHT_METER_MIN_DB;
+    return Math.max(LIGHT_METER_MIN_DB, 20 * Math.log10(wert));
+}
+
+function lightDbZuLinear(db) {
+    return Math.pow(10, db / 20);
+}
+
+function lightPegelProzent(wert) {
+    const db = lightLinearZuDb(wert);
+    return Math.max(0, Math.min(100,
+        ((db - LIGHT_METER_MIN_DB) / -LIGHT_METER_MIN_DB) * 100
+    ));
+}
+
+function lightRoleLabel(role) {
+    return I18N["light_role_" + role] || role;
+}
+
+function lightFixtureValues(fixtureId, channelCount) {
+    const values = (lightState && lightState.values && lightState.values[fixtureId]) || [];
+    const result = [];
+
+    for (let i = 0; i < channelCount; i++) {
+        result.push(typeof values[i] === "number" ? values[i] : 0);
+    }
+
+    return result;
+}
+
+//
+// Kanaele zu Gruppen zusammenfassen: Sobald sich eine Rolle
+// innerhalb der laufenden Gruppe wiederholt, faengt eine neue an.
+// Aus [rot,gruen,blau] x 8 werden so acht Segmente, aus
+// [dimmer,rot,gruen,blau] eine einzige Gruppe. Ohne das haette die
+// LED-Bar 24 einzelne Regler.
+//
+function groupLightChannels(roles) {
+    const groups = [];
+    let current = [];
+    let seen = new Set();
+
+    roles.forEach((role, index) => {
+        if (seen.has(role)) {
+            groups.push(current);
+            current = [];
+            seen = new Set();
+        }
+        current.push(index);
+        seen.add(role);
+    });
+
+    if (current.length > 0) groups.push(current);
+
+    return groups;
+}
+
+function rgbToHex(r, g, b) {
+    const teil = (wert) => Math.max(0, Math.min(255, wert | 0)).toString(16).padStart(2, "0");
+    return "#" + teil(r) + teil(g) + teil(b);
+}
+
+function hexToRgb(hex) {
+    return [
+        parseInt(hex.slice(1, 3), 16),
+        parseInt(hex.slice(3, 5), 16),
+        parseInt(hex.slice(5, 7), 16)
+    ];
+}
+
+function queueLightValues(fixtureId, values) {
+    if (!lightState.values) lightState.values = {};
+    lightState.values[fixtureId] = values;
+
+    if (lightSendTimers[fixtureId]) clearTimeout(lightSendTimers[fixtureId]);
+
+    lightSendTimers[fixtureId] = setTimeout(() => {
+        delete lightSendTimers[fixtureId];
+        sendLightValues(fixtureId, values);
+    }, 80);
+}
+
+async function sendLightValues(fixtureId, values) {
+    const response = await fetch("/api/lighting/values", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: fixtureId, values })
+    });
+
+    const result = await response.json();
+
+    if (!result.success) showLightWarning(result.message);
+}
+
+function showLightWarning(text) {
+    const box = document.getElementById("light-warning");
+    if (!box) return;
+
+    if (!text) {
+        box.classList.add("d-none");
+        box.textContent = "";
+        return;
+    }
+
+    box.textContent = text;
+    box.classList.remove("d-none");
+}
+
+//
+// "DMX 1-29" fuer eine Lampe. Der letzte Kanal kommt vom Server
+// (siehe LightingStore.uebersicht); fehlt er - etwa weil zu der
+// Lampe die Vorlage fehlt -, steht nur die Startadresse da.
+//
+//
+// Die drei Arten, die eine Lampe haben kann. Reihenfolge und
+// Beschriftung stehen hier einmal - im Anlege-Feld, in der Liste und
+// im Abzeichen der Karte wird darauf zurueckgegriffen.
+//
+const LIGHT_KINDS = ["effect", "background", "background2", "static"];
+
+function lightKindLabel(art) {
+    return I18N["light_kind_" + (art || "effect")] || art || "";
+}
+
+function lightAddressLabel(lampe) {
+    if (typeof lampe.last_address !== "number" ||
+        lampe.last_address === lampe.address) {
+        return "DMX " + lampe.address;
+    }
+
+    return I18N.light_address_range
+        .replace("{von}", lampe.address)
+        .replace("{bis}", lampe.last_address);
+}
+
+//
+// Wann jemand zuletzt an der Lampenliste war (Zeitstempel).
+//
+// Gebraucht wird das, weil der Neuaufbau die Regler wegwirft und
+// neu erzeugt. Waehrend der Show passiert das zweimal pro Sekunde -
+// wer gerade einen Regler zieht, verliert ihn dabei mitten in der
+// Bewegung. Solange jemand die Liste anfasst, bleibt sie also
+// stehen.
+//
+let lightFixturesBeruehrt = 0;
+
+// So lange nach der letzten Beruehrung wird nicht neu aufgebaut.
+// Grosszuegig gewaehlt: Beim Farbwaehler laeuft die Auswahl im
+// Dialog des Browsers weiter, da hilft ein Zeitfenster mehr als
+// jedes Maus-Ereignis.
+const LIGHT_RUHE_MS = 1500;
+
+//
+// Der Fingerabdruck der Liste - welche Lampen mit welcher Vorlage
+// und Adresse. Aendert der sich, MUSS neu aufgebaut werden, auch
+// eingeklappt und auch mitten im Ziehen: Dann ist eine Lampe dazu-
+// oder weggekommen, und die alte Liste zeigt etwas, das es nicht
+// mehr gibt.
+//
+let lightFixturesAbdruck = null;
+
+function lightFixturesEingeklappt() {
+    const koerper = document.getElementById("light-fixtures-body");
+
+    return !!koerper && !koerper.classList.contains("show");
+}
+
+function renderLightFixtures(stand) {
+    const container = document.getElementById("light-fixtures");
+    if (!container) return;
+
+    const lampen = stand.fixtures || [];
+
+    //
+    // Die Zahl im Kopf steht auch eingeklappt da - sonst wuesste
+    // man nicht, ob dort unten ueberhaupt etwas ist.
+    //
+    const zaehler = document.getElementById("light-fixtures-count");
+    if (zaehler) zaehler.textContent = lampen.length;
+
+    const abdruck = JSON.stringify(
+        lampen.map((l) => [l.id, l.template, l.address])
+    );
+
+    const strukturNeu = abdruck !== lightFixturesAbdruck;
+    lightFixturesAbdruck = abdruck;
+
+    if (!strukturNeu) {
+
+        if (lightFixturesEingeklappt()) return;
+
+        if (Date.now() - lightFixturesBeruehrt < LIGHT_RUHE_MS) return;
+    }
+
+    container.innerHTML = "";
+
+    if (!stand.fixtures || stand.fixtures.length === 0) {
+        const leer = document.createElement("div");
+        leer.className = "text-muted small";
+        leer.textContent = I18N.light_no_fixtures;
+        container.appendChild(leer);
+        return;
+    }
+
+    const vorlagen = {};
+    (stand.templates || []).forEach((v) => { vorlagen[v.id] = v; });
+
+    for (const lampe of stand.fixtures) {
+        const vorlage = vorlagen[lampe.template];
+        if (!vorlage) continue;
+
+        const werte = lightFixtureValues(lampe.id, vorlage.channels.length);
+
+        const zeile = document.createElement("div");
+        zeile.className = "mb-3";
+
+        const kopf = document.createElement("div");
+        kopf.className = "d-flex flex-wrap align-items-center gap-2 mb-1";
+
+        const name = document.createElement("strong");
+        name.className = "small";
+        name.textContent = lampe.name;
+        kopf.appendChild(name);
+
+        const adresse = document.createElement("span");
+        adresse.className = "text-body-secondary small";
+        adresse.textContent = lightAddressLabel(lampe);
+        kopf.appendChild(adresse);
+
+        //
+        // Welche Art die Lampe hat, ohne dass man den Dialog oeffnen
+        // muss. Vor allem bei "ausgenommen" wichtig: Sonst wundert man
+        // sich, warum genau diese Lampe bei der Show nicht mitmacht.
+        //
+        const art = document.createElement("span");
+        art.className = "badge text-bg-light border fw-normal";
+        art.textContent = lightKindLabel(lampe.kind);
+        kopf.appendChild(art);
+
+        zeile.appendChild(kopf);
+
+        // Helligkeit fuer die ganze Lampe - funktioniert auch bei
+        // Geraeten ohne Dimmerkanal (dann rechnet der Server die
+        // Farben herunter).
+        const dimmZeile = document.createElement("div");
+        dimmZeile.className = "d-flex align-items-center gap-2 mb-2";
+
+        const dimmLabel = document.createElement("span");
+        dimmLabel.className = "text-body-secondary small flex-shrink-0";
+        dimmLabel.textContent = I18N.light_brightness;
+        dimmZeile.appendChild(dimmLabel);
+
+        //
+        // Der Wert kommt vom Server, nicht aus einer Annahme. Vorher
+        // stand hier fest 255 - der Regler sprang nach jedem Ziehen
+        // zurueck auf voll, weil die Karte nach dem Setzen neu
+        // aufgebaut wird und der eingestellte Wert nirgends stand.
+        //
+        const gemerkt = (lightState && lightState.brightness &&
+                         typeof lightState.brightness[lampe.id] === "number")
+            ? lightState.brightness[lampe.id]
+            : 255;
+
+        const dimmer = document.createElement("input");
+        dimmer.type = "range";
+        dimmer.className = "form-range";
+        dimmer.min = 0;
+        dimmer.max = 255;
+        dimmer.value = gemerkt;
+        dimmer.addEventListener("change", () => setLightBrightness(lampe.id, parseInt(dimmer.value, 10)));
+        dimmZeile.appendChild(dimmer);
+
+        zeile.appendChild(dimmZeile);
+
+        const gruppen = groupLightChannels(vorlage.channels);
+
+        const raster = document.createElement("div");
+        raster.className = "d-flex flex-wrap gap-2";
+
+        gruppen.forEach((gruppe, nummer) => {
+            const rollen = gruppe.map((i) => vorlage.channels[i]);
+            const istFarbe = LIGHT_COLOR_ROLES.every((r) => rollen.includes(r));
+
+            const kasten = document.createElement("div");
+            kasten.className = "border rounded p-2";
+            kasten.style.minWidth = "6rem";
+
+            if (gruppen.length > 1) {
+                const beschriftung = document.createElement("div");
+                beschriftung.className = "text-body-secondary";
+                beschriftung.style.fontSize = "0.75rem";
+                beschriftung.textContent = I18N.light_segment.replace("{n}", nummer + 1);
+                kasten.appendChild(beschriftung);
+            }
+
+            if (istFarbe) {
+                const rot = gruppe[rollen.indexOf("red")];
+                const gruen = gruppe[rollen.indexOf("green")];
+                const blau = gruppe[rollen.indexOf("blue")];
+
+                const feld = document.createElement("input");
+                feld.type = "color";
+                feld.className = "form-control form-control-color";
+                feld.value = rgbToHex(werte[rot], werte[gruen], werte[blau]);
+
+                feld.addEventListener("input", () => {
+                    const [r, g, b] = hexToRgb(feld.value);
+                    werte[rot] = r;
+                    werte[gruen] = g;
+                    werte[blau] = b;
+                    queueLightValues(lampe.id, werte);
+                });
+
+                kasten.appendChild(feld);
+            }
+
+            // Alles, was keine Farbe ist, bekommt einen eigenen Regler -
+            // Pan, Tilt, Gobo, Strobe.
+            gruppe.forEach((index) => {
+                const rolle = vorlage.channels[index];
+                if (istFarbe && LIGHT_COLOR_ROLES.includes(rolle)) return;
+
+                // Den Dimmer-Kanal bedient der Helligkeitsregler
+                // oben. Zwei Regler fuer dieselbe Sache, von denen
+                // einer den anderen ueberschreibt, waere nur
+                // verwirrend.
+                if (rolle === "dimmer") return;
+
+                const beschriftung = document.createElement("div");
+                beschriftung.className = "text-body-secondary";
+                beschriftung.style.fontSize = "0.75rem";
+                beschriftung.textContent = lightRoleLabel(rolle);
+                kasten.appendChild(beschriftung);
+
+                const regler = document.createElement("input");
+                regler.type = "range";
+                regler.className = "form-range";
+                regler.min = 0;
+                regler.max = 255;
+                regler.value = werte[index];
+
+                regler.addEventListener("input", () => {
+                    werte[index] = parseInt(regler.value, 10);
+                    queueLightValues(lampe.id, werte);
+                });
+
+                kasten.appendChild(regler);
+            });
+
+            raster.appendChild(kasten);
+        });
+
+        zeile.appendChild(raster);
+        container.appendChild(zeile);
+    }
+}
+
+function renderLightScenes(stand) {
+    const container = document.getElementById("light-scenes");
+    if (!container) return;
+
+    //
+    // Auch hier nur bei Aenderung: Ein Knopf, der zwischen Druecken
+    // und Loslassen ausgetauscht wird, verschluckt den Klick.
+    //
+    const abdruck = JSON.stringify(
+        (stand.scenes || []).map((s) => [s.id, s.name])
+    );
+
+    if (abdruck === lightSzenenAbdruck) return;
+
+    lightSzenenAbdruck = abdruck;
+
+    container.innerHTML = "";
+
+    if (!stand.scenes || stand.scenes.length === 0) {
+        const leer = document.createElement("div");
+        leer.className = "text-muted small";
+        leer.textContent = I18N.light_no_scenes;
+        container.appendChild(leer);
+        return;
+    }
+
+    const raster = document.createElement("div");
+    raster.className = "d-flex flex-wrap gap-2";
+
+    for (const szene of stand.scenes) {
+        const gruppe = document.createElement("div");
+        gruppe.className = "btn-group btn-group-sm";
+
+        const knopf = document.createElement("button");
+        knopf.className = "btn btn-outline-primary";
+        knopf.textContent = szene.name;
+        knopf.addEventListener("click", () => activateLightScene(szene.id));
+        gruppe.appendChild(knopf);
+
+        const weg = document.createElement("button");
+        weg.className = "btn btn-outline-danger";
+        weg.innerHTML = '<i class="bi bi-trash"></i>';
+        weg.addEventListener("click", () => deleteLightScene(szene.id, szene.name));
+        gruppe.appendChild(weg);
+
+        raster.appendChild(gruppe);
+    }
+
+    container.appendChild(raster);
+}
+
+function renderLighting(stand) {
+    lightState = stand;
+
+    const karte = document.getElementById("light-card-wrapper");
+    if (karte) karte.classList.toggle("d-none", !stand.enabled);
+
+    const schalter = document.getElementById("settings-light-toggle");
+    if (schalter) schalter.checked = !!stand.enabled;
+
+    const zustand = document.getElementById("settings-light-state");
+
+    if (zustand) {
+        const dmx = stand.dmx || {};
+        const teile = [];
+
+        if (!dmx.service_running) teile.push(I18N.light_service_missing);
+        else if (!dmx.adapter_present) teile.push(I18N.light_adapter_missing);
+
+        zustand.textContent = teile.join(" ");
+    }
+
+    if (!stand.enabled) {
+        lightShowPulsSetzen(false);
+        return;
+    }
+
+    const warnungen = [];
+    const dmx = stand.dmx || {};
+
+    if (!dmx.service_running) warnungen.push(I18N.light_service_missing);
+    else if (!dmx.adapter_present) warnungen.push(I18N.light_adapter_missing);
+
+    if (stand.overlaps && stand.overlaps.length > 0) {
+        warnungen.push(I18N.light_overlap_warning);
+    }
+
+    //
+    // Show laeuft, aber es kommt nichts herein: Das ist ein anderer
+    // Fehler als "die Musik gefaellt der Erkennung nicht", und er
+    // muss auch anders dastehen.
+    //
+    if (stand.show_running && !stand.show_stream) {
+        warnungen.push(I18N.light_show_no_stream);
+    }
+
+    showLightWarning(warnungen.join(" "));
+
+    renderLightFixtures(stand);
+    renderLightScenes(stand);
+    renderLightSetup(stand);
+    renderLightShow(stand);
+    renderLightShowSettings(stand);
+
+    lightShowPulsSetzen(!!stand.show_running);
+}
+
+async function refreshLighting() {
+    try {
+        const response = await fetch("/api/lighting/status");
+        renderLighting(await response.json());
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+async function lightRequest(url, koerper) {
+    const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(koerper || {})
+    });
+
+    const result = await response.json();
+
+    if (!result.success && result.message) {
+        alert(result.message);
+    }
+
+    return result.success;
+}
+
+async function setLightBrightness(fixtureId, brightness) {
+    await lightRequest("/api/lighting/brightness", { id: fixtureId, brightness });
+    await refreshLighting();
+}
+
+async function activateLightScene(sceneId) {
+    await lightRequest("/api/lighting/scene/activate", { id: sceneId });
+    await refreshLighting();
+}
+
+async function deleteLightScene(sceneId, name) {
+    if (!confirm(I18N.confirm_light_scene_delete.replace("{name}", name))) return;
+
+    await lightRequest("/api/lighting/scene/delete", { id: sceneId });
+    await refreshLighting();
+}
+
+async function saveLightScene() {
+    const name = prompt(I18N.light_scene_name_prompt, "");
+    if (!name) return;
+
+    await lightRequest("/api/lighting/scene", { name, id: "" });
+    await refreshLighting();
+}
+
+async function lightBlackout() {
+    await lightRequest("/api/lighting/blackout", {});
+    await refreshLighting();
+}
+
+// ------------------------------------------------------------
+// Einrichten
+// ------------------------------------------------------------
+
+//
+// Fingerabdruecke der Listen im Einrichten-Dialog.
+//
+// Sie sind der Grund, warum die Auswahlfelder darin ueberhaupt
+// bedienbar sind: Frueher wurde der ganze Dialog bei JEDEM
+// Statusabruf neu aufgebaut, waehrend der Show also zweimal pro
+// Sekunde. Ein geoeffnetes Auswahlfeld wurde dabei mitsamt seinem
+// DOM-Knoten weggeworfen und klappte zu - die Art einer schon
+// angelegten Lampe liess sich damit gar nicht mehr aendern.
+//
+// Jetzt wird nur gezeichnet, wenn sich wirklich etwas geaendert hat.
+// Eine Zeitsperre wie in der Lichtkarte braucht es dann nicht mehr:
+// Wo nichts grundlos passiert, gibt es auch nichts abzufangen.
+//
+let lightSetupAbdruck = null;
+let lightVorlagenAbdruck = null;
+let lightSzenenAbdruck = null;
+
+function renderLightSetup(stand) {
+    const lampen = document.getElementById("light-fixture-list");
+    const vorlagenListe = document.getElementById("light-template-list");
+    const auswahl = document.getElementById("light-fixture-template");
+
+    const vorlagen = {};
+    (stand.templates || []).forEach((v) => { vorlagen[v.id] = v; });
+
+    const vorlagenAbdruck = JSON.stringify(
+        (stand.templates || []).map((v) => [v.id, v.name, v.channels.length])
+    );
+
+    const lampenAbdruck = JSON.stringify(
+        (stand.fixtures || []).map((l) => [
+            l.id, l.name, l.template, l.address, l.last_address, l.kind
+        ])
+    );
+
+    const vorlagenNeu = vorlagenAbdruck !== lightVorlagenAbdruck;
+    const lampenNeu = lampenAbdruck !== lightSetupAbdruck;
+
+    lightVorlagenAbdruck = vorlagenAbdruck;
+    lightSetupAbdruck = lampenAbdruck;
+
+    if (auswahl && vorlagenNeu) {
+        const gemerkt = auswahl.value;
+        auswahl.innerHTML = "";
+
+        for (const vorlage of stand.templates || []) {
+            const eintrag = document.createElement("option");
+            eintrag.value = vorlage.id;
+            eintrag.textContent = vorlage.name;
+            auswahl.appendChild(eintrag);
+        }
+
+        if (gemerkt) auswahl.value = gemerkt;
+    }
+
+    //
+    // Das Auswahlfeld beim Anlegen aus derselben Liste fuellen wie
+    // die Felder in den Zeilen darunter.
+    //
+    const neueArt = document.getElementById("light-fixture-kind");
+
+    if (neueArt && neueArt.options.length !== LIGHT_KINDS.length) {
+
+        const gemerkt = neueArt.value;
+        neueArt.innerHTML = "";
+
+        for (const wert of LIGHT_KINDS) {
+            const option = document.createElement("option");
+            option.value = wert;
+            option.textContent = lightKindLabel(wert);
+            neueArt.appendChild(option);
+        }
+
+        if (gemerkt) neueArt.value = gemerkt;
+    }
+
+    renderLightFixtureRange();
+
+    if (lampen && (lampenNeu || vorlagenNeu)) {
+        lampen.innerHTML = "";
+
+        for (const lampe of stand.fixtures || []) {
+            const vorlage = vorlagen[lampe.template];
+
+            const eintrag = document.createElement("div");
+            eintrag.className = "list-group-item d-flex justify-content-between align-items-center gap-2";
+
+            const info = document.createElement("div");
+            info.className = "text-break small";
+
+            const name = document.createElement("div");
+            name.className = "fw-semibold";
+            name.textContent = lampe.name;
+            info.appendChild(name);
+
+            const rest = document.createElement("div");
+            rest.className = "text-body-secondary";
+            rest.textContent =
+                (vorlage ? vorlage.name : lampe.template) +
+                " · " + lightAddressLabel(lampe) +
+                (vorlage ? " · " + I18N.light_channels_count.replace("{n}", vorlage.channels.length) : "");
+            info.appendChild(rest);
+
+            eintrag.appendChild(info);
+
+            const art = document.createElement("select");
+            art.className = "form-select form-select-sm w-auto flex-shrink-0";
+
+            for (const wert of LIGHT_KINDS) {
+                const option = document.createElement("option");
+                option.value = wert;
+                option.textContent = lightKindLabel(wert);
+                art.appendChild(option);
+            }
+
+            art.value = lampe.kind || "effect";
+            art.addEventListener("change", () =>
+                setLightFixtureKind(lampe, art.value));
+
+            eintrag.appendChild(art);
+
+            const weg = document.createElement("button");
+            weg.className = "btn btn-outline-danger btn-sm flex-shrink-0";
+            weg.innerHTML = '<i class="bi bi-trash"></i>';
+            weg.addEventListener("click", () => deleteLightFixture(lampe.id, lampe.name));
+            eintrag.appendChild(weg);
+
+            lampen.appendChild(eintrag);
+        }
+    }
+
+    if (vorlagenListe && vorlagenNeu) {
+        vorlagenListe.innerHTML = "";
+
+        for (const vorlage of stand.templates || []) {
+            const eintrag = document.createElement("div");
+            eintrag.className = "list-group-item d-flex justify-content-between align-items-center gap-2";
+
+            const info = document.createElement("div");
+            info.className = "text-break small";
+
+            const name = document.createElement("div");
+            name.className = "fw-semibold";
+            name.textContent = vorlage.name;
+            info.appendChild(name);
+
+            const rest = document.createElement("div");
+            rest.className = "text-body-secondary";
+            rest.textContent =
+                I18N.light_channels_count.replace("{n}", vorlage.channels.length) +
+                (vorlage.builtin ? " · " + I18N.light_template_builtin : "");
+            info.appendChild(rest);
+
+            eintrag.appendChild(info);
+
+            if (!vorlage.builtin) {
+                const weg = document.createElement("button");
+                weg.className = "btn btn-outline-danger btn-sm flex-shrink-0";
+                weg.innerHTML = '<i class="bi bi-trash"></i>';
+                weg.addEventListener("click", () => deleteLightTemplate(vorlage.id, vorlage.name));
+                eintrag.appendChild(weg);
+            }
+
+            vorlagenListe.appendChild(eintrag);
+        }
+    }
+}
+
+//
+// Der Hinweis unter dem Adressfeld: welchen Bereich die Lampe
+// belegen wuerde, die man gerade eintippt.
+//
+function renderLightFixtureRange() {
+    const zeile = document.getElementById("light-fixture-range");
+    if (!zeile) return;
+
+    const vorlage = document.getElementById("light-fixture-template");
+    const adresse = document.getElementById("light-fixture-address");
+
+    const gewaehlt = (lightState && lightState.templates || []).find(
+        (v) => v.id === (vorlage ? vorlage.value : "")
+    );
+
+    const start = parseInt(adresse ? adresse.value : "", 10);
+
+    if (!gewaehlt || !start) {
+        zeile.textContent = "";
+        return;
+    }
+
+    zeile.textContent = I18N.light_address_occupies
+        .replace("{von}", start)
+        .replace("{bis}", start + gewaehlt.channels.length - 1);
+}
+
+function renderLightPattern() {
+    const container = document.getElementById("light-template-pattern");
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    lightPattern.forEach((rolle, index) => {
+        const zeile = document.createElement("div");
+        zeile.className = "input-group input-group-sm mb-1";
+
+        const nummer = document.createElement("span");
+        nummer.className = "input-group-text";
+        nummer.textContent = index + 1;
+        zeile.appendChild(nummer);
+
+        const auswahl = document.createElement("select");
+        auswahl.className = "form-select";
+
+        for (const moeglich of (lightState && lightState.roles) || []) {
+            const eintrag = document.createElement("option");
+            eintrag.value = moeglich;
+            eintrag.textContent = lightRoleLabel(moeglich);
+            auswahl.appendChild(eintrag);
+        }
+
+        auswahl.value = rolle;
+        auswahl.addEventListener("change", () => { lightPattern[index] = auswahl.value; });
+        zeile.appendChild(auswahl);
+
+        const weg = document.createElement("button");
+        weg.className = "btn btn-outline-danger";
+        weg.innerHTML = '<i class="bi bi-x-lg"></i>';
+        weg.addEventListener("click", () => {
+            lightPattern.splice(index, 1);
+            renderLightPattern();
+        });
+        zeile.appendChild(weg);
+
+        container.appendChild(zeile);
+    });
+}
+
+async function addLightFixture() {
+    const name = document.getElementById("light-fixture-name");
+    const vorlage = document.getElementById("light-fixture-template");
+    const adresse = document.getElementById("light-fixture-address");
+
+    const art = document.getElementById("light-fixture-kind");
+
+    const erfolg = await lightRequest("/api/lighting/fixture", {
+        id: "",
+        name: name.value,
+        template: vorlage.value,
+        address: parseInt(adresse.value, 10) || 0,
+        kind: art ? art.value : "effect"
+    });
+
+    if (erfolg) name.value = "";
+
+    await refreshLighting();
+}
+
+//
+// Die Art einer schon angelegten Lampe aendern.
+//
+// Ohne das muesste man sie loeschen und neu anlegen - und verloere
+// dabei ihre Werte in allen Szenen (siehe LightingStore.
+// lampe_loeschen). Fuer eine Einstellung, die man beim Einrichten
+// eines Rigs mehrfach umwirft, waere das absurd.
+//
+async function setLightFixtureKind(lampe, art) {
+    await lightRequest("/api/lighting/fixture", {
+        id: lampe.id,
+        name: lampe.name,
+        template: lampe.template,
+        address: lampe.address,
+        kind: art
+    });
+
+    await refreshLighting();
+}
+
+async function deleteLightFixture(fixtureId, name) {
+    if (!confirm(I18N.confirm_light_fixture_delete.replace("{name}", name))) return;
+
+    await lightRequest("/api/lighting/fixture/delete", { id: fixtureId });
+    await refreshLighting();
+}
+
+async function addLightTemplate() {
+    const name = document.getElementById("light-template-name");
+    const wiederholung = document.getElementById("light-template-repeat");
+
+    const anzahl = Math.max(1, parseInt(wiederholung.value, 10) || 1);
+
+    let kanaele = [];
+    for (let i = 0; i < anzahl; i++) kanaele = kanaele.concat(lightPattern);
+
+    const erfolg = await lightRequest("/api/lighting/template", {
+        id: "",
+        name: name.value,
+        channels: kanaele
+    });
+
+    if (erfolg) {
+        name.value = "";
+        wiederholung.value = 1;
+        lightPattern = [];
+        renderLightPattern();
+    }
+
+    await refreshLighting();
+}
+
+async function deleteLightTemplate(templateId, name) {
+    if (!confirm(I18N.confirm_light_template_delete.replace("{name}", name))) return;
+
+    await lightRequest("/api/lighting/template/delete", { id: templateId });
+    await refreshLighting();
+}
+
+async function toggleLighting(event) {
+    const schalter = event.target;
+
+    await lightRequest("/api/lighting/enabled", { enabled: schalter.checked });
+    await refreshLighting();
+}
+
+(function verdrahteLicht() {
+    const knopf = (kennung, handler) => {
+        const element = document.getElementById(kennung);
+        if (element) element.addEventListener("click", handler);
+    };
+
+    knopf("btn-light-blackout", lightBlackout);
+    knopf("btn-light-scene-save", saveLightScene);
+    knopf("btn-light-fixture-add", addLightFixture);
+    knopf("btn-light-template-add", addLightTemplate);
+
+    knopf("btn-light-template-channel", () => {
+        lightPattern.push("red");
+        renderLightPattern();
+    });
+
+    //
+    // Jede Beruehrung der Lampenliste haelt den Neuaufbau kurz an.
+    //
+    const lampen = document.getElementById("light-fixtures");
+
+    if (lampen) {
+        for (const art of ["pointerdown", "input"]) {
+            lampen.addEventListener(art, () => {
+                lightFixturesBeruehrt = Date.now();
+            });
+        }
+    }
+
+    //
+    // Ein- und Ausklappen ueberlebt einen Neuladen der Seite. Wer die
+    // Liste zugeklappt hat, will sie nicht bei jedem Blick auf die
+    // Karte wieder vor sich haben.
+    //
+    const koerper = document.getElementById("light-fixtures-body");
+    const pfeil = document.getElementById("light-fixtures-chevron");
+
+    if (koerper) {
+
+        let gemerkt = null;
+
+        try {
+            gemerkt = localStorage.getItem("xrack-light-fixtures-open");
+        } catch (fehler) {
+            gemerkt = null;
+        }
+
+        if (gemerkt === "0") {
+            koerper.classList.remove("show");
+
+            const schalter = document.getElementById("btn-light-fixtures-toggle");
+            if (schalter) schalter.setAttribute("aria-expanded", "false");
+
+            if (pfeil) pfeil.className = "bi bi-chevron-right";
+        }
+
+        koerper.addEventListener("show.bs.collapse", () => {
+            if (pfeil) pfeil.className = "bi bi-chevron-down";
+
+            try {
+                localStorage.setItem("xrack-light-fixtures-open", "1");
+            } catch (fehler) { /* Speichern ist Beiwerk, nicht Pflicht. */ }
+
+            //
+            // Beim Aufklappen sofort auf den neuesten Stand bringen -
+            // eingeklappt wurde ja nicht mitgezeichnet.
+            //
+            lightFixturesAbdruck = null;
+            refreshLighting();
+        });
+
+        koerper.addEventListener("hide.bs.collapse", () => {
+            if (pfeil) pfeil.className = "bi bi-chevron-right";
+
+            try {
+                localStorage.setItem("xrack-light-fixtures-open", "0");
+            } catch (fehler) { /* siehe oben */ }
+        });
+    }
+
+    for (const kennung of ["light-fixture-template", "light-fixture-address"]) {
+
+        const feld = document.getElementById(kennung);
+
+        if (feld) {
+            feld.addEventListener("input", renderLightFixtureRange);
+            feld.addEventListener("change", renderLightFixtureRange);
+        }
+    }
+
+    knopf("btn-light-setup", () => {
+        bootstrap.Modal.getOrCreateInstance(
+            document.getElementById("lightSetupModal")
+        ).show();
+    });
+
+    const schalter = document.getElementById("settings-light-toggle");
+    if (schalter) schalter.addEventListener("change", toggleLighting);
+
+    const einrichten = document.getElementById("lightSetupModal");
+    if (einrichten) {
+        einrichten.addEventListener("show.bs.modal", () => {
+            refreshLighting();
+            renderLightPattern();
+        });
+    }
+
+    const einstellungen = document.getElementById("settingsModal");
+    if (einstellungen) {
+        einstellungen.addEventListener("show.bs.modal", refreshLighting);
+    }
+
+    refreshLighting();
+})();
+
+
+// ------------------------------------------------------------
+// Die musikgesteuerte Show
+// ------------------------------------------------------------
+
+const LIGHT_SHOW_BANDS = [
+    ["low", "light_show_band_low"],
+    ["mid", "light_show_band_mid"],
+    ["high", "light_show_band_high"],
+    //
+    // Der Gesamtpegel gehoert dazu, auch wenn er kein Band ist: An
+    // ihm haengt die Stille-Erkennung. Ohne ihn sieht man nicht,
+    // warum die Show auf die Rueckfallszene umschaltet, und dreht
+    // an der falschen Schraube.
+    //
+    ["level", "light_show_band_level"]
+];
+
+function renderLightShow(stand) {
+    const knopf = document.getElementById("btn-light-show");
+    const anzeige = document.getElementById("light-show-status");
+
+    const laeuft = !!stand.show_running;
+
+    if (knopf) {
+        knopf.classList.toggle("btn-primary", laeuft);
+        knopf.classList.toggle("btn-outline-primary", !laeuft);
+        knopf.title = laeuft ? I18N.light_show_stop : I18N.light_show_start;
+    }
+
+    if (anzeige) anzeige.classList.toggle("d-none", !laeuft);
+
+    if (!laeuft) return;
+
+    const zustand = document.getElementById("light-show-state");
+
+    if (zustand) {
+        const text = {
+            music: I18N.light_show_state_music,
+            speech: I18N.light_show_state_speech,
+            silence: I18N.light_show_state_silence
+        }[stand.show_state] || stand.show_state || "";
+
+        zustand.textContent = text;
+
+        // Nur bei Musik laeuft die Show wirklich - sonst haelt die
+        // Rueckfallszene das Licht, und das soll man sehen.
+        zustand.classList.toggle("text-bg-success", stand.show_state === "music");
+        zustand.classList.toggle("text-bg-secondary", stand.show_state !== "music");
+    }
+
+    const balken = document.getElementById("light-show-bands");
+    if (!balken) return;
+
+    balken.innerHTML = "";
+
+    const pegel = stand.show_levels || {};
+
+    for (const [name, textschluessel] of LIGHT_SHOW_BANDS) {
+
+        const zeile = document.createElement("div");
+        zeile.className = "d-flex align-items-center gap-2";
+
+        const beschriftung = document.createElement("span");
+        beschriftung.className = "text-body-secondary small";
+        beschriftung.style.minWidth = "3.5rem";
+        beschriftung.textContent = I18N[textschluessel];
+        zeile.appendChild(beschriftung);
+
+        const rahmen = document.createElement("div");
+        rahmen.className = "progress flex-grow-1";
+        rahmen.style.height = "0.5rem";
+
+        const fuellung = document.createElement("div");
+        fuellung.className = "progress-bar";
+        //
+        // Nur der Gesamtpegel ist ein echter Pegel und gehoert auf
+        // die dB-Skala. Die drei Baender sind schon auf 0-1 normiert.
+        //
+        fuellung.style.width = (
+            name === "level"
+                ? Math.round(lightPegelProzent(pegel[name] || 0))
+                : Math.round((pegel[name] || 0) * 100)
+        ) + "%";
+        rahmen.appendChild(fuellung);
+
+        zeile.appendChild(rahmen);
+        balken.appendChild(zeile);
+    }
+}
+
+function renderLightShowSettings(stand) {
+    const show = stand.show || {};
+
+    const setzen = (kennung, wert) => {
+        const element = document.getElementById(kennung);
+        if (element && document.activeElement !== element) element.value = wert;
+    };
+
+    //
+    // Das Kanalpaar aus der Kanalzahl des Interfaces aufbauen -
+    // derselbe Helfer wie beim Musikspieler und bei der Aufnahme.
+    // Er zeichnet nur neu, wenn sich die Kanalzahl geaendert hat,
+    // die Auswahl springt also nicht bei jedem Statusabruf zurueck.
+    //
+    const kanal = document.getElementById("light-show-channel");
+
+    if (kanal) {
+        buildChannelOptions(kanal, stand.input_channels || 2, show.channel);
+        setzen("light-show-channel", show.channel);
+    }
+    setzen("light-show-color-low", show.color_low);
+    setzen("light-show-color-mid", show.color_mid);
+    setzen("light-show-color-high", show.color_high);
+    setzen("light-show-color-low-1", show.color_low_1);
+    setzen("light-show-color-mid-1", show.color_mid_1);
+    setzen("light-show-color-high-1", show.color_high_1);
+    setzen("light-show-color-low-2", show.color_low_2);
+    setzen("light-show-color-mid-2", show.color_mid_2);
+    setzen("light-show-color-high-2", show.color_high_2);
+    setzen("light-show-sensitivity", show.sensitivity);
+    setzen("light-show-background-seconds", show.background_seconds);
+    setzen("light-show-background-beats", show.background_beats);
+    setzen("light-show-fade-seconds", show.fade_seconds);
+    lightTraegheitBeschriften();
+    const schwelle = document.getElementById("light-show-silence-threshold");
+
+    if (schwelle && document.activeElement !== schwelle) {
+        schwelle.value = Math.round(lightLinearZuDb(show.silence_threshold));
+    }
+
+    lightSchwelleBeschriften();
+    setzen("light-show-silence-seconds", show.silence_seconds);
+    setzen("light-show-speech-seconds", show.speech_seconds);
+
+    const auswahl = document.getElementById("light-show-fallback");
+    if (!auswahl) return;
+
+    auswahl.innerHTML = "";
+
+    const aus = document.createElement("option");
+    aus.value = "";
+    aus.textContent = I18N.light_show_fallback_none;
+    auswahl.appendChild(aus);
+
+    for (const szene of stand.scenes || []) {
+        const eintrag = document.createElement("option");
+        eintrag.value = szene.id;
+        eintrag.textContent = szene.name;
+        auswahl.appendChild(eintrag);
+    }
+
+    auswahl.value = show.fallback_scene || "";
+}
+
+async function toggleLightShow() {
+    const laeuft = lightState && lightState.show_running;
+
+    await lightRequest(
+        laeuft ? "/api/lighting/show/stop" : "/api/lighting/show/start", {}
+    );
+
+    await refreshLighting();
+}
+
+function lightTraegheitBeschriften() {
+    const regler = document.getElementById("light-show-background-seconds");
+    const text = document.getElementById("light-show-background-seconds-value");
+
+    if (regler && text) text.textContent = regler.value + " s";
+
+    const blende = document.getElementById("light-show-fade-seconds");
+    const blendetext = document.getElementById("light-show-fade-seconds-value");
+
+    if (blende && blendetext) blendetext.textContent = blende.value + " s";
+
+    const takte = document.getElementById("light-show-background-beats");
+    const takttext = document.getElementById("light-show-background-beats-value");
+
+    if (takte && takttext) {
+        takttext.textContent =
+            I18N.light_show_beats_unit.replace("{n}", takte.value);
+    }
+
+    //
+    // Warnen, wenn die Blende laenger dauert als die halbe Standzeit.
+    //
+    // Dann kommt keine Farbe mehr rein an, sondern es steht dauerhaft
+    // ein Mittelton da - genau der Effekt, wegen dem der Farbwechsel
+    // ueberhaupt gebaut wurde. Gerechnet wird mit 120 BPM, weil das
+    // echte Tempo hier niemand kennt; als Groessenordnung reicht das,
+    // und es ist ein Hinweis, keine Sperre.
+    //
+    const hinweis = document.getElementById("light-show-background-warning");
+
+    if (hinweis && regler && takte) {
+        const standzeit = parseFloat(takte.value) * 0.5;
+        hinweis.textContent = I18N.light_show_background_warning;
+        hinweis.classList.toggle(
+            "d-none", parseFloat(regler.value) <= standzeit / 2
+        );
+    }
+}
+
+function lightSchwelleBeschriften() {
+    const regler = document.getElementById("light-show-silence-threshold");
+    const anzeige = document.getElementById("light-show-silence-threshold-value");
+
+    if (regler && anzeige) anzeige.textContent = regler.value + " dBFS";
+}
+
+async function saveLightShowSettings() {
+    const zahl = (kennung) => {
+        const element = document.getElementById(kennung);
+        return element ? parseFloat(element.value) : null;
+    };
+
+    const auswahl = document.getElementById("light-show-fallback");
+
+    const farbe = (kennung) => {
+        const element = document.getElementById(kennung);
+        return element ? element.value : null;
+    };
+
+    await lightRequest("/api/lighting/show/settings", {
+        channel: zahl("light-show-channel"),
+        color_low: farbe("light-show-color-low"),
+        color_mid: farbe("light-show-color-mid"),
+        color_high: farbe("light-show-color-high"),
+        color_low_1: farbe("light-show-color-low-1"),
+        color_mid_1: farbe("light-show-color-mid-1"),
+        color_high_1: farbe("light-show-color-high-1"),
+        color_low_2: farbe("light-show-color-low-2"),
+        color_mid_2: farbe("light-show-color-mid-2"),
+        color_high_2: farbe("light-show-color-high-2"),
+        sensitivity: zahl("light-show-sensitivity"),
+        background_seconds: zahl("light-show-background-seconds"),
+        background_beats: zahl("light-show-background-beats"),
+        fade_seconds: zahl("light-show-fade-seconds"),
+        silence_threshold: lightDbZuLinear(zahl("light-show-silence-threshold")),
+        silence_seconds: zahl("light-show-silence-seconds"),
+        speech_seconds: zahl("light-show-speech-seconds"),
+        fallback_scene: auswahl ? auswahl.value : ""
+    });
+
+    await refreshLighting();
+}
+
+//
+// Laeuft die Show, muss die Karte oefter nachsehen - sonst stuenden
+// die Pegelbalken still, und es saehe aus, als kaeme nichts an.
+// Ohne laufende Show waere das nur unnoetiger Verkehr.
+//
+let lightShowTimer = null;
+
+function lightShowPulsSetzen(laeuft) {
+    if (laeuft && lightShowTimer === null) {
+        lightShowTimer = setInterval(refreshLighting, 500);
+    } else if (!laeuft && lightShowTimer !== null) {
+        clearInterval(lightShowTimer);
+        lightShowTimer = null;
+    }
+}
+
+(function verdrahteShow() {
+    const knopf = document.getElementById("btn-light-show");
+    if (knopf) knopf.addEventListener("click", toggleLightShow);
+
+    for (const kennung of [
+        "light-show-channel", "light-show-sensitivity",
+        "light-show-silence-threshold", "light-show-silence-seconds",
+        "light-show-speech-seconds", "light-show-fallback",
+        "light-show-background-seconds", "light-show-background-beats",
+        "light-show-fade-seconds",
+        "light-show-color-low", "light-show-color-mid",
+        "light-show-color-high",
+        "light-show-color-low-1", "light-show-color-mid-1",
+        "light-show-color-high-1",
+        "light-show-color-low-2", "light-show-color-mid-2",
+        "light-show-color-high-2"
+    ]) {
+        const element = document.getElementById(kennung);
+        if (element) element.addEventListener("change", saveLightShowSettings);
+    }
+
+    const schwelle = document.getElementById("light-show-silence-threshold");
+    if (schwelle) schwelle.addEventListener("input", lightSchwelleBeschriften);
+
+    for (const kennung of ["light-show-background-seconds",
+                          "light-show-background-beats",
+                          "light-show-fade-seconds"]) {
+        const element = document.getElementById(kennung);
+        if (element) element.addEventListener("input", lightTraegheitBeschriften);
+    }
+})();

@@ -34,6 +34,9 @@ from core.updater import Updater
 from core.console_control import ConsoleControl, MIN_DB
 from core.diagnostics import Diagnostics
 from core.state_store import StateStore
+from core.dmx_control import DmxControl
+from lighting.light_engine import LightEngine
+from lighting.store import LightingStore
 from core.pin import hash_pin, verify_pin
 from core.stem_combiner import combine_stems, StemCombineError
 import getpass
@@ -48,6 +51,7 @@ from core.application.audio import AudioMixin
 from core.application.aufnahme import AufnahmeMixin
 from core.application.bluetooth import BluetoothMixin
 from core.application.einstellungen import EinstellungenMixin
+from core.application.licht import LichtMixin
 from core.application.musik import MusikMixin
 from core.application.netzwerk import NetzwerkMixin
 from core.application.pult import PultMixin
@@ -60,6 +64,7 @@ class Application(
     AufnahmeMixin,
     BluetoothMixin,
     EinstellungenMixin,
+    LichtMixin,
     MusikMixin,
     NetzwerkMixin,
     PultMixin,
@@ -153,6 +158,54 @@ class Application(
         self.updater = Updater(self.usb_storage)
 
         self.console_control = ConsoleControl()
+
+        self.dmx_control = DmxControl()
+
+        self.lighting_store = LightingStore(self.state_store)
+
+        #
+        # Der aktuelle Lichtzustand: Lampen-Kennung -> Kanalwerte,
+        # relativ zum ersten Kanal der Lampe. Nur im Arbeitsspeicher -
+        # nach einem Neustart ist es dunkel, bis jemand eine Szene
+        # aufruft.
+        #
+        self.light_values: dict = {}
+
+        #
+        # Die Helligkeit je Lampe, getrennt von den Farbwerten: Dimmen
+        # ist nicht umkehrbar, deshalb bleiben die gemerkten Werte
+        # ungedimmt und die Helligkeit kommt erst beim Senden dazu.
+        #
+        self.light_brightness: dict = {}
+
+        #
+        # Show-Thread und Bedienung koennen gleichzeitig senden
+        # wollen. Ohne Sperre waere, was auf dem Kabel landet, eine
+        # Mischung aus beidem.
+        #
+        self._light_lock = threading.Lock()
+
+        #
+        # Die Blende in die Rueckfallszene: eingefrorener
+        # Ausgangsstand, Ziel, und wie viel Zeit noch bleibt.
+        # Siehe core/application/licht.py.
+        #
+        self._blende_von: dict = {}
+        self._blende_helligkeit_von: dict = {}
+        self._blende_ziel: dict = {}
+        self._blende_helligkeit_ziel: dict = {}
+        self._blende_dauer = 0.0
+        self._blende_rest = 0.0
+
+        #
+        # Merker: Etwas anderes als die Show hatte gerade das Licht in
+        # der Hand - eine Szene, der Rueckfall, ein frischer Start.
+        # Das naechste Show-Bild dreht die von ihr gefahrenen Lampen
+        # dann wieder auf volle Helligkeit.
+        #
+        self._show_uebernahme = False
+
+        self.light_engine = LightEngine(self)
 
         self._usb_copy_lock = threading.Lock()
 

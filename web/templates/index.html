@@ -460,6 +460,134 @@
 
     </div>
 
+    <!-- Licht ------------------------------------------------------->
+
+    {#
+        Die Karte ist erst da, wenn die Lichtsteuerung in den
+        Einstellungen eingeschaltet wurde. Wer kein DMX hat - also die
+        meisten - soll sie gar nicht erst sehen.
+    #}
+
+    <div class="row g-4 mt-0 d-none" id="light-card-wrapper">
+
+        <div class="col-12">
+
+            {% set title %}
+            <i class="bi bi-lightbulb me-2"></i>{{ t.light_title }}
+            {% endset %}
+
+            {% set header_right %}
+            <button
+                id="btn-light-show"
+                class="btn btn-outline-primary btn-sm me-1"
+                title="{{ t.light_show_start }}"
+            >
+                <i class="bi bi-music-note-beamed"></i>
+            </button>
+
+            <button
+                id="btn-light-blackout"
+                class="btn btn-outline-secondary btn-sm me-1"
+                title="{{ t.light_blackout }}"
+            >
+                <i class="bi bi-lightbulb-off"></i>
+            </button>
+
+            <button
+                id="btn-light-setup"
+                class="btn btn-outline-secondary btn-sm"
+                title="{{ t.light_setup }}"
+            >
+                <i class="bi bi-sliders2"></i>
+            </button>
+            {% endset %}
+
+            {% set body %}
+            <div
+                id="light-warning"
+                class="alert alert-warning py-2 px-3 small d-none"
+            ></div>
+
+            {#
+                Laeuft die Show, zeigt diese Zeile, was sie hoert -
+                sonst steht man vor einer Lampe, die nichts tut, und
+                weiss nicht, ob das Signal fehlt oder die Erkennung
+                gerade "Sprache" meint.
+            #}
+            <div id="light-show-status" class="d-none mb-3">
+
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                    <span class="badge text-bg-primary">{{ t.light_show_title }}</span>
+                    <span id="light-show-state" class="badge text-bg-secondary"></span>
+                </div>
+
+                <div class="d-flex flex-column gap-1" id="light-show-bands"></div>
+
+                {#
+                    Ohne diesen Satz haelt man 0.02 fuer "ein
+                    bisschen" statt fuer -34 dBFS - und wundert sich,
+                    warum die Show bei normal laufender Musik auf die
+                    Rueckfallszene springt. Genau das ist am Geraet
+                    passiert.
+                #}
+                <div class="form-text mt-1">{{ t.light_show_level_hint }}</div>
+
+            </div>
+
+            {#
+                Einklappbar, weil aus jeder Lampe mehrere Regler
+                werden - bei einem ganzen Rig scrollt man sonst an
+                den Szenen und der Show vorbei, um die Karte
+                ueberhaupt zu ueberblicken. Die Zahl im Kopf bleibt
+                auch eingeklappt stehen; sonst waere nicht zu sehen,
+                ob da unten etwas ist.
+            #}
+            <button
+                id="btn-light-fixtures-toggle"
+                class="btn btn-link btn-sm text-decoration-none p-0 d-flex align-items-center gap-2"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#light-fixtures-body"
+                aria-expanded="true"
+                aria-controls="light-fixtures-body"
+            >
+                <i id="light-fixtures-chevron" class="bi bi-chevron-down"></i>
+                <strong class="small">{{ t.light_fixtures_title }}</strong>
+                <span
+                    id="light-fixtures-count"
+                    class="badge text-bg-secondary"
+                ></span>
+            </button>
+
+            <div class="collapse show" id="light-fixtures-body">
+                <div id="light-fixtures" class="mt-2"></div>
+            </div>
+
+            <hr class="my-3">
+
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+
+                <strong class="small">{{ t.light_scenes_title }}</strong>
+
+                <button
+                    id="btn-light-scene-save"
+                    class="btn btn-outline-primary btn-sm"
+                >
+                    <i class="bi bi-bookmark-plus me-1"></i>
+                    {{ t.light_scene_save }}
+                </button>
+
+            </div>
+
+            <div id="light-scenes"></div>
+            {% endset %}
+
+            {% include "components/status_card.html" %}
+
+        </div>
+
+    </div>
+
     <!-- System ------------------------------------------------------>
 
     {% include "components/footer_status.html" %}

@@ -34,6 +34,7 @@ from web.routes import (
     bluetooth,
     console,
     diagnostics,
+    lighting,
     music,
     recordings,
     seiten,
@@ -56,6 +57,7 @@ for _teil in (
     system,
     usb,
     diagnostics,
+    lighting,
     update,
 ):
     router.include_router(_teil.router)

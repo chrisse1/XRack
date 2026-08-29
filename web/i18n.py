@@ -216,7 +216,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_console_access_hint": "Das Pult an der Netzwerkbuchse wird aus dem Heimnetz erreichbar - für X32-Edit, X-AIR-Edit und Mixing Station.",
         "faders_snapshot_label": "Snapshot",
         "faders_snapshot_load": "Laden",
-        "faders_snapshot_none": "Keine Snapshots gefunden",
         "faders_snapshot_unnamed": "Snapshot {n}",
         "confirm_snapshot_load": (
             "Snapshot \"{name}\" wirklich laden? Das stellt am Mischpult "
@@ -419,6 +418,160 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "confirm_bluetooth_forget_device": '"{name}" wirklich vergessen?',
         "alert_bluetooth_pairing_started": (
             "Koppelbar für 2 Minuten - jetzt am Handy/Tablet verbinden."
+        ),
+
+        # Licht (DMX)
+        "light_title": "Licht",
+        "light_settings_group": "Licht",
+        "light_enable": "Lichtsteuerung verwenden",
+        "light_enable_hint": (
+            "Steuert DMX-Lampen über ein USB-DMX-Kabel. Ohne Kabel "
+            "nicht nötig."
+        ),
+        "light_setup": "Einrichten",
+        "light_blackout": "Alles aus",
+        "light_no_fixtures": (
+            "Noch keine Lampen eingerichtet - über \"Einrichten\" anlegen."
+        ),
+        "light_service_missing": (
+            "Der Lichtdienst antwortet nicht. Läuft olad?"
+        ),
+        "light_adapter_missing": "Kein DMX-Kabel erkannt.",
+        "light_overlap_warning": (
+            "Achtung: Zwei Lampen belegen dieselben Kanäle. Das ist "
+            "erlaubt, aber selten gewollt."
+        ),
+        "light_brightness": "Helligkeit",
+        "light_segment": "Segment {n}",
+
+        # Licht: Einrichten
+        "light_setup_title": "Licht einrichten",
+        "light_fixtures_title": "Lampen",
+        "light_fixture_new": "Lampe aus Vorlage erstellen",
+        "light_templates_title": "Gerätevorlagen",
+        "light_template_new": "Eigene Vorlage erstellen",
+        "light_name": "Name",
+        "light_template": "Vorlage",
+        "light_address": "Startadresse",
+        "light_kind": "Art",
+        "light_kind_effect": "Effektlicht",
+        "light_kind_background": "Hintergrundlicht 1",
+        "light_kind_background2": "Hintergrundlicht 2",
+        "light_kind_static": "Von der Show ausgenommen",
+        "light_kind_hint": (
+            "Effektlicht folgt dem Takt. Die beiden Hintergrundgruppen "
+            "wechseln die Farbe langsam, jede mit eigenen Farben und "
+            "gegeneinander versetzt. Ausgenommene Lampen behalten, was "
+            "von Hand oder über eine Szene eingestellt ist."
+        ),
+        "light_address_range": "DMX {von}–{bis}",
+        "light_address_occupies": "Belegt DMX {von}–{bis}.",
+        "light_channels_count": "{n} Kanäle",
+        "light_template_name": "Name der Vorlage",
+        "light_template_pattern": "Kanäle (Muster)",
+        "light_template_repeat": "Wiederholungen",
+        "light_template_repeat_hint": (
+            "Für Geräte mit mehreren gleichen Segmenten: Muster einmal "
+            "angeben, Anzahl der Segmente eintragen."
+        ),
+        "light_template_add_channel": "Kanal",
+        "light_template_builtin": "mitgeliefert",
+        "confirm_light_fixture_delete": "Lampe \"{name}\" wirklich löschen?",
+        "confirm_light_template_delete": "Vorlage \"{name}\" wirklich löschen?",
+        "confirm_light_scene_delete": "Szene \"{name}\" wirklich löschen?",
+
+        # Licht: Szenen
+        "light_scenes_title": "Szenen",
+        "light_no_scenes": (
+            "Noch keine Szene gespeichert. Lampen einstellen, dann "
+            "speichern."
+        ),
+        "light_scene_save": "Aktuellen Stand speichern",
+        "light_scene_name_prompt": "Name der Szene:",
+
+        # Licht: Kanalrollen
+        "light_role_dimmer": "Dimmer",
+        "light_role_red": "Rot",
+        "light_role_green": "Grün",
+        "light_role_blue": "Blau",
+        "light_role_white": "Weiß",
+        "light_role_amber": "Amber",
+        "light_role_uv": "UV",
+        "light_role_pan": "Pan (drehen)",
+        "light_role_pan_fine": "Pan fein",
+        "light_role_tilt": "Tilt (neigen)",
+        "light_role_tilt_fine": "Tilt fein",
+        "light_role_gobo": "Gobo",
+        "light_role_gobo_rotation": "Gobo-Drehung",
+        "light_role_color_wheel": "Farbrad",
+        "light_role_strobe": "Strobe",
+        "light_role_shutter": "Shutter",
+        "light_role_rotation": "Drehung",
+        "light_role_laser": "Laser",
+        "light_role_generic": "Sonstiger Kanal",
+
+        # Licht: musikgesteuerte Show
+        "light_show_title": "Musikshow",
+        "light_show_start": "Show starten",
+        "light_show_stop": "Show anhalten",
+        "light_show_settings": "Show-Einstellungen",
+        "light_show_channel": "Kanalpaar zum Mithören",
+        "light_show_channel_hint": (
+            "Auf dieses Kanalpaar hört die Lichtshow. Am besten ein "
+            "Ausspielweg, auf dem die Musik liegt - nicht ein einzelnes "
+            "Instrument."
+        ),
+        "light_show_sensitivity": "Empfindlichkeit",
+        "light_show_background_seconds": "Hintergrund: Trägheit",
+        "light_show_background_beats": "Hintergrund: Farbwechsel",
+        "light_show_fade_seconds": "Ausblenden in die Szene",
+        "light_show_beats_unit": "{n} Schläge",
+        "light_show_background_warning": (
+            "Die Blende ist länger als die halbe Standzeit - die Farben "
+            "kommen nicht mehr rein an, sondern mischen sich zu einem "
+            "Mittelton. Trägheit verkürzen oder Farbwechsel verlängern."
+        ),
+        "light_show_colors": "Farben: Effektlicht",
+        "light_show_colors_1": "Farben: Hintergrundlicht 1",
+        "light_show_colors_2": "Farben: Hintergrundlicht 2",
+        "light_show_colors_1_hint": (
+            "Nur für Lampen der Gruppe \"Hintergrundlicht 1\"."
+        ),
+        "light_show_colors_2_hint": (
+            "Nur für Lampen der Gruppe \"Hintergrundlicht 2\". Sie läuft um eine Farbe versetzt, damit immer zwei verschiedene Farben auf der Bühne stehen."
+        ),
+        "light_show_color_low": "Tiefe Töne",
+        "light_show_color_mid": "Mitten",
+        "light_show_color_high": "Höhen",
+        "light_show_colors_hint": (
+            "Die drei Farben werden nach Lautstärke der Bereiche "
+            "gemischt. Geschmackssache - probier es aus."
+        ),
+        "light_show_fallback": "Szene bei Sprache oder Stille",
+        "light_show_fallback_none": "Licht aus",
+        "light_show_fallback_hint": (
+            "Läuft keine Musik mehr, schaltet XRack hierauf um."
+        ),
+        "light_show_silence_threshold": "Ab wann gilt es als still",
+        "light_show_level_hint": (
+            "Der Balken \"Gesamt\" und die Schwelle sind in dBFS - dieselbe Skala wie am Pult."
+        ),
+        "light_show_silence_seconds": "Wartezeit bis Stille (Sekunden)",
+        "light_show_speech_seconds": "Wartezeit bis Sprache (0 = aus)",
+        "light_show_tuning_hint": (
+            "Diese Werte hängen vom Signal ab, das bei dir ankommt - "
+            "vor Ort ausprobieren."
+        ),
+        "light_show_state_music": "Musik",
+        "light_show_state_speech": "Sprache",
+        "light_show_state_silence": "Stille",
+        "light_show_band_low": "Tief",
+        "light_show_band_mid": "Mitte",
+        "light_show_band_high": "Hoch",
+        "light_show_band_level": "Gesamt",
+        "light_show_no_stream": (
+            "Es kommt kein Audio an. Ist das richtige Kanalpaar gewählt, "
+            "und liegt dort ein Signal?"
         ),
     },
     "en": {
@@ -625,7 +778,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_console_access_hint": "The console on the Ethernet port becomes reachable from the home network - for X32-Edit, X-AIR-Edit and Mixing Station.",
         "faders_snapshot_label": "Snapshot",
         "faders_snapshot_load": "Load",
-        "faders_snapshot_none": "No snapshots found",
         "faders_snapshot_unnamed": "Snapshot {n}",
         "confirm_snapshot_load": (
             "Really load snapshot \"{name}\"? This changes every fader, "
@@ -814,6 +966,158 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "confirm_bluetooth_forget_device": 'Really forget "{name}"?',
         "alert_bluetooth_pairing_started": (
             "Pairing mode for 2 minutes - connect from your phone/tablet now."
+        ),
+
+        # Lighting (DMX)
+        "light_title": "Lighting",
+        "light_settings_group": "Lighting",
+        "light_enable": "Use lighting control",
+        "light_enable_hint": (
+            "Controls DMX fixtures through a USB-to-DMX cable. Not "
+            "needed without one."
+        ),
+        "light_setup": "Set up",
+        "light_blackout": "All off",
+        "light_no_fixtures": (
+            "No fixtures set up yet - add them under \"Set up\"."
+        ),
+        "light_service_missing": (
+            "The lighting service is not responding. Is olad running?"
+        ),
+        "light_adapter_missing": "No DMX cable detected.",
+        "light_overlap_warning": (
+            "Careful: two fixtures use the same channels. That is "
+            "allowed, but rarely intended."
+        ),
+        "light_brightness": "Brightness",
+        "light_segment": "Segment {n}",
+
+        # Lighting: setup
+        "light_setup_title": "Set up lighting",
+        "light_fixtures_title": "Fixtures",
+        "light_fixture_new": "Create a fixture from a template",
+        "light_templates_title": "Fixture types",
+        "light_template_new": "Create your own template",
+        "light_name": "Name",
+        "light_template": "Type",
+        "light_address": "Start address",
+        "light_kind": "Kind",
+        "light_kind_effect": "Effect light",
+        "light_kind_background": "Background light 1",
+        "light_kind_background2": "Background light 2",
+        "light_kind_static": "Left out of the show",
+        "light_kind_hint": (
+            "Effect lights follow the beat. The two background groups "
+            "change colour slowly, each with its own colours and offset "
+            "against each other. Fixtures left out keep whatever was set "
+            "by hand or from a scene."
+        ),
+        "light_address_range": "DMX {von}–{bis}",
+        "light_address_occupies": "Occupies DMX {von}–{bis}.",
+        "light_channels_count": "{n} channels",
+        "light_template_name": "Type name",
+        "light_template_pattern": "Channels (pattern)",
+        "light_template_repeat": "Repeats",
+        "light_template_repeat_hint": (
+            "For devices with several identical segments: give the "
+            "pattern once, enter the number of segments."
+        ),
+        "light_template_add_channel": "Channel",
+        "light_template_builtin": "built in",
+        "confirm_light_fixture_delete": "Really delete fixture \"{name}\"?",
+        "confirm_light_template_delete": "Really delete type \"{name}\"?",
+        "confirm_light_scene_delete": "Really delete scene \"{name}\"?",
+
+        # Lighting: scenes
+        "light_scenes_title": "Scenes",
+        "light_no_scenes": (
+            "No scene saved yet. Set the fixtures, then save."
+        ),
+        "light_scene_save": "Save current state",
+        "light_scene_name_prompt": "Scene name:",
+
+        # Lighting: channel roles
+        "light_role_dimmer": "Dimmer",
+        "light_role_red": "Red",
+        "light_role_green": "Green",
+        "light_role_blue": "Blue",
+        "light_role_white": "White",
+        "light_role_amber": "Amber",
+        "light_role_uv": "UV",
+        "light_role_pan": "Pan",
+        "light_role_pan_fine": "Pan fine",
+        "light_role_tilt": "Tilt",
+        "light_role_tilt_fine": "Tilt fine",
+        "light_role_gobo": "Gobo",
+        "light_role_gobo_rotation": "Gobo rotation",
+        "light_role_color_wheel": "Colour wheel",
+        "light_role_strobe": "Strobe",
+        "light_role_shutter": "Shutter",
+        "light_role_rotation": "Rotation",
+        "light_role_laser": "Laser",
+        "light_role_generic": "Other channel",
+
+        # Lighting: music-driven show
+        "light_show_title": "Music show",
+        "light_show_start": "Start show",
+        "light_show_stop": "Stop show",
+        "light_show_settings": "Show settings",
+        "light_show_channel": "Channel pair to listen on",
+        "light_show_channel_hint": (
+            "The light show listens to this channel pair. Best a send "
+            "carrying the music - not a single instrument."
+        ),
+        "light_show_sensitivity": "Sensitivity",
+        "light_show_background_seconds": "Background: inertia",
+        "light_show_background_beats": "Background: colour change",
+        "light_show_fade_seconds": "Fade into the scene",
+        "light_show_beats_unit": "every {n} beats",
+        "light_show_background_warning": (
+            "The fade is longer than half the hold time - the colours no "
+            "longer arrive and blur into a mid tone. Shorten the inertia "
+            "or lengthen the colour change."
+        ),
+        "light_show_colors": "Colours: effect light",
+        "light_show_colors_1": "Colours: background light 1",
+        "light_show_colors_2": "Colours: background light 2",
+        "light_show_colors_1_hint": (
+            "Only for fixtures in the \"Background light 1\" group."
+        ),
+        "light_show_colors_2_hint": (
+            "Only for fixtures in the \"Background light 2\" group. It runs one colour offset so two different colours are always on stage."
+        ),
+        "light_show_color_low": "Lows",
+        "light_show_color_mid": "Mids",
+        "light_show_color_high": "Highs",
+        "light_show_colors_hint": (
+            "The three colours are mixed by how loud each band is. "
+            "A matter of taste - try it out."
+        ),
+        "light_show_fallback": "Scene for speech or silence",
+        "light_show_fallback_none": "Lights off",
+        "light_show_fallback_hint": (
+            "When the music stops, XRack switches to this."
+        ),
+        "light_show_silence_threshold": "Level counted as silence",
+        "light_show_level_hint": (
+            "The \"Total\" bar and the threshold are in dBFS - the same scale as on the mixer."
+        ),
+        "light_show_silence_seconds": "Wait before silence (seconds)",
+        "light_show_speech_seconds": "Wait before speech (0 = off)",
+        "light_show_tuning_hint": (
+            "These depend on the signal that reaches you - try them out "
+            "on site."
+        ),
+        "light_show_state_music": "Music",
+        "light_show_state_speech": "Speech",
+        "light_show_state_silence": "Silence",
+        "light_show_band_low": "Low",
+        "light_show_band_mid": "Mid",
+        "light_show_band_high": "High",
+        "light_show_band_level": "Total",
+        "light_show_no_stream": (
+            "No audio is arriving. Is the right channel pair selected, and "
+            "is there a signal on it?"
         ),
     },
 }

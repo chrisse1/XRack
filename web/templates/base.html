@@ -988,6 +988,45 @@
                                 class="accordion-button collapsed"
                                 type="button"
                                 data-bs-toggle="collapse"
+                                data-bs-target="#settings-gruppe-licht"
+                            >
+                                {{ t.light_settings_group }}
+                            </button>
+                        </h2>
+                        <div
+                            id="settings-gruppe-licht"
+                            class="accordion-collapse collapse"
+                            data-bs-parent="#settings-accordion"
+                        >
+                            <div class="accordion-body">
+
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input
+                                    type="checkbox"
+                                    role="switch"
+                                    id="settings-light-toggle"
+                                    class="form-check-input"
+                                >
+                                <label class="form-check-label" for="settings-light-toggle">
+                                    {{ t.light_enable }}
+                                </label>
+                            </div>
+                            <small class="text-body-secondary">{{ t.light_enable_hint }}</small>
+                        </div>
+
+                        <div id="settings-light-state" class="small text-body-secondary"></div>
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button
+                                class="accordion-button collapsed"
+                                type="button"
+                                data-bs-toggle="collapse"
                                 data-bs-target="#settings-gruppe-wartung"
                             >
                                 {{ t.settings_group_maintenance }}
@@ -1183,6 +1222,497 @@
                   class="list-group"
               >
               </div>
+
+            </div>
+
+            <div class="modal-footer">
+                <button
+                    class="btn btn-secondary"
+                    data-bs-dismiss="modal"
+                >
+                    {{ t.btn_close }}
+                </button>
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
+<div
+    class="modal fade"
+    id="lightSetupModal"
+    tabindex="-1"
+    aria-hidden="true"
+>
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+
+        <div class="modal-content">
+
+            <div class="modal-header">
+
+                <h5 class="modal-title">
+                    {{ t.light_setup_title }}
+                </h5>
+
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="modal"
+                ></button>
+
+            </div>
+
+            <div class="modal-body">
+
+                <h6 class="fw-semibold">{{ t.light_fixtures_title }}</h6>
+
+                <div id="light-fixture-list" class="list-group mb-3"></div>
+
+                <h6 class="fw-semibold">{{ t.light_fixture_new }}</h6>
+
+                <div class="row g-2 align-items-end mb-4">
+
+                    <div class="col-12 col-sm-3">
+                        <label class="form-label small mb-1" for="light-fixture-name">
+                            {{ t.light_name }}
+                        </label>
+                        <input
+                            id="light-fixture-name"
+                            type="text"
+                            class="form-control form-control-sm"
+                            maxlength="40"
+                        >
+                    </div>
+
+                    <div class="col-12 col-sm-4 col-lg-3">
+                        <label class="form-label small mb-1" for="light-fixture-template">
+                            {{ t.light_template }}
+                        </label>
+                        <select
+                            id="light-fixture-template"
+                            class="form-select form-select-sm"
+                        ></select>
+                    </div>
+
+                    <div class="col-12 col-sm-3">
+                        <label class="form-label small mb-1" for="light-fixture-kind">
+                            {{ t.light_kind }}
+                        </label>
+                        {#
+                            Leer: Die Liste der Arten steht in
+                            xrack.js (LIGHT_KINDS) und wird von dort
+                            gefuellt. Stuende sie hier ein zweites
+                            Mal, ginge beim naechsten Zuwachs genau
+                            eine der beiden Stellen vergessen - was
+                            beim Anlegen der zweiten Hintergrundgruppe
+                            auch prompt passiert ist.
+                        #}
+                        <select
+                            id="light-fixture-kind"
+                            class="form-select form-select-sm"
+                        ></select>
+                    </div>
+
+                    <div class="col-8 col-sm-2">
+                        <label class="form-label small mb-1" for="light-fixture-address">
+                            {{ t.light_address }}
+                        </label>
+                        <input
+                            id="light-fixture-address"
+                            type="number"
+                            class="form-control form-control-sm"
+                            min="1"
+                            max="512"
+                            value="1"
+                        >
+                    </div>
+
+                    <div class="col-4 col-sm-2 d-grid">
+                        <button
+                            id="btn-light-fixture-add"
+                            class="btn btn-primary btn-sm"
+                        >
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
+                    </div>
+
+                    {#
+                        Welchen Bereich die Lampe belegen wuerde -
+                        schon beim Eintippen, nicht erst nach dem
+                        Anlegen. Sonst muss man Startadresse plus
+                        Kanalzahl im Kopf rechnen, um die naechste
+                        Lampe daneben zu setzen.
+                    #}
+                    <div class="col-12">
+                        <div id="light-fixture-range" class="form-text"></div>
+                        <div class="form-text">{{ t.light_kind_hint }}</div>
+                    </div>
+
+                </div>
+
+                <h6 class="fw-semibold">{{ t.light_templates_title }}</h6>
+
+                <div id="light-template-list" class="list-group mb-3"></div>
+
+                {#
+                    Bewusst kein mitgeliefertes Bewegtlicht: Ein
+                    geratenes Preset waere schlimmer als keins. Wer
+                    eines hat, baut hier die Kanalliste aus dem
+                    Handbuch nach - einmal, danach ist sie richtig.
+                #}
+                <h6 class="fw-semibold">{{ t.light_template_new }}</h6>
+
+                <div class="row g-2 align-items-end mb-2">
+
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label small mb-1" for="light-template-name">
+                            {{ t.light_template_name }}
+                        </label>
+                        <input
+                            id="light-template-name"
+                            type="text"
+                            class="form-control form-control-sm"
+                            maxlength="40"
+                        >
+                    </div>
+
+                    <div class="col-8 col-sm-4">
+                        <label class="form-label small mb-1" for="light-template-repeat">
+                            {{ t.light_template_repeat }}
+                        </label>
+                        <input
+                            id="light-template-repeat"
+                            type="number"
+                            class="form-control form-control-sm"
+                            min="1"
+                            max="170"
+                            value="1"
+                        >
+                    </div>
+
+                    <div class="col-4 col-sm-2 d-grid">
+                        <button
+                            id="btn-light-template-add"
+                            class="btn btn-primary btn-sm"
+                        >
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
+                    </div>
+
+                </div>
+
+                <label class="form-label small mb-1">
+                    {{ t.light_template_pattern }}
+                </label>
+
+                <div id="light-template-pattern" class="mb-2"></div>
+
+                <button
+                    id="btn-light-template-channel"
+                    class="btn btn-outline-secondary btn-sm"
+                >
+                    <i class="bi bi-plus-lg me-1"></i>{{ t.light_template_add_channel }}
+                </button>
+
+                <div class="form-text">{{ t.light_template_repeat_hint }}</div>
+
+                <hr class="my-4">
+
+                <h6 class="fw-semibold">{{ t.light_show_settings }}</h6>
+
+                <div class="row g-2 mb-2">
+
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label small mb-1" for="light-show-channel">
+                            {{ t.light_show_channel }}
+                        </label>
+                        {#
+                            Auswahl statt Zahlenfeld: So wie ueberall
+                            sonst in XRack, und ein Paar, das es am
+                            Interface nicht gibt, laesst sich damit
+                            gar nicht erst waehlen. Gefuellt wird es
+                            in xrack.js aus der Kanalzahl des
+                            Interfaces.
+                        #}
+                        <select
+                            id="light-show-channel"
+                            class="form-select form-select-sm"
+                        ></select>
+                        <div class="form-text">{{ t.light_show_channel_hint }}</div>
+                    </div>
+
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label small mb-1" for="light-show-fallback">
+                            {{ t.light_show_fallback }}
+                        </label>
+                        <select
+                            id="light-show-fallback"
+                            class="form-select form-select-sm"
+                        ></select>
+                        <div class="form-text">{{ t.light_show_fallback_hint }}</div>
+                    </div>
+
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label small mb-1" for="light-show-sensitivity">
+                            {{ t.light_show_sensitivity }}
+                        </label>
+                        <input
+                            id="light-show-sensitivity"
+                            type="range"
+                            class="form-range"
+                            min="0.2"
+                            max="3"
+                            step="0.1"
+                            value="1"
+                        >
+                    </div>
+
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label small mb-1"
+                               for="light-show-background-seconds">
+                            {{ t.light_show_background_seconds }}
+                            <span id="light-show-background-seconds-value"
+                                  class="text-body-secondary"></span>
+                        </label>
+                        <input
+                            id="light-show-background-seconds"
+                            type="range"
+                            class="form-range"
+                            min="1"
+                            max="15"
+                            step="1"
+                            value="4"
+                        >
+                    </div>
+
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label small mb-1"
+                               for="light-show-background-beats">
+                            {{ t.light_show_background_beats }}
+                            <span id="light-show-background-beats-value"
+                                  class="text-body-secondary"></span>
+                        </label>
+                        <input
+                            id="light-show-background-beats"
+                            type="range"
+                            class="form-range"
+                            min="1"
+                            max="64"
+                            step="1"
+                            value="16"
+                        >
+                    </div>
+
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label small mb-1"
+                               for="light-show-fade-seconds">
+                            {{ t.light_show_fade_seconds }}
+                            <span id="light-show-fade-seconds-value"
+                                  class="text-body-secondary"></span>
+                        </label>
+                        <input
+                            id="light-show-fade-seconds"
+                            type="range"
+                            class="form-range"
+                            min="0"
+                            max="10"
+                            step="0.5"
+                            value="2"
+                        >
+                    </div>
+
+                    <div class="col-12">
+                        <div id="light-show-background-warning"
+                             class="form-text text-warning-emphasis d-none"></div>
+                    </div>
+
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label small mb-1" for="light-show-silence-threshold">
+                            {{ t.light_show_silence_threshold }}
+                            <span id="light-show-silence-threshold-value"
+                                  class="text-body-secondary"></span>
+                        </label>
+                        <input
+                            id="light-show-silence-threshold"
+                            type="range"
+                            class="form-range"
+                            min="-80"
+                            max="-20"
+                            step="1"
+                            value="-54"
+                        >
+                    </div>
+
+                    <div class="col-6">
+                        <label class="form-label small mb-1" for="light-show-silence-seconds">
+                            {{ t.light_show_silence_seconds }}
+                        </label>
+                        <input
+                            id="light-show-silence-seconds"
+                            type="number"
+                            class="form-control form-control-sm"
+                            min="1"
+                            max="120"
+                            value="6"
+                        >
+                    </div>
+
+                    <div class="col-6">
+                        <label class="form-label small mb-1" for="light-show-speech-seconds">
+                            {{ t.light_show_speech_seconds }}
+                        </label>
+                        <input
+                            id="light-show-speech-seconds"
+                            type="number"
+                            class="form-control form-control-sm"
+                            min="0"
+                            max="300"
+                            value="0"
+                        >
+                    </div>
+
+                </div>
+
+                <label class="form-label small mb-1">
+                    {{ t.light_show_colors }}
+                </label>
+
+                <div class="d-flex flex-wrap gap-3 mb-2">
+
+                    <div>
+                        <div class="text-body-secondary" style="font-size: 0.75rem;">
+                            {{ t.light_show_color_low }}
+                        </div>
+                        <input
+                            id="light-show-color-low"
+                            type="color"
+                            class="form-control form-control-color"
+                            value="#ff0000"
+                        >
+                    </div>
+
+                    <div>
+                        <div class="text-body-secondary" style="font-size: 0.75rem;">
+                            {{ t.light_show_color_mid }}
+                        </div>
+                        <input
+                            id="light-show-color-mid"
+                            type="color"
+                            class="form-control form-control-color"
+                            value="#00ff00"
+                        >
+                    </div>
+
+                    <div>
+                        <div class="text-body-secondary" style="font-size: 0.75rem;">
+                            {{ t.light_show_color_high }}
+                        </div>
+                        <input
+                            id="light-show-color-high"
+                            type="color"
+                            class="form-control form-control-color"
+                            value="#0000ff"
+                        >
+                    </div>
+
+                </div>
+
+                <div class="form-text mb-3">{{ t.light_show_colors_hint }}</div>
+
+                <label class="form-label small mb-1">
+                    {{ t.light_show_colors_1 }}
+                </label>
+
+                <div class="d-flex flex-wrap gap-3 mb-2">
+
+                    <div>
+                        <div class="text-body-secondary" style="font-size: 0.75rem;">
+                            {{ t.light_show_color_low }}
+                        </div>
+                        <input
+                            id="light-show-color-low-1"
+                            type="color"
+                            class="form-control form-control-color"
+                            value="#ff0000"
+                        >
+                    </div>
+
+                    <div>
+                        <div class="text-body-secondary" style="font-size: 0.75rem;">
+                            {{ t.light_show_color_mid }}
+                        </div>
+                        <input
+                            id="light-show-color-mid-1"
+                            type="color"
+                            class="form-control form-control-color"
+                            value="#00ff00"
+                        >
+                    </div>
+
+                    <div>
+                        <div class="text-body-secondary" style="font-size: 0.75rem;">
+                            {{ t.light_show_color_high }}
+                        </div>
+                        <input
+                            id="light-show-color-high-1"
+                            type="color"
+                            class="form-control form-control-color"
+                            value="#0000ff"
+                        >
+                    </div>
+
+                </div>
+
+                <div class="form-text mb-3">{{ t.light_show_colors_1_hint }}</div>
+
+                <label class="form-label small mb-1">
+                    {{ t.light_show_colors_2 }}
+                </label>
+
+                <div class="d-flex flex-wrap gap-3 mb-2">
+
+                    <div>
+                        <div class="text-body-secondary" style="font-size: 0.75rem;">
+                            {{ t.light_show_color_low }}
+                        </div>
+                        <input
+                            id="light-show-color-low-2"
+                            type="color"
+                            class="form-control form-control-color"
+                            value="#ff00ff"
+                        >
+                    </div>
+
+                    <div>
+                        <div class="text-body-secondary" style="font-size: 0.75rem;">
+                            {{ t.light_show_color_mid }}
+                        </div>
+                        <input
+                            id="light-show-color-mid-2"
+                            type="color"
+                            class="form-control form-control-color"
+                            value="#ffaa00"
+                        >
+                    </div>
+
+                    <div>
+                        <div class="text-body-secondary" style="font-size: 0.75rem;">
+                            {{ t.light_show_color_high }}
+                        </div>
+                        <input
+                            id="light-show-color-high-2"
+                            type="color"
+                            class="form-control form-control-color"
+                            value="#00ffff"
+                        >
+                    </div>
+
+                </div>
+
+                <div class="form-text mb-3">{{ t.light_show_colors_2_hint }}</div>
+
+                <div class="form-text">{{ t.light_show_tuning_hint }}</div>
 
             </div>
 

@@ -289,23 +289,105 @@ install_system_dependencies() {
 }
 
 #
+# Liest eine vorhandene config/local.yaml ein.
+#
+# Setzt XRACK_ALT_PORT, XRACK_ALT_SPRACHE und XRACK_ALT_PIN_HASH auf
+# das, was dort steht - oder auf leer, wenn es die Datei nicht gibt
+# oder sie unlesbar ist. Eine kaputte Datei darf die Installation nicht
+# anhalten; dann gelten eben die Vorgaben.
+#
+vorhandene_einstellungen_lesen() {
+
+    XRACK_ALT_PORT=""
+    XRACK_ALT_SPRACHE=""
+    XRACK_ALT_PIN_HASH=""
+
+    local datei="${XRACK_LOCAL_CONFIG:-config/local.yaml}"
+
+    [ -f "${datei}" ] || return 0
+
+    local gelesen
+    gelesen="$(XRACK_DATEI="${datei}" python3 -c "
+import os
+import sys
+
+try:
+    import yaml
+
+    with open(os.environ['XRACK_DATEI'], encoding='utf-8') as f:
+        daten = yaml.safe_load(f) or {}
+
+    if not isinstance(daten, dict):
+        raise ValueError('kein Wörterbuch')
+
+    def hole(gruppe, name):
+        teil = daten.get(gruppe) or {}
+        return str(teil.get(name, '') or '') if isinstance(teil, dict) else ''
+
+    print(hole('server', 'port'))
+    print(hole('application', 'language'))
+    print(hole('security', 'pin_hash'))
+
+except Exception:
+    sys.exit(1)
+" 2>/dev/null)" || return 0
+
+    XRACK_ALT_PORT="$(echo "${gelesen}" | sed -n '1p')"
+    XRACK_ALT_SPRACHE="$(echo "${gelesen}" | sed -n '2p')"
+    XRACK_ALT_PIN_HASH="$(echo "${gelesen}" | sed -n '3p')"
+}
+
+#
 # Port, Hostname und PIN abfragen und nach config/local.yaml
 # schreiben (die Sprache wurde bereits von choose_language() gesetzt).
 #
+# Gibt es die Datei schon, sind ihre Werte die Vorgaben - Enter behält
+# also, was da ist.
+#
+# Das ist nicht Bequemlichkeit, sondern eine Reparatur: Vorher wurde
+# die Datei bedingungslos überschrieben. Wer den Installer ein zweites
+# Mal laufen ließ - und genau dazu fordert der Updater auf, wenn sich
+# install.sh geändert hat -, verlor durch bloßes Enterdrücken seinen
+# abweichenden Port und seinen PIN-Schutz. Nicht interaktiv wurde nicht
+# einmal gefragt.
+#
 # Läuft das Skript nicht interaktiv (z.B. per "curl | bash"), werden
-# stillschweigend die Standardwerte (Port 8080, Hostname "xrack",
-# kein PIN-Schutz) verwendet.
+# die vorhandenen Werte übernommen, und bei einer Neuinstallation die
+# Standardwerte (Port 8080, Hostname "xrack", kein PIN-Schutz).
 #
 configure_basic_settings() {
 
-    XRACK_PORT="8080"
-    XRACK_HOSTNAME="xrack"
+    vorhandene_einstellungen_lesen
+
+    XRACK_PORT="${XRACK_ALT_PORT:-8080}"
     XRACK_PIN=""
+
+    #
+    # Beim ZWEITEN Lauf ist der laufende Hostname der richtige
+    # Vorgabewert - er wurde ja beim ersten gesetzt. Bei einer
+    # Neuinstallation bleibt es bei "xrack"; der Name, den der
+    # Raspberry Pi ab Werk hat, wäre hier eine schlechte Vorgabe.
+    #
+    if [ -n "${XRACK_ALT_PORT}${XRACK_ALT_SPRACHE}${XRACK_ALT_PIN_HASH}" ]; then
+        XRACK_HOSTNAME="$(hostname 2>/dev/null || echo xrack)"
+    else
+        XRACK_HOSTNAME="xrack"
+    fi
+
+    #
+    # Die Sprache hat choose_language() schon gesetzt. Steht in der
+    # Datei eine andere und wurde nicht interaktiv gefragt, gilt die
+    # gespeicherte - sonst spräche XRack nach einem stillen zweiten
+    # Lauf plötzlich Deutsch.
+    #
+    if [ ! -t 0 ] && [ -n "${XRACK_ALT_SPRACHE}" ]; then
+        XRACK_LANGUAGE="${XRACK_ALT_SPRACHE}"
+    fi
 
     if [ -t 0 ]; then
 
         echo ""
-        read -r -p "$(L "Port fürs Webinterface (Standard: 8080): " "Port for the web interface (default: 8080): ")" XRACK_PORT_INPUT || true
+        read -r -p "$(L "Port fürs Webinterface (aktuell: ${XRACK_PORT}): " "Port for the web interface (current: ${XRACK_PORT}): ")" XRACK_PORT_INPUT || true
 
         if [ -n "${XRACK_PORT_INPUT}" ] && [ "${XRACK_PORT_INPUT}" -eq "${XRACK_PORT_INPUT}" ] 2>/dev/null; then
             XRACK_PORT="${XRACK_PORT_INPUT}"
@@ -319,27 +401,41 @@ configure_basic_settings() {
         # sonst mit einer Adresse in die Irre geschickt, die bei ihm
         # nie geht.
         #
-        read -r -p "$(L "Hostname (Standard: xrack): " "Hostname (default: xrack): ")" XRACK_HOSTNAME_INPUT || true
+        read -r -p "$(L "Hostname (aktuell: ${XRACK_HOSTNAME}): " "Hostname (current: ${XRACK_HOSTNAME}): ")" XRACK_HOSTNAME_INPUT || true
 
         if [ -n "${XRACK_HOSTNAME_INPUT}" ]; then
             if [[ "${XRACK_HOSTNAME_INPUT}" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]]; then
                 XRACK_HOSTNAME="${XRACK_HOSTNAME_INPUT}"
             else
-                echo "$(L "Ungültiger Hostname (nur Buchstaben, Ziffern, Bindestriche) - verwende 'xrack'." "Invalid hostname (letters, digits, hyphens only) - using 'xrack'.")"
+                echo "$(L "Ungültiger Hostname (nur Buchstaben, Ziffern, Bindestriche) - behalte '${XRACK_HOSTNAME}'." "Invalid hostname (letters, digits, hyphens only) - keeping '${XRACK_HOSTNAME}'.")"
             fi
         fi
 
         echo ""
         echo "$(L "Eine 4-stellige PIN schützt das Einstellungen-Menü vor unbefugtem Zugriff. Sie lässt sich später jederzeit im Einstellungen-Menü selbst ändern." "A 4-digit PIN protects the settings menu from unauthorized access. You can change it any time later in the settings menu itself.")"
-        read_confirmed_secret "$(L "PIN fürs Einstellungen-Menü (4 Ziffern, leer = kein Schutz)" "PIN for the settings menu (4 digits, empty = no protection)")" 4 XRACK_PIN "^[0-9]{4}$"
 
-        if [ -z "${XRACK_PIN}" ]; then
+        #
+        # Steht schon eine PIN in der Ablage, heisst Enter "behalten"
+        # und nicht "abschalten". Eine vorhandene PIN darf nur durch
+        # eine ausdrueckliche Eingabe ersetzt werden - abschalten geht
+        # ueber das Einstellungen-Menue.
+        #
+        if [ -n "${XRACK_ALT_PIN_HASH}" ]; then
+            read_confirmed_secret "$(L "PIN fürs Einstellungen-Menü (4 Ziffern, leer = die vorhandene behalten)" "PIN for the settings menu (4 digits, empty = keep the existing one)")" 4 XRACK_PIN "^[0-9]{4}$"
+        else
+            read_confirmed_secret "$(L "PIN fürs Einstellungen-Menü (4 Ziffern, leer = kein Schutz)" "PIN for the settings menu (4 digits, empty = no protection)")" 4 XRACK_PIN "^[0-9]{4}$"
+        fi
+
+        if [ -z "${XRACK_PIN}" ] && [ -z "${XRACK_ALT_PIN_HASH}" ]; then
             echo "$(L "Kein PIN-Schutz eingerichtet - die Einstellungen sind ungeschützt (später im Einstellungen-Menü nachholbar)." "No PIN protection set up - the settings are unprotected (can be added later in the settings menu).")"
         fi
 
     fi
 
-    XRACK_PIN_HASH=""
+    #
+    # Ohne neue Eingabe bleibt der gespeicherte Hash stehen.
+    #
+    XRACK_PIN_HASH="${XRACK_ALT_PIN_HASH}"
 
     if [ -n "${XRACK_PIN}" ]; then
         XRACK_PIN_HASH="$(XRACK_PIN="${XRACK_PIN}" python3 -c "
@@ -356,7 +452,7 @@ print(hash_pin(os.environ['XRACK_PIN']))
 
     echo "$(L "XRack: Konfiguration wird geschrieben (Sprache: ${XRACK_LANGUAGE}, Port: ${XRACK_PORT})..." "XRack: Writing configuration (language: ${XRACK_LANGUAGE}, port: ${XRACK_PORT})...")"
 
-    cat > config/local.yaml <<EOF
+    cat > "${XRACK_LOCAL_CONFIG:-config/local.yaml}" <<EOF
 application:
   language: "${XRACK_LANGUAGE}"
 
@@ -420,15 +516,59 @@ configure_hostname_and_avahi() {
 # ("Verbindung ist nicht privat" o.ä.) - "Erweitert" -> "Trotzdem
 # fortfahren" reicht, danach merkt sich der Browser die Ausnahme für
 # dieses Gerät. Zehn Jahre Gültigkeit, damit das nicht regelmäßig
-# erneut bestätigt werden muss. Wird bei jedem install.sh-Lauf neu
-# erzeugt (falls sich der Hostname geändert hat), eine bereits erteilte
-# Browser-Ausnahme muss dann einmalig erneut bestätigt werden.
+# erneut bestätigt werden muss.
 #
+# Ein vorhandenes, passendes Zertifikat wird behalten.
+#
+# Vorher wurde bei jedem Lauf ein neues erzeugt. Das war vertretbar,
+# solange man den Installer selten laufen ließ - nur muss man ihn
+# nach einem Update mit geänderter install.sh ausdrücklich noch
+# einmal starten, und dann wäre auf JEDEM Handy, Tablet und Rechner
+# die Sicherheitswarnung wieder da. Der Grund fürs Neuerzeugen war
+# ein möglicherweise geänderter Hostname, und genau das lässt sich
+# nachsehen, statt es vorsorglich anzunehmen.
+#
+# Wer trotzdem ein frisches will, löscht certs/ und lässt install.sh
+# noch einmal laufen.
+#
+zertifikat_passt() {
+
+    local crt="${INSTALL_DIR}/certs/xrack.crt"
+    local key="${INSTALL_DIR}/certs/xrack.key"
+
+    [ -f "${crt}" ] && [ -f "${key}" ] || return 1
+
+    #
+    # Läuft es noch mindestens 30 Tage? Bei zehn Jahren Laufzeit ist
+    # das eine Rückversicherung, kein Regelfall - aber ein
+    # abgelaufenes Zertifikat stillschweigend zu behalten wäre die
+    # schlechteste aller Möglichkeiten.
+    #
+    openssl x509 -in "${crt}" -noout -checkend 2592000 >/dev/null 2>&1 \
+        || return 1
+
+    #
+    # Deckt es den aktuellen Hostnamen ab? Auf den genauen Eintrag
+    # geprüft und nicht nur auf das Vorkommen: Sonst würde bei
+    # Hostname "pi" auch ein Zertifikat für "pi-studio" passen.
+    #
+    openssl x509 -in "${crt}" -noout -text 2>/dev/null \
+        | grep -qE "(^|[ ,])DNS:${XRACK_HOSTNAME}([ ,]|\$)" || return 1
+
+    return 0
+}
+
 generate_tls_certificate() {
 
-    echo "$(L "XRack: Selbstsigniertes TLS-Zertifikat wird erzeugt..." "XRack: Generating self-signed TLS certificate...")"
-
     mkdir -p "${INSTALL_DIR}/certs"
+
+    if zertifikat_passt; then
+
+        echo "$(L "XRack: Vorhandenes TLS-Zertifikat wird behalten (Browser-Ausnahmen bleiben gültig)." "XRack: Keeping the existing TLS certificate (browser exceptions stay valid).")"
+        return 0
+    fi
+
+    echo "$(L "XRack: Selbstsigniertes TLS-Zertifikat wird erzeugt..." "XRack: Generating self-signed TLS certificate...")"
 
     openssl req -x509 -nodes -newkey rsa:2048 \
         -keyout "${INSTALL_DIR}/certs/xrack.key" \
@@ -600,6 +740,48 @@ disable_foreign_wifi_profiles() {
 # Der Heimnetz-Client läuft über NetworkManager (nmcli), der Access
 # Point über hostapd - siehe den Kommentarblock weiter oben.
 #
+#
+# Was ist schon eingerichtet?
+#
+# Gebraucht wird das, damit beim zweiten Lauf die Enter-Taste nichts
+# umbenennt und nichts loescht. Ein Installer, den man nach einem
+# Update ausdruecklich noch einmal starten soll, darf auf dem
+# bequemsten Weg nicht der gefaehrlichste sein.
+#
+aktuelle_home_ssid() {
+    nmcli -g 802-11-wireless.ssid connection show "XRack-Home" 2>/dev/null
+}
+
+aktuelle_ap_ssid() {
+
+    local conf="${XRACK_HOSTAPD_CONF:-/etc/hostapd/xrack.conf}"
+
+    #
+    # Die Datei gehoert root (das Passwort steht darin im Klartext),
+    # deshalb ueber sudo lesen. Gelesen wird nur die SSID-Zeile.
+    #
+    sudo test -f "${conf}" 2>/dev/null || return 0
+
+    sudo grep -m1 '^ssid=' "${conf}" 2>/dev/null | cut -d= -f2-
+}
+
+#
+# Der Vorgabename fuer den Access Point: der eingerichtete, sonst
+# "XRack".
+#
+# Vorher stand hier fest "XRack". Wer seinen Access Point anders
+# genannt hatte und beim zweiten Lauf nur Enter drueckte, benannte ihn
+# damit stillschweigend um - und jedes gekoppelte Handy fand das Netz
+# nicht mehr.
+#
+ap_ssid_vorgabe() {
+
+    local vorhanden
+    vorhanden="$(aktuelle_ap_ssid)"
+
+    echo "${vorhanden:-XRack}"
+}
+
 configure_wifi() {
 
     XRACK_WLAN_CLIENT_SSID=""
@@ -674,10 +856,29 @@ configure_wifi() {
     # ----------------------------------------------------------------
 
     echo ""
-    read -r -p "$(L "Wollen Sie eine WLAN-Verbindung zu einem bestehenden Netzwerk einrichten? [J/n]: " "Do you want to set up a Wi-Fi connection to an existing network? [Y/n]: ")" XRACK_WLAN_SETUP || true
 
-    if [ "$(lower "${XRACK_WLAN_SETUP}")" != "n" ]; then
-        configure_wifi_client
+    XRACK_HOME_VORHANDEN="$(aktuelle_home_ssid)"
+
+    if [ -n "${XRACK_HOME_VORHANDEN}" ]; then
+
+        #
+        # Steht schon eine Verbindung, ist "nein" die Vorgabe: Enter
+        # behaelt sie. Sonst muesste man SSID und Passwort nur
+        # deshalb neu eintippen, weil man den Installer wegen einer
+        # ganz anderen Aenderung noch einmal gestartet hat.
+        #
+        read -r -p "$(L "WLAN-Verbindung neu einrichten? Eingerichtet ist '${XRACK_HOME_VORHANDEN}'. [j/N]: " "Set up the Wi-Fi connection again? '${XRACK_HOME_VORHANDEN}' is configured. [y/N]: ")" XRACK_WLAN_SETUP || true
+
+        [ "$(lower "${XRACK_WLAN_SETUP}")" = "j" ] || [ "$(lower "${XRACK_WLAN_SETUP}")" = "y" ] \
+            && configure_wifi_client
+
+    else
+
+        read -r -p "$(L "Wollen Sie eine WLAN-Verbindung zu einem bestehenden Netzwerk einrichten? [J/n]: " "Do you want to set up a Wi-Fi connection to an existing network? [Y/n]: ")" XRACK_WLAN_SETUP || true
+
+        if [ "$(lower "${XRACK_WLAN_SETUP}")" != "n" ]; then
+            configure_wifi_client
+        fi
     fi
 
     # ----------------------------------------------------------------
@@ -685,10 +886,23 @@ configure_wifi() {
     # ----------------------------------------------------------------
 
     echo ""
-    read -r -p "$(L "Wollen Sie einen Access Point einrichten? [J/n]: " "Do you want to set up an access point? [Y/n]: ")" XRACK_AP_SETUP || true
 
-    if [ "$(lower "${XRACK_AP_SETUP}")" != "n" ]; then
-        configure_access_point
+    XRACK_AP_VORHANDEN="$(aktuelle_ap_ssid)"
+
+    if [ -n "${XRACK_AP_VORHANDEN}" ]; then
+
+        read -r -p "$(L "Access Point neu einrichten? Eingerichtet ist '${XRACK_AP_VORHANDEN}'. [j/N]: " "Set up the access point again? '${XRACK_AP_VORHANDEN}' is configured. [y/N]: ")" XRACK_AP_SETUP || true
+
+        [ "$(lower "${XRACK_AP_SETUP}")" = "j" ] || [ "$(lower "${XRACK_AP_SETUP}")" = "y" ] \
+            && configure_access_point
+
+    else
+
+        read -r -p "$(L "Wollen Sie einen Access Point einrichten? [J/n]: " "Do you want to set up an access point? [Y/n]: ")" XRACK_AP_SETUP || true
+
+        if [ "$(lower "${XRACK_AP_SETUP}")" != "n" ]; then
+            configure_access_point
+        fi
     fi
 }
 
@@ -827,8 +1041,10 @@ configure_access_point() {
     frage_wlan_land
 
     echo ""
-    read -r -p "$(L "Name des Access Points (Standard: XRack): " "Access point name (default: XRack): ")" AP_SSID_INPUT || true
-    AP_SSID="${AP_SSID_INPUT:-XRack}"
+    AP_VORGABE="$(ap_ssid_vorgabe)"
+
+    read -r -p "$(L "Name des Access Points (aktuell: ${AP_VORGABE}): " "Access point name (current: ${AP_VORGABE}): ")" AP_SSID_INPUT || true
+    AP_SSID="${AP_SSID_INPUT:-${AP_VORGABE}}"
 
     read_confirmed_secret "$(L "Passwort für den Access Point (mind. 8 Zeichen)" "Access point password (min. 8 characters)")" 8 AP_PASSWORD
 
@@ -1053,6 +1269,394 @@ EOF
 }
 
 #
+# Lichtsteuerung: DMX über OLA (Open Lighting Architecture).
+#
+# XRack erzeugt das DMX-Signal nicht selbst. Ein DMX-Bild muss alle
+# 23 Millisekunden neu geschrieben werden, mit einer Pause ("Break")
+# von mindestens 88 Mikrosekunden davor - harte Echtzeit. Im selben
+# Python-Prozess, der ALSA-Audio liest und den Webserver bedient,
+# wäre jede Aufnahme und jeder Seitenaufruf eine mögliche Ursache
+# für sichtbares Flackern.
+#
+# Deshalb dasselbe Muster wie beim WLAN (hostapd) und bei Bluetooth
+# (bluetoothd): Ein ausgereifter Systemdienst übernimmt den
+# zeitkritischen Teil, XRack schickt ihm nur Kanalwerte (siehe
+# core/dmx_control.py).
+#
+# Kein sudoers-Eintrag nötig: olad läuft unter eigenem Benutzer, das
+# USB-Kabel wird über eine udev-Regel freigegeben, und XRack spricht
+# den Dienst über HTTP auf localhost an.
+#
+# Alles hier ist bewusst nicht abbrechend. Fehlt das Paket oder
+# klappt etwas nicht, läuft XRack ohne Licht weiter - Aufnahme und
+# Wiedergabe dürfen davon nie betroffen sein.
+#
+#
+# Ist ein Debian-Paket wirklich installiert?
+#
+# "apt-get install" als Prüfung zu missbrauchen ist unzuverlässig: Es
+# kann aus Gründen scheitern, die mit dem Paket nichts zu tun haben.
+# dpkg-query beantwortet genau die Frage, um die es geht.
+#
+paket_da() {
+    dpkg-query -W -f='${Status}' "$1" 2>/dev/null \
+        | grep -q "^install ok installed$"
+}
+
+#
+# Sorgt dafür, dass das ola-Paket da ist. Rückgabewert 0 heißt: da.
+#
+# In einem eigenen Schritt und nicht in der großen Paketliste: Wäre
+# "ola" dort nicht verfügbar, schlüge die Installation aller
+# Systempakete fehl - wegen des Lichts.
+#
+dmx_paket_sicherstellen() {
+
+    #
+    # Erst nachsehen. Ein Installer, der ausdrücklich mehrfach laufen
+    # darf, soll ein vorhandenes Paket gar nicht erst anfassen.
+    #
+    if paket_da ola; then
+        return 0
+    fi
+
+    #
+    # "sudo env VAR=wert" und nicht "sudo VAR=wert".
+    #
+    # Die zweite Form hing daran, ob die sudoers-Regel das Setzen von
+    # Umgebungsvariablen erlaubt (SETENV, env_keep). Tut sie es nicht,
+    # bricht sudo ab, BEVOR apt überhaupt startet - und weil die
+    # Ausgabe zusätzlich verschluckt wurde, stand am Gerät "Paket
+    # nicht installierbar", während "apt install ola" von Hand
+    # meldete, es sei längst installiert. env ist ein ganz
+    # gewöhnliches Programm; damit ist die Frage weg.
+    #
+    local ausgabe
+    ausgabe="$(sudo env DEBIAN_FRONTEND=noninteractive \
+        apt-get install -y -qq ola 2>&1)" || true
+
+    #
+    # Entscheidend ist, ob das Paket jetzt da ist - nicht, was apt
+    # zurückgegeben hat. Ein Aufruf, der aus einem Nebengrund meckert,
+    # darf nicht die ganze DMX-Einrichtung überspringen.
+    #
+    if paket_da ola; then
+        return 0
+    fi
+
+    echo "$(L "Hinweis: Paket 'ola' nicht installierbar - Lichtsteuerung nicht verfügbar." "Note: package 'ola' could not be installed - lighting control unavailable.")"
+
+    #
+    # Und den Grund dazusagen. Ohne ihn sucht man an der falschen
+    # Stelle - genau das ist am Gerät passiert.
+    #
+    if [ -n "${ausgabe}" ]; then
+        echo "${ausgabe}" | tail -n 5
+    fi
+
+    return 1
+}
+
+configure_dmx() {
+
+    echo "$(L "XRack: Lichtsteuerung (DMX über OLA) wird eingerichtet..." "XRack: Setting up lighting control (DMX via OLA)...")"
+
+    if ! dmx_paket_sicherstellen; then
+        return 0
+    fi
+
+    #
+    # Das USB-DMX-Kabel freigeben.
+    #
+    # Alle gängigen Kabel dieser Preisklasse hängen an einem
+    # FTDI-Chip (FT232R und Verwandte). Das ola-Paket bringt eigene
+    # udev-Regeln mit und steckt seinen Benutzer in die Gruppen
+    # dialout und plugdev; diese Regel hier ist die Rückversicherung
+    # für Nachbauten, die dort nicht aufgeführt sind.
+    #
+    sudo tee /etc/udev/rules.d/99-xrack-dmx.rules > /dev/null <<'EOF'
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", GROUP="plugdev", MODE="0660"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", GROUP="plugdev", MODE="0660"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6015", GROUP="plugdev", MODE="0660"
+EOF
+
+    sudo udevadm control --reload-rules
+    sudo udevadm trigger --subsystem-match=usb >/dev/null 2>&1 || true
+
+    #
+    # Wie heißt der Dienst? Das Debian-Paket hat lange nur ein
+    # SysV-Startskript mitgebracht und erst seit Anfang 2026 eine
+    # systemd-Unit. Je nach Stand des Betriebssystems heißt sie
+    # "olad" oder "ola" - deshalb nachsehen statt raten.
+    #
+    DMX_UNIT=""
+
+    for kandidat in olad.service ola.service; do
+
+        if systemctl list-unit-files "${kandidat}" 2>/dev/null | grep -q "^${kandidat}"; then
+            DMX_UNIT="${kandidat}"
+            break
+        fi
+    done
+
+    if [ -z "${DMX_UNIT}" ]; then
+        echo "$(L "Hinweis: OLA-Dienst nicht gefunden - Licht bleibt aus, XRack läuft normal weiter." "Note: OLA service not found - lighting stays off, XRack runs normally.")"
+        return 0
+    fi
+
+    sudo systemctl enable "${DMX_UNIT}" >/dev/null 2>&1 || true
+    sudo systemctl start "${DMX_UNIT}" >/dev/null 2>&1 || true
+
+    #
+    # Wo liegen die Plugin-Einstellungen? Auch das ist je nach
+    # Paketstand verschieden. Beim ersten Start legt olad die
+    # Dateien selbst an, deshalb wird danach noch einmal gesucht.
+    #
+    DMX_CONF_DIR=""
+
+    for versuch in 1 2; do
+
+        for kandidat in /etc/ola /var/lib/ola/conf "$(getent passwd olad 2>/dev/null | cut -d: -f6)/.ola"; do
+
+            if [ -n "${kandidat}" ] && [ -d "${kandidat}" ]; then
+                DMX_CONF_DIR="${kandidat}"
+                break
+            fi
+        done
+
+        [ -n "${DMX_CONF_DIR}" ] && break
+
+        sleep 2
+    done
+
+    if [ -z "${DMX_CONF_DIR}" ]; then
+        echo "$(L "Hinweis: OLA-Konfiguration nicht gefunden - das DMX-Plugin muss von Hand aktiviert werden." "Note: OLA configuration not found - the DMX plugin has to be enabled manually.")"
+        return 0
+    fi
+
+    #
+    # Genau ein Plugin darf sich das Kabel greifen.
+    #
+    #   ftdidmx    - für "dumme" FTDI-Kabel ohne eigenen Prozessor,
+    #                bei denen der Rechner das Timing macht. Das ist
+    #                unser Fall (Open DMX USB und Nachbauten).
+    #   usbserial  - für Kabel MIT eigenem Prozessor (Enttec USB Pro).
+    #   opendmx    - dasselbe wie ftdidmx, über ein eigenes Kernelmodul.
+    #   stageprofi - für StageProfi-Widgets, ebenfalls über die
+    #                serielle Schnittstelle.
+    #
+    # Alle erkennen dieselbe Hardware. Bleiben mehrere aktiv, streiten
+    # sie sich darum, wer das Kabel bekommt.
+    #
+    # stageprofi stand hier zuerst nicht drin, und genau das ist am
+    # Gerät aufgefallen: Es griff sich /dev/ttyUSB0 im Sekundentakt,
+    # fragte an, bekam keine Antwort, gab wieder frei - endlos. In der
+    # Zeit kam ftdidmx nicht an das Kabel heran, und es blieb dunkel.
+    #
+    ola_plugin_schalten "${DMX_CONF_DIR}/ola-ftdidmx.conf" true
+
+    for streithahn in usbserial opendmx stageprofi; do
+
+        #
+        # Nur vorhandene Dateien anfassen: Ein Plugin, das dieses
+        # Paket gar nicht kennt, soll hier keine Karteileiche
+        # bekommen.
+        #
+        if sudo test -f "${DMX_CONF_DIR}/ola-${streithahn}.conf"; then
+            ola_plugin_schalten "${DMX_CONF_DIR}/ola-${streithahn}.conf" false
+        fi
+    done
+
+    restrict_ola_to_loopback "${DMX_UNIT}" "${DMX_CONF_DIR}"
+
+    sudo systemctl restart "${DMX_UNIT}" >/dev/null 2>&1 || true
+}
+
+#
+# Eine Plugin-Einstellung in einer OLA-Konfigurationsdatei setzen.
+#
+# Die Dateien gehören dem olad-Benutzer, deshalb läuft alles über
+# sudo und der Besitzer wird danach wiederhergestellt - sonst könnte
+# olad seine eigene Konfiguration beim nächsten Start nicht mehr
+# schreiben.
+#
+ola_plugin_schalten() {
+
+    datei="$1"
+    wert="$2"
+
+    if sudo test -f "${datei}"; then
+
+        sudo sed -i "s/^[[:space:]]*enabled[[:space:]]*=.*/enabled = ${wert}/" "${datei}"
+
+        if ! sudo grep -q "^enabled" "${datei}"; then
+            echo "enabled = ${wert}" | sudo tee -a "${datei}" > /dev/null
+        fi
+
+    else
+        echo "enabled = ${wert}" | sudo tee "${datei}" > /dev/null
+    fi
+
+    sudo chown olad:olad "${datei}" 2>/dev/null || true
+}
+
+#
+# Die Weboberfläche von OLA auf localhost beschränken.
+#
+# olad bringt eine eigene, ungeschützte Weboberfläche mit (Port 9090)
+# - über sie spricht XRack den Dienst an. Ohne Einschränkung wäre sie
+# aber auch aus dem ganzen Netzwerk erreichbar: eine zweite
+# Oberfläche neben XRacks eigener, ohne PIN und ohne TLS, mit der
+# jeder das Licht übernehmen und OLA umkonfigurieren könnte. Und
+# dieses Netzwerk ist im Betrieb der Access Point, in dem Pult und
+# Handys hängen.
+#
+# "-i 127.0.0.1" bindet sie an die Loopback-Adresse.
+#
+# Wie das gesetzt wird, hängt davon ab, was für eine Unit da ist -
+# und das ist der Punkt, an dem der erste Versuch danebenlag:
+#
+#   Echte systemd-Unit -> eine Ergänzung genügt: ExecStart leeren
+#                         und mit der ergänzten Zeile neu setzen.
+#
+#   SysV-Startskript   -> ExecStart zeigt auf /etc/init.d/olad. Eine
+#                         Ergänzung hängte "-i 127.0.0.1" dort an den
+#                         Aufruf des Startskripts, das die Option
+#                         schlicht ignoriert. Sah eingerichtet aus,
+#                         tat aber nichts (am Gerät gesehen: der
+#                         Daemon lief weiter ohne die Bindung).
+#                         Deshalb hier eine eigene Unit, die olad
+#                         direkt startet. Sie liegt in
+#                         /etc/systemd/system und hat damit Vorrang
+#                         vor der erzeugten - überschrieben wird
+#                         nichts, und Löschen macht es rückgängig.
+#
+restrict_ola_to_loopback() {
+
+    unit="$1"
+    conf_dir="${2:-/etc/ola}"
+
+    #
+    # Überschreibbar, damit der Test das prüfen kann, ohne an /etc zu
+    # rühren - wie XRACK_HOSTAPD_CONF anderswo.
+    #
+    systemd_dir="${XRACK_SYSTEMD_DIR:-/etc/systemd/system}"
+
+    unit_datei="$(systemctl show -p FragmentPath --value "${unit}" 2>/dev/null)"
+
+    if [ -z "${unit_datei}" ] || [ ! -f "${unit_datei}" ]; then
+        echo "$(L "Hinweis: OLA-Startzeile nicht gefunden - die OLA-Weboberfläche (Port 9090) bleibt im Netzwerk erreichbar." "Note: OLA start command not found - the OLA web interface (port 9090) stays reachable on the network.")"
+        return 0
+    fi
+
+    #
+    # Aus einem SysV-Startskript erzeugt? Dann eigene Unit.
+    #
+    case "${unit_datei}" in
+
+        */generator*|/etc/init.d/*)
+
+            olad_pfad="$(command -v olad 2>/dev/null)"
+
+            if [ -z "${olad_pfad}" ]; then
+                echo "$(L "Hinweis: olad nicht gefunden - die OLA-Weboberfläche (Port 9090) bleibt im Netzwerk erreichbar." "Note: olad not found - the OLA web interface (port 9090) stays reachable on the network.")"
+                return 0
+            fi
+
+            #
+            # Die alte, wirkungslose Ergänzung muss weg: Sie würde
+            # ExecStart der eigenen Unit wieder durch den Aufruf des
+            # Startskripts ersetzen.
+            #
+            sudo rm -f "${systemd_dir}/${unit}.d/xrack.conf"
+            sudo rmdir "${systemd_dir}/${unit}.d" 2>/dev/null || true
+
+            #
+            # Unter welchem Benutzer? Das ola-Paket legt "olad" an und
+            # steckt ihn in dialout und plugdev - genau die Gruppen,
+            # die für den Zugriff aufs Kabel gebraucht werden. Gibt es
+            # ihn nicht, bleibt es beim Standard, statt einen Benutzer
+            # zu erfinden, den es nicht gibt.
+            #
+            if getent passwd olad >/dev/null 2>&1; then
+                olad_benutzer="User=olad"
+            else
+                olad_benutzer=""
+            fi
+
+            sudo mkdir -p "${systemd_dir}"
+
+            sudo tee "${systemd_dir}/${unit}" > /dev/null <<EOF
+[Unit]
+Description=OLA-Dienst fürs Licht (von XRack eingerichtet)
+Documentation=man:olad(1)
+After=network-online.target
+
+[Service]
+Type=simple
+${olad_benutzer}
+ExecStart=${olad_pfad} --syslog --log-level 3 --config-dir ${conf_dir} -i 127.0.0.1
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+            ;;
+
+        *)
+
+            start_zeile="$(grep -m1 '^ExecStart=' "${unit_datei}" | sed 's/^ExecStart=//')"
+
+            if [ -z "${start_zeile}" ]; then
+                echo "$(L "Hinweis: OLA-Startzeile nicht lesbar - die OLA-Weboberfläche (Port 9090) bleibt im Netzwerk erreichbar." "Note: OLA start command unreadable - the OLA web interface (port 9090) stays reachable on the network.")"
+                return 0
+            fi
+
+            #
+            # Steht die Bindung schon drin, nichts tun - sonst stünde
+            # sie nach einem zweiten Installationslauf doppelt da.
+            #
+            case "${start_zeile}" in
+                *"-i 127.0.0.1"*) return 0 ;;
+            esac
+
+            sudo mkdir -p "${systemd_dir}/${unit}.d"
+
+            sudo tee "${systemd_dir}/${unit}.d/xrack.conf" > /dev/null <<EOF
+[Service]
+ExecStart=
+ExecStart=${start_zeile} -i 127.0.0.1
+EOF
+            ;;
+    esac
+
+    sudo systemctl daemon-reload
+
+    #
+    # Und einschalten. Genau dieser Schritt hat gefehlt.
+    #
+    # Weiter oben in configure_dmx wird schon einmal "enable"
+    # gerufen - das galt aber der Unit, die es DAMALS gab. Auf einem
+    # System mit SysV-Startskript war das die von systemd erzeugte,
+    # und die Startverknüpfung entstand über die Runlevel-Links des
+    # Init-Skripts. Die eigene Unit, die hier gerade daneben
+    # geschrieben wurde, hat davon nichts: Sie braucht ihre eigene
+    # Verknüpfung in multi-user.target.wants.
+    #
+    # Am Gerät sah das heimtückisch aus. Bis zum nächsten Neustart
+    # lief alles, weil der alte Daemon noch lief - der Fehler zeigte
+    # sich erst beim Hochfahren, mit "disabled" und "inactive (dead)",
+    # und dann blieb das Licht aus. Also genau dann, wenn man ihn am
+    # wenigsten gebrauchen kann.
+    #
+    # Ein zweites "enable" schadet nicht: Auf einem System mit echter
+    # systemd-Unit ist es ein Nichts-Tun.
+    #
+    sudo systemctl enable "${unit}" >/dev/null 2>&1 || true
+}
+
+#
 # sudo-Berechtigung für Herunterfahren, Dienst-Neustart und die
 # WLAN-Einstellungen (Webinterface -> Einstellungen) einrichten.
 #
@@ -1273,6 +1877,7 @@ configure_firewall
 configure_wifi
 configure_bluetooth
 configure_usb_automount
+configure_dmx
 configure_sudoers
 configure_systemd_service
 print_summary
