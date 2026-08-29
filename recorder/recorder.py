@@ -21,7 +21,23 @@ class Recorder:
     startet den Thread ohne in eine Datei zu schreiben, eine echte
     Aufnahme schaltet das Schreiben zusätzlich dazu - nahtlos, ohne
     den Thread neu zu starten, falls bereits pegelgeprüft wird.
+
+    Seit der Lichtsteuerung gibt es einen dritten Interessenten an
+    demselben Strom: Die musikgesteuerte Show muss mithören, auch
+    wenn niemand aufnimmt oder Pegel prüft. Deshalb merkt sich der
+    Recorder nicht mehr nur "läuft ja/nein", sondern WER ihn braucht.
+    Der Thread läuft, solange mindestens einer ihn braucht, und hört
+    auf, wenn der letzte geht. Ein einzelnes Flag hätte hier
+    zwangsläufig einen Fall falsch entschieden - etwa "Pegelprüfung
+    beenden" mitten in einer laufenden Lichtshow.
     """
+
+    #
+    # Die Gruende, aus denen der Aufnahme-Thread laufen kann.
+    #
+    GRUND_PEGEL = "pegel"
+    GRUND_AUFNAHME = "aufnahme"
+    GRUND_LICHT = "licht"
 
     def __init__(
         self,
@@ -35,6 +51,15 @@ class Recorder:
         self.backend = backend
 
         self._active = False
+
+        self._gruende: set[str] = set()
+
+        #
+        # Wer sonst noch jeden gelesenen Block sehen will (derzeit die
+        # Lichtsteuerung). Was hier haengt, laeuft IM Lesethread und
+        # muss deshalb sehr kurz sein - siehe _worker().
+        #
+        self._verbraucher: list = []
 
         self._write_to_file = False
 
@@ -65,9 +90,21 @@ class Recorder:
     @property
     def monitoring(self) -> bool:
         """
-        True, wenn der Aufnahme-Thread läuft (Pegel testen oder
-        Aufnahme - beides aktiviert die Pegelmessung).
+        True bei Pegelprüfung oder Aufnahme.
+
+        Bewusst NICHT "der Thread läuft": Hält ihn allein die
+        Lichtsteuerung am Leben, prüft niemand Pegel - und die
+        Oberfläche darf dann auch nicht behaupten, es liefe eine
+        Pegelprüfung.
         """
+
+        return bool(
+            self._gruende & {self.GRUND_PEGEL, self.GRUND_AUFNAHME}
+        )
+
+    @property
+    def stream_active(self) -> bool:
+        """True, wenn überhaupt vom Interface gelesen wird."""
 
         return self._active
 
@@ -112,7 +149,7 @@ class Recorder:
             self._current_filename,
         )
 
-        self._ensure_thread_running()
+        self._ensure_thread_running(self.GRUND_AUFNAHME)
 
         self.logger.info(
             "Recorder gestartet."
@@ -139,7 +176,14 @@ class Recorder:
 
         self._start_time = None
 
-        self._stop_thread()
+        #
+        # Beide Gruende abmelden, nicht nur die Aufnahme: "Stop" im
+        # Recorder beendet auch eine Pegelpruefung, die vorher lief -
+        # so war es immer, und daran soll sich nichts aendern. Nur
+        # die Lichtsteuerung behaelt den Strom, falls sie ihn hat.
+        #
+        self._stop_thread(self.GRUND_AUFNAHME)
+        self._stop_thread(self.GRUND_PEGEL)
 
         self.writer.close()
 
@@ -152,12 +196,19 @@ class Recorder:
         Startet die reine Pegelprüfung, ohne aufzuzeichnen.
         """
 
-        if self._active:
+        #
+        # Waehrend einer Aufnahme oder einer laufenden Pegelpruefung
+        # gibt es nichts zu starten. Haelt dagegen nur die
+        # Lichtsteuerung den Strom offen, darf die Pegelpruefung
+        # dazukommen - fruehere Fassungen haben hier auf "Thread
+        # laeuft" geprueft und haetten das verweigert.
+        #
+        if self.monitoring:
             return False
 
         self._write_to_file = False
 
-        self._ensure_thread_running()
+        self._ensure_thread_running(self.GRUND_PEGEL)
 
         self.logger.info(
             "Pegelprüfung gestartet."
@@ -171,16 +222,54 @@ class Recorder:
         Aufnahme aufrufen - dafür ist stop() da).
         """
 
-        if not self._active or self._write_to_file:
+        if self.GRUND_PEGEL not in self._gruende or self._write_to_file:
             return
 
-        self._stop_thread()
+        self._stop_thread(self.GRUND_PEGEL)
 
         self.logger.info(
             "Pegelprüfung gestoppt."
         )
 
-    def _ensure_thread_running(self) -> None:
+    # ----------------------------------------------------------------
+    # Mithoeren fuer die Lichtsteuerung
+    # ----------------------------------------------------------------
+
+    def start_analysis(self) -> None:
+        """
+        Den Strom offen halten, ohne aufzunehmen oder Pegel zu
+        zeigen - fuer die musikgesteuerte Lichtshow.
+        """
+
+        self._ensure_thread_running(self.GRUND_LICHT)
+
+    def stop_analysis(self) -> None:
+        """Das Mithoeren wieder abmelden."""
+
+        self._stop_thread(self.GRUND_LICHT)
+
+    def add_consumer(self, verbraucher) -> None:
+        """
+        Einen Mithoerer anmelden, der jeden gelesenen Block bekommt.
+
+        Achtung: Er laeuft IM Lesethread. Alles, was dort laenger
+        dauert, verzoegert das naechste Lesen von ALSA und riskiert
+        einen Ueberlauf - also verlorene Audiodaten mitten in einer
+        Aufnahme. Wer hier etwas anmeldet, darf nur weiterreichen,
+        nicht rechnen.
+        """
+
+        if verbraucher not in self._verbraucher:
+            self._verbraucher.append(verbraucher)
+
+    def remove_consumer(self, verbraucher) -> None:
+
+        if verbraucher in self._verbraucher:
+            self._verbraucher.remove(verbraucher)
+
+    def _ensure_thread_running(self, grund: str) -> None:
+
+        self._gruende.add(grund)
 
         if self._active:
             return
@@ -198,7 +287,22 @@ class Recorder:
 
         self._thread.start()
 
-    def _stop_thread(self) -> None:
+    def _stop_thread(self, grund: str) -> None:
+        """
+        Einen Grund abmelden. Erst wenn keiner mehr uebrig ist, wird
+        wirklich aufgehoert.
+        """
+
+        self._gruende.discard(grund)
+
+        if grund == self.GRUND_AUFNAHME:
+            self._write_to_file = False
+
+        #
+        # Braucht noch jemand den Strom, laeuft er weiter.
+        #
+        if self._gruende:
+            return
 
         self._active = False
 
@@ -257,6 +361,24 @@ class Recorder:
 
             if self.meter is not None:
                 self.meter.update(data)
+
+            #
+            # Mithoerer bedienen. Wirft einer, wird er abgemeldet
+            # statt den Thread mitzureissen: Eine kaputte Lichtshow
+            # darf keine laufende Aufnahme beenden.
+            #
+            for verbraucher in list(self._verbraucher):
+
+                try:
+                    verbraucher(data)
+
+                except Exception as exc:
+
+                    self.logger.error(
+                        "Recorder: Mithoerer wirft, wird abgemeldet: %s", exc
+                    )
+
+                    self.remove_consumer(verbraucher)
 
             if not self._write_to_file:
                 continue

@@ -146,4 +146,131 @@ assert recorder.recording is True, "stop_monitoring() darf eine laufende Aufnahm
 recorder.stop()
 print("OK: stop_monitoring() waehrend einer Aufnahme ist wirkungslos (stop() ist dafuer zustaendig)")
 
+# ----------------------------------------------------------------
+# 5. Die Lichtsteuerung als dritter Interessent am selben Strom
+#
+# ALSA erlaubt nur einen Leser. Die musikgesteuerte Lichtshow muss
+# aber mithoeren, auch wenn niemand aufnimmt oder Pegel prueft.
+# Deshalb merkt sich der Recorder, WER ihn braucht, statt nur "laeuft
+# ja/nein".
+# ----------------------------------------------------------------
+
+recorder = Recorder(FakeBackend(channels=2))
+recorder.writer = FakeWriter()
+
+recorder.start_analysis()
+time.sleep(0.02)
+
+assert recorder.stream_active is True, "Das Licht muss den Strom oeffnen koennen."
+
+#
+# Aber es prueft niemand Pegel - die Oberflaeche darf das nicht
+# behaupten.
+#
+assert recorder.monitoring is False, (
+    "Wenn nur das Licht mithoert, laeuft keine Pegelpruefung."
+)
+
+print("OK: Das Licht haelt den Strom offen, ohne als Pegelpruefung zu gelten")
+
+#
+# Und die Pegelpruefung muss trotzdem startbar sein. Eine Pruefung
+# auf "Thread laeuft" haette hier False geliefert - der Knopf im
+# Webinterface haette einfach nichts getan.
+#
+assert recorder.start_monitoring() is True, (
+    "Bei laufender Lichtshow muss sich die Pegelpruefung starten lassen."
+)
+assert recorder.monitoring is True
+
+recorder.stop_monitoring()
+
+assert recorder.monitoring is False
+assert recorder.stream_active is True, (
+    "Das Beenden der Pegelpruefung darf die Lichtshow nicht abwuergen."
+)
+
+print("OK: Pegelprüfung lässt sich neben der Lichtshow starten und beenden")
+
+#
+# Aufnahme dazu, dann Stop: Die Aufnahme endet, das Licht hoert
+# weiter mit.
+#
+assert recorder.start() is True
+time.sleep(0.03)
+assert recorder.recording is True
+
+recorder.stop()
+
+assert recorder.recording is False
+assert recorder.writer.close_count == 1
+assert recorder.stream_active is True, (
+    "Stop der Aufnahme darf die Lichtshow nicht mitnehmen."
+)
+
+print("OK: Stop der Aufnahme lässt die Lichtshow weiterlaufen")
+
+#
+# Meldet sich das Licht ab und will sonst niemand etwas, ist Schluss.
+#
+recorder.stop_analysis()
+
+assert recorder.stream_active is False, (
+    "Ohne Interessenten muss der Thread wirklich aufhoeren."
+)
+assert recorder._thread is None
+
+print("OK: Geht der letzte Interessent, hört der Thread auf")
+
+
+# ----------------------------------------------------------------
+# 6. Mithoerer bekommen die Bloecke - und koennen nichts kaputtmachen
+# ----------------------------------------------------------------
+
+recorder = Recorder(FakeBackend(channels=2))
+recorder.writer = FakeWriter()
+
+gesehen = []
+
+recorder.add_consumer(lambda block: gesehen.append(len(block)))
+recorder.start_analysis()
+
+time.sleep(0.05)
+
+assert len(gesehen) > 0, "Der Mithoerer hat keine Bloecke bekommen."
+
+print("OK: Ein Mithörer bekommt die gelesenen Blöcke")
+
+#
+# Und jetzt der Fall, der zaehlt: Ein Mithoerer wirft. Die Aufnahme
+# darf davon nichts merken - eine kaputte Lichtshow mitten in einem
+# Konzert waere sonst eine abgebrochene Aufnahme.
+#
+def kaputt(block):
+    raise RuntimeError("absichtlich kaputt")
+
+recorder.add_consumer(kaputt)
+
+recorder.start()
+
+vorher = recorder.writer.write_count
+
+time.sleep(0.05)
+
+assert recorder.recording is True, (
+    "Ein werfender Mithoerer hat die Aufnahme beendet."
+)
+assert recorder.writer.write_count > vorher, (
+    "Nach dem Fehler eines Mithoerers wurde nicht weitergeschrieben."
+)
+assert kaputt not in recorder._verbraucher, (
+    "Ein werfender Mithoerer muss abgemeldet werden, sonst wirft er ewig weiter."
+)
+
+recorder.stop()
+recorder.stop_analysis()
+
+print("OK: Ein werfender Mithörer wird abgemeldet, die Aufnahme läuft weiter")
+
+
 print("Alle Tests erfolgreich.")
