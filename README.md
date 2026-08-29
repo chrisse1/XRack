@@ -87,14 +87,28 @@ the Pi itself.
   now and then - it stays on across restarts, and the log can be
   downloaded straight from the settings dialog.
 
-- **DMX lighting control** (groundwork, not usable yet): the installer
-  sets up OLA (Open Lighting Architecture) as a system service so a
-  USB-to-DMX cable can be driven without XRack having to generate the
-  time-critical DMX signal inside its own process. Nothing is visible
-  in the web interface yet - fixtures, scenes and the music-driven
-  light show follow in later steps. Lighting never affects recording or
-  playback: if the service or the cable is missing, XRack simply runs
-  without light.
+- **DMX lighting control**: drive fixtures through a USB-to-DMX cable,
+  save scenes and recall them with one click. A switch under
+  *Settings → Lighting* shows or hides the whole card - without DMX
+  gear you never see it.
+
+  Fixtures are set up through *types*: a type describes what each
+  channel of a fixture does (red, green, blue, dimmer, pan, tilt,
+  gobo, ...); a fixture is then just type + start address + name.
+  Types with an unambiguous layout ship with XRack (dimmer, RGB,
+  RGB+dimmer, RGBW, 8-segment LED bar); moving heads are entered as
+  your own type, channel by channel from the manual - a guessed
+  preset would be worse than none.
+
+  Brightness works on fixtures without a dimmer channel too: the
+  colours are scaled down while position, gobo and strobe stay
+  untouched. Scenes are stored relative to the fixture, so moving a
+  fixture to a different start address does not invalidate them.
+
+  XRack does not generate the DMX signal itself - OLA (Open Lighting
+  Architecture) does, as its own system service set up by the
+  installer. Lighting never affects recording or playback: if the
+  service or the cable is missing, XRack simply runs without light.
 
 ### Requirements
 
@@ -281,19 +295,42 @@ am Pi nötig.
   an, und die Aufzeichnung lässt sich direkt aus dem
   Einstellungsdialog herunterladen.
 
-- **DMX-Lichtsteuerung** (Grundlage, noch nicht nutzbar): Die
-  Installation richtet OLA (Open Lighting Architecture) als
-  Systemdienst ein, damit ein USB-DMX-Kabel angesteuert werden kann,
-  ohne dass XRack das zeitkritische DMX-Signal im eigenen Prozess
-  erzeugen muss - dasselbe Muster wie beim WLAN (hostapd) und bei
-  Bluetooth (bluetoothd). Im Webinterface ist davon noch nichts zu
-  sehen; Lampen, Szenen und die musikgesteuerte Lichtshow folgen in
-  weiteren Schritten. Licht stört Aufnahme und Wiedergabe nie: Fehlt
-  der Dienst oder das Kabel, läuft XRack einfach ohne Licht.
+- **DMX-Lichtsteuerung**: Lampen über ein USB-DMX-Kabel steuern,
+  Szenen speichern und per Knopfdruck aufrufen. Ein Schalter unter
+  *Einstellungen → Licht* blendet die ganze Karte ein und aus - wer
+  kein DMX hat, sieht sie gar nicht erst.
+
+  Eingerichtet wird über *Gerätevorlagen*: Eine Vorlage beschreibt,
+  welcher Kanal einer Lampe was macht (Rot, Grün, Blau, Dimmer, Pan,
+  Tilt, Gobo, ...); eine Lampe ist dann nur noch Vorlage +
+  Startadresse + Name. Mitgeliefert sind Vorlagen mit eindeutiger
+  Belegung (Dimmer, RGB, RGB+Dimmer, RGBW, 8-Segment-LED-Bar);
+  Bewegtlichter legt man als eigene Vorlage an, Kanal für Kanal aus
+  dem Handbuch - ein geratenes Preset wäre schlimmer als keins.
+
+  Die Helligkeit funktioniert auch bei Lampen ohne Dimmerkanal: Dann
+  werden die Farben heruntergerechnet, während Position, Gobo und
+  Strobe unangetastet bleiben. Szenen speichern relativ zur Lampe -
+  wer eine Lampe später auf eine andere Startadresse zieht, muss
+  seine Szenen nicht neu bauen.
+
+  Das DMX-Signal selbst erzeugt XRack nicht: Das macht OLA (Open
+  Lighting Architecture) als eigener Systemdienst, den die
+  Installation einrichtet. Ein DMX-Bild braucht alle 23
+  Millisekunden eine neue Sendung - im selben Prozess, der Audio
+  aufnimmt und den Webserver bedient, wäre jede Aufnahme eine
+  mögliche Ursache für Flackern. Dasselbe Muster wie beim WLAN
+  (hostapd) und bei Bluetooth (bluetoothd). Licht stört Aufnahme und
+  Wiedergabe nie: Fehlt der Dienst oder das Kabel, läuft XRack
+  einfach ohne Licht.
 
   Angesteuert werden USB-DMX-Kabel mit FTDI-Chip (FT232R und
   Verwandte) - das verbreitetste und günstigste Genre, dazu gehören
-  Enttecs "Open DMX USB" und die üblichen Nachbauten.
+  Enttecs "Open DMX USB" und die üblichen Nachbauten. Nach der
+  Installation muss der Ausgang in OLA einmal dem Universum 1
+  zugeordnet werden (`ola_dev_info`, dann
+  `ola_patch -d <Gerät> -p <Port> -u 1`); OLA merkt sich das über
+  Neustarts hinweg.
 
 ### Voraussetzungen
 

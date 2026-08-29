@@ -4559,3 +4559,642 @@ async function setBluetoothChannelPreference(startChannel) {
     const result = await response.json();
     console.log(result);
 }
+
+
+// ============================================================
+// Licht (DMX)
+// ============================================================
+//
+// Die Karte ist nur da, wenn die Lichtsteuerung in den
+// Einstellungen eingeschaltet wurde. Wer kein DMX hat, soll sie
+// gar nicht erst sehen.
+//
+// Gerechnet wird nichts hier: Welche Werte auf welchen Kanal
+// gehoeren, entscheidet lighting/fixtures.py. Diese Seite schickt
+// nur die Werte je Lampe, relativ zu deren erstem Kanal.
+
+let lightState = null;
+let lightPattern = [];
+
+const LIGHT_COLOR_ROLES = ["red", "green", "blue"];
+
+//
+// Regler feuern bei jeder Mausbewegung. Ungebremst waeren das
+// hunderte Anfragen pro Sekunde an einen Pi, der nebenbei Audio
+// aufnimmt - deshalb wird pro Lampe gesammelt und erst nach einer
+// kurzen Ruhe geschickt.
+//
+const lightSendTimers = {};
+
+function lightRoleLabel(role) {
+    return I18N["light_role_" + role] || role;
+}
+
+function lightFixtureValues(fixtureId, channelCount) {
+    const values = (lightState && lightState.values && lightState.values[fixtureId]) || [];
+    const result = [];
+
+    for (let i = 0; i < channelCount; i++) {
+        result.push(typeof values[i] === "number" ? values[i] : 0);
+    }
+
+    return result;
+}
+
+//
+// Kanaele zu Gruppen zusammenfassen: Sobald sich eine Rolle
+// innerhalb der laufenden Gruppe wiederholt, faengt eine neue an.
+// Aus [rot,gruen,blau] x 8 werden so acht Segmente, aus
+// [dimmer,rot,gruen,blau] eine einzige Gruppe. Ohne das haette die
+// LED-Bar 24 einzelne Regler.
+//
+function groupLightChannels(roles) {
+    const groups = [];
+    let current = [];
+    let seen = new Set();
+
+    roles.forEach((role, index) => {
+        if (seen.has(role)) {
+            groups.push(current);
+            current = [];
+            seen = new Set();
+        }
+        current.push(index);
+        seen.add(role);
+    });
+
+    if (current.length > 0) groups.push(current);
+
+    return groups;
+}
+
+function rgbToHex(r, g, b) {
+    const teil = (wert) => Math.max(0, Math.min(255, wert | 0)).toString(16).padStart(2, "0");
+    return "#" + teil(r) + teil(g) + teil(b);
+}
+
+function hexToRgb(hex) {
+    return [
+        parseInt(hex.slice(1, 3), 16),
+        parseInt(hex.slice(3, 5), 16),
+        parseInt(hex.slice(5, 7), 16)
+    ];
+}
+
+function queueLightValues(fixtureId, values) {
+    if (!lightState.values) lightState.values = {};
+    lightState.values[fixtureId] = values;
+
+    if (lightSendTimers[fixtureId]) clearTimeout(lightSendTimers[fixtureId]);
+
+    lightSendTimers[fixtureId] = setTimeout(() => {
+        delete lightSendTimers[fixtureId];
+        sendLightValues(fixtureId, values);
+    }, 80);
+}
+
+async function sendLightValues(fixtureId, values) {
+    const response = await fetch("/api/lighting/values", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: fixtureId, values })
+    });
+
+    const result = await response.json();
+
+    if (!result.success) showLightWarning(result.message);
+}
+
+function showLightWarning(text) {
+    const box = document.getElementById("light-warning");
+    if (!box) return;
+
+    if (!text) {
+        box.classList.add("d-none");
+        box.textContent = "";
+        return;
+    }
+
+    box.textContent = text;
+    box.classList.remove("d-none");
+}
+
+function renderLightFixtures(stand) {
+    const container = document.getElementById("light-fixtures");
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    if (!stand.fixtures || stand.fixtures.length === 0) {
+        const leer = document.createElement("div");
+        leer.className = "text-muted small";
+        leer.textContent = I18N.light_no_fixtures;
+        container.appendChild(leer);
+        return;
+    }
+
+    const vorlagen = {};
+    (stand.templates || []).forEach((v) => { vorlagen[v.id] = v; });
+
+    for (const lampe of stand.fixtures) {
+        const vorlage = vorlagen[lampe.template];
+        if (!vorlage) continue;
+
+        const werte = lightFixtureValues(lampe.id, vorlage.channels.length);
+
+        const zeile = document.createElement("div");
+        zeile.className = "mb-3";
+
+        const kopf = document.createElement("div");
+        kopf.className = "d-flex flex-wrap align-items-center gap-2 mb-1";
+
+        const name = document.createElement("strong");
+        name.className = "small";
+        name.textContent = lampe.name;
+        kopf.appendChild(name);
+
+        const adresse = document.createElement("span");
+        adresse.className = "text-body-secondary small";
+        adresse.textContent = "DMX " + lampe.address;
+        kopf.appendChild(adresse);
+
+        zeile.appendChild(kopf);
+
+        // Helligkeit fuer die ganze Lampe - funktioniert auch bei
+        // Geraeten ohne Dimmerkanal (dann rechnet der Server die
+        // Farben herunter).
+        const dimmZeile = document.createElement("div");
+        dimmZeile.className = "d-flex align-items-center gap-2 mb-2";
+
+        const dimmLabel = document.createElement("span");
+        dimmLabel.className = "text-body-secondary small flex-shrink-0";
+        dimmLabel.textContent = I18N.light_brightness;
+        dimmZeile.appendChild(dimmLabel);
+
+        const dimmer = document.createElement("input");
+        dimmer.type = "range";
+        dimmer.className = "form-range";
+        dimmer.min = 0;
+        dimmer.max = 255;
+        dimmer.value = 255;
+        dimmer.addEventListener("change", () => setLightBrightness(lampe.id, parseInt(dimmer.value, 10)));
+        dimmZeile.appendChild(dimmer);
+
+        zeile.appendChild(dimmZeile);
+
+        const gruppen = groupLightChannels(vorlage.channels);
+
+        const raster = document.createElement("div");
+        raster.className = "d-flex flex-wrap gap-2";
+
+        gruppen.forEach((gruppe, nummer) => {
+            const rollen = gruppe.map((i) => vorlage.channels[i]);
+            const istFarbe = LIGHT_COLOR_ROLES.every((r) => rollen.includes(r));
+
+            const kasten = document.createElement("div");
+            kasten.className = "border rounded p-2";
+            kasten.style.minWidth = "6rem";
+
+            if (gruppen.length > 1) {
+                const beschriftung = document.createElement("div");
+                beschriftung.className = "text-body-secondary";
+                beschriftung.style.fontSize = "0.75rem";
+                beschriftung.textContent = I18N.light_segment.replace("{n}", nummer + 1);
+                kasten.appendChild(beschriftung);
+            }
+
+            if (istFarbe) {
+                const rot = gruppe[rollen.indexOf("red")];
+                const gruen = gruppe[rollen.indexOf("green")];
+                const blau = gruppe[rollen.indexOf("blue")];
+
+                const feld = document.createElement("input");
+                feld.type = "color";
+                feld.className = "form-control form-control-color";
+                feld.value = rgbToHex(werte[rot], werte[gruen], werte[blau]);
+
+                feld.addEventListener("input", () => {
+                    const [r, g, b] = hexToRgb(feld.value);
+                    werte[rot] = r;
+                    werte[gruen] = g;
+                    werte[blau] = b;
+                    queueLightValues(lampe.id, werte);
+                });
+
+                kasten.appendChild(feld);
+            }
+
+            // Alles, was keine Farbe ist, bekommt einen eigenen Regler -
+            // Pan, Tilt, Gobo, Strobe.
+            gruppe.forEach((index) => {
+                const rolle = vorlage.channels[index];
+                if (istFarbe && LIGHT_COLOR_ROLES.includes(rolle)) return;
+
+                const beschriftung = document.createElement("div");
+                beschriftung.className = "text-body-secondary";
+                beschriftung.style.fontSize = "0.75rem";
+                beschriftung.textContent = lightRoleLabel(rolle);
+                kasten.appendChild(beschriftung);
+
+                const regler = document.createElement("input");
+                regler.type = "range";
+                regler.className = "form-range";
+                regler.min = 0;
+                regler.max = 255;
+                regler.value = werte[index];
+
+                regler.addEventListener("input", () => {
+                    werte[index] = parseInt(regler.value, 10);
+                    queueLightValues(lampe.id, werte);
+                });
+
+                kasten.appendChild(regler);
+            });
+
+            raster.appendChild(kasten);
+        });
+
+        zeile.appendChild(raster);
+        container.appendChild(zeile);
+    }
+}
+
+function renderLightScenes(stand) {
+    const container = document.getElementById("light-scenes");
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    if (!stand.scenes || stand.scenes.length === 0) {
+        const leer = document.createElement("div");
+        leer.className = "text-muted small";
+        leer.textContent = I18N.light_no_scenes;
+        container.appendChild(leer);
+        return;
+    }
+
+    const raster = document.createElement("div");
+    raster.className = "d-flex flex-wrap gap-2";
+
+    for (const szene of stand.scenes) {
+        const gruppe = document.createElement("div");
+        gruppe.className = "btn-group btn-group-sm";
+
+        const knopf = document.createElement("button");
+        knopf.className = "btn btn-outline-primary";
+        knopf.textContent = szene.name;
+        knopf.addEventListener("click", () => activateLightScene(szene.id));
+        gruppe.appendChild(knopf);
+
+        const weg = document.createElement("button");
+        weg.className = "btn btn-outline-danger";
+        weg.innerHTML = '<i class="bi bi-trash"></i>';
+        weg.addEventListener("click", () => deleteLightScene(szene.id, szene.name));
+        gruppe.appendChild(weg);
+
+        raster.appendChild(gruppe);
+    }
+
+    container.appendChild(raster);
+}
+
+function renderLighting(stand) {
+    lightState = stand;
+
+    const karte = document.getElementById("light-card-wrapper");
+    if (karte) karte.classList.toggle("d-none", !stand.enabled);
+
+    const schalter = document.getElementById("settings-light-toggle");
+    if (schalter) schalter.checked = !!stand.enabled;
+
+    const zustand = document.getElementById("settings-light-state");
+
+    if (zustand) {
+        const dmx = stand.dmx || {};
+        const teile = [];
+
+        if (!dmx.service_running) teile.push(I18N.light_service_missing);
+        else if (!dmx.adapter_present) teile.push(I18N.light_adapter_missing);
+
+        zustand.textContent = teile.join(" ");
+    }
+
+    if (!stand.enabled) return;
+
+    const warnungen = [];
+    const dmx = stand.dmx || {};
+
+    if (!dmx.service_running) warnungen.push(I18N.light_service_missing);
+    else if (!dmx.adapter_present) warnungen.push(I18N.light_adapter_missing);
+
+    if (stand.overlaps && stand.overlaps.length > 0) {
+        warnungen.push(I18N.light_overlap_warning);
+    }
+
+    showLightWarning(warnungen.join(" "));
+
+    renderLightFixtures(stand);
+    renderLightScenes(stand);
+    renderLightSetup(stand);
+}
+
+async function refreshLighting() {
+    try {
+        const response = await fetch("/api/lighting/status");
+        renderLighting(await response.json());
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+async function lightRequest(url, koerper) {
+    const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(koerper || {})
+    });
+
+    const result = await response.json();
+
+    if (!result.success && result.message) {
+        alert(result.message);
+    }
+
+    return result.success;
+}
+
+async function setLightBrightness(fixtureId, brightness) {
+    await lightRequest("/api/lighting/brightness", { id: fixtureId, brightness });
+    await refreshLighting();
+}
+
+async function activateLightScene(sceneId) {
+    await lightRequest("/api/lighting/scene/activate", { id: sceneId });
+    await refreshLighting();
+}
+
+async function deleteLightScene(sceneId, name) {
+    if (!confirm(I18N.confirm_light_scene_delete.replace("{name}", name))) return;
+
+    await lightRequest("/api/lighting/scene/delete", { id: sceneId });
+    await refreshLighting();
+}
+
+async function saveLightScene() {
+    const name = prompt(I18N.light_scene_name_prompt, "");
+    if (!name) return;
+
+    await lightRequest("/api/lighting/scene", { name, id: "" });
+    await refreshLighting();
+}
+
+async function lightBlackout() {
+    await lightRequest("/api/lighting/blackout", {});
+    await refreshLighting();
+}
+
+// ------------------------------------------------------------
+// Einrichten
+// ------------------------------------------------------------
+
+function renderLightSetup(stand) {
+    const lampen = document.getElementById("light-fixture-list");
+    const vorlagenListe = document.getElementById("light-template-list");
+    const auswahl = document.getElementById("light-fixture-template");
+
+    const vorlagen = {};
+    (stand.templates || []).forEach((v) => { vorlagen[v.id] = v; });
+
+    if (auswahl) {
+        const gemerkt = auswahl.value;
+        auswahl.innerHTML = "";
+
+        for (const vorlage of stand.templates || []) {
+            const eintrag = document.createElement("option");
+            eintrag.value = vorlage.id;
+            eintrag.textContent = vorlage.name;
+            auswahl.appendChild(eintrag);
+        }
+
+        if (gemerkt) auswahl.value = gemerkt;
+    }
+
+    if (lampen) {
+        lampen.innerHTML = "";
+
+        for (const lampe of stand.fixtures || []) {
+            const vorlage = vorlagen[lampe.template];
+
+            const eintrag = document.createElement("div");
+            eintrag.className = "list-group-item d-flex justify-content-between align-items-center gap-2";
+
+            const info = document.createElement("div");
+            info.className = "text-break small";
+
+            const name = document.createElement("div");
+            name.className = "fw-semibold";
+            name.textContent = lampe.name;
+            info.appendChild(name);
+
+            const rest = document.createElement("div");
+            rest.className = "text-body-secondary";
+            rest.textContent =
+                (vorlage ? vorlage.name : lampe.template) +
+                " · DMX " + lampe.address +
+                (vorlage ? " · " + I18N.light_channels_count.replace("{n}", vorlage.channels.length) : "");
+            info.appendChild(rest);
+
+            eintrag.appendChild(info);
+
+            const weg = document.createElement("button");
+            weg.className = "btn btn-outline-danger btn-sm flex-shrink-0";
+            weg.innerHTML = '<i class="bi bi-trash"></i>';
+            weg.addEventListener("click", () => deleteLightFixture(lampe.id, lampe.name));
+            eintrag.appendChild(weg);
+
+            lampen.appendChild(eintrag);
+        }
+    }
+
+    if (vorlagenListe) {
+        vorlagenListe.innerHTML = "";
+
+        for (const vorlage of stand.templates || []) {
+            const eintrag = document.createElement("div");
+            eintrag.className = "list-group-item d-flex justify-content-between align-items-center gap-2";
+
+            const info = document.createElement("div");
+            info.className = "text-break small";
+
+            const name = document.createElement("div");
+            name.className = "fw-semibold";
+            name.textContent = vorlage.name;
+            info.appendChild(name);
+
+            const rest = document.createElement("div");
+            rest.className = "text-body-secondary";
+            rest.textContent =
+                I18N.light_channels_count.replace("{n}", vorlage.channels.length) +
+                (vorlage.builtin ? " · " + I18N.light_template_builtin : "");
+            info.appendChild(rest);
+
+            eintrag.appendChild(info);
+
+            if (!vorlage.builtin) {
+                const weg = document.createElement("button");
+                weg.className = "btn btn-outline-danger btn-sm flex-shrink-0";
+                weg.innerHTML = '<i class="bi bi-trash"></i>';
+                weg.addEventListener("click", () => deleteLightTemplate(vorlage.id, vorlage.name));
+                eintrag.appendChild(weg);
+            }
+
+            vorlagenListe.appendChild(eintrag);
+        }
+    }
+}
+
+function renderLightPattern() {
+    const container = document.getElementById("light-template-pattern");
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    lightPattern.forEach((rolle, index) => {
+        const zeile = document.createElement("div");
+        zeile.className = "input-group input-group-sm mb-1";
+
+        const nummer = document.createElement("span");
+        nummer.className = "input-group-text";
+        nummer.textContent = index + 1;
+        zeile.appendChild(nummer);
+
+        const auswahl = document.createElement("select");
+        auswahl.className = "form-select";
+
+        for (const moeglich of (lightState && lightState.roles) || []) {
+            const eintrag = document.createElement("option");
+            eintrag.value = moeglich;
+            eintrag.textContent = lightRoleLabel(moeglich);
+            auswahl.appendChild(eintrag);
+        }
+
+        auswahl.value = rolle;
+        auswahl.addEventListener("change", () => { lightPattern[index] = auswahl.value; });
+        zeile.appendChild(auswahl);
+
+        const weg = document.createElement("button");
+        weg.className = "btn btn-outline-danger";
+        weg.innerHTML = '<i class="bi bi-x-lg"></i>';
+        weg.addEventListener("click", () => {
+            lightPattern.splice(index, 1);
+            renderLightPattern();
+        });
+        zeile.appendChild(weg);
+
+        container.appendChild(zeile);
+    });
+}
+
+async function addLightFixture() {
+    const name = document.getElementById("light-fixture-name");
+    const vorlage = document.getElementById("light-fixture-template");
+    const adresse = document.getElementById("light-fixture-address");
+
+    const erfolg = await lightRequest("/api/lighting/fixture", {
+        id: "",
+        name: name.value,
+        template: vorlage.value,
+        address: parseInt(adresse.value, 10) || 0
+    });
+
+    if (erfolg) name.value = "";
+
+    await refreshLighting();
+}
+
+async function deleteLightFixture(fixtureId, name) {
+    if (!confirm(I18N.confirm_light_fixture_delete.replace("{name}", name))) return;
+
+    await lightRequest("/api/lighting/fixture/delete", { id: fixtureId });
+    await refreshLighting();
+}
+
+async function addLightTemplate() {
+    const name = document.getElementById("light-template-name");
+    const wiederholung = document.getElementById("light-template-repeat");
+
+    const anzahl = Math.max(1, parseInt(wiederholung.value, 10) || 1);
+
+    let kanaele = [];
+    for (let i = 0; i < anzahl; i++) kanaele = kanaele.concat(lightPattern);
+
+    const erfolg = await lightRequest("/api/lighting/template", {
+        id: "",
+        name: name.value,
+        channels: kanaele
+    });
+
+    if (erfolg) {
+        name.value = "";
+        wiederholung.value = 1;
+        lightPattern = [];
+        renderLightPattern();
+    }
+
+    await refreshLighting();
+}
+
+async function deleteLightTemplate(templateId, name) {
+    if (!confirm(I18N.confirm_light_template_delete.replace("{name}", name))) return;
+
+    await lightRequest("/api/lighting/template/delete", { id: templateId });
+    await refreshLighting();
+}
+
+async function toggleLighting(event) {
+    const schalter = event.target;
+
+    await lightRequest("/api/lighting/enabled", { enabled: schalter.checked });
+    await refreshLighting();
+}
+
+(function verdrahteLicht() {
+    const knopf = (kennung, handler) => {
+        const element = document.getElementById(kennung);
+        if (element) element.addEventListener("click", handler);
+    };
+
+    knopf("btn-light-blackout", lightBlackout);
+    knopf("btn-light-scene-save", saveLightScene);
+    knopf("btn-light-fixture-add", addLightFixture);
+    knopf("btn-light-template-add", addLightTemplate);
+
+    knopf("btn-light-template-channel", () => {
+        lightPattern.push("red");
+        renderLightPattern();
+    });
+
+    knopf("btn-light-setup", () => {
+        bootstrap.Modal.getOrCreateInstance(
+            document.getElementById("lightSetupModal")
+        ).show();
+    });
+
+    const schalter = document.getElementById("settings-light-toggle");
+    if (schalter) schalter.addEventListener("change", toggleLighting);
+
+    const einrichten = document.getElementById("lightSetupModal");
+    if (einrichten) {
+        einrichten.addEventListener("show.bs.modal", () => {
+            refreshLighting();
+            renderLightPattern();
+        });
+    }
+
+    const einstellungen = document.getElementById("settingsModal");
+    if (einstellungen) {
+        einstellungen.addEventListener("show.bs.modal", refreshLighting);
+    }
+
+    refreshLighting();
+})();

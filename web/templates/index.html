@@ -460,6 +460,73 @@
 
     </div>
 
+    <!-- Licht ------------------------------------------------------->
+
+    {#
+        Die Karte ist erst da, wenn die Lichtsteuerung in den
+        Einstellungen eingeschaltet wurde. Wer kein DMX hat - also die
+        meisten - soll sie gar nicht erst sehen.
+    #}
+
+    <div class="row g-4 mt-0 d-none" id="light-card-wrapper">
+
+        <div class="col-12">
+
+            {% set title %}
+            <i class="bi bi-lightbulb me-2"></i>{{ t.light_title }}
+            {% endset %}
+
+            {% set header_right %}
+            <button
+                id="btn-light-blackout"
+                class="btn btn-outline-secondary btn-sm me-1"
+                title="{{ t.light_blackout }}"
+            >
+                <i class="bi bi-lightbulb-off"></i>
+            </button>
+
+            <button
+                id="btn-light-setup"
+                class="btn btn-outline-secondary btn-sm"
+                title="{{ t.light_setup }}"
+            >
+                <i class="bi bi-sliders2"></i>
+            </button>
+            {% endset %}
+
+            {% set body %}
+            <div
+                id="light-warning"
+                class="alert alert-warning py-2 px-3 small d-none"
+            ></div>
+
+            <div id="light-fixtures"></div>
+
+            <hr class="my-3">
+
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+
+                <strong class="small">{{ t.light_scenes_title }}</strong>
+
+                <button
+                    id="btn-light-scene-save"
+                    class="btn btn-outline-primary btn-sm"
+                >
+                    <i class="bi bi-bookmark-plus me-1"></i>
+                    {{ t.light_scene_save }}
+                </button>
+
+            </div>
+
+            <div id="light-scenes"></div>
+            {% endset %}
+
+            {% include "components/status_card.html" %}
+
+        </div>
+
+    </div>
+
     <!-- System ------------------------------------------------------>
 
     {% include "components/footer_status.html" %}

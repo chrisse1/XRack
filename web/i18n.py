@@ -420,6 +420,82 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "alert_bluetooth_pairing_started": (
             "Koppelbar für 2 Minuten - jetzt am Handy/Tablet verbinden."
         ),
+
+        # Licht (DMX)
+        "light_title": "Licht",
+        "light_settings_group": "Licht",
+        "light_enable": "Lichtsteuerung verwenden",
+        "light_enable_hint": (
+            "Steuert DMX-Lampen über ein USB-DMX-Kabel. Ohne Kabel "
+            "nicht nötig."
+        ),
+        "light_setup": "Einrichten",
+        "light_blackout": "Alles aus",
+        "light_no_fixtures": (
+            "Noch keine Lampen eingerichtet - über \"Einrichten\" anlegen."
+        ),
+        "light_service_missing": (
+            "Der Lichtdienst antwortet nicht. Läuft olad?"
+        ),
+        "light_adapter_missing": "Kein DMX-Kabel erkannt.",
+        "light_overlap_warning": (
+            "Achtung: Zwei Lampen belegen dieselben Kanäle. Das ist "
+            "erlaubt, aber selten gewollt."
+        ),
+        "light_brightness": "Helligkeit",
+        "light_segment": "Segment {n}",
+
+        # Licht: Einrichten
+        "light_setup_title": "Licht einrichten",
+        "light_fixtures_title": "Lampen",
+        "light_templates_title": "Gerätevorlagen",
+        "light_name": "Name",
+        "light_template": "Vorlage",
+        "light_address": "Startadresse",
+        "light_channels_count": "{n} Kanäle",
+        "light_add_fixture": "Lampe hinzufügen",
+        "light_add_template": "Vorlage anlegen",
+        "light_template_name": "Name der Vorlage",
+        "light_template_pattern": "Kanäle (Muster)",
+        "light_template_repeat": "Wiederholungen",
+        "light_template_repeat_hint": (
+            "Für Geräte mit mehreren gleichen Segmenten: Muster einmal "
+            "angeben, Anzahl der Segmente eintragen."
+        ),
+        "light_template_add_channel": "Kanal",
+        "light_template_builtin": "mitgeliefert",
+        "light_save": "Speichern",
+        "confirm_light_fixture_delete": "Lampe \"{name}\" wirklich löschen?",
+        "confirm_light_template_delete": "Vorlage \"{name}\" wirklich löschen?",
+        "confirm_light_scene_delete": "Szene \"{name}\" wirklich löschen?",
+
+        # Licht: Szenen
+        "light_scenes_title": "Szenen",
+        "light_no_scenes": (
+            "Noch keine Szene gespeichert. Lampen einstellen, dann "
+            "speichern."
+        ),
+        "light_scene_save": "Aktuellen Stand speichern",
+        "light_scene_name_prompt": "Name der Szene:",
+
+        # Licht: Kanalrollen
+        "light_role_dimmer": "Dimmer",
+        "light_role_red": "Rot",
+        "light_role_green": "Grün",
+        "light_role_blue": "Blau",
+        "light_role_white": "Weiß",
+        "light_role_amber": "Amber",
+        "light_role_uv": "UV",
+        "light_role_pan": "Pan (drehen)",
+        "light_role_pan_fine": "Pan fein",
+        "light_role_tilt": "Tilt (neigen)",
+        "light_role_tilt_fine": "Tilt fein",
+        "light_role_gobo": "Gobo",
+        "light_role_gobo_rotation": "Gobo-Drehung",
+        "light_role_color_wheel": "Farbrad",
+        "light_role_strobe": "Strobe",
+        "light_role_shutter": "Shutter",
+        "light_role_generic": "Sonstiger Kanal",
     },
     "en": {
         # Audio interface
@@ -815,6 +891,81 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "alert_bluetooth_pairing_started": (
             "Pairing mode for 2 minutes - connect from your phone/tablet now."
         ),
+
+        # Lighting (DMX)
+        "light_title": "Lighting",
+        "light_settings_group": "Lighting",
+        "light_enable": "Use lighting control",
+        "light_enable_hint": (
+            "Controls DMX fixtures through a USB-to-DMX cable. Not "
+            "needed without one."
+        ),
+        "light_setup": "Set up",
+        "light_blackout": "All off",
+        "light_no_fixtures": (
+            "No fixtures set up yet - add them under \"Set up\"."
+        ),
+        "light_service_missing": (
+            "The lighting service is not responding. Is olad running?"
+        ),
+        "light_adapter_missing": "No DMX cable detected.",
+        "light_overlap_warning": (
+            "Careful: two fixtures use the same channels. That is "
+            "allowed, but rarely intended."
+        ),
+        "light_brightness": "Brightness",
+        "light_segment": "Segment {n}",
+
+        # Lighting: setup
+        "light_setup_title": "Set up lighting",
+        "light_fixtures_title": "Fixtures",
+        "light_templates_title": "Fixture types",
+        "light_name": "Name",
+        "light_template": "Type",
+        "light_address": "Start address",
+        "light_channels_count": "{n} channels",
+        "light_add_fixture": "Add fixture",
+        "light_add_template": "Add type",
+        "light_template_name": "Type name",
+        "light_template_pattern": "Channels (pattern)",
+        "light_template_repeat": "Repeats",
+        "light_template_repeat_hint": (
+            "For devices with several identical segments: give the "
+            "pattern once, enter the number of segments."
+        ),
+        "light_template_add_channel": "Channel",
+        "light_template_builtin": "built in",
+        "light_save": "Save",
+        "confirm_light_fixture_delete": "Really delete fixture \"{name}\"?",
+        "confirm_light_template_delete": "Really delete type \"{name}\"?",
+        "confirm_light_scene_delete": "Really delete scene \"{name}\"?",
+
+        # Lighting: scenes
+        "light_scenes_title": "Scenes",
+        "light_no_scenes": (
+            "No scene saved yet. Set the fixtures, then save."
+        ),
+        "light_scene_save": "Save current state",
+        "light_scene_name_prompt": "Scene name:",
+
+        # Lighting: channel roles
+        "light_role_dimmer": "Dimmer",
+        "light_role_red": "Red",
+        "light_role_green": "Green",
+        "light_role_blue": "Blue",
+        "light_role_white": "White",
+        "light_role_amber": "Amber",
+        "light_role_uv": "UV",
+        "light_role_pan": "Pan",
+        "light_role_pan_fine": "Pan fine",
+        "light_role_tilt": "Tilt",
+        "light_role_tilt_fine": "Tilt fine",
+        "light_role_gobo": "Gobo",
+        "light_role_gobo_rotation": "Gobo rotation",
+        "light_role_color_wheel": "Colour wheel",
+        "light_role_strobe": "Strobe",
+        "light_role_shutter": "Shutter",
+        "light_role_generic": "Other channel",
     },
 }
 

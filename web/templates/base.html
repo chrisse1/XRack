@@ -988,6 +988,45 @@
                                 class="accordion-button collapsed"
                                 type="button"
                                 data-bs-toggle="collapse"
+                                data-bs-target="#settings-gruppe-licht"
+                            >
+                                {{ t.light_settings_group }}
+                            </button>
+                        </h2>
+                        <div
+                            id="settings-gruppe-licht"
+                            class="accordion-collapse collapse"
+                            data-bs-parent="#settings-accordion"
+                        >
+                            <div class="accordion-body">
+
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input
+                                    type="checkbox"
+                                    role="switch"
+                                    id="settings-light-toggle"
+                                    class="form-check-input"
+                                >
+                                <label class="form-check-label" for="settings-light-toggle">
+                                    {{ t.light_enable }}
+                                </label>
+                            </div>
+                            <small class="text-body-secondary">{{ t.light_enable_hint }}</small>
+                        </div>
+
+                        <div id="settings-light-state" class="small text-body-secondary"></div>
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button
+                                class="accordion-button collapsed"
+                                type="button"
+                                data-bs-toggle="collapse"
                                 data-bs-target="#settings-gruppe-wartung"
                             >
                                 {{ t.settings_group_maintenance }}
@@ -1183,6 +1222,165 @@
                   class="list-group"
               >
               </div>
+
+            </div>
+
+            <div class="modal-footer">
+                <button
+                    class="btn btn-secondary"
+                    data-bs-dismiss="modal"
+                >
+                    {{ t.btn_close }}
+                </button>
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
+<div
+    class="modal fade"
+    id="lightSetupModal"
+    tabindex="-1"
+    aria-hidden="true"
+>
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+
+        <div class="modal-content">
+
+            <div class="modal-header">
+
+                <h5 class="modal-title">
+                    {{ t.light_setup_title }}
+                </h5>
+
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="modal"
+                ></button>
+
+            </div>
+
+            <div class="modal-body">
+
+                <h6 class="fw-semibold">{{ t.light_fixtures_title }}</h6>
+
+                <div id="light-fixture-list" class="list-group mb-3"></div>
+
+                <div class="row g-2 align-items-end mb-4">
+
+                    <div class="col-12 col-sm-4">
+                        <label class="form-label small mb-1" for="light-fixture-name">
+                            {{ t.light_name }}
+                        </label>
+                        <input
+                            id="light-fixture-name"
+                            type="text"
+                            class="form-control form-control-sm"
+                            maxlength="40"
+                        >
+                    </div>
+
+                    <div class="col-12 col-sm-4">
+                        <label class="form-label small mb-1" for="light-fixture-template">
+                            {{ t.light_template }}
+                        </label>
+                        <select
+                            id="light-fixture-template"
+                            class="form-select form-select-sm"
+                        ></select>
+                    </div>
+
+                    <div class="col-8 col-sm-2">
+                        <label class="form-label small mb-1" for="light-fixture-address">
+                            {{ t.light_address }}
+                        </label>
+                        <input
+                            id="light-fixture-address"
+                            type="number"
+                            class="form-control form-control-sm"
+                            min="1"
+                            max="512"
+                            value="1"
+                        >
+                    </div>
+
+                    <div class="col-4 col-sm-2 d-grid">
+                        <button
+                            id="btn-light-fixture-add"
+                            class="btn btn-primary btn-sm"
+                        >
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
+                    </div>
+
+                </div>
+
+                <h6 class="fw-semibold">{{ t.light_templates_title }}</h6>
+
+                <div id="light-template-list" class="list-group mb-3"></div>
+
+                {#
+                    Bewusst kein mitgeliefertes Bewegtlicht: Ein
+                    geratenes Preset waere schlimmer als keins. Wer
+                    eines hat, baut hier die Kanalliste aus dem
+                    Handbuch nach - einmal, danach ist sie richtig.
+                #}
+                <div class="row g-2 align-items-end mb-2">
+
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label small mb-1" for="light-template-name">
+                            {{ t.light_template_name }}
+                        </label>
+                        <input
+                            id="light-template-name"
+                            type="text"
+                            class="form-control form-control-sm"
+                            maxlength="40"
+                        >
+                    </div>
+
+                    <div class="col-8 col-sm-4">
+                        <label class="form-label small mb-1" for="light-template-repeat">
+                            {{ t.light_template_repeat }}
+                        </label>
+                        <input
+                            id="light-template-repeat"
+                            type="number"
+                            class="form-control form-control-sm"
+                            min="1"
+                            max="170"
+                            value="1"
+                        >
+                    </div>
+
+                    <div class="col-4 col-sm-2 d-grid">
+                        <button
+                            id="btn-light-template-add"
+                            class="btn btn-primary btn-sm"
+                        >
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
+                    </div>
+
+                </div>
+
+                <label class="form-label small mb-1">
+                    {{ t.light_template_pattern }}
+                </label>
+
+                <div id="light-template-pattern" class="mb-2"></div>
+
+                <button
+                    id="btn-light-template-channel"
+                    class="btn btn-outline-secondary btn-sm"
+                >
+                    <i class="bi bi-plus-lg me-1"></i>{{ t.light_template_add_channel }}
+                </button>
+
+                <div class="form-text">{{ t.light_template_repeat_hint }}</div>
 
             </div>
 
