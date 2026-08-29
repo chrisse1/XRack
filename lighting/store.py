@@ -484,10 +484,28 @@ class LightingStore:
         vorlagen = self.vorlagen()
         lampen = self.lampen()
 
+        #
+        # Zu jeder Lampe auch den letzten belegten Kanal. Ausrechnen
+        # koennte die Oberflaeche das selbst, aber dann stuende die
+        # Regel an zwei Stellen - und die Ueberschneidungspruefung
+        # weiter unten benutzt schon dieselbe Funktion. Nebenbei
+        # nimmt es dem Nutzer das Kopfrechnen ab, wenn er die
+        # naechste Lampe adressieren will.
+        #
+        mit_bereich = []
+
+        for lampe in lampen:
+
+            if lampe.get("template") in vorlagen:
+                _, ende = fixtures.adressbereich(lampe, vorlagen)
+                mit_bereich.append({**lampe, "last_address": ende})
+            else:
+                mit_bereich.append(dict(lampe))
+
         return {
             "enabled": self.enabled,
             "templates": list(vorlagen.values()),
-            "fixtures": lampen,
+            "fixtures": mit_bereich,
             "scenes": self.szenen(),
             "roles": list(fixtures.ROLLEN),
             "overlaps": fixtures.ueberschneidungen(lampen, vorlagen),

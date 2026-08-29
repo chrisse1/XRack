@@ -352,16 +352,33 @@ class LightEngine:
             if vorlage is None:
                 continue
 
-            ergebnis[lampe["id"]] = self._werte(vorlage, baender, farben)
+            ergebnis[lampe["id"]] = self._werte(
+                vorlage, baender, farben,
+                self.application.light_values.get(lampe["id"]),
+            )
 
         return ergebnis
 
-    def _werte(self, vorlage: dict, baender: dict,
-               farben: dict) -> list[int]:
+    def _werte(self, vorlage: dict, baender: dict, farben: dict,
+               vorher: list[int] | None = None) -> list[int]:
         """Die Kanalwerte einer einzelnen Lampe."""
 
         kanaele = vorlage["channels"]
-        werte = [0] * len(kanaele)
+
+        #
+        # Ausgangspunkt ist, was gerade an der Lampe steht - nicht
+        # Null.
+        #
+        # Die Show faehrt nur Farbe und Bewegung. Strobe, Shutter,
+        # Drehung, Laser, Gobo und die Sonstigen laesst sie mit
+        # Absicht in Ruhe. "In Ruhe lassen" hiess aber bisher, sie
+        # bei jedem Bild auf 0 zu schreiben - und da alle 20 ms ein
+        # Bild kommt, war jeder von Hand gestellte Regler eine
+        # Zwanzigstelsekunde spaeter wieder aus. Von aussen sah das
+        # aus, als taeten diese Regler gar nichts.
+        #
+        werte = [fixtures.begrenzen(wert) for wert in (vorher or [])[:len(kanaele)]]
+        werte += [0] * (len(kanaele) - len(werte))
 
         gruppen = self._gruppen(kanaele)
 

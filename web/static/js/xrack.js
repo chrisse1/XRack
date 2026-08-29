@@ -4706,6 +4706,22 @@ function showLightWarning(text) {
     box.classList.remove("d-none");
 }
 
+//
+// "DMX 1-29" fuer eine Lampe. Der letzte Kanal kommt vom Server
+// (siehe LightingStore.uebersicht); fehlt er - etwa weil zu der
+// Lampe die Vorlage fehlt -, steht nur die Startadresse da.
+//
+function lightAddressLabel(lampe) {
+    if (typeof lampe.last_address !== "number" ||
+        lampe.last_address === lampe.address) {
+        return "DMX " + lampe.address;
+    }
+
+    return I18N.light_address_range
+        .replace("{von}", lampe.address)
+        .replace("{bis}", lampe.last_address);
+}
+
 function renderLightFixtures(stand) {
     const container = document.getElementById("light-fixtures");
     if (!container) return;
@@ -4742,7 +4758,7 @@ function renderLightFixtures(stand) {
 
         const adresse = document.createElement("span");
         adresse.className = "text-body-secondary small";
-        adresse.textContent = "DMX " + lampe.address;
+        adresse.textContent = lightAddressLabel(lampe);
         kopf.appendChild(adresse);
 
         zeile.appendChild(kopf);
@@ -5017,109 +5033,29 @@ async function lightBlackout() {
 // Einrichten
 // ------------------------------------------------------------
 
-// Die zuletzt gewaehlte Vorlage in der Verwaltung. Ohne das springt
-// die Auswahl bei jedem Statusabruf zurueck auf den ersten Eintrag,
-// waehrend man noch liest, was drinsteht.
-let lightTemplatePick = "";
+function renderLightSetup(stand) {
+    const lampen = document.getElementById("light-fixture-list");
+    const vorlagenListe = document.getElementById("light-template-list");
+    const auswahl = document.getElementById("light-fixture-template");
 
-// Die zuletzt bekannten Vorlagen. Damit kommt die Auskunftszeile
-// unter der Auswahl ohne einen Abruf beim Server aus - sie zeigt
-// nur, was ohnehin schon da ist.
-let lightTemplates = [];
+    const vorlagen = {};
+    (stand.templates || []).forEach((v) => { vorlagen[v.id] = v; });
 
-//
-// Die Zeile unter der Auswahl und den Loeschknopf auf den Stand der
-// gewaehlten Vorlage bringen.
-//
-function renderLightTemplateInfo() {
-    const auskunft = document.getElementById("light-template-info");
-    const loeschen = document.getElementById("btn-light-template-delete");
+    if (auswahl) {
+        const gemerkt = auswahl.value;
+        auswahl.innerHTML = "";
 
-    const gewaehlt = lightTemplates.find((v) => v.id === lightTemplatePick);
-
-    if (auskunft) {
-        auskunft.textContent = gewaehlt
-            ? I18N.light_channels_count.replace("{n}", gewaehlt.channels.length) +
-              (gewaehlt.builtin ? " · " + I18N.light_template_builtin_hint : "")
-            : "";
-    }
-
-    //
-    // Mitgelieferte Vorlagen kann man nicht loeschen. Der Knopf wird
-    // deshalb gesperrt statt versteckt: Ein Knopf, der kommt und
-    // geht, laesst einen zweifeln, ob man ihn eben wirklich gesehen
-    // hat.
-    //
-    if (loeschen) {
-        loeschen.disabled = !gewaehlt || !!gewaehlt.builtin;
-    }
-}
-
-//
-// Die Vorlagen in ein Auswahlfeld fuellen, getrennt nach
-// mitgeliefert und selbst angelegt.
-//
-// Die Trennung ist der eigentliche Punkt: Mit neun mitgelieferten
-// Geraeten ginge eine selbst angelegte Vorlage in einer flachen
-// Liste sonst unter - und die ist die, die man sucht.
-//
-function fuelleVorlagenAuswahl(feld, vorlagen, gewaehlt) {
-    feld.innerHTML = "";
-
-    const gruppen = [
-        [I18N.light_template_group_own, vorlagen.filter((v) => !v.builtin)],
-        [I18N.light_template_group_builtin, vorlagen.filter((v) => v.builtin)],
-    ];
-
-    for (const [titel, liste] of gruppen) {
-        if (!liste.length) continue;
-
-        const gruppe = document.createElement("optgroup");
-        gruppe.label = titel;
-
-        for (const vorlage of liste) {
+        for (const vorlage of stand.templates || []) {
             const eintrag = document.createElement("option");
             eintrag.value = vorlage.id;
             eintrag.textContent = vorlage.name;
-            gruppe.appendChild(eintrag);
+            auswahl.appendChild(eintrag);
         }
 
-        feld.appendChild(gruppe);
+        if (gemerkt) auswahl.value = gemerkt;
     }
 
-    //
-    // Nur zuruecksetzen, wenn es die gemerkte Vorlage noch gibt -
-    // sonst stuende im Feld eine Kennung, die geloescht wurde, und
-    // der Knopf danebem bezoege sich auf nichts.
-    //
-    if (gewaehlt && vorlagen.some((v) => v.id === gewaehlt)) {
-        feld.value = gewaehlt;
-    }
-
-    return feld.value;
-}
-
-function renderLightSetup(stand) {
-    const lampen = document.getElementById("light-fixture-list");
-    const verwaltung = document.getElementById("light-template-select");
-    const auswahl = document.getElementById("light-fixture-template");
-
-    lightTemplates = stand.templates || [];
-
-    const vorlagen = {};
-    lightTemplates.forEach((v) => { vorlagen[v.id] = v; });
-
-    if (auswahl) {
-        fuelleVorlagenAuswahl(auswahl, lightTemplates, auswahl.value);
-    }
-
-    if (verwaltung) {
-        lightTemplatePick = fuelleVorlagenAuswahl(
-            verwaltung, lightTemplates, lightTemplatePick
-        );
-    }
-
-    renderLightTemplateInfo();
+    renderLightFixtureRange();
 
     if (lampen) {
         lampen.innerHTML = "";
@@ -5142,7 +5078,7 @@ function renderLightSetup(stand) {
             rest.className = "text-body-secondary";
             rest.textContent =
                 (vorlage ? vorlage.name : lampe.template) +
-                " · DMX " + lampe.address +
+                " · " + lightAddressLabel(lampe) +
                 (vorlage ? " · " + I18N.light_channels_count.replace("{n}", vorlage.channels.length) : "");
             info.appendChild(rest);
 
@@ -5158,6 +5094,68 @@ function renderLightSetup(stand) {
         }
     }
 
+    if (vorlagenListe) {
+        vorlagenListe.innerHTML = "";
+
+        for (const vorlage of stand.templates || []) {
+            const eintrag = document.createElement("div");
+            eintrag.className = "list-group-item d-flex justify-content-between align-items-center gap-2";
+
+            const info = document.createElement("div");
+            info.className = "text-break small";
+
+            const name = document.createElement("div");
+            name.className = "fw-semibold";
+            name.textContent = vorlage.name;
+            info.appendChild(name);
+
+            const rest = document.createElement("div");
+            rest.className = "text-body-secondary";
+            rest.textContent =
+                I18N.light_channels_count.replace("{n}", vorlage.channels.length) +
+                (vorlage.builtin ? " · " + I18N.light_template_builtin : "");
+            info.appendChild(rest);
+
+            eintrag.appendChild(info);
+
+            if (!vorlage.builtin) {
+                const weg = document.createElement("button");
+                weg.className = "btn btn-outline-danger btn-sm flex-shrink-0";
+                weg.innerHTML = '<i class="bi bi-trash"></i>';
+                weg.addEventListener("click", () => deleteLightTemplate(vorlage.id, vorlage.name));
+                eintrag.appendChild(weg);
+            }
+
+            vorlagenListe.appendChild(eintrag);
+        }
+    }
+}
+
+//
+// Der Hinweis unter dem Adressfeld: welchen Bereich die Lampe
+// belegen wuerde, die man gerade eintippt.
+//
+function renderLightFixtureRange() {
+    const zeile = document.getElementById("light-fixture-range");
+    if (!zeile) return;
+
+    const vorlage = document.getElementById("light-fixture-template");
+    const adresse = document.getElementById("light-fixture-address");
+
+    const gewaehlt = (lightState && lightState.templates || []).find(
+        (v) => v.id === (vorlage ? vorlage.value : "")
+    );
+
+    const start = parseInt(adresse ? adresse.value : "", 10);
+
+    if (!gewaehlt || !start) {
+        zeile.textContent = "";
+        return;
+    }
+
+    zeile.textContent = I18N.light_address_occupies
+        .replace("{von}", start)
+        .replace("{bis}", start + gewaehlt.channels.length - 1);
 }
 
 function renderLightPattern() {
@@ -5281,24 +5279,14 @@ async function toggleLighting(event) {
         renderLightPattern();
     });
 
-    //
-    // Loeschen bezieht sich immer auf die gerade gewaehlte Vorlage.
-    //
-    knopf("btn-light-template-delete", () => {
-        const feld = document.getElementById("light-template-select");
-        if (!feld || !feld.value) return;
+    for (const kennung of ["light-fixture-template", "light-fixture-address"]) {
 
-        const gewaehlt = feld.options[feld.selectedIndex];
-        deleteLightTemplate(feld.value, gewaehlt ? gewaehlt.textContent : "");
-    });
+        const feld = document.getElementById(kennung);
 
-    const verwaltung = document.getElementById("light-template-select");
-
-    if (verwaltung) {
-        verwaltung.addEventListener("change", () => {
-            lightTemplatePick = verwaltung.value;
-            renderLightTemplateInfo();
-        });
+        if (feld) {
+            feld.addEventListener("input", renderLightFixtureRange);
+            feld.addEventListener("change", renderLightFixtureRange);
+        }
     }
 
     knopf("btn-light-setup", () => {

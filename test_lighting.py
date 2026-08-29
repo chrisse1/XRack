@@ -1168,5 +1168,73 @@ with tempfile.TemporaryDirectory() as tmp:
 
     print("OK: Der 29-Kanal-Modus dimmt über den Master-Dimmer")
 
+    #
+    # Was die Show nicht faehrt, darf sie auch nicht loeschen.
+    #
+    # Bisher fing jedes Bild bei Null an. Da alle 20 ms eines kommt,
+    # war ein von Hand gestellter Strobe- oder Laserkanal eine
+    # Zwanzigstelsekunde spaeter wieder aus - von aussen sah es aus,
+    # als taeten diese Regler ueberhaupt nichts.
+    #
+    app.light_values = {}
+    app.light_brightness = {}
+
+    vonHand = [0] * 28
+    vonHand[20] = 200      # roter Laser
+    vonHand[3] = 90        # Strobe Derby 1
+    vonHand[4] = 150       # Drehung Derby 1
+
+    ok, meldung = app.set_light_fixture_values("laser", vonHand)
+    assert ok, meldung
+
+    motor.position = 0
+
+    for _ in range(5):
+        app.licht_show_bild(motor.werte_je_lampe())
+
+    stand29 = app.light_values["laser"]
+
+    assert stand29[20] == 200, f"Laser von der Show gelöscht: {stand29[20]}"
+    assert stand29[3] == 90, f"Strobe von der Show gelöscht: {stand29[3]}"
+    assert stand29[4] == 150, f"Drehung von der Show gelöscht: {stand29[4]}"
+
+    #
+    # Die Farbe muss die Show trotzdem stellen - sonst waere aus dem
+    # "nicht anfassen" ein "gar nichts mehr tun" geworden.
+    #
+    assert stand29[0] > 200, f"Die Show stellt die Farbe nicht mehr: {stand29[:3]}"
+
+    print("OK: Die Show lässt von Hand gestellte Kanäle stehen")
+
+
+# ====================================================================
+# 10. Der belegte Adressbereich steht im Statusbericht
+#
+# Ausrechnen koennte die Oberflaeche ihn selbst - dann stuende die
+# Regel aber an zwei Stellen, und eine davon wuerde irgendwann
+# vergessen.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+
+    licht.lampe_speichern({
+        "id": "gross", "name": "KLS gross",
+        "template": "eurolite-kls-180-6-29", "address": 30,
+    })
+    licht.lampe_speichern({
+        "id": "klein", "name": "Dimmer",
+        "template": "dimmer", "address": 100,
+    })
+
+    lampen = {l["id"]: l for l in licht.uebersicht()["fixtures"]}
+
+    assert lampen["gross"]["last_address"] == 58, lampen["gross"]
+    assert lampen["klein"]["last_address"] == 100, lampen["klein"]
+
+    print("OK: Zu jeder Lampe steht der letzte belegte Kanal im Bericht")
+
 
 print("Alle Licht-Tests erfolgreich.")

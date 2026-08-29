@@ -198,7 +198,7 @@ def stand(enabled=True, service=True, adapter=True, overlaps=None,
         ],
         "fixtures": [
             {"id": "bar", "name": "LED-Bar links",
-             "template": "bar-8-rgb", "address": 1},
+             "template": "bar-8-rgb", "address": 1, "last_address": 24},
         ],
         "scenes": [{"id": "s1", "name": "Pause", "values": {}}],
         "roles": ["dimmer", "red", "green", "blue", "pan", "tilt", "generic"],
@@ -377,8 +377,7 @@ ergebnis = ausfuehren(stand(), """function () {
     return {
         offen: dialog.classList.contains('show'),
         lampen: document.getElementById('light-fixture-list').textContent,
-        vorlagen: Array.from(document.getElementById(
-            'light-template-select').options).map((o) => o.textContent).join('|'),
+        vorlagen: document.getElementById('light-template-list').textContent,
         auswahl: document.getElementById('light-fixture-template').options.length
     };
 }""", vorher="document.getElementById('btn-light-setup').click();")
@@ -583,100 +582,49 @@ print("OK: Die Stille-Schwelle steht in dBFS - derselben Skala wie am Pult")
 
 
 # ====================================================================
-# 10. Die Vorlagenverwaltung ist eine Auswahl, keine lange Liste
+# 10. Der belegte Kanalbereich steht da, wo man ihn braucht
 #
-# Mit den mitgelieferten Geraeten stuenden hier neun Zeilen
-# untereinander, durch die man sich zu den Feldern darunter scrollen
-# muesste. Geprueft wird deshalb, dass es eine Auswahl ist, dass sie
-# nach eigenen und mitgelieferten Vorlagen getrennt ist, und dass der
-# Loeschknopf zur gewaehlten Vorlage passt.
+# Nur die Startadresse zu zeigen, heisst: Wer die naechste Lampe
+# daneben setzen will, muss Startadresse plus Kanalzahl im Kopf
+# rechnen. Bei einem 29-Kanal-Geraet macht man das genau einmal
+# falsch.
 # ====================================================================
 
-viele = stand()
-
-ergebnis = ausfuehren(viele, """function () {
-    const feld = document.getElementById('light-template-select');
-
-    const gruppen = Array.from(feld.querySelectorAll('optgroup')).map(
-        (g) => [g.label, Array.from(g.children).map((o) => o.value)]
-    );
-
+ergebnis = ausfuehren(stand(), """function () {
     return {
-        gruppen: gruppen,
-        gewaehlt: feld.value,
-        gesperrt: document.getElementById(
-            'btn-light-template-delete').disabled,
-        auskunft: document.getElementById(
-            'light-template-info').textContent,
-        alte_liste: !!document.getElementById('light-template-list')
+        karte: document.getElementById('light-fixtures').textContent,
+        liste: document.getElementById('light-fixture-list').textContent
     };
 }""")
 
-assert not ergebnis["alte_liste"], "Die alte Listendarstellung ist noch da."
+for wo in ("karte", "liste"):
+    assert "DMX 1–24" in ergebnis[wo], (
+        f"In der {wo} fehlt der Endkanal: {ergebnis[wo][:200]}"
+    )
 
-#
-# Die eigene Vorlage muss OBEN stehen. Sie ist die, die man sucht -
-# die mitgelieferten aendern sich nie.
-#
-assert ergebnis["gruppen"][0][0] == TEXTE["light_template_group_own"], ergebnis
-assert ergebnis["gruppen"][0][1] == ["kopf"], ergebnis
-assert ergebnis["gruppen"][1][0] == TEXTE["light_template_group_builtin"], ergebnis
-assert ergebnis["gruppen"][1][1] == ["bar-8-rgb"], ergebnis
-
-#
-# Zuerst gewaehlt ist die eigene - und die laesst sich loeschen.
-#
-assert ergebnis["gewaehlt"] == "kopf", ergebnis
-assert ergebnis["gesperrt"] is False, ergebnis
-assert "6" in ergebnis["auskunft"], ergebnis
-
-print("OK: Die Vorlagen stehen in einer Auswahl, eigene zuerst")
+print("OK: Karte und Liste zeigen den belegten Bereich, nicht nur den Start")
 
 
 #
-# Und beim Umschalten auf eine mitgelieferte muss der Loeschknopf
-# sperren. Ohne das koennte man auf ein Loeschen klicken, das der
-# Server sowieso abweist - eine Fehlermeldung fuer etwas, das die
-# Oberflaeche vorher haette wissen koennen.
+# Und beim Eintippen einer neuen Lampe, bevor sie angelegt ist -
+# genau dann braucht man die Rechnung ja.
 #
-ergebnis = ausfuehren(viele, """function () {
-    return {
-        gesperrt: document.getElementById(
-            'btn-light-template-delete').disabled,
-        auskunft: document.getElementById(
-            'light-template-info').textContent
-    };
+ergebnis = ausfuehren(stand(), """function () {
+    return { hinweis: document.getElementById(
+        'light-fixture-range').textContent };
 }""", vorher="""
-    const feld = document.getElementById('light-template-select');
-    feld.value = 'bar-8-rgb';
-    feld.dispatchEvent(new Event('change'));
+    const vorlage = document.getElementById('light-fixture-template');
+    const adresse = document.getElementById('light-fixture-address');
+    vorlage.value = 'bar-8-rgb';
+    adresse.value = '100';
+    adresse.dispatchEvent(new Event('input'));
 """)
 
-assert ergebnis["gesperrt"] is True, ergebnis
-assert TEXTE["light_template_builtin_hint"] in ergebnis["auskunft"], ergebnis
-assert "24" in ergebnis["auskunft"], ergebnis
+assert "100" in ergebnis["hinweis"] and "123" in ergebnis["hinweis"], (
+    f"Der Hinweis unter dem Adressfeld rechnet nicht: {ergebnis['hinweis']!r}"
+)
 
-print("OK: Bei einer mitgelieferten Vorlage ist das Löschen gesperrt")
-
-
-#
-# Das Feld zum Anlegen einer Lampe ist genauso gruppiert - dort ist
-# es genauso leicht, die eigene Vorlage zu uebersehen.
-#
-ergebnis = ausfuehren(viele, """function () {
-    const feld = document.getElementById('light-fixture-template');
-    return {
-        gruppen: Array.from(feld.querySelectorAll('optgroup')).map(
-            (g) => g.label)
-    };
-}""")
-
-assert ergebnis["gruppen"] == [
-    TEXTE["light_template_group_own"],
-    TEXTE["light_template_group_builtin"],
-], ergebnis
-
-print("OK: Auch beim Anlegen einer Lampe sind die Vorlagen gruppiert")
+print("OK: Beim Anlegen steht schon beim Tippen da, was belegt würde")
 
 
 print("Alle Lichtkarten-Tests erfolgreich.")

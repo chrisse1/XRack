@@ -452,6 +452,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_name": "Name",
         "light_template": "Vorlage",
         "light_address": "Startadresse",
+        "light_address_range": "DMX {von}–{bis}",
+        "light_address_occupies": "Belegt DMX {von}–{bis}.",
         "light_channels_count": "{n} Kanäle",
         "light_add_fixture": "Lampe hinzufügen",
         "light_add_template": "Vorlage anlegen",
@@ -463,12 +465,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "angeben, Anzahl der Segmente eintragen."
         ),
         "light_template_add_channel": "Kanal",
-        "light_template_group_builtin": "Mitgelieferte Geräte",
-        "light_template_group_own": "Eigene Vorlagen",
-        "light_template_delete": "Vorlage löschen",
-        "light_template_builtin_hint": (
-            "Mitgelieferte Vorlagen lassen sich nicht löschen."
-        ),
+        "light_template_builtin": "mitgeliefert",
         "light_save": "Speichern",
         "confirm_light_fixture_delete": "Lampe \"{name}\" wirklich löschen?",
         "confirm_light_template_delete": "Vorlage \"{name}\" wirklich löschen?",
@@ -976,6 +973,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_name": "Name",
         "light_template": "Type",
         "light_address": "Start address",
+        "light_address_range": "DMX {von}–{bis}",
+        "light_address_occupies": "Occupies DMX {von}–{bis}.",
         "light_channels_count": "{n} channels",
         "light_add_fixture": "Add fixture",
         "light_add_template": "Add type",
@@ -987,12 +986,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "pattern once, enter the number of segments."
         ),
         "light_template_add_channel": "Channel",
-        "light_template_group_builtin": "Built-in devices",
-        "light_template_group_own": "Your templates",
-        "light_template_delete": "Delete template",
-        "light_template_builtin_hint": (
-            "Built-in templates cannot be deleted."
-        ),
+        "light_template_builtin": "built in",
         "light_save": "Save",
         "confirm_light_fixture_delete": "Really delete fixture \"{name}\"?",
         "confirm_light_template_delete": "Really delete type \"{name}\"?",
