@@ -780,14 +780,21 @@ assert TEXTE["light_kind_background"] in ergebnis["karte"], (
     "Die Art fehlt in der Karte: " + ergebnis["karte"][:200]
 )
 
-assert ergebnis["anlegen"] == ["effect", "background", "static"], ergebnis
+#
+# Beide Felder müssen DIESELBEN Arten anbieten. Sie standen einmal an
+# zwei Stellen im Code, und beim Anlegen der zweiten Hintergrundgruppe
+# wurde prompt eine davon vergessen - genau das fällt hier auf.
+#
+assert ergebnis["anlegen"] == ergebnis["zeilenarten"], ergebnis
+assert ergebnis["anlegen"] == [
+    "effect", "background", "background2", "static",
+], ergebnis
 
 #
 # Und die Zeile der vorhandenen Lampe zeigt DEREN Art vorausgewählt -
 # nicht stumpf die erste. Sonst verstellte ein unbedachter Klick die
 # Lampe, statt sie zu lassen, wie sie ist.
 #
-assert ergebnis["zeilenarten"] == ["effect", "background", "static"], ergebnis
 assert ergebnis["zeilenwert"] == "background", ergebnis
 
 print("OK: Die Art steht in der Karte und ist an der Lampe vorausgewählt")

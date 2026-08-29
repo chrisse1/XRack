@@ -454,12 +454,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_address": "Startadresse",
         "light_kind": "Art",
         "light_kind_effect": "Effektlicht",
-        "light_kind_background": "Hintergrundlicht",
+        "light_kind_background": "Hintergrundlicht 1",
+        "light_kind_background2": "Hintergrundlicht 2",
         "light_kind_static": "Von der Show ausgenommen",
         "light_kind_hint": (
-            "Effektlicht folgt dem Takt. Hintergrundlicht wechselt die "
-            "Farbe langsam. Ausgenommene Lampen behalten, was von Hand "
-            "oder über eine Szene eingestellt ist."
+            "Effektlicht folgt dem Takt. Die beiden Hintergrundgruppen "
+            "wechseln die Farbe langsam, jede mit eigenen Farben und "
+            "gegeneinander versetzt. Ausgenommene Lampen behalten, was "
+            "von Hand oder über eine Szene eingestellt ist."
         ),
         "light_address_range": "DMX {von}–{bis}",
         "light_address_occupies": "Belegt DMX {von}–{bis}.",
@@ -530,6 +532,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Mittelton. Trägheit verkürzen oder Farbwechsel verlängern."
         ),
         "light_show_colors": "Farben der Frequenzbereiche",
+        "light_show_colors_2": "Farben für Hintergrundlicht 2",
+        "light_show_colors_2_hint": (
+            "Nur für Lampen der Gruppe \"Hintergrundlicht 2\". Sie läuft um eine Farbe versetzt, damit immer zwei verschiedene Farben auf der Bühne stehen."
+        ),
         "light_show_color_low": "Tiefe Töne",
         "light_show_color_mid": "Mitten",
         "light_show_color_high": "Höhen",
@@ -992,12 +998,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_address": "Start address",
         "light_kind": "Kind",
         "light_kind_effect": "Effect light",
-        "light_kind_background": "Background light",
+        "light_kind_background": "Background light 1",
+        "light_kind_background2": "Background light 2",
         "light_kind_static": "Left out of the show",
         "light_kind_hint": (
-            "Effect lights follow the beat. Background lights change "
-            "colour slowly. Fixtures left out keep whatever was set by "
-            "hand or from a scene."
+            "Effect lights follow the beat. The two background groups "
+            "change colour slowly, each with its own colours and offset "
+            "against each other. Fixtures left out keep whatever was set "
+            "by hand or from a scene."
         ),
         "light_address_range": "DMX {von}–{bis}",
         "light_address_occupies": "Occupies DMX {von}–{bis}.",
@@ -1067,6 +1075,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "or lengthen the colour change."
         ),
         "light_show_colors": "Colours for the frequency bands",
+        "light_show_colors_2": "Colours for background light 2",
+        "light_show_colors_2_hint": (
+            "Only for fixtures in the \"Background light 2\" group. It runs one colour offset so two different colours are always on stage."
+        ),
         "light_show_color_low": "Lows",
         "light_show_color_mid": "Mids",
         "light_show_color_high": "Highs",

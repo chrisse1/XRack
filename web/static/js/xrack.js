@@ -4716,7 +4716,7 @@ function showLightWarning(text) {
 // Beschriftung stehen hier einmal - im Anlege-Feld, in der Liste und
 // im Abzeichen der Karte wird darauf zurueckgegriffen.
 //
-const LIGHT_KINDS = ["effect", "background", "static"];
+const LIGHT_KINDS = ["effect", "background", "background2", "static"];
 
 function lightKindLabel(art) {
     return I18N["light_kind_" + (art || "effect")] || art || "";
@@ -5129,6 +5129,27 @@ function renderLightSetup(stand) {
         }
 
         if (gemerkt) auswahl.value = gemerkt;
+    }
+
+    //
+    // Das Auswahlfeld beim Anlegen aus derselben Liste fuellen wie
+    // die Felder in den Zeilen darunter.
+    //
+    const neueArt = document.getElementById("light-fixture-kind");
+
+    if (neueArt && neueArt.options.length !== LIGHT_KINDS.length) {
+
+        const gemerkt = neueArt.value;
+        neueArt.innerHTML = "";
+
+        for (const wert of LIGHT_KINDS) {
+            const option = document.createElement("option");
+            option.value = wert;
+            option.textContent = lightKindLabel(wert);
+            neueArt.appendChild(option);
+        }
+
+        if (gemerkt) neueArt.value = gemerkt;
     }
 
     renderLightFixtureRange();
@@ -5596,6 +5617,9 @@ function renderLightShowSettings(stand) {
     setzen("light-show-color-low", show.color_low);
     setzen("light-show-color-mid", show.color_mid);
     setzen("light-show-color-high", show.color_high);
+    setzen("light-show-color-low-2", show.color_low_2);
+    setzen("light-show-color-mid-2", show.color_mid_2);
+    setzen("light-show-color-high-2", show.color_high_2);
     setzen("light-show-sensitivity", show.sensitivity);
     setzen("light-show-background-seconds", show.background_seconds);
     setzen("light-show-background-beats", show.background_beats);
@@ -5699,6 +5723,9 @@ async function saveLightShowSettings() {
         color_low: farbe("light-show-color-low"),
         color_mid: farbe("light-show-color-mid"),
         color_high: farbe("light-show-color-high"),
+        color_low_2: farbe("light-show-color-low-2"),
+        color_mid_2: farbe("light-show-color-mid-2"),
+        color_high_2: farbe("light-show-color-high-2"),
         sensitivity: zahl("light-show-sensitivity"),
         background_seconds: zahl("light-show-background-seconds"),
         background_beats: zahl("light-show-background-beats"),
@@ -5737,7 +5764,9 @@ function lightShowPulsSetzen(laeuft) {
         "light-show-speech-seconds", "light-show-fallback",
         "light-show-background-seconds", "light-show-background-beats",
         "light-show-color-low", "light-show-color-mid",
-        "light-show-color-high"
+        "light-show-color-high",
+        "light-show-color-low-2", "light-show-color-mid-2",
+        "light-show-color-high-2"
     ]) {
         const element = document.getElementById(kennung);
         if (element) element.addEventListener("change", saveLightShowSettings);

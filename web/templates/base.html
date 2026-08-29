@@ -1297,14 +1297,19 @@
                         <label class="form-label small mb-1" for="light-fixture-kind">
                             {{ t.light_kind }}
                         </label>
+                        {#
+                            Leer: Die Liste der Arten steht in
+                            xrack.js (LIGHT_KINDS) und wird von dort
+                            gefuellt. Stuende sie hier ein zweites
+                            Mal, ginge beim naechsten Zuwachs genau
+                            eine der beiden Stellen vergessen - was
+                            beim Anlegen der zweiten Hintergrundgruppe
+                            auch prompt passiert ist.
+                        #}
                         <select
                             id="light-fixture-kind"
                             class="form-select form-select-sm"
-                        >
-                            <option value="effect">{{ t.light_kind_effect }}</option>
-                            <option value="background">{{ t.light_kind_background }}</option>
-                            <option value="static">{{ t.light_kind_static }}</option>
-                        </select>
+                        ></select>
                     </div>
 
                     <div class="col-8 col-sm-2">
@@ -1587,6 +1592,52 @@
                 </div>
 
                 <div class="form-text mb-3">{{ t.light_show_colors_hint }}</div>
+
+                <label class="form-label small mb-1">
+                    {{ t.light_show_colors_2 }}
+                </label>
+
+                <div class="d-flex flex-wrap gap-3 mb-2">
+
+                    <div>
+                        <div class="text-body-secondary" style="font-size: 0.75rem;">
+                            {{ t.light_show_color_low }}
+                        </div>
+                        <input
+                            id="light-show-color-low-2"
+                            type="color"
+                            class="form-control form-control-color"
+                            value="#ff00ff"
+                        >
+                    </div>
+
+                    <div>
+                        <div class="text-body-secondary" style="font-size: 0.75rem;">
+                            {{ t.light_show_color_mid }}
+                        </div>
+                        <input
+                            id="light-show-color-mid-2"
+                            type="color"
+                            class="form-control form-control-color"
+                            value="#ffaa00"
+                        >
+                    </div>
+
+                    <div>
+                        <div class="text-body-secondary" style="font-size: 0.75rem;">
+                            {{ t.light_show_color_high }}
+                        </div>
+                        <input
+                            id="light-show-color-high-2"
+                            type="color"
+                            class="form-control form-control-color"
+                            value="#00ffff"
+                        >
+                    </div>
+
+                </div>
+
+                <div class="form-text mb-3">{{ t.light_show_colors_2_hint }}</div>
 
                 <div class="form-text">{{ t.light_show_tuning_hint }}</div>
 

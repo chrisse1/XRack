@@ -1655,4 +1655,111 @@ with tempfile.TemporaryDirectory() as tmp:
     print("OK: Über einen Durchlauf kommen alle drei Farben satt vor")
 
 
+# ====================================================================
+# 13. Die zweite Hintergrundgruppe
+#
+# Zwei Gruppen mit eigenen Farben und gegeneinander versetzt: Damit
+# stehen immer zwei verschiedene Farben auf der Buehne statt einer.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+
+    licht.lampe_speichern({
+        "id": "a", "name": "Wash A", "template": "rgb",
+        "address": 1, "kind": "background",
+    })
+    licht.lampe_speichern({
+        "id": "b", "name": "Wash B", "template": "rgb",
+        "address": 10, "kind": "background2",
+    })
+    licht.lampe_speichern({
+        "id": "e", "name": "Effekt", "template": "rgb",
+        "address": 20, "kind": "effect",
+    })
+
+    app = LichtApp(licht, DmxAttrappe())
+    motor = app.light_engine
+
+    #
+    # Zwei klar unterscheidbare Paletten: Satz 1 rein rot/gruen/blau,
+    # Satz 2 rein weiss - so ist an einem Kanalwert sofort zu sehen,
+    # aus welchem Satz eine Farbe stammt.
+    #
+    motor.einstellungen = {
+        "sensitivity": 1.0,
+        "background_seconds": 1.0,
+        "background_beats": 8,
+        "color_low": "#ff0000",
+        "color_mid": "#00ff00",
+        "color_high": "#0000ff",
+        "color_low_2": "#ffffff",
+        "color_mid_2": "#ffffff",
+        "color_high_2": "#ffffff",
+    }
+
+    motor.stand = {"low": 1.0, "mid": 1.0, "high": 1.0,
+                   "level": 0.9, "beat": False}
+
+    for _ in range(300):
+        werte = motor.werte_je_lampe()
+
+    assert werte["b"][0] > 200 and werte["b"][1] > 200 and werte["b"][2] > 200, (
+        f"Gruppe 2 benutzt nicht ihren eigenen Farbsatz: {werte['b']}"
+    )
+    assert werte["a"][1] < 40 or werte["a"][2] < 40, (
+        f"Gruppe 1 hat den Farbsatz der zweiten erwischt: {werte['a']}"
+    )
+    assert werte["e"] == [255, 255, 255], (
+        f"Das Effektlicht mischt nicht mehr den ersten Satz: {werte['e']}"
+    )
+
+    print("OK: Jede Hintergrundgruppe benutzt ihren eigenen Farbsatz")
+
+    #
+    # Der Versatz: Mit der GLEICHEN Palette in beiden Saetzen muessen
+    # die Gruppen trotzdem verschiedene Farben zeigen. Ohne diese
+    # Prüfung koennte der Versatz fehlen, ohne dass es auffiele -
+    # solange die Paletten verschieden sind, sieht es ja ohnehin
+    # anders aus.
+    #
+    motor.einstellungen.update({
+        "color_low_2": "#ff0000",
+        "color_mid_2": "#00ff00",
+        "color_high_2": "#0000ff",
+    })
+    motor._hintergrund.clear()
+    motor.hintergrund_farbe = 0
+    motor.hintergrund_schlaege = 0
+    motor.hintergrund_zeit = 0.0
+
+    gleich = 0
+    proben = 0
+
+    for schritt in range(2400):
+
+        motor._farbe_weiterschalten(0.02, schritt % 25 == 0)
+        werte = motor.werte_je_lampe()
+
+        #
+        # Nur messen, wenn eine Farbe wirklich steht - waehrend der
+        # Blende sind beide unterwegs, und ein Vergleich mittendrin
+        # sagt nichts.
+        #
+        if max(werte["a"]) > 240:
+            proben += 1
+            if werte["a"] == werte["b"]:
+                gleich += 1
+
+    assert proben > 100, f"Zu wenige brauchbare Proben: {proben}"
+    assert gleich == 0, (
+        f"Bei gleicher Palette zeigen beide Gruppen dieselbe Farbe "
+        f"({gleich} von {proben} Proben) - der Versatz fehlt."
+    )
+
+    print(f"OK: Die Gruppen laufen versetzt ({proben} Proben, keine gleich)")
+
+
 print("Alle Licht-Tests erfolgreich.")

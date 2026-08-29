@@ -210,6 +210,9 @@ class LightingShowSettings(BaseModel):
     color_low: str | None = None
     color_mid: str | None = None
     color_high: str | None = None
+    color_low_2: str | None = None
+    color_mid_2: str | None = None
+    color_high_2: str | None = None
     fallback_scene: str | None = None
     silence_threshold: float | None = None
     silence_seconds: float | None = None

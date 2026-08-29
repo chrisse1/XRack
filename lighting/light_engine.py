@@ -58,6 +58,24 @@ VORGABE_FARBEN = {
     "color_low": "#ff0000",
     "color_mid": "#00ff00",
     "color_high": "#0000ff",
+
+    # Der Satz der zweiten Hintergrundgruppe.
+    "color_low_2": "#ff00ff",
+    "color_mid_2": "#ffaa00",
+    "color_high_2": "#00ffff",
+}
+
+#
+# Welchen Farbsatz eine Lampenart benutzt.
+#
+# Das Effektlicht und die erste Hintergrundgruppe teilen sich den
+# ersten Satz - so war es, bevor es eine zweite Gruppe gab, und so
+# bleibt eine vorhandene Einrichtung unveraendert.
+#
+FARBSATZ = {
+    "effect": "",
+    "background": "",
+    "background2": "_2",
 }
 
 #
@@ -446,11 +464,12 @@ class LightEngine:
         # Einmal je Bild zerlegen, nicht je Lampe und Segment.
         #
         farben = {
-            band: farbe_zerlegen(
-                self.einstellungen.get(einstellung)
-                or VORGABE_FARBEN[einstellung]
+            band + anhang: farbe_zerlegen(
+                self.einstellungen.get(einstellung + anhang)
+                or VORGABE_FARBEN[einstellung + anhang]
             )
             for band, einstellung in BAENDER
+            for anhang in ("", "_2")
         }
 
         vorlagen = self.application.lighting_store.vorlagen()
@@ -568,7 +587,13 @@ class LightEngine:
                art: str = "effect", kennung: str = "") -> list[int]:
         """Die Kanalwerte einer einzelnen Lampe."""
 
-        hintergrund = art == "background"
+        hintergrund = art in fixtures.HINTERGRUND_ARTEN
+
+        #
+        # Welcher Farbsatz gilt: der erste oder der der zweiten
+        # Hintergrundgruppe.
+        #
+        satz = FARBSATZ.get(art, "")
 
         kanaele = vorlage["channels"]
 
@@ -651,9 +676,24 @@ class LightEngine:
                 # und der Tiefpass darunter blendet weich hinueber,
                 # wenn weitergeschaltet wird.
                 #
-                band = BAENDER[self.hintergrund_farbe % len(BAENDER)][0]
+                #
+                # Die zweite Gruppe laeuft um eine Farbe VERSETZT.
+                #
+                # Ohne den Versatz zeigten beide Gruppen dieselbe
+                # Stelle ihres Verlaufs, und wer zweimal dieselbe
+                # Palette einstellt, saehe zwei gleiche Farben - also
+                # genau nicht das, wofuer es die zweite Gruppe gibt.
+                # Ein gemeinsamer Zaehler mit Versatz statt eines
+                # zweiten Zaehlers: So koennen die beiden gar nicht
+                # auseinanderlaufen.
+                #
+                versatz = 1 if art == "background2" else 0
 
-                rot, gruen, blau = farben[band]
+                stelle = (self.hintergrund_farbe + versatz) % len(BAENDER)
+
+                band = BAENDER[stelle][0]
+
+                rot, gruen, blau = farben[band + satz]
 
                 #
                 # Die Helligkeit kommt aus dem lautesten Band, nicht
@@ -686,7 +726,7 @@ class LightEngine:
 
                 for band, einstellung in BAENDER:
 
-                    rot, gruen, blau = farben[band]
+                    rot, gruen, blau = farben[band + satz]
 
                     gemischt[0] += baender[band] * rot
                     gemischt[1] += baender[band] * gruen

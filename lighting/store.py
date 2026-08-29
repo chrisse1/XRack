@@ -48,6 +48,19 @@ SHOW_VORGABE = {
     "color_high": "#0000ff",
 
     #
+    # Derselbe Satz noch einmal fuer die zweite Hintergrundgruppe.
+    #
+    # Die Vorgabe ist bewusst eine ANDERE Palette - Magenta, Amber,
+    # Cyan statt Rot, Gruen, Blau. Waeren beide gleich, saehe man den
+    # Unterschied zwischen den Gruppen erst, nachdem man selbst
+    # etwas umgestellt hat, und haette bis dahin den Eindruck, die
+    # zweite Gruppe tue nichts.
+    #
+    "color_low_2": "#ff00ff",
+    "color_mid_2": "#ffaa00",
+    "color_high_2": "#00ffff",
+
+    #
     # Szene, auf die bei Sprache oder Stille umgeschaltet wird.
     # Leer heisst: dann geht das Licht aus.
     #
@@ -445,7 +458,8 @@ class LightingStore:
 
             show["channel"] = kanal
 
-        for name in ("color_low", "color_mid", "color_high"):
+        for name in ("color_low", "color_mid", "color_high",
+                     "color_low_2", "color_mid_2", "color_high_2"):
 
             if name not in werte:
                 continue

@@ -281,13 +281,22 @@ def pruefe_vorlage(vorlage: dict) -> str:
 # kann in einem Aufbau das Effektlicht sein und im naechsten das
 # ruhige Grundlicht davor.
 #
-#   effect      - wie bisher: Bandfarben, Lauflicht auf dem Schlag,
-#                 Drehung und Laser.
-#   background  - dieselben Farben, aber ueber Sekunden geglaettet,
-#                 ohne Lauflicht, ohne Drehung und Laser.
-#   static      - die Show fasst die Lampe nicht an.
+#   effect       - wie bisher: Bandfarben, Lauflicht auf dem Schlag,
+#                  Drehung und Laser.
+#   background   - eine Farbe nach der anderen, ueber Sekunden
+#                  geblendet, ohne Lauflicht, ohne Drehung und Laser.
+#   background2  - dasselbe, aber mit einem eigenen Satz Farben und
+#                  um eine Farbe versetzt. Damit stehen immer zwei
+#                  verschiedene Farben auf der Buehne statt einer.
+#   static       - die Show fasst die Lampe nicht an.
 #
-LAMPENARTEN = ("effect", "background", "static")
+LAMPENARTEN = ("effect", "background", "background2", "static")
+
+#
+# Die Arten, die als Hintergrundlicht laufen. An mehreren Stellen
+# gebraucht - einmal aufgeschrieben ist einmal zu aendern.
+#
+HINTERGRUND_ARTEN = ("background", "background2")
 
 #
 # Vorgabe ist "effect" - das ist das Verhalten, das es vor den Arten
