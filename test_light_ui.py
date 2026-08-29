@@ -377,7 +377,8 @@ ergebnis = ausfuehren(stand(), """function () {
     return {
         offen: dialog.classList.contains('show'),
         lampen: document.getElementById('light-fixture-list').textContent,
-        vorlagen: document.getElementById('light-template-list').textContent,
+        vorlagen: Array.from(document.getElementById(
+            'light-template-select').options).map((o) => o.textContent).join('|'),
         auswahl: document.getElementById('light-fixture-template').options.length
     };
 }""", vorher="document.getElementById('btn-light-setup').click();")
@@ -579,6 +580,103 @@ assert ergebnis["regler"] == "-54", ergebnis
 assert "dBFS" in ergebnis["beschriftung"], ergebnis
 
 print("OK: Die Stille-Schwelle steht in dBFS - derselben Skala wie am Pult")
+
+
+# ====================================================================
+# 10. Die Vorlagenverwaltung ist eine Auswahl, keine lange Liste
+#
+# Mit den mitgelieferten Geraeten stuenden hier neun Zeilen
+# untereinander, durch die man sich zu den Feldern darunter scrollen
+# muesste. Geprueft wird deshalb, dass es eine Auswahl ist, dass sie
+# nach eigenen und mitgelieferten Vorlagen getrennt ist, und dass der
+# Loeschknopf zur gewaehlten Vorlage passt.
+# ====================================================================
+
+viele = stand()
+
+ergebnis = ausfuehren(viele, """function () {
+    const feld = document.getElementById('light-template-select');
+
+    const gruppen = Array.from(feld.querySelectorAll('optgroup')).map(
+        (g) => [g.label, Array.from(g.children).map((o) => o.value)]
+    );
+
+    return {
+        gruppen: gruppen,
+        gewaehlt: feld.value,
+        gesperrt: document.getElementById(
+            'btn-light-template-delete').disabled,
+        auskunft: document.getElementById(
+            'light-template-info').textContent,
+        alte_liste: !!document.getElementById('light-template-list')
+    };
+}""")
+
+assert not ergebnis["alte_liste"], "Die alte Listendarstellung ist noch da."
+
+#
+# Die eigene Vorlage muss OBEN stehen. Sie ist die, die man sucht -
+# die mitgelieferten aendern sich nie.
+#
+assert ergebnis["gruppen"][0][0] == TEXTE["light_template_group_own"], ergebnis
+assert ergebnis["gruppen"][0][1] == ["kopf"], ergebnis
+assert ergebnis["gruppen"][1][0] == TEXTE["light_template_group_builtin"], ergebnis
+assert ergebnis["gruppen"][1][1] == ["bar-8-rgb"], ergebnis
+
+#
+# Zuerst gewaehlt ist die eigene - und die laesst sich loeschen.
+#
+assert ergebnis["gewaehlt"] == "kopf", ergebnis
+assert ergebnis["gesperrt"] is False, ergebnis
+assert "6" in ergebnis["auskunft"], ergebnis
+
+print("OK: Die Vorlagen stehen in einer Auswahl, eigene zuerst")
+
+
+#
+# Und beim Umschalten auf eine mitgelieferte muss der Loeschknopf
+# sperren. Ohne das koennte man auf ein Loeschen klicken, das der
+# Server sowieso abweist - eine Fehlermeldung fuer etwas, das die
+# Oberflaeche vorher haette wissen koennen.
+#
+ergebnis = ausfuehren(viele, """function () {
+    return {
+        gesperrt: document.getElementById(
+            'btn-light-template-delete').disabled,
+        auskunft: document.getElementById(
+            'light-template-info').textContent
+    };
+}""", vorher="""
+    const feld = document.getElementById('light-template-select');
+    feld.value = 'bar-8-rgb';
+    feld.dispatchEvent(new Event('change'));
+""")
+
+assert ergebnis["gesperrt"] is True, ergebnis
+assert TEXTE["light_template_builtin_hint"] in ergebnis["auskunft"], ergebnis
+assert "24" in ergebnis["auskunft"], ergebnis
+
+print("OK: Bei einer mitgelieferten Vorlage ist das Löschen gesperrt")
+
+
+#
+# Das Feld zum Anlegen einer Lampe ist genauso gruppiert - dort ist
+# es genauso leicht, die eigene Vorlage zu uebersehen.
+#
+ergebnis = ausfuehren(viele, """function () {
+    const feld = document.getElementById('light-fixture-template');
+    return {
+        gruppen: Array.from(feld.querySelectorAll('optgroup')).map(
+            (g) => g.label)
+    };
+}""")
+
+assert ergebnis["gruppen"] == [
+    TEXTE["light_template_group_own"],
+    TEXTE["light_template_group_builtin"],
+], ergebnis
+
+print("OK: Auch beim Anlegen einer Lampe sind die Vorlagen gruppiert")
 
 
 print("Alle Lichtkarten-Tests erfolgreich.")

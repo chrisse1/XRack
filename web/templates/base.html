@@ -1320,7 +1320,36 @@
 
                 <h6 class="fw-semibold">{{ t.light_templates_title }}</h6>
 
-                <div id="light-template-list" class="list-group mb-3"></div>
+                {#
+                    Frueher stand hier eine Liste aller Vorlagen
+                    untereinander. Mit den mitgelieferten Geraeten
+                    wurde daraus ein langer Block, durch den man sich
+                    scrollen musste, um an die Felder darunter zu
+                    kommen. Jetzt eine Auswahl mit einer Zeile
+                    Auskunft zur gewaehlten Vorlage.
+                #}
+                <div class="row g-2 align-items-end mb-1">
+
+                    <div class="col">
+                        <select
+                            id="light-template-select"
+                            class="form-select form-select-sm"
+                        ></select>
+                    </div>
+
+                    <div class="col-auto">
+                        <button
+                            id="btn-light-template-delete"
+                            class="btn btn-outline-danger btn-sm"
+                            title="{{ t.light_template_delete }}"
+                        >
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+
+                </div>
+
+                <div id="light-template-info" class="form-text mb-3"></div>
 
                 {#
                     Bewusst kein mitgeliefertes Bewegtlicht: Ein

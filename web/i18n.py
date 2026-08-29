@@ -463,7 +463,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "angeben, Anzahl der Segmente eintragen."
         ),
         "light_template_add_channel": "Kanal",
-        "light_template_builtin": "mitgeliefert",
+        "light_template_group_builtin": "Mitgelieferte Geräte",
+        "light_template_group_own": "Eigene Vorlagen",
+        "light_template_delete": "Vorlage löschen",
+        "light_template_builtin_hint": (
+            "Mitgelieferte Vorlagen lassen sich nicht löschen."
+        ),
         "light_save": "Speichern",
         "confirm_light_fixture_delete": "Lampe \"{name}\" wirklich löschen?",
         "confirm_light_template_delete": "Vorlage \"{name}\" wirklich löschen?",
@@ -982,7 +987,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "pattern once, enter the number of segments."
         ),
         "light_template_add_channel": "Channel",
-        "light_template_builtin": "built in",
+        "light_template_group_builtin": "Built-in devices",
+        "light_template_group_own": "Your templates",
+        "light_template_delete": "Delete template",
+        "light_template_builtin_hint": (
+            "Built-in templates cannot be deleted."
+        ),
         "light_save": "Save",
         "confirm_light_fixture_delete": "Really delete fixture \"{name}\"?",
         "confirm_light_template_delete": "Really delete type \"{name}\"?",
