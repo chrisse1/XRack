@@ -292,4 +292,146 @@ print("OK: Sprache wird erst nach langer Entprellzeit angenommen - und "
       "sofort widerrufen, wenn der Takt zurückkommt")
 
 
+# ====================================================================
+# 7. Echte Musik, nicht nur saubere Einzelschläge
+#
+# Am Gerät ist die Show nach rund zehn Sekunden auf die
+# Rückfallszene gesprungen - mitten in der Musik. Ursache war die
+# Schlagerkennung: Sie verglich die TRÄGE Hüllkurve (250 ms Abfall,
+# fürs Licht gedacht) mit ihrem eigenen Mittel. Unter durchgehendem
+# Bass fällt die zwischen zwei Kicks gar nicht weit genug ab, ein
+# Kick ragt nicht mehr heraus - gemessen kamen 5 Schläge in 20
+# Sekunden an, wo 40 zu erwarten waren, mit einer Lücke von 19,5
+# Sekunden.
+#
+# Der alte Test hat das nicht gefunden, weil sein Signal zu sauber
+# war: einzelne Kicks mit Stille dazwischen. So sieht echte,
+# komprimierte Musik nie aus. Deshalb steht hier jetzt ein Signal,
+# das dem näher kommt.
+# ====================================================================
+
+def musik_bloecke(sekunden: int = 20, bpm: int = 120,
+                  channels: int = 2) -> list:
+    """
+    Durchgehender Bass + Kicks darüber + Mitten + etwas Rauschen.
+    Die Hüllkurve fällt also nie auf Null.
+    """
+
+    import random
+
+    random.seed(1)
+
+    periode = int(RATE * 60.0 / bpm)
+    kick_laenge = 0.06 * RATE
+
+    daten = array.array("i")
+
+    for n in range(RATE * sekunden):
+
+        stelle = n % periode
+
+        kick = max(0.0, 1.0 - stelle / kick_laenge) if stelle < kick_laenge else 0.0
+
+        wert = (
+            0.35 * math.sin(2 * math.pi * 80 * n / RATE)
+            + 0.45 * kick * math.sin(2 * math.pi * 55 * n / RATE)
+            + 0.15 * math.sin(2 * math.pi * 900 * n / RATE)
+            + 0.05 * random.uniform(-1.0, 1.0)
+        )
+
+        roh = int(max(-1.0, min(1.0, wert)) * (2 ** 31 - 1))
+
+        for _ in range(channels):
+            daten.append(roh)
+
+    bytes_roh = daten.tobytes()
+    schritt = BLOCK * channels * 4
+
+    return [bytes_roh[i:i + schritt]
+            for i in range(0, len(bytes_roh) - schritt + 1, schritt)]
+
+
+analyse = Bandanalyse(rate=RATE, channels=2)
+
+schlaege = 0
+luecke = 0.0
+groesste_luecke = 0.0
+
+for block in musik_bloecke():
+
+    if analyse.verarbeite(block)["beat"]:
+        schlaege += 1
+        luecke = 0.0
+    else:
+        luecke += BLOCK / RATE
+        groesste_luecke = max(groesste_luecke, luecke)
+
+#
+# 20 Sekunden bei 120 bpm sind 40 Schlaege. Ein paar mehr oder
+# weniger sind fuer Licht gleichgueltig - was zaehlt, ist die
+# Groessenordnung.
+#
+assert 25 <= schlaege <= 60, (
+    f"Bei rund 40 Bassschlägen in echter Musik wurden {schlaege} gemeldet."
+)
+
+#
+# Und das ist die Zusicherung, an der es haengt: Die groesste Luecke
+# ohne Schlag muss deutlich unter jeder brauchbaren Wartezeit fuer
+# die Spracherkennung liegen. Sonst springt die Show mitten im Stueck
+# auf die Rueckfallszene.
+#
+assert groesste_luecke < 3.0, (
+    f"Größte Lücke ohne erkannten Schlag: {groesste_luecke:.1f} s - damit "
+    f"hält jede Spracherkennung die Musik irgendwann für eine Ansage."
+)
+
+print(f"OK: In echter Musik kommen die Schläge durch ({schlaege} Stück, "
+      f"größte Lücke {groesste_luecke:.1f} s)")
+
+
+# ====================================================================
+# 8. Die Spracherkennung ist standardmäßig aus
+#
+# Das ist eine Entscheidung aus dem Betrieb: "Kein Bassschlag" ist
+# kein Beweis für eine Ansage. Eine Ballade, ein akustisches Set,
+# eine lange Einleitung - alles kann eine Weile ohne erkennbaren Kick
+# auskommen. Springt die Show dann auf eine feste Szene, leuchtet sie
+# nicht aus, sondern falsch, und niemand weiß warum.
+# ====================================================================
+
+erkennung = Stimmungserkennung()
+
+assert erkennung.sprache_sekunden == 0.0, (
+    "Die Spracherkennung muss standardmäßig aus sein."
+)
+
+#
+# Fuenf Minuten Signal ohne einen einzigen Schlag - und trotzdem
+# bleibt es Musik.
+#
+for _ in range(int(300.0 / DAUER)):
+    erkennung.aktualisieren(
+        {"level": 0.3, "beat": False, "low": 0.2, "mid": 0.7, "high": 0.4}, DAUER
+    )
+
+assert erkennung.zustand == "music", (
+    "Ohne eingeschaltete Spracherkennung darf nie auf 'Sprache' "
+    "umgeschaltet werden: " + erkennung.zustand
+)
+
+#
+# Stille bleibt davon unberuehrt - die ist eindeutig messbar.
+#
+for _ in range(int(10.0 / DAUER)):
+    erkennung.aktualisieren(
+        {"level": 0.0, "beat": False, "low": 0.0, "mid": 0.0, "high": 0.0}, DAUER
+    )
+
+assert erkennung.zustand == "silence", erkennung.zustand
+
+print("OK: Sprache wird nur erkannt, wenn man es ausdrücklich einschaltet - "
+      "Stille immer")
+
+
 print("Alle Analyse-Tests erfolgreich.")

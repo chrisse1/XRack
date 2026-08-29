@@ -43,7 +43,14 @@ SHOW_VORGABE = {
 
     "silence_threshold": 0.02,
     "silence_seconds": 6.0,
-    "speech_seconds": 12.0,
+
+    #
+    # 0 heisst: Spracherkennung aus. Siehe die Begruendung in
+    # lighting/analysis.py (Stimmungserkennung) - "kein Bassschlag"
+    # ist kein Beweis fuer eine Ansage, und ein Fehlgriff mitten im
+    # Stueck ist schlimmer als gar keine Erkennung.
+    #
+    "speech_seconds": 0.0,
 }
 
 
@@ -415,7 +422,10 @@ class LightingStore:
             show["silence_seconds"] = max(1.0, min(120.0, float(werte["silence_seconds"])))
 
         if "speech_seconds" in werte:
-            show["speech_seconds"] = max(1.0, min(300.0, float(werte["speech_seconds"])))
+            #
+            # 0 ist erlaubt und heisst "aus".
+            #
+            show["speech_seconds"] = max(0.0, min(300.0, float(werte["speech_seconds"])))
 
         daten["show"] = show
 

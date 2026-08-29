@@ -118,7 +118,7 @@ class LightEngine:
         self.erkennung = Stimmungserkennung(
             stille_schwelle=float(einstellungen.get("silence_threshold", 0.02)),
             stille_sekunden=float(einstellungen.get("silence_seconds", 6.0)),
-            sprache_sekunden=float(einstellungen.get("speech_seconds", 12.0)),
+            sprache_sekunden=float(einstellungen.get("speech_seconds", 0.0)),
         )
 
         self.einstellungen = dict(einstellungen)

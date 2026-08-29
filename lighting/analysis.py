@@ -49,6 +49,35 @@ ANSTIEG_S = 0.010
 ABFALL_S = 0.250
 
 #
+# Zweite, flinkere Huellkurve nur fuer die Schlagerkennung.
+#
+# Die traege Huellkurve oben ist zum Ansteuern von Licht gedacht -
+# sie soll nicht zappeln. Genau das macht sie fuer die
+# Schlagerkennung aber unbrauchbar: Unter durchgehendem Bass faellt
+# sie zwischen zwei Kicks gar nicht weit genug ab, und ein Kick ragt
+# nicht mehr heraus. Am Geraet sah das so aus, dass die Show mitten
+# in der Musik auf die Rueckfallszene sprang.
+#
+SCHLAG_ANSTIEG_S = 0.005
+SCHLAG_ABFALL_S = 0.060
+
+#
+# Zeitkonstante des Vergleichswerts, gegen den ein Schlag gemessen
+# wird - rund eine Sekunde, also mehrere Schlaege lang.
+#
+SCHLAG_MITTEL_S = 1.0
+
+#
+# Wie weit ein Schlag ueber dem Mittel liegen muss.
+#
+# 1.5 war zu viel: Bei echter, komprimierter Musik ragt ein Kick
+# selten um die Haelfte heraus. Gemessen an einem Signal mit
+# durchgehendem Bass kamen damit 5 Schlaege in 20 Sekunden an, wo 40
+# zu erwarten waren.
+#
+SCHLAG_FAKTOR = 1.25
+
+#
 # S32_LE: ALSA liefert 24 Bit linksbündig in 32 Bit (siehe
 # audio/audio_backend.py). Der größte Betrag ist deshalb 2^31.
 #
@@ -111,12 +140,20 @@ class Bandanalyse:
         self.anstieg = _koeffizient(ANSTIEG_S, self.rate)
         self.abfall = _koeffizient(ABFALL_S, self.rate)
 
+        self.schlag_anstieg = _koeffizient(SCHLAG_ANSTIEG_S, self.rate)
+        self.schlag_abfall = _koeffizient(SCHLAG_ABFALL_S, self.rate)
+
         self._tief = 0.0
         self._mitte = 0.0
 
         self.tief = 0.0
         self.mittel = 0.0
         self.hoch = 0.0
+
+        #
+        # Die flinke Huellkurve des Bassbandes, nur fuer Schlaege.
+        #
+        self.tief_schnell = 0.0
 
         #
         # Mitlaufende Spitzenwerte je Band.
@@ -221,6 +258,11 @@ class Bandanalyse:
             self.mittel = self._huellkurve(self.mittel, mittel)
             self.hoch = self._huellkurve(self.hoch, hoch)
 
+            faktor = (self.schlag_anstieg if tief > self.tief_schnell
+                      else self.schlag_abfall)
+
+            self.tief_schnell = tief + faktor * (self.tief_schnell - tief)
+
             summe += wert * wert
 
         #
@@ -231,16 +273,20 @@ class Bandanalyse:
         dauer = len(mono) / self.rate
         self.zeit += dauer
 
-        if self.tief > self.bass_mittel * 1.5 and self.zeit >= self.sperre_bis:
+        if (self.tief_schnell > self.bass_mittel * SCHLAG_FAKTOR
+                and self.zeit >= self.sperre_bis):
 
             schlag = True
             self.sperre_bis = self.zeit + 0.12
 
         #
-        # Der Mittelwert zieht langsam nach, damit er einem
-        # Lautstaerkewechsel folgt, aber nicht dem einzelnen Schlag.
+        # Der Mittelwert zieht ueber rund eine Sekunde nach: schnell
+        # genug, um einem Lautstaerkewechsel zu folgen, langsam genug,
+        # um nicht dem einzelnen Schlag hinterherzulaufen.
         #
-        self.bass_mittel += 0.05 * (self.tief - self.bass_mittel)
+        anteil = min(1.0, dauer / SCHLAG_MITTEL_S)
+
+        self.bass_mittel += anteil * (self.tief_schnell - self.bass_mittel)
 
         self.pegel = math.sqrt(summe / len(mono))
 
@@ -312,11 +358,27 @@ class Stimmungserkennung:
         wenn ein Zustand mehrere Sekunden anhält, und die Schwellen
         liegen als Regler in der Oberfläche. Vor Ort nachjustieren
         muss ohne Codeänderung gehen.
+
+      - Die Spracherkennung ist standardmäßig AUS (Wartezeit 0).
+
+        Das ist eine Entscheidung aus dem Betrieb, keine Bequemlichkeit:
+        "Kein Bassschlag" ist kein Beweis für eine Ansage. Eine
+        Ballade, ein akustisches Set, eine lange Einleitung - alles
+        kann eine Weile ohne erkennbaren Kick auskommen. Springt die
+        Show dann mitten im Stück auf eine feste Szene, ist das der
+        schlimmste denkbare Fehlgriff; sie hört nicht auf zu leuchten,
+        sie leuchtet falsch, und niemand weiß warum. Genau das ist am
+        Gerät passiert.
+
+        Stille dagegen ist eindeutig messbar und bleibt an.
+
+        Wer die Spracherkennung will, stellt eine Wartezeit ein - dann
+        ist es eine bewusste Entscheidung und keine Überraschung.
     """
 
     def __init__(self, stille_schwelle: float = 0.02,
                  stille_sekunden: float = 6.0,
-                 sprache_sekunden: float = 12.0):
+                 sprache_sekunden: float = 0.0):
 
         self.stille_schwelle = stille_schwelle
         self.stille_sekunden = stille_sekunden
@@ -353,11 +415,15 @@ class Stimmungserkennung:
         if self.leise_seit >= self.stille_sekunden:
             self.zustand = "silence"
 
-        elif self.ohne_schlag_seit >= self.sprache_sekunden:
+        elif (self.sprache_sekunden > 0
+              and self.ohne_schlag_seit >= self.sprache_sekunden):
             #
             # Kein Bass-Puls ueber lange Zeit, aber es kommt etwas:
-            # sehr wahrscheinlich eine Ansage. Die Entprellzeit ist
-            # bewusst lang - eine ruhige Strophe soll nicht reichen.
+            # moeglicherweise eine Ansage.
+            #
+            # Nur wenn ausdruecklich eingeschaltet (Wartezeit > 0).
+            # Der Grund steht in der Klassendokumentation: "keine
+            # Schlaege" ist kein verlaesslicher Beweis fuer Sprache.
             #
             self.zustand = "speech"
 

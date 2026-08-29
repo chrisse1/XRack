@@ -515,7 +515,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "light_show_silence_threshold": "Ab wann gilt es als still",
         "light_show_silence_seconds": "Wartezeit bis Stille (Sekunden)",
-        "light_show_speech_seconds": "Wartezeit bis Sprache (Sekunden)",
+        "light_show_speech_seconds": "Wartezeit bis Sprache (0 = aus)",
         "light_show_tuning_hint": (
             "Diese Werte hängen vom Signal ab, das bei dir ankommt - "
             "vor Ort ausprobieren."
@@ -1015,7 +1015,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "light_show_silence_threshold": "Level counted as silence",
         "light_show_silence_seconds": "Wait before silence (seconds)",
-        "light_show_speech_seconds": "Wait before speech (seconds)",
+        "light_show_speech_seconds": "Wait before speech (0 = off)",
         "light_show_tuning_hint": (
             "These depend on the signal that reaches you - try them out "
             "on site."
