@@ -5623,6 +5623,7 @@ function renderLightShowSettings(stand) {
     setzen("light-show-sensitivity", show.sensitivity);
     setzen("light-show-background-seconds", show.background_seconds);
     setzen("light-show-background-beats", show.background_beats);
+    setzen("light-show-fade-seconds", show.fade_seconds);
     lightTraegheitBeschriften();
     const schwelle = document.getElementById("light-show-silence-threshold");
 
@@ -5669,6 +5670,11 @@ function lightTraegheitBeschriften() {
     const text = document.getElementById("light-show-background-seconds-value");
 
     if (regler && text) text.textContent = regler.value + " s";
+
+    const blende = document.getElementById("light-show-fade-seconds");
+    const blendetext = document.getElementById("light-show-fade-seconds-value");
+
+    if (blende && blendetext) blendetext.textContent = blende.value + " s";
 
     const takte = document.getElementById("light-show-background-beats");
     const takttext = document.getElementById("light-show-background-beats-value");
@@ -5729,6 +5735,7 @@ async function saveLightShowSettings() {
         sensitivity: zahl("light-show-sensitivity"),
         background_seconds: zahl("light-show-background-seconds"),
         background_beats: zahl("light-show-background-beats"),
+        fade_seconds: zahl("light-show-fade-seconds"),
         silence_threshold: lightDbZuLinear(zahl("light-show-silence-threshold")),
         silence_seconds: zahl("light-show-silence-seconds"),
         speech_seconds: zahl("light-show-speech-seconds"),
@@ -5763,6 +5770,7 @@ function lightShowPulsSetzen(laeuft) {
         "light-show-silence-threshold", "light-show-silence-seconds",
         "light-show-speech-seconds", "light-show-fallback",
         "light-show-background-seconds", "light-show-background-beats",
+        "light-show-fade-seconds",
         "light-show-color-low", "light-show-color-mid",
         "light-show-color-high",
         "light-show-color-low-2", "light-show-color-mid-2",
@@ -5776,7 +5784,8 @@ function lightShowPulsSetzen(laeuft) {
     if (schwelle) schwelle.addEventListener("input", lightSchwelleBeschriften);
 
     for (const kennung of ["light-show-background-seconds",
-                          "light-show-background-beats"]) {
+                          "light-show-background-beats",
+                          "light-show-fade-seconds"]) {
         const element = document.getElementById(kennung);
         if (element) element.addEventListener("input", lightTraegheitBeschriften);
     }

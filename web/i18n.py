@@ -525,6 +525,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_show_sensitivity": "Empfindlichkeit",
         "light_show_background_seconds": "Hintergrund: Trägheit",
         "light_show_background_beats": "Hintergrund: Farbwechsel",
+        "light_show_fade_seconds": "Ausblenden in die Szene",
         "light_show_beats_unit": "{n} Schläge",
         "light_show_background_warning": (
             "Die Blende ist länger als die halbe Standzeit - die Farben "
@@ -1068,6 +1069,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_show_sensitivity": "Sensitivity",
         "light_show_background_seconds": "Background: inertia",
         "light_show_background_beats": "Background: colour change",
+        "light_show_fade_seconds": "Fade into the scene",
         "light_show_beats_unit": "every {n} beats",
         "light_show_background_warning": (
             "The fade is longer than half the hold time - the colours no "

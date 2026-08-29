@@ -430,6 +430,15 @@ class LightEngine:
             if vorher == "music":
                 self.application.licht_rueckfall(self.zustand)
 
+            #
+            # Und bei JEDEM weiteren Block die Blende weiterziehen.
+            #
+            # Nur beim Uebergang zu rufen hiesse: einmal springen -
+            # und genau das soll ja weg. Ist die Blende durch, kostet
+            # der Aufruf nichts, er kehrt sofort zurueck.
+            #
+            self.application.licht_rueckfall_halten(dauer)
+
             return
 
         if vorher != "music":

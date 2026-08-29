@@ -866,4 +866,25 @@ assert "Mittelton" in ergebnis["text"], ergebnis
 print("OK: Eine zu lange Blende wird gemeldet, brauchbare Werte nicht")
 
 
+# ====================================================================
+# 15. Der Regler für die Blende
+# ====================================================================
+
+blende = stand()
+blende["show"] = {**blende["show"], "fade_seconds": 3.5}
+
+ergebnis = ausfuehren(blende, """function () {
+    return {
+        regler: document.getElementById('light-show-fade-seconds').value,
+        beschriftung: document.getElementById(
+            'light-show-fade-seconds-value').textContent
+    };
+}""")
+
+assert ergebnis["regler"] == "3.5", ergebnis
+assert "3.5 s" in ergebnis["beschriftung"], ergebnis
+
+print("OK: Die Ausblendzeit steht in Sekunden im Dialog")
+
+
 print("Alle Lichtkarten-Tests erfolgreich.")

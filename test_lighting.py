@@ -438,6 +438,18 @@ class LichtApp(LichtMixin):
         self.dmx_control = dmx
         self.light_values = {}
         self.light_brightness = {}
+
+        #
+        # Der Zustand der Blende - im Betrieb legt ihn
+        # core/application/__init__.py an.
+        #
+        self._blende_von = {}
+        self._blende_helligkeit_von = {}
+        self._blende_ziel = {}
+        self._blende_helligkeit_ziel = {}
+        self._blende_dauer = 0.0
+        self._blende_rest = 0.0
+
         self._light_lock = threading.Lock()
         self.logger = logging.getLogger("XRack-Test")
 
@@ -449,6 +461,23 @@ class LichtApp(LichtMixin):
         from lighting.light_engine import LightEngine
 
         self.light_engine = LightEngine(self)
+
+
+def blende_zuende(app, schritte: int = 400) -> None:
+    """
+    Die Blende in die Rueckfallszene zu Ende ziehen.
+
+    Der Show-Thread tut das im Betrieb bei jedem Block. Wo es einem
+    Test nur um das ZIEL geht und nicht um den Weg dorthin, steht
+    dieser Helfer dafuer.
+    """
+
+    for _ in range(schritte):
+
+        if app._blende_rest <= 0.0:
+            return
+
+        app.licht_rueckfall_halten(0.02)
 
 
 def aufbau(ordner: Path, antwortet: bool = True):
@@ -829,6 +858,7 @@ with tempfile.TemporaryDirectory() as tmp:
     dmx.gesendet.clear()
 
     app.licht_rueckfall("speech")
+    blende_zuende(app)
 
     assert set(dmx.gesendet[-1]) == {0}, dmx.gesendet[-1][:6]
 
@@ -847,6 +877,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
     app.set_light_fixture_values("bar", [255, 0, 0])
     app.licht_rueckfall("silence")
+    blende_zuende(app)
 
     assert dmx.gesendet[-1][0:3] == [0, 0, 255], dmx.gesendet[-1][0:3]
 
@@ -1945,6 +1976,273 @@ with tempfile.TemporaryDirectory() as tmp:
     )
 
     print("OK: Eine Lampe ohne Segmente mischt weiterhin alle drei Bänder")
+
+
+# ====================================================================
+# 15. Die Blende in die Rückfallszene
+#
+# Am Songende hart auf die Szene umzuschalten ist ein sichtbarer
+# Sprung, und zwar genau in dem Moment, in dem es ruhig werden soll.
+#
+# Der Rueckweg bleibt mit Absicht hart: Die Show setzt mit dem ersten
+# Takt des naechsten Songs sofort ein.
+# ====================================================================
+
+def blenden_aufbau(ordner: Path, dauer: float = 2.0):
+    """Eine Lampe, eine Szene, und die Show auf Rot."""
+
+    licht = ablage(ordner)
+    licht.set_enabled(True)
+    licht.lampe_speichern({
+        "id": "p", "name": "Par", "template": "rgb", "address": 1,
+    })
+
+    dmx = DmxAttrappe()
+    app = LichtApp(licht, dmx)
+
+    # Die Szene: tiefblau.
+    app.light_values = {"p": [0, 0, 120]}
+    app.save_light_scene("Pause")
+
+    szene = licht.szenen()[0]["id"]
+
+    ok, meldung = licht.set_show_einstellungen({
+        "fallback_scene": szene, "fade_seconds": dauer,
+    })
+    assert ok, meldung
+
+    # Und die laufende Show: hellrot.
+    app.light_values = {"p": [255, 0, 0]}
+    app._licht_senden()
+
+    return licht, app, dmx
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht, app, dmx = blenden_aufbau(Path(tmp), dauer=2.0)
+
+    app.licht_rueckfall("silence")
+
+    #
+    # Drei Punkte statt einem.
+    #
+    # Nur zu pruefen, dass die Szene am Ende steht, waere auch ohne
+    # jede Blende erfuellt - dann eben sofort. Erst der Anfang und die
+    # Mitte zusammen belegen, dass wirklich geblendet wird.
+    #
+    assert app.light_values["p"] == [255, 0, 0], (
+        f"Im Moment des Übergangs darf sich noch nichts bewegt haben: "
+        f"{app.light_values['p']}"
+    )
+
+    for _ in range(50):                       # 50 x 20 ms = 1 s
+        app.licht_rueckfall_halten(0.02)
+
+    mitte = app.light_values["p"]
+
+    assert 100 < mitte[0] < 155 and 40 < mitte[2] < 80, (
+        f"Nach der halben Zeit muss es etwa in der Mitte stehen: {mitte}"
+    )
+
+    for _ in range(50):
+        app.licht_rueckfall_halten(0.02)
+
+    assert app.light_values["p"] == [0, 0, 120], (
+        f"Nach der vollen Zeit muss die Szene stehen: {app.light_values['p']}"
+    )
+
+    #
+    # Und danach passiert nichts mehr - der Tick laeuft weiter, solange
+    # keine Musik kommt.
+    #
+    vorher = len(dmx.gesendet)
+
+    for _ in range(20):
+        app.licht_rueckfall_halten(0.02)
+
+    assert len(dmx.gesendet) == vorher, (
+        "Eine durchgelaufene Blende sendet weiter, obwohl sich nichts "
+        "mehr ändert."
+    )
+
+    print("OK: Es wird über die eingestellte Zeit in die Szene geblendet")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    #
+    # Kommt die Musik mitten in der Blende zurueck, gilt das Show-Bild
+    # SOFORT und vollstaendig. Ohne das Abbrechen zoege der naechste
+    # Tick das Licht wieder Richtung Szene.
+    #
+    licht, app, dmx = blenden_aufbau(Path(tmp), dauer=2.0)
+
+    app.licht_rueckfall("silence")
+
+    for _ in range(50):
+        app.licht_rueckfall_halten(0.02)
+
+    app.licht_show_bild({"p": [0, 255, 0]})
+
+    assert app.light_values["p"] == [0, 255, 0], (
+        f"Das Show-Bild muss sofort und ganz gelten: {app.light_values['p']}"
+    )
+
+    app.licht_rueckfall_halten(0.02)
+
+    assert app.light_values["p"] == [0, 255, 0], (
+        f"Die Blende lief weiter, obwohl die Musik zurück ist: "
+        f"{app.light_values['p']}"
+    )
+
+    print("OK: Kommt die Musik zurück, setzt die Show sofort und ganz ein")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    #
+    # Auf 0 gestellt: hartes Umschalten wie vorher. Das ist zugleich
+    # die Ruecksicherung darauf, dass das alte Verhalten erreichbar
+    # bleibt.
+    #
+    licht, app, dmx = blenden_aufbau(Path(tmp), dauer=0.0)
+
+    app.licht_rueckfall("silence")
+
+    assert app.light_values["p"] == [0, 0, 120], (
+        f"Mit 0 Sekunden muss sofort umgeschaltet werden: "
+        f"{app.light_values['p']}"
+    )
+
+    print("OK: Auf 0 gestellt schaltet es hart um wie vorher")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    #
+    # Blackout ist der Knopf fuer den Fall, dass etwas schiefgeht. Er
+    # darf nie durch die Blende laufen - zwei Sekunden, bis es dunkel
+    # wird, sind hier zwei Sekunden zu viel.
+    #
+    licht, app, dmx = blenden_aufbau(Path(tmp), dauer=2.0)
+
+    app.licht_rueckfall("silence")
+
+    for _ in range(25):
+        app.licht_rueckfall_halten(0.02)
+
+    app.light_blackout()
+
+    assert set(dmx.gesendet[-1]) == {0}, (
+        f"Blackout mitten in der Blende ist nicht sofort dunkel: "
+        f"{dmx.gesendet[-1][:6]}"
+    )
+
+    app.licht_rueckfall_halten(0.02)
+
+    assert set(dmx.gesendet[-1]) == {0}, (
+        "Nach dem Blackout zieht die Blende das Licht wieder hoch."
+    )
+
+    print("OK: Blackout wirkt sofort, auch mitten in der Blende")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    #
+    # Die Helligkeit ist die Stelle, an der man sich am leichtesten
+    # vertut.
+    #
+    # Eine Lampe ohne Eintrag in light_brightness gilt als VOLL
+    # aufgedreht - so liest es fixtures.bild(). Wer beim Mischen einen
+    # fehlenden Eintrag als 0 nimmt, dimmt sie waehrend der Blende auf
+    # null herunter und wieder hoch. Am Geraet saehe das aus wie ein
+    # Wackelkontakt.
+    #
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+    licht.lampe_speichern({
+        "id": "p", "name": "Par", "template": "rgb", "address": 1,
+    })
+
+    dmx = DmxAttrappe()
+    app = LichtApp(licht, dmx)
+
+    #
+    # Der riskante Fall ist, dass EINE Seite einen Eintrag hat und die
+    # andere nicht - haetten beide keinen, wuerde gar nicht erst
+    # gemischt, und der Test belegte nichts.
+    #
+    # Hier: Die Szene wird ohne Helligkeit gespeichert, die laufende
+    # Show hat volle Helligkeit eingetragen. Beide bedeuten dasselbe,
+    # naemlich voll aufgedreht - also darf sich waehrend der Blende
+    # nichts bewegen.
+    #
+    app.light_values = {"p": [0, 0, 255]}
+    app.light_brightness = {}
+    app.save_light_scene("Pause")
+
+    szene = licht.szenen()[0]["id"]
+    licht.set_show_einstellungen({"fallback_scene": szene, "fade_seconds": 2.0})
+
+    app.light_values = {"p": [255, 0, 0]}
+    app.light_brightness = {"p": 255}
+
+    app.licht_rueckfall("silence")
+
+    for schritt in range(100):
+
+        app.licht_rueckfall_halten(0.02)
+
+        assert app.light_brightness.get("p", 255) == 255, (
+            f"Die Helligkeit wurde heruntergezogen, obwohl beide Seiten "
+            f"voll sind - Schritt {schritt}: {app.light_brightness}"
+        )
+
+    print("OK: Eine fehlende Helligkeit gilt als voll, nicht als null")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    #
+    # Ausgenommene Lampen stehen ueber die ganze Blende hinweg still.
+    #
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+    licht.lampe_speichern({
+        "id": "p", "name": "Par", "template": "rgb", "address": 1,
+    })
+    licht.lampe_speichern({
+        "id": "fest", "name": "Ambient", "template": "rgb",
+        "address": 10, "kind": "static",
+    })
+
+    dmx = DmxAttrappe()
+    app = LichtApp(licht, dmx)
+
+    app.light_values = {"p": [0, 0, 120], "fest": [10, 20, 30]}
+    app.save_light_scene("Pause")
+
+    szene = licht.szenen()[0]["id"]
+    licht.set_show_einstellungen({"fallback_scene": szene, "fade_seconds": 2.0})
+
+    app.light_values = {"p": [255, 0, 0], "fest": [77, 88, 99]}
+
+    app.licht_rueckfall("silence")
+
+    for schritt in range(120):
+
+        app.licht_rueckfall_halten(0.02)
+
+        assert app.light_values["fest"] == [77, 88, 99], (
+            f"Die ausgenommene Lampe bewegt sich mit - Schritt {schritt}: "
+            f"{app.light_values['fest']}"
+        )
+
+    assert app.light_values["p"] == [0, 0, 120], app.light_values["p"]
+
+    print("OK: Ausgenommene Lampen stehen auch während der Blende still")
 
 
 print("Alle Licht-Tests erfolgreich.")

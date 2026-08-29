@@ -185,6 +185,18 @@ class Application(
         #
         self._light_lock = threading.Lock()
 
+        #
+        # Die Blende in die Rueckfallszene: eingefrorener
+        # Ausgangsstand, Ziel, und wie viel Zeit noch bleibt.
+        # Siehe core/application/licht.py.
+        #
+        self._blende_von: dict = {}
+        self._blende_helligkeit_von: dict = {}
+        self._blende_ziel: dict = {}
+        self._blende_helligkeit_ziel: dict = {}
+        self._blende_dauer = 0.0
+        self._blende_rest = 0.0
+
         self.light_engine = LightEngine(self)
 
         self._usb_copy_lock = threading.Lock()

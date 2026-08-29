@@ -103,6 +103,14 @@ SHOW_VORGABE = {
     # Farbe nimmt. 16 sind bei 120 BPM rund vier Takte.
     #
     "background_beats": 16,
+
+    #
+    # Wie lange das Ausblenden in die Rueckfallszene dauert.
+    #
+    # 0 ist mit Absicht erlaubt und bedeutet hartes Umschalten - so
+    # war es vorher, und wer den Schnitt will, soll ihn bekommen.
+    #
+    "fade_seconds": 2.0,
 }
 
 
@@ -483,6 +491,11 @@ class LightingStore:
         if "background_seconds" in werte:
             show["background_seconds"] = max(
                 1.0, min(15.0, float(werte["background_seconds"]))
+            )
+
+        if "fade_seconds" in werte:
+            show["fade_seconds"] = max(
+                0.0, min(10.0, float(werte["fade_seconds"]))
             )
 
         if "background_beats" in werte:

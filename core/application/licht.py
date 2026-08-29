@@ -72,6 +72,8 @@ class LichtMixin:
             #
             self.stop_light_show()
 
+            self._blende_abbrechen()
+
             self.light_values = {}
             self.light_brightness = {}
             self.dmx_control.blackout()
@@ -191,7 +193,15 @@ class LichtMixin:
         return self._licht_senden()
 
     def light_blackout(self) -> tuple[bool, str]:
-        """Alles aus."""
+        """
+        Alles aus - sofort.
+
+        Das ist der Knopf für den Fall, dass etwas schiefgeht. Er darf
+        nie durch die Blende laufen: Zwei Sekunden, bis es dunkel
+        wird, sind hier zwei Sekunden zu viel.
+        """
+
+        self._blende_abbrechen()
 
         self.light_values = {}
         self.light_brightness = {}
@@ -219,6 +229,12 @@ class LichtMixin:
 
         if szene is None:
             return False, "Diese Szene gibt es nicht."
+
+        #
+        # Von Hand aufgerufen gilt eine Szene sofort. Ein Knopf, der
+        # zwei Sekunden braucht, fühlt sich kaputt an.
+        #
+        self._blende_abbrechen()
 
         self.light_values = {
             lampe: list(werte)
@@ -326,6 +342,126 @@ class LichtMixin:
         return True, ""
 
     # ----------------------------------------------------------------
+    # Die Blende in die Rueckfallszene
+    #
+    # Am Songende hart auf die Szene umzuschalten ist ein sichtbarer
+    # Sprung, und zwar genau in dem Moment, in dem es ruhig werden
+    # soll. Deshalb wird hinein geblendet.
+    #
+    # Der Rueckweg bleibt hart: Die Show setzt mit dem ersten Takt des
+    # naechsten Songs sofort ein. Die beiden Richtungen sind nicht
+    # symmetrisch - ein Einsatz, der zwei Sekunden nachzieht, wirkt
+    # schlapp, ein Ausklang, der nachzieht, wirkt richtig.
+    # ----------------------------------------------------------------
+
+    #
+    # Fehlt eine Lampe in light_brightness, gilt sie als voll
+    # aufgedreht - so liest es fixtures.bild(). Beim Mischen muss
+    # dasselbe gelten: Wer einen fehlenden Eintrag als 0 nimmt, dimmt
+    # die Lampe waehrend der Blende auf null herunter und wieder hoch.
+    #
+    VOLLE_HELLIGKEIT = 255
+
+    def _blende_abbrechen(self) -> None:
+        """
+        Eine laufende Blende verwerfen.
+        
+        Immer dann, wenn etwas anderes das Licht übernimmt - die Show,
+        ein Blackout, eine von Hand aufgerufene Szene. Ohne das zöge
+        der nächste Tick das Licht wieder Richtung Szene, obwohl längst
+        etwas anderes gilt.
+        """
+
+        self._blende_rest = 0.0
+
+    def _blende_starten(self, ziel_werte: dict, ziel_helligkeit: dict,
+                        dauer: float) -> None:
+        """Den aktuellen Stand einfrieren und die Blende aufziehen."""
+
+        self._blende_von = {
+            lampe: list(werte) for lampe, werte in self.light_values.items()
+        }
+        self._blende_helligkeit_von = dict(self.light_brightness)
+
+        self._blende_ziel = ziel_werte
+        self._blende_helligkeit_ziel = ziel_helligkeit
+
+        self._blende_dauer = max(0.0, float(dauer))
+        self._blende_rest = self._blende_dauer
+
+    def _blende_mischen(self, anteil: float) -> None:
+        """
+        light_values und light_brightness auf den Zwischenstand
+        setzen. anteil 0 = Ausgangsstand, 1 = Ziel.
+        """
+
+        lampen = set(self._blende_von) | set(self._blende_ziel)
+
+        werte = {}
+
+        for lampe in lampen:
+
+            von = self._blende_von.get(lampe, [])
+            nach = self._blende_ziel.get(lampe, [])
+
+            anzahl = max(len(von), len(nach))
+
+            werte[lampe] = [
+                round(
+                    (von[i] if i < len(von) else 0) * (1.0 - anteil)
+                    + (nach[i] if i < len(nach) else 0) * anteil
+                )
+                for i in range(anzahl)
+            ]
+
+        self.light_values = werte
+
+        helle = set(self._blende_helligkeit_von) | set(self._blende_helligkeit_ziel)
+
+        self.light_brightness = {
+            lampe: round(
+                self._blende_helligkeit_von.get(lampe, self.VOLLE_HELLIGKEIT)
+                * (1.0 - anteil)
+                + self._blende_helligkeit_ziel.get(lampe, self.VOLLE_HELLIGKEIT)
+                * anteil
+            )
+            for lampe in helle
+        }
+
+    def licht_rueckfall_halten(self, dauer: float) -> None:
+        """
+        Die Blende weiterziehen. Wird bei JEDEM Block gerufen, solange
+        keine Musik erkannt wird.
+
+        Bei jedem Block und nicht nur beim Übergang: Ein einzelner
+        Aufruf könnte nur springen, und genau das soll ja weg.
+        """
+
+        if self._blende_rest <= 0.0:
+            return
+
+        with self._light_lock:
+
+            #
+            # Zwischen der Prüfung oben und der Sperre kann die Show
+            # die Blende abgebrochen haben. Dann ist hier nichts mehr
+            # zu tun.
+            #
+            if self._blende_rest <= 0.0:
+                return
+
+            self._blende_rest = max(0.0, self._blende_rest - float(dauer))
+
+            anteil = (
+                1.0 if self._blende_dauer <= 0.0
+                else 1.0 - self._blende_rest / self._blende_dauer
+            )
+
+            self._blende_mischen(anteil)
+
+            self._licht_senden()
+
+    # ----------------------------------------------------------------
     # Rueckrufe aus dem Show-Thread
     # ----------------------------------------------------------------
 
@@ -339,6 +475,13 @@ class LichtMixin:
         """
 
         with self._light_lock:
+
+            #
+            # Die Show hat wieder das Sagen. Eine noch laufende Blende
+            # muss weg - sonst zöge der nächste Tick das Licht wieder
+            # Richtung Szene, obwohl die Musik längst läuft.
+            #
+            self._blende_abbrechen()
 
             self.light_values = werte
 
@@ -378,6 +521,8 @@ class LichtMixin:
             if lampe.get("kind") == "static"
         }
 
+        dauer = float(einstellungen.get("fade_seconds", 0.0) or 0.0)
+
         with self._light_lock:
 
             bewahrt = {
@@ -395,23 +540,32 @@ class LichtMixin:
 
                 szene = self.lighting_store.szene(kennung)
 
-                self.light_values = {
+                ziel = {
                     lampe: list(liste)
                     for lampe, liste in (szene.get("values") or {}).items()
                     if lampe not in ausgenommen
                 }
-                self.light_brightness = {
+                ziel_helligkeit = {
                     lampe: wert
                     for lampe, wert in (szene.get("brightness") or {}).items()
                     if lampe not in ausgenommen
                 }
 
             else:
-                self.light_values = {}
-                self.light_brightness = {}
+                ziel = {}
+                ziel_helligkeit = {}
 
-            self.light_values.update(bewahrt)
-            self.light_brightness.update(bewahrte_helligkeit)
+            ziel.update(bewahrt)
+            ziel_helligkeit.update(bewahrte_helligkeit)
+
+            self._blende_starten(ziel, ziel_helligkeit, dauer)
+
+            #
+            # Den ersten Schritt gleich hier: Ist die Blende auf 0
+            # gestellt, steht das Ziel damit sofort - und das
+            # Verhalten ist genau das alte, harte Umschalten.
+            #
+            self._blende_mischen(1.0 if dauer <= 0.0 else 0.0)
 
             self._licht_senden()
 
