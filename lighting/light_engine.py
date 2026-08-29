@@ -33,18 +33,59 @@ from lighting import fixtures
 from lighting.analysis import Bandanalyse, Stimmungserkennung
 
 #
-# Farbrollen in der Reihenfolge, in der die Bänder darauf abgebildet
-# werden: tief -> rot, mittel -> grün, hoch -> blau.
+# Die drei Bänder und die Einstellung, in der ihre Farbe steht.
 #
-# Das ist die übliche Zuordnung von Sound-to-Light-Geräten, und sie
-# hat einen praktischen Grund: Bass ist das, was am kräftigsten
-# schwankt, und Rot ist die Farbe, die am wenigsten blendet.
+# Früher war die Zuordnung fest verdrahtet (tief rot, mittel grün,
+# hoch blau). Das ist eine brauchbare Vorgabe, aber Geschmack und
+# nicht Physik - deshalb kommt die Farbe jetzt aus den Einstellungen,
+# und jedes Band kann jede Farbe bekommen.
 #
-BAND_ZU_FARBE = (
-    ("low", "red"),
-    ("mid", "green"),
-    ("high", "blue"),
+BAENDER = (
+    ("low", "color_low"),
+    ("mid", "color_mid"),
+    ("high", "color_high"),
 )
+
+#
+# Vorgabefarben, falls in den Einstellungen keine stehen.
+#
+# Ohne die wird aus einer fehlenden Einstellung Schwarz, und die
+# ganze Show bleibt dunkel - ein fehlender Wert darf nicht "kein
+# Licht" bedeuten. Betrifft alte gespeicherte Einrichtungen, die die
+# Farben noch nicht kennen.
+#
+VORGABE_FARBEN = {
+    "color_low": "#ff0000",
+    "color_mid": "#00ff00",
+    "color_high": "#0000ff",
+}
+
+#
+# Die Farbkanäle einer Lampe in der Reihenfolge Rot/Grün/Blau.
+#
+RGB_ROLLEN = ("red", "green", "blue")
+
+
+def farbe_zerlegen(text: str) -> tuple[int, int, int]:
+    """
+    "#rrggbb" in drei Zahlen. Bei Unsinn Schwarz - eine kaputte
+    Farbe soll die Show nicht anhalten.
+    """
+
+    text = str(text or "").strip().lstrip("#")
+
+    if len(text) != 6:
+        return (0, 0, 0)
+
+    try:
+        return (
+            int(text[0:2], 16),
+            int(text[2:4], 16),
+            int(text[4:6], 16),
+        )
+
+    except ValueError:
+        return (0, 0, 0)
 
 
 class LightEngine:
@@ -289,6 +330,17 @@ class LightEngine:
             for name in ("low", "mid", "high")
         }
 
+        #
+        # Einmal je Bild zerlegen, nicht je Lampe und Segment.
+        #
+        farben = {
+            band: farbe_zerlegen(
+                self.einstellungen.get(einstellung)
+                or VORGABE_FARBEN[einstellung]
+            )
+            for band, einstellung in BAENDER
+        }
+
         vorlagen = self.application.lighting_store.vorlagen()
 
         ergebnis = {}
@@ -300,11 +352,12 @@ class LightEngine:
             if vorlage is None:
                 continue
 
-            ergebnis[lampe["id"]] = self._werte(vorlage, baender)
+            ergebnis[lampe["id"]] = self._werte(vorlage, baender, farben)
 
         return ergebnis
 
-    def _werte(self, vorlage: dict, baender: dict) -> list[int]:
+    def _werte(self, vorlage: dict, baender: dict,
+               farben: dict) -> list[int]:
         """Die Kanalwerte einer einzelnen Lampe."""
 
         kanaele = vorlage["channels"]
@@ -325,13 +378,30 @@ class LightEngine:
             else:
                 staerke = 1.0
 
-            for band, rolle in BAND_ZU_FARBE:
+            #
+            # Die drei Bänder werden zu EINER Farbe gemischt, statt
+            # jedes auf einen festen Kanal zu legen. Nur so kann ein
+            # Band eine beliebige Farbe haben: "tief = orange" braucht
+            # Rot UND Grün, und das ginge mit einer starren Zuordnung
+            # Band->Kanal nicht.
+            #
+            gemischt = [0.0, 0.0, 0.0]
+
+            for band, einstellung in BAENDER:
+
+                rot, gruen, blau = farben[band]
+
+                gemischt[0] += baender[band] * rot
+                gemischt[1] += baender[band] * gruen
+                gemischt[2] += baender[band] * blau
+
+            for stelle, rolle in enumerate(RGB_ROLLEN):
 
                 for index in gruppe:
 
                     if kanaele[index] == rolle:
                         werte[index] = fixtures.begrenzen(
-                            baender[band] * staerke * 255
+                            gemischt[stelle] * staerke
                         )
 
             #

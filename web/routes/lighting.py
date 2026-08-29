@@ -201,6 +201,9 @@ def lighting_scene_delete(
 class LightingShowSettings(BaseModel):
     channel: int | None = None
     sensitivity: float | None = None
+    color_low: str | None = None
+    color_mid: str | None = None
+    color_high: str | None = None
     fallback_scene: str | None = None
     silence_threshold: float | None = None
     silence_seconds: float | None = None

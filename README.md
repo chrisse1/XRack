@@ -333,9 +333,11 @@ am Pi nötig.
   einfach ohne Licht.
 
 - **Musikgesteuerte Lichtshow**: XRack hört auf ein Stereo-Kanalpaar
-  vom Mischpult und macht daraus Licht - tiefe Töne werden zu Rot,
-  mittlere zu Grün, hohe zu Blau, und bei jedem Bassschlag wandert ein
-  heller Punkt ein Segment weiter. Empfindlichkeit, Kanalpaar und die
+  vom Mischpult und macht daraus Licht: Jeder der drei
+  Frequenzbereiche bekommt eine Farbe, die sich frei einstellen lässt
+  (Vorgabe tief rot, mittel grün, hoch blau), und die drei mischen
+  sich nach Lautstärke. Bei jedem Bassschlag wandert ein heller Punkt
+  ein Segment weiter. Empfindlichkeit, Kanalpaar und die
   Wartezeiten liegen als Regler im Einrichten-Dialog; sie hängen vom
   Signal ab, das vor Ort ankommt.
 

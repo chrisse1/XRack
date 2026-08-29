@@ -5359,6 +5359,9 @@ function renderLightShowSettings(stand) {
     };
 
     setzen("light-show-channel", show.channel);
+    setzen("light-show-color-low", show.color_low);
+    setzen("light-show-color-mid", show.color_mid);
+    setzen("light-show-color-high", show.color_high);
     setzen("light-show-sensitivity", show.sensitivity);
     const schwelle = document.getElementById("light-show-silence-threshold");
 
@@ -5415,8 +5418,16 @@ async function saveLightShowSettings() {
 
     const auswahl = document.getElementById("light-show-fallback");
 
+    const farbe = (kennung) => {
+        const element = document.getElementById(kennung);
+        return element ? element.value : null;
+    };
+
     await lightRequest("/api/lighting/show/settings", {
         channel: zahl("light-show-channel"),
+        color_low: farbe("light-show-color-low"),
+        color_mid: farbe("light-show-color-mid"),
+        color_high: farbe("light-show-color-high"),
         sensitivity: zahl("light-show-sensitivity"),
         silence_threshold: lightDbZuLinear(zahl("light-show-silence-threshold")),
         silence_seconds: zahl("light-show-silence-seconds"),
@@ -5450,7 +5461,9 @@ function lightShowPulsSetzen(laeuft) {
     for (const kennung of [
         "light-show-channel", "light-show-sensitivity",
         "light-show-silence-threshold", "light-show-silence-seconds",
-        "light-show-speech-seconds", "light-show-fallback"
+        "light-show-speech-seconds", "light-show-fallback",
+        "light-show-color-low", "light-show-color-mid",
+        "light-show-color-high"
     ]) {
         const element = document.getElementById(kennung);
         if (element) element.addEventListener("change", saveLightShowSettings);

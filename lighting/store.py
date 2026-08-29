@@ -36,6 +36,18 @@ SHOW_VORGABE = {
     "sensitivity": 1.0,
 
     #
+    # Welche Farbe welches Band bekommt.
+    #
+    # Vorgabe ist die uebliche Zuordnung von Sound-to-Light-Geraeten
+    # (tief rot, mittel gruen, hoch blau) - aber das ist Geschmack,
+    # nicht Physik. Wer eine Buehne in Blau und Gold will, soll das
+    # einstellen koennen, ohne dass jemand am Programm etwas aendert.
+    #
+    "color_low": "#ff0000",
+    "color_mid": "#00ff00",
+    "color_high": "#0000ff",
+
+    #
     # Szene, auf die bei Sprache oder Stille umgeschaltet wird.
     # Leer heisst: dann geht das Licht aus.
     #
@@ -405,6 +417,24 @@ class LightingStore:
                 return False, "Der Kanal muss mindestens 1 sein."
 
             show["channel"] = kanal
+
+        for name in ("color_low", "color_mid", "color_high"):
+
+            if name not in werte:
+                continue
+
+            farbe = str(werte[name] or "").strip().lower()
+
+            #
+            # Nur "#rrggbb". Was hier durchrutscht, landet spaeter in
+            # einer Rechnung und faerbt entweder gar nichts oder alles
+            # falsch - und man sucht den Fehler in der Analyse.
+            #
+            if (len(farbe) != 7 or not farbe.startswith("#")
+                    or any(z not in "0123456789abcdef" for z in farbe[1:])):
+                return False, f"'{werte[name]}' ist keine gültige Farbe."
+
+            show[name] = farbe
 
         if "sensitivity" in werte:
             show["sensitivity"] = max(0.1, min(4.0, float(werte["sensitivity"])))

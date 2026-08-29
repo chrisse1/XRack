@@ -905,4 +905,92 @@ print(f"OK: Die Stille-Schwelle liegt bei {schwelle_db:.0f} dBFS - "
       f"unter normaler Musik, über dem Rauschen")
 
 
+# --- Die Farben der Bänder sind einstellbar -------------------------
+#
+# Fruehr war tief=rot, mittel=gruen, hoch=blau fest verdrahtet. Das
+# ist eine brauchbare Vorgabe, aber Geschmack und nicht Physik.
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+    licht.lampe_speichern({
+        "id": "par", "name": "Par", "template": "rgb", "address": 1,
+    })
+
+    app = LichtApp(licht, DmxAttrappe())
+    motor = app.light_engine
+
+    #
+    # Nur tiefe Toene, Farbe dafuer auf Orange gestellt: Das braucht
+    # Rot UND Gruen. Mit der alten, starren Zuordnung Band->Kanal
+    # waere das gar nicht darstellbar gewesen.
+    #
+    motor.einstellungen = {
+        "sensitivity": 1.0,
+        "color_low": "#ff8000",
+        "color_mid": "#000000",
+        "color_high": "#000000",
+    }
+
+    motor.stand = {"low": 1.0, "mid": 0.0, "high": 0.0, "level": 0.5, "beat": False}
+
+    werte = motor.werte_je_lampe()["par"]
+
+    assert werte[0] == 255, f"Rotanteil von Orange fehlt: {werte}"
+    assert 100 < werte[1] < 160, f"Grünanteil von Orange fehlt: {werte}"
+    assert werte[2] == 0, f"Blau darf hier nicht leuchten: {werte}"
+
+    print("OK: Ein Band kann jede Farbe bekommen, nicht nur Rot/Grün/Blau")
+
+    #
+    # Und die Baender mischen sich: tief blau + hoch rot, beide halb.
+    #
+    motor.einstellungen = {
+        "sensitivity": 1.0,
+        "color_low": "#0000ff",
+        "color_mid": "#000000",
+        "color_high": "#ff0000",
+    }
+
+    motor.stand = {"low": 0.5, "mid": 0.0, "high": 0.5, "level": 0.5, "beat": False}
+
+    werte = motor.werte_je_lampe()["par"]
+
+    assert 100 < werte[0] < 160, f"Rot aus dem Hoehenband fehlt: {werte}"
+    assert 100 < werte[2] < 160, f"Blau aus dem Bassband fehlt: {werte}"
+
+    print("OK: Die Bänder mischen sich zu einer Farbe")
+
+    #
+    # Unsinnige Farben werden schon beim Speichern abgewiesen - sonst
+    # landet der Unsinn in einer Rechnung und faerbt entweder gar
+    # nichts oder alles falsch.
+    #
+    ok, meldung = licht.set_show_einstellungen({"color_low": "rot"})
+    assert not ok and "Farbe" in meldung, meldung
+
+    ok, meldung = licht.set_show_einstellungen({"color_low": "#ff0000"})
+    assert ok, meldung
+
+    print("OK: Unsinnige Farbangaben werden abgewiesen")
+
+    #
+    # Und ohne jede Farbeinstellung - etwa bei einer Einrichtung aus
+    # einer aelteren Fassung - muss die Vorgabe greifen. Ein fehlender
+    # Wert darf nicht "kein Licht" bedeuten.
+    #
+    motor.einstellungen = {}
+    motor.stand = {"low": 1.0, "mid": 0.0, "high": 0.0, "level": 0.5, "beat": False}
+
+    werte = motor.werte_je_lampe()["par"]
+
+    assert werte[0] > 200, (
+        f"Ohne gespeicherte Farben muss die Vorgabe greifen: {werte}"
+    )
+
+    print("OK: Fehlen die Farben in der Ablage, greift die Vorgabe")
+
+
+
 print("Alle Licht-Tests erfolgreich.")

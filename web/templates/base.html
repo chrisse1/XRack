@@ -1475,6 +1475,52 @@
 
                 </div>
 
+                <label class="form-label small mb-1">
+                    {{ t.light_show_colors }}
+                </label>
+
+                <div class="d-flex flex-wrap gap-3 mb-2">
+
+                    <div>
+                        <div class="text-body-secondary" style="font-size: 0.75rem;">
+                            {{ t.light_show_color_low }}
+                        </div>
+                        <input
+                            id="light-show-color-low"
+                            type="color"
+                            class="form-control form-control-color"
+                            value="#ff0000"
+                        >
+                    </div>
+
+                    <div>
+                        <div class="text-body-secondary" style="font-size: 0.75rem;">
+                            {{ t.light_show_color_mid }}
+                        </div>
+                        <input
+                            id="light-show-color-mid"
+                            type="color"
+                            class="form-control form-control-color"
+                            value="#00ff00"
+                        >
+                    </div>
+
+                    <div>
+                        <div class="text-body-secondary" style="font-size: 0.75rem;">
+                            {{ t.light_show_color_high }}
+                        </div>
+                        <input
+                            id="light-show-color-high"
+                            type="color"
+                            class="form-control form-control-color"
+                            value="#0000ff"
+                        >
+                    </div>
+
+                </div>
+
+                <div class="form-text mb-3">{{ t.light_show_colors_hint }}</div>
+
                 <div class="form-text">{{ t.light_show_tuning_hint }}</div>
 
             </div>

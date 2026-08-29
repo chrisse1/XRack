@@ -508,6 +508,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Der rechte ist der daneben."
         ),
         "light_show_sensitivity": "Empfindlichkeit",
+        "light_show_colors": "Farben der Frequenzbereiche",
+        "light_show_color_low": "Tiefe Töne",
+        "light_show_color_mid": "Mitten",
+        "light_show_color_high": "Höhen",
+        "light_show_colors_hint": (
+            "Die drei Farben werden nach Lautstärke der Bereiche "
+            "gemischt. Geschmackssache - probier es aus."
+        ),
         "light_show_fallback": "Szene bei Sprache oder Stille",
         "light_show_fallback_none": "Licht aus",
         "light_show_fallback_hint": (
@@ -1016,6 +1024,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "The right one is next to it."
         ),
         "light_show_sensitivity": "Sensitivity",
+        "light_show_colors": "Colours for the frequency bands",
+        "light_show_color_low": "Lows",
+        "light_show_color_mid": "Mids",
+        "light_show_color_high": "Highs",
+        "light_show_colors_hint": (
+            "The three colours are mixed by how loud each band is. "
+            "A matter of taste - try it out."
+        ),
         "light_show_fallback": "Scene for speech or silence",
         "light_show_fallback_none": "Lights off",
         "light_show_fallback_hint": (
