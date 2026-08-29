@@ -522,6 +522,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "light_show_sensitivity": "Empfindlichkeit",
         "light_show_background_seconds": "Hintergrund: Trägheit",
+        "light_show_background_beats": "Hintergrund: Farbwechsel",
+        "light_show_beats_unit": "{n} Schläge",
+        "light_show_background_warning": (
+            "Die Blende ist länger als die halbe Standzeit - die Farben "
+            "kommen nicht mehr rein an, sondern mischen sich zu einem "
+            "Mittelton. Trägheit verkürzen oder Farbwechsel verlängern."
+        ),
         "light_show_colors": "Farben der Frequenzbereiche",
         "light_show_color_low": "Tiefe Töne",
         "light_show_color_mid": "Mitten",
@@ -1052,6 +1059,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "light_show_sensitivity": "Sensitivity",
         "light_show_background_seconds": "Background: inertia",
+        "light_show_background_beats": "Background: colour change",
+        "light_show_beats_unit": "every {n} beats",
+        "light_show_background_warning": (
+            "The fade is longer than half the hold time - the colours no "
+            "longer arrive and blur into a mid tone. Shorten the inertia "
+            "or lengthen the colour change."
+        ),
         "light_show_colors": "Colours for the frequency bands",
         "light_show_color_low": "Lows",
         "light_show_color_mid": "Mids",

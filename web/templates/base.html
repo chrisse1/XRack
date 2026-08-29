@@ -1473,6 +1473,29 @@
                     </div>
 
                     <div class="col-12 col-sm-6">
+                        <label class="form-label small mb-1"
+                               for="light-show-background-beats">
+                            {{ t.light_show_background_beats }}
+                            <span id="light-show-background-beats-value"
+                                  class="text-body-secondary"></span>
+                        </label>
+                        <input
+                            id="light-show-background-beats"
+                            type="range"
+                            class="form-range"
+                            min="1"
+                            max="64"
+                            step="1"
+                            value="16"
+                        >
+                    </div>
+
+                    <div class="col-12">
+                        <div id="light-show-background-warning"
+                             class="form-text text-warning-emphasis d-none"></div>
+                    </div>
+
+                    <div class="col-12 col-sm-6">
                         <label class="form-label small mb-1" for="light-show-silence-threshold">
                             {{ t.light_show_silence_threshold }}
                             <span id="light-show-silence-threshold-value"

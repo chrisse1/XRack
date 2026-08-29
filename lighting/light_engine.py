@@ -141,6 +141,29 @@ class LightEngine:
     HINTERGRUND_VORGABE_S = 4.0
 
     #
+    # Nach wie vielen Schlaegen das Hintergrundlicht auf die naechste
+    # der drei Farben wechselt, falls in den Einstellungen nichts
+    # steht.
+    #
+    # 16 Schlaege sind bei 120 BPM rund acht Sekunden, also etwa vier
+    # Takte: lang genug, dass eine Farbe wirklich steht, kurz genug,
+    # dass man alle drei zu sehen bekommt.
+    #
+    HINTERGRUND_VORGABE_SCHLAEGE = 16
+
+    #
+    # Wie lange ein Schlag hoechstens dauern darf, bevor der Wechsel
+    # stattdessen nach der Uhr geht.
+    #
+    # 1,5 Sekunden je Schlag entsprechen 40 BPM - langsamer ist keine
+    # Musik, die jemand auflegt. Der Zeitweg greift also nur, wenn die
+    # Takterkennung wirklich nichts findet; ohne ihn stuende die Farbe
+    # bei einer ruhigen Passage einfach still, und das saehe aus wie
+    # ein Fehler.
+    #
+    HINTERGRUND_ERSATZ_S = 1.5
+
+    #
     # Wie lange ein Block dauert, wenn niemand es besser weiss.
     #
     # Gebraucht wird das nur, wenn werte_je_lampe() ohne einen
@@ -203,6 +226,17 @@ class LightEngine:
         # Weiss daneben zappelig.
         #
         self._hintergrund: dict[str, list[float]] = {}
+
+        #
+        # Welche der drei Farben das Hintergrundlicht gerade ansteuert,
+        # und wie lange schon.
+        #
+        # Bewusst EINE Zahl fuer alle Hintergrundlampen: Ein Wash, bei
+        # dem jede Lampe eine andere Farbe zeigt, ist kein Wash mehr.
+        #
+        self.hintergrund_farbe = 0
+        self.hintergrund_schlaege = 0
+        self.hintergrund_zeit = 0.0
 
         #
         # Die Dauer des zuletzt verarbeiteten Blocks. Die Glaettung
@@ -269,6 +303,9 @@ class LightEngine:
         # gehoerte.
         #
         self._hintergrund.clear()
+        self.hintergrund_farbe = 0
+        self.hintergrund_schlaege = 0
+        self.hintergrund_zeit = 0.0
         self.letzte_dauer = self.BLOCK_VORGABE_S
 
         self._laeuft = True
@@ -383,6 +420,8 @@ class LightEngine:
         if self.stand["beat"]:
             self.position += 1
 
+        self._farbe_weiterschalten(dauer, bool(self.stand["beat"]))
+
         self.phase += 0.02 + 0.08 * self.stand["low"]
 
         self.application.licht_show_bild(self.werte_je_lampe())
@@ -453,6 +492,38 @@ class LightEngine:
             )
 
         return ergebnis
+
+    def _farbe_weiterschalten(self, dauer: float, schlag: bool) -> None:
+        """
+        Das Hintergrundlicht auf die naechste der drei Farben
+        weiterschalten, wenn es soweit ist.
+
+        Gezaehlt werden Schlaege, nicht Sekunden - damit haengt der
+        Wechsel am Tempo der Musik, ohne dass XRack dafuer BPM in
+        Zahlen schaetzen muesste. Der vorhandene Taktzaehler reicht
+        dafuer aus; er treibt schon das Lauflicht.
+
+        Der Zeitweg daneben ist ein Notnagel: Findet die Erkennung
+        keinen Takt, stuende die Farbe sonst still, und das sieht aus
+        wie ein Fehler.
+        """
+
+        schlaege = max(1, int(
+            self.einstellungen.get("background_beats")
+            or self.HINTERGRUND_VORGABE_SCHLAEGE
+        ))
+
+        if schlag:
+            self.hintergrund_schlaege += 1
+
+        self.hintergrund_zeit += dauer
+
+        if (self.hintergrund_schlaege >= schlaege
+                or self.hintergrund_zeit >= schlaege * self.HINTERGRUND_ERSATZ_S):
+
+            self.hintergrund_farbe = (self.hintergrund_farbe + 1) % len(BAENDER)
+            self.hintergrund_schlaege = 0
+            self.hintergrund_zeit = 0.0
 
     def _geglaettet(self, kennung: str, ziel: list[float]) -> list[float]:
         """
@@ -565,39 +636,62 @@ class LightEngine:
             # Rot UND Grün, und das ginge mit einer starren Zuordnung
             # Band->Kanal nicht.
             #
-            gemischt = [0.0, 0.0, 0.0]
+            if hintergrund:
 
-            for band, einstellung in BAENDER:
+                #
+                # Das Hintergrundlicht zeigt EINE der drei Farben, nicht
+                # ihre Summe.
+                #
+                # Das ist der Unterschied, auf den es ankommt. Addiert
+                # man alle drei - so lief es zuerst -, dann steht bei
+                # halbwegs ausgewogener Musik dauerhaft die Summe da,
+                # und mit der ueblichen Vorgabe Rot plus Gruen plus
+                # Blau ist das schlicht Weiss. Es wechselte also gar
+                # nichts. Jetzt ist immer genau eine Farbe das Ziel,
+                # und der Tiefpass darunter blendet weich hinueber,
+                # wenn weitergeschaltet wird.
+                #
+                band = BAENDER[self.hintergrund_farbe % len(BAENDER)][0]
 
                 rot, gruen, blau = farben[band]
 
-                gemischt[0] += baender[band] * rot
-                gemischt[1] += baender[band] * gruen
-                gemischt[2] += baender[band] * blau
-
-            #
-            # Beim Hintergrundlicht wird genau dieses Tripel
-            # geglaettet - und damit Farbe UND Helligkeit in einem
-            # Schritt, denn die Bandstaerke steckt oben schon mit
-            # drin. Der mittlere Bandwert kommt mit, weil
-            # Weiss/Amber/UV daraus entstehen.
-            #
-            if hintergrund:
+                #
+                # Die Helligkeit kommt aus dem lautesten Band, nicht
+                # aus dem gerade gezeigten: Sonst wuerde der Wash
+                # dunkel, sobald die Farbe eines Bandes an der Reihe
+                # ist, das in diesem Stueck kaum vorkommt.
+                #
+                laut = max(baender.values())
 
                 # Der Schluessel enthaelt die Gruppe, nicht nur die
                 # Lampe. Das ist kein Beiwerk: Jeder Schluessel darf
                 # je Bild genau einmal weiterlaufen. Bei einer Lampe
                 # mit acht Segmenten waere die Glaettung sonst
                 # achtmal so schnell - und damit gar keine mehr.
-                rot, gruen, blau, mitte = self._geglaettet(
+                gemischt = self._geglaettet(
                     f"{kennung}:{nummer}",
-                    [gemischt[0], gemischt[1], gemischt[2], baender["mid"]],
+                    [rot * laut, gruen * laut, blau * laut],
                 )
 
-                gemischt = [rot, gruen, blau]
-                mittelband = mitte
+                #
+                # Weiss, Amber und UV bleiben beim Hintergrundlicht
+                # aus. Sie wuerden genau die Farbe verwaschen, um die
+                # es hier geht.
+                #
+                mittelband = 0.0
 
             else:
+
+                gemischt = [0.0, 0.0, 0.0]
+
+                for band, einstellung in BAENDER:
+
+                    rot, gruen, blau = farben[band]
+
+                    gemischt[0] += baender[band] * rot
+                    gemischt[1] += baender[band] * gruen
+                    gemischt[2] += baender[band] * blau
+
                 mittelband = baender["mid"]
 
             for stelle, rolle in enumerate(RGB_ROLLEN):

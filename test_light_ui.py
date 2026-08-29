@@ -813,4 +813,50 @@ assert "9 s" in ergebnis["beschriftung"], ergebnis
 print("OK: Die Trägheit des Hintergrundlichts steht in Sekunden im Dialog")
 
 
+# ====================================================================
+# 14. Der Hinweis, wenn die Blende die Standzeit überholt
+#
+# Dauert die Blende länger als die halbe Standzeit, kommt keine Farbe
+# mehr rein an - es steht dauerhaft ein Mittelton da. Das ist genau
+# der Effekt, wegen dem der Farbwechsel überhaupt gebaut wurde, und
+# er lässt sich mit zwei Reglern versehentlich wiederherstellen.
+# ====================================================================
+
+gut = stand()
+gut["show"] = {**gut["show"], "background_seconds": 2, "background_beats": 16}
+
+ergebnis = ausfuehren(gut, """function () {
+    const hinweis = document.getElementById('light-show-background-warning');
+    return {
+        versteckt: hinweis.classList.contains('d-none'),
+        takte: document.getElementById(
+            'light-show-background-beats-value').textContent
+    };
+}""")
+
+assert ergebnis["versteckt"], (
+    "Bei brauchbaren Werten darf kein Hinweis stehen: " + str(ergebnis)
+)
+assert "16" in ergebnis["takte"], ergebnis
+
+schlecht = stand()
+schlecht["show"] = {**schlecht["show"],
+                    "background_seconds": 12, "background_beats": 4}
+
+ergebnis = ausfuehren(schlecht, """function () {
+    const hinweis = document.getElementById('light-show-background-warning');
+    return {
+        versteckt: hinweis.classList.contains('d-none'),
+        text: hinweis.textContent
+    };
+}""")
+
+assert not ergebnis["versteckt"], (
+    "12 s Blende bei 4 Schlägen Standzeit muss gemeldet werden."
+)
+assert "Mittelton" in ergebnis["text"], ergebnis
+
+print("OK: Eine zu lange Blende wird gemeldet, brauchbare Werte nicht")
+
+
 print("Alle Lichtkarten-Tests erfolgreich.")

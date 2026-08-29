@@ -5598,6 +5598,7 @@ function renderLightShowSettings(stand) {
     setzen("light-show-color-high", show.color_high);
     setzen("light-show-sensitivity", show.sensitivity);
     setzen("light-show-background-seconds", show.background_seconds);
+    setzen("light-show-background-beats", show.background_beats);
     lightTraegheitBeschriften();
     const schwelle = document.getElementById("light-show-silence-threshold");
 
@@ -5644,6 +5645,33 @@ function lightTraegheitBeschriften() {
     const text = document.getElementById("light-show-background-seconds-value");
 
     if (regler && text) text.textContent = regler.value + " s";
+
+    const takte = document.getElementById("light-show-background-beats");
+    const takttext = document.getElementById("light-show-background-beats-value");
+
+    if (takte && takttext) {
+        takttext.textContent =
+            I18N.light_show_beats_unit.replace("{n}", takte.value);
+    }
+
+    //
+    // Warnen, wenn die Blende laenger dauert als die halbe Standzeit.
+    //
+    // Dann kommt keine Farbe mehr rein an, sondern es steht dauerhaft
+    // ein Mittelton da - genau der Effekt, wegen dem der Farbwechsel
+    // ueberhaupt gebaut wurde. Gerechnet wird mit 120 BPM, weil das
+    // echte Tempo hier niemand kennt; als Groessenordnung reicht das,
+    // und es ist ein Hinweis, keine Sperre.
+    //
+    const hinweis = document.getElementById("light-show-background-warning");
+
+    if (hinweis && regler && takte) {
+        const standzeit = parseFloat(takte.value) * 0.5;
+        hinweis.textContent = I18N.light_show_background_warning;
+        hinweis.classList.toggle(
+            "d-none", parseFloat(regler.value) <= standzeit / 2
+        );
+    }
 }
 
 function lightSchwelleBeschriften() {
@@ -5673,6 +5701,7 @@ async function saveLightShowSettings() {
         color_high: farbe("light-show-color-high"),
         sensitivity: zahl("light-show-sensitivity"),
         background_seconds: zahl("light-show-background-seconds"),
+        background_beats: zahl("light-show-background-beats"),
         silence_threshold: lightDbZuLinear(zahl("light-show-silence-threshold")),
         silence_seconds: zahl("light-show-silence-seconds"),
         speech_seconds: zahl("light-show-speech-seconds"),
@@ -5706,7 +5735,7 @@ function lightShowPulsSetzen(laeuft) {
         "light-show-channel", "light-show-sensitivity",
         "light-show-silence-threshold", "light-show-silence-seconds",
         "light-show-speech-seconds", "light-show-fallback",
-        "light-show-background-seconds",
+        "light-show-background-seconds", "light-show-background-beats",
         "light-show-color-low", "light-show-color-mid",
         "light-show-color-high"
     ]) {
@@ -5717,6 +5746,9 @@ function lightShowPulsSetzen(laeuft) {
     const schwelle = document.getElementById("light-show-silence-threshold");
     if (schwelle) schwelle.addEventListener("input", lightSchwelleBeschriften);
 
-    const traegheit = document.getElementById("light-show-background-seconds");
-    if (traegheit) traegheit.addEventListener("input", lightTraegheitBeschriften);
+    for (const kennung of ["light-show-background-seconds",
+                          "light-show-background-beats"]) {
+        const element = document.getElementById(kennung);
+        if (element) element.addEventListener("input", lightTraegheitBeschriften);
+    }
 })();

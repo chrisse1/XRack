@@ -1499,4 +1499,160 @@ with tempfile.TemporaryDirectory() as tmp:
     print("OK: Als Hintergrundlicht bleiben Drehung und Laser aus")
 
 
+# ====================================================================
+# 12. Das Hintergrundlicht wechselt zwischen den drei Farben
+#
+# Zuerst wurden alle drei Bandfarben ADDIERT. Bei halbwegs
+# ausgewogener Musik stand damit dauerhaft ihre Summe da - und mit
+# der ueblichen Vorgabe Rot plus Gruen plus Blau ist das schlicht
+# Weiss. Es wechselte also gar nichts. Genau das prueft dieser
+# Abschnitt.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+
+    licht.lampe_speichern({
+        "id": "wash", "name": "Wash", "template": "rgb",
+        "address": 1, "kind": "background",
+    })
+    licht.lampe_speichern({
+        "id": "effekt", "name": "Effekt", "template": "rgb",
+        "address": 10, "kind": "effect",
+    })
+
+    app = LichtApp(licht, DmxAttrappe())
+    motor = app.light_engine
+
+    motor.einstellungen = {
+        "sensitivity": 1.0,
+        "background_seconds": 1.0,
+        "background_beats": 8,
+        "color_low": "#ff0000",
+        "color_mid": "#00ff00",
+        "color_high": "#0000ff",
+    }
+
+    #
+    # Alle drei Baender voll - der Fall, in dem die alte Rechnung
+    # Weiss ergab.
+    #
+    motor.stand = {"low": 1.0, "mid": 1.0, "high": 1.0,
+                   "level": 0.9, "beat": False}
+
+    for _ in range(300):
+        werte = motor.werte_je_lampe()
+
+    wash = werte["wash"]
+    effekt = werte["effekt"]
+
+    assert effekt == [255, 255, 255], (
+        f"Das Effektlicht soll weiterhin mischen: {effekt}"
+    )
+
+    assert wash[0] > 200 and wash[1] < 40 and wash[2] < 40, (
+        f"Das Hintergrundlicht zeigt keine reine Farbe, sondern {wash} - "
+        f"genau der Mischmasch, der behoben werden sollte."
+    )
+
+    print("OK: Das Hintergrundlicht zeigt eine Farbe, das Effektlicht die Mischung")
+
+    #
+    # Weiss, Amber und UV bleiben aus - sie wuerden genau die Farbe
+    # verwaschen, um die es hier geht.
+    #
+    licht.lampe_speichern({
+        "id": "rgbw", "name": "RGBW", "template": "rgbw",
+        "address": 30, "kind": "background",
+    })
+
+    for _ in range(50):
+        werte = motor.werte_je_lampe()
+
+    assert werte["rgbw"][3] == 0, (
+        f"Weiß verwässert die Hintergrundfarbe: {werte['rgbw']}"
+    )
+
+    print("OK: Weiß bleibt beim Hintergrundlicht aus")
+
+    #
+    # Weitergeschaltet wird nach Schlaegen. Genau nach acht, nicht
+    # nach sieben und nicht nach neun.
+    #
+    motor.hintergrund_farbe = 0
+    motor.hintergrund_schlaege = 0
+    motor.hintergrund_zeit = 0.0
+
+    for _ in range(7):
+        motor._farbe_weiterschalten(0.02, True)
+
+    assert motor.hintergrund_farbe == 0, (
+        f"Zu früh weitergeschaltet, nach 7 Schlägen: "
+        f"{motor.hintergrund_farbe}"
+    )
+
+    motor._farbe_weiterschalten(0.02, True)
+
+    assert motor.hintergrund_farbe == 1, (
+        f"Nach 8 Schlägen nicht weitergeschaltet: {motor.hintergrund_farbe}"
+    )
+
+    print("OK: Der Farbwechsel kommt nach genau der eingestellten Zahl Schläge")
+
+    #
+    # Und ohne jeden Schlag geht es nach der Uhr weiter. Ohne diesen
+    # Notnagel stuende die Farbe bei einer ruhigen Passage still, und
+    # das saehe aus wie ein Fehler.
+    #
+    motor.hintergrund_farbe = 0
+    motor.hintergrund_schlaege = 0
+    motor.hintergrund_zeit = 0.0
+
+    # 8 Schläge x 1,5 s = 12 s. Nach 10 s darf noch nichts passiert
+    # sein, nach 13 s muss es.
+    for _ in range(500):
+        motor._farbe_weiterschalten(0.02, False)
+
+    assert motor.hintergrund_farbe == 0, (
+        "Der Zeitweg greift zu früh - er soll nur einspringen, wenn "
+        "die Takterkennung wirklich nichts findet."
+    )
+
+    for _ in range(150):
+        motor._farbe_weiterschalten(0.02, False)
+
+    assert motor.hintergrund_farbe == 1, (
+        "Ohne Takt bleibt die Farbe stehen, statt nach der Uhr "
+        "weiterzugehen."
+    )
+
+    print("OK: Ohne erkannten Takt geht der Wechsel nach der Uhr weiter")
+
+    #
+    # Über einen ganzen Durchlauf müssen alle drei Farben vorkommen -
+    # sonst wäre es kein Wechsel, sondern eine Vorliebe.
+    #
+    motor.hintergrund_farbe = 0
+    motor._hintergrund.clear()
+
+    gesehen = set()
+
+    for schritt in range(2400):
+
+        motor._farbe_weiterschalten(0.02, schritt % 25 == 0)
+        wash = motor.werte_je_lampe()["wash"]
+
+        if wash[0] > 200 and wash[1] < 40: gesehen.add("rot")
+        if wash[1] > 200 and wash[0] < 40: gesehen.add("gruen")
+        if wash[2] > 200 and wash[0] < 40: gesehen.add("blau")
+
+    assert gesehen == {"rot", "gruen", "blau"}, (
+        f"Nicht alle drei Farben kamen vor: {gesehen}"
+    )
+
+    print("OK: Über einen Durchlauf kommen alle drei Farben satt vor")
+
+
 print("Alle Licht-Tests erfolgreich.")

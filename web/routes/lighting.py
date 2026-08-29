@@ -215,6 +215,7 @@ class LightingShowSettings(BaseModel):
     silence_seconds: float | None = None
     speech_seconds: float | None = None
     background_seconds: float | None = None
+    background_beats: int | None = None
 
 
 @router.post("/api/lighting/show/start")

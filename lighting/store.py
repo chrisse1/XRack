@@ -84,6 +84,12 @@ SHOW_VORGABE = {
     # Musik nicht mehr.
     #
     "background_seconds": 4.0,
+
+    #
+    # Nach wie vielen Schlaegen das Hintergrundlicht die naechste
+    # Farbe nimmt. 16 sind bei 120 BPM rund vier Takte.
+    #
+    "background_beats": 16,
 }
 
 
@@ -463,6 +469,11 @@ class LightingStore:
         if "background_seconds" in werte:
             show["background_seconds"] = max(
                 1.0, min(15.0, float(werte["background_seconds"]))
+            )
+
+        if "background_beats" in werte:
+            show["background_beats"] = max(
+                1, min(64, int(werte["background_beats"]))
             )
 
         if "fallback_scene" in werte:
