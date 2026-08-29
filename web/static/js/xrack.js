@@ -4722,9 +4722,64 @@ function lightAddressLabel(lampe) {
         .replace("{bis}", lampe.last_address);
 }
 
+//
+// Wann jemand zuletzt an der Lampenliste war (Zeitstempel).
+//
+// Gebraucht wird das, weil der Neuaufbau die Regler wegwirft und
+// neu erzeugt. Waehrend der Show passiert das zweimal pro Sekunde -
+// wer gerade einen Regler zieht, verliert ihn dabei mitten in der
+// Bewegung. Solange jemand die Liste anfasst, bleibt sie also
+// stehen.
+//
+let lightFixturesBeruehrt = 0;
+
+// So lange nach der letzten Beruehrung wird nicht neu aufgebaut.
+// Grosszuegig gewaehlt: Beim Farbwaehler laeuft die Auswahl im
+// Dialog des Browsers weiter, da hilft ein Zeitfenster mehr als
+// jedes Maus-Ereignis.
+const LIGHT_RUHE_MS = 1500;
+
+//
+// Der Fingerabdruck der Liste - welche Lampen mit welcher Vorlage
+// und Adresse. Aendert der sich, MUSS neu aufgebaut werden, auch
+// eingeklappt und auch mitten im Ziehen: Dann ist eine Lampe dazu-
+// oder weggekommen, und die alte Liste zeigt etwas, das es nicht
+// mehr gibt.
+//
+let lightFixturesAbdruck = null;
+
+function lightFixturesEingeklappt() {
+    const koerper = document.getElementById("light-fixtures-body");
+
+    return !!koerper && !koerper.classList.contains("show");
+}
+
 function renderLightFixtures(stand) {
     const container = document.getElementById("light-fixtures");
     if (!container) return;
+
+    const lampen = stand.fixtures || [];
+
+    //
+    // Die Zahl im Kopf steht auch eingeklappt da - sonst wuesste
+    // man nicht, ob dort unten ueberhaupt etwas ist.
+    //
+    const zaehler = document.getElementById("light-fixtures-count");
+    if (zaehler) zaehler.textContent = lampen.length;
+
+    const abdruck = JSON.stringify(
+        lampen.map((l) => [l.id, l.template, l.address])
+    );
+
+    const strukturNeu = abdruck !== lightFixturesAbdruck;
+    lightFixturesAbdruck = abdruck;
+
+    if (!strukturNeu) {
+
+        if (lightFixturesEingeklappt()) return;
+
+        if (Date.now() - lightFixturesBeruehrt < LIGHT_RUHE_MS) return;
+    }
 
     container.innerHTML = "";
 
@@ -5278,6 +5333,70 @@ async function toggleLighting(event) {
         lightPattern.push("red");
         renderLightPattern();
     });
+
+    //
+    // Jede Beruehrung der Lampenliste haelt den Neuaufbau kurz an.
+    //
+    const lampen = document.getElementById("light-fixtures");
+
+    if (lampen) {
+        for (const art of ["pointerdown", "input"]) {
+            lampen.addEventListener(art, () => {
+                lightFixturesBeruehrt = Date.now();
+            });
+        }
+    }
+
+    //
+    // Ein- und Ausklappen ueberlebt einen Neuladen der Seite. Wer die
+    // Liste zugeklappt hat, will sie nicht bei jedem Blick auf die
+    // Karte wieder vor sich haben.
+    //
+    const koerper = document.getElementById("light-fixtures-body");
+    const pfeil = document.getElementById("light-fixtures-chevron");
+
+    if (koerper) {
+
+        let gemerkt = null;
+
+        try {
+            gemerkt = localStorage.getItem("xrack-light-fixtures-open");
+        } catch (fehler) {
+            gemerkt = null;
+        }
+
+        if (gemerkt === "0") {
+            koerper.classList.remove("show");
+
+            const schalter = document.getElementById("btn-light-fixtures-toggle");
+            if (schalter) schalter.setAttribute("aria-expanded", "false");
+
+            if (pfeil) pfeil.className = "bi bi-chevron-right";
+        }
+
+        koerper.addEventListener("show.bs.collapse", () => {
+            if (pfeil) pfeil.className = "bi bi-chevron-down";
+
+            try {
+                localStorage.setItem("xrack-light-fixtures-open", "1");
+            } catch (fehler) { /* Speichern ist Beiwerk, nicht Pflicht. */ }
+
+            //
+            // Beim Aufklappen sofort auf den neuesten Stand bringen -
+            // eingeklappt wurde ja nicht mitgezeichnet.
+            //
+            lightFixturesAbdruck = null;
+            refreshLighting();
+        });
+
+        koerper.addEventListener("hide.bs.collapse", () => {
+            if (pfeil) pfeil.className = "bi bi-chevron-right";
+
+            try {
+                localStorage.setItem("xrack-light-fixtures-open", "0");
+            } catch (fehler) { /* siehe oben */ }
+        });
+    }
 
     for (const kennung of ["light-fixture-template", "light-fixture-address"]) {
 

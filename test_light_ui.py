@@ -627,4 +627,130 @@ assert "100" in ergebnis["hinweis"] and "123" in ergebnis["hinweis"], (
 print("OK: Beim Anlegen steht schon beim Tippen da, was belegt würde")
 
 
+# ====================================================================
+# 11. Die Lampenliste ist einklappbar
+#
+# Aus jeder Lampe werden mehrere Regler. Bei einem ganzen Rig
+# scrollt man sonst an den Szenen und der Show vorbei, nur um die
+# Karte zu ueberblicken.
+# ====================================================================
+
+ergebnis = ausfuehren(stand(), """function () {
+    const koerper = document.getElementById('light-fixtures-body');
+
+    return {
+        offen: koerper.classList.contains('show'),
+        zahl: document.getElementById('light-fixtures-count').textContent,
+        inhalt: document.getElementById('light-fixtures').textContent
+    };
+}""")
+
+assert ergebnis["offen"], "Die Liste ist von Haus aus zugeklappt."
+assert ergebnis["zahl"] == "1", ergebnis
+assert "LED-Bar links" in ergebnis["inhalt"], ergebnis
+
+print("OK: Die Lampenliste ist aufgeklappt und nennt die Anzahl")
+
+
+#
+# Eingeklappt darf die Zahl nicht verschwinden - sonst waere nicht
+# zu sehen, ob dort unten ueberhaupt etwas ist.
+#
+ergebnis = ausfuehren(stand(), """function () {
+    const koerper = document.getElementById('light-fixtures-body');
+
+    return {
+        offen: koerper.classList.contains('show'),
+        zahl: document.getElementById('light-fixtures-count').textContent,
+        pfeil: document.getElementById('light-fixtures-chevron').className
+    };
+}""", vorher="document.getElementById('btn-light-fixtures-toggle').click();")
+
+assert not ergebnis["offen"], "Der Knopf klappt die Liste nicht zu."
+assert ergebnis["zahl"] == "1", ergebnis
+assert "chevron-right" in ergebnis["pfeil"], ergebnis
+
+print("OK: Zugeklappt bleibt die Anzahl stehen, der Pfeil dreht sich")
+
+
+# ====================================================================
+# 12. Eingeklappt wird nicht neu gezeichnet, und ein Regler wird
+#     einem nicht unterm Finger weggezogen
+#
+# Der Neuaufbau wirft die Regler weg und erzeugt sie neu. Waehrend
+# der Show passiert das zweimal pro Sekunde - wer gerade zieht,
+# verliert den Regler mitten in der Bewegung.
+# ====================================================================
+
+ergebnis = ausfuehren(stand(show_running=True), """function () {
+    return {
+        gleich: window.__merker ===
+            document.querySelector('#light-fixtures input[type=range]')
+    };
+}""", vorher="""
+    const regler = document.querySelector('#light-fixtures input[type=range]');
+    window.__merker = regler;
+    regler.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    renderLighting(lightState);
+""")
+
+assert ergebnis["gleich"], (
+    "Der Regler wurde beim Neuzeichnen ersetzt, obwohl gerade jemand "
+    "darauf gedrückt hat."
+)
+
+print("OK: Wer einen Regler anfasst, behält ihn auch während der Show")
+
+
+#
+# Und eingeklappt wird gar nicht erst gezeichnet.
+#
+ergebnis = ausfuehren(stand(show_running=True), """function () {
+    return { gleich: window.__merker ===
+        document.querySelector('#light-fixtures input[type=range]') };
+}""", vorher="""
+    document.getElementById('light-fixtures-body').classList.remove('show');
+    window.__merker = document.querySelector('#light-fixtures input[type=range]');
+    renderLighting(lightState);
+""")
+
+assert ergebnis["gleich"], "Eingeklappt wird trotzdem neu gezeichnet."
+
+print("OK: Eingeklappt wird die Liste nicht mehr neu aufgebaut")
+
+
+#
+# Kommt aber eine Lampe dazu, muss neu gezeichnet werden - auch
+# eingeklappt und auch mitten im Ziehen. Sonst zeigt die Liste beim
+# Aufklappen etwas, das es nicht mehr gibt.
+#
+#
+# Wichtig ist die Reihenfolge: Erst EINMAL zeichnen (dabei merkt
+# sich die Karte den Fingerabdruck), dann die Lampe dazunehmen.
+# Prueft man es andersherum, zeichnet ohnehin der erste Aufruf
+# alles - und der Test beweist nichts.
+#
+ergebnis = ausfuehren(stand(), """function () {
+    return { inhalt: document.getElementById('light-fixtures').textContent };
+}""", vorher="""
+    const regler = document.querySelector('#light-fixtures input[type=range]');
+    regler.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    document.getElementById('light-fixtures-body').classList.remove('show');
+
+    const neu = JSON.parse(JSON.stringify(lightState));
+    neu.fixtures.push({
+        id: 'kopf1', name: 'Bewegtlicht', template: 'kopf',
+        address: 100, last_address: 105
+    });
+
+    renderLighting(neu);
+""")
+
+assert "Bewegtlicht" in ergebnis["inhalt"], (
+    "Eine neue Lampe taucht nicht auf: " + ergebnis["inhalt"][:200]
+)
+
+print("OK: Eine neue Lampe erscheint trotzdem sofort")
+
+
 print("Alle Lichtkarten-Tests erfolgreich.")

@@ -525,7 +525,34 @@
 
             </div>
 
-            <div id="light-fixtures"></div>
+            {#
+                Einklappbar, weil aus jeder Lampe mehrere Regler
+                werden - bei einem ganzen Rig scrollt man sonst an
+                den Szenen und der Show vorbei, um die Karte
+                ueberhaupt zu ueberblicken. Die Zahl im Kopf bleibt
+                auch eingeklappt stehen; sonst waere nicht zu sehen,
+                ob da unten etwas ist.
+            #}
+            <button
+                id="btn-light-fixtures-toggle"
+                class="btn btn-link btn-sm text-decoration-none p-0 d-flex align-items-center gap-2"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#light-fixtures-body"
+                aria-expanded="true"
+                aria-controls="light-fixtures-body"
+            >
+                <i id="light-fixtures-chevron" class="bi bi-chevron-down"></i>
+                <strong class="small">{{ t.light_fixtures_title }}</strong>
+                <span
+                    id="light-fixtures-count"
+                    class="badge text-bg-secondary"
+                ></span>
+            </button>
+
+            <div class="collapse show" id="light-fixtures-body">
+                <div id="light-fixtures" class="mt-2"></div>
+            </div>
 
             <hr class="my-3">
 
