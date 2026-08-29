@@ -47,6 +47,14 @@ class LichtMixin:
         # steht in der Karte "Show laeuft", waehrend der Lesethread
         # laengst weg ist - und man sucht den Fehler bei der Musik.
         #
+        #
+        # Wie viele Kanaele das Interface hat - fuer die Auswahl des
+        # Kanalpaars in den Einstellungen. Dieselbe Quelle, aus der
+        # start_light_show() prueft, ob das gewaehlte Paar ueberhaupt
+        # existiert.
+        #
+        stand["input_channels"] = self.recorder.backend.channels
+
         stand["show_stream"] = self.light_engine.strom_da
         stand["show_blocks"] = self.light_engine.bloecke
 

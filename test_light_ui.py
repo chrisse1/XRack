@@ -207,6 +207,12 @@ def stand(enabled=True, service=True, adapter=True, overlaps=None,
         "values": {"bar": [255, 0, 0] * 8},
         "brightness": {"bar": 64},
         "dmx": {"service_running": service, "adapter_present": adapter},
+
+        #
+        # Wie viele Kanaele das Interface hat - daraus baut die
+        # Oberflaeche die Auswahl des Kanalpaars.
+        #
+        "input_channels": 8,
         "show_running": show_running,
         "show_state": show_state,
         "show_stream": show_running,
@@ -952,6 +958,82 @@ assert ergebnis["wert"] == "static", (
 )
 
 print("OK: Eine geänderte Art wird sofort im Feld angezeigt")
+
+
+# ====================================================================
+# 17. Kanalpaar als Auswahl, Überschriften, drei Farbblöcke
+# ====================================================================
+
+ergebnis = ausfuehren(stand(), """function () {
+    const kanal = document.getElementById('light-show-channel');
+
+    return {
+        art: kanal.tagName,
+        werte: Array.from(kanal.options).map((o) => o.value),
+        texte: Array.from(kanal.options).map((o) => o.textContent),
+        gewaehlt: kanal.value,
+        text: document.getElementById('lightSetupModal').textContent,
+        farben: document.querySelectorAll(
+            '#lightSetupModal input[type=color]').length
+    };
+}""")
+
+#
+# Acht Kanaele ergeben genau vier Paare - keine krummen Reste, und
+# der letzte ist 7+8.
+#
+assert ergebnis["art"] == "SELECT", (
+    "Das Kanalpaar ist noch ein Eingabefeld: " + ergebnis["art"]
+)
+assert ergebnis["werte"] == ["1", "3", "5", "7"], ergebnis["werte"]
+assert ergebnis["texte"][0] == TEXTE["channel_option"].replace(
+    "{a}", "1").replace("{b}", "2"), ergebnis["texte"]
+assert ergebnis["texte"][-1] == TEXTE["channel_option"].replace(
+    "{a}", "7").replace("{b}", "8"), ergebnis["texte"]
+#
+# Und der gespeicherte Wert ist vorgewaehlt - im Attrappenzustand
+# steht Kanal 3, also das Paar 3+4.
+#
+assert ergebnis["gewaehlt"] == "3", ergebnis["gewaehlt"]
+
+print("OK: Das Kanalpaar wird ausgewählt statt eingetippt")
+
+#
+# Die beiden Ueberschriften ueber den Anlege-Feldern.
+#
+for schluessel in ("light_fixture_new", "light_template_new"):
+    assert TEXTE[schluessel] in ergebnis["text"], (
+        f"Die Überschrift '{TEXTE[schluessel]}' fehlt im Dialog."
+    )
+
+print("OK: Über den Anlege-Feldern stehen Überschriften")
+
+#
+# Drei Farbsaetze zu je drei Waehlern.
+#
+assert ergebnis["farben"] == 9, (
+    f"Es sind nicht neun Farbwähler, sondern {ergebnis['farben']}."
+)
+
+print("OK: Es gibt neun Farbwähler in drei Blöcken")
+
+
+#
+# Und die drei Ueberschriften der Farbbloecke benennen, wofuer sie
+# gelten - das war der Anlass: "Farben der Frequenzbereiche" galt
+# stillschweigend fuer Effektlicht UND Hintergrund 1.
+#
+ergebnis = ausfuehren(stand(), """function () {
+    return { text: document.getElementById('lightSetupModal').textContent };
+}""")
+
+for schluessel in ("light_show_colors", "light_show_colors_1",
+                   "light_show_colors_2"):
+    assert TEXTE[schluessel] in ergebnis["text"], (
+        f"Die Überschrift '{TEXTE[schluessel]}' fehlt."
+    )
+
+print("OK: Jeder Farbblock sagt, für welche Lampenart er gilt")
 
 
 print("Alle Lichtkarten-Tests erfolgreich.")

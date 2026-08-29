@@ -5659,10 +5659,24 @@ function renderLightShowSettings(stand) {
         if (element && document.activeElement !== element) element.value = wert;
     };
 
-    setzen("light-show-channel", show.channel);
+    //
+    // Das Kanalpaar aus der Kanalzahl des Interfaces aufbauen -
+    // derselbe Helfer wie beim Musikspieler und bei der Aufnahme.
+    // Er zeichnet nur neu, wenn sich die Kanalzahl geaendert hat,
+    // die Auswahl springt also nicht bei jedem Statusabruf zurueck.
+    //
+    const kanal = document.getElementById("light-show-channel");
+
+    if (kanal) {
+        buildChannelOptions(kanal, stand.input_channels || 2, show.channel);
+        setzen("light-show-channel", show.channel);
+    }
     setzen("light-show-color-low", show.color_low);
     setzen("light-show-color-mid", show.color_mid);
     setzen("light-show-color-high", show.color_high);
+    setzen("light-show-color-low-1", show.color_low_1);
+    setzen("light-show-color-mid-1", show.color_mid_1);
+    setzen("light-show-color-high-1", show.color_high_1);
     setzen("light-show-color-low-2", show.color_low_2);
     setzen("light-show-color-mid-2", show.color_mid_2);
     setzen("light-show-color-high-2", show.color_high_2);
@@ -5775,6 +5789,9 @@ async function saveLightShowSettings() {
         color_low: farbe("light-show-color-low"),
         color_mid: farbe("light-show-color-mid"),
         color_high: farbe("light-show-color-high"),
+        color_low_1: farbe("light-show-color-low-1"),
+        color_mid_1: farbe("light-show-color-mid-1"),
+        color_high_1: farbe("light-show-color-high-1"),
         color_low_2: farbe("light-show-color-low-2"),
         color_mid_2: farbe("light-show-color-mid-2"),
         color_high_2: farbe("light-show-color-high-2"),
@@ -5819,6 +5836,8 @@ function lightShowPulsSetzen(laeuft) {
         "light-show-fade-seconds",
         "light-show-color-low", "light-show-color-mid",
         "light-show-color-high",
+        "light-show-color-low-1", "light-show-color-mid-1",
+        "light-show-color-high-1",
         "light-show-color-low-2", "light-show-color-mid-2",
         "light-show-color-high-2"
     ]) {

@@ -210,6 +210,9 @@ class LightingShowSettings(BaseModel):
     color_low: str | None = None
     color_mid: str | None = None
     color_high: str | None = None
+    color_low_1: str | None = None
+    color_mid_1: str | None = None
+    color_high_1: str | None = None
     color_low_2: str | None = None
     color_mid_2: str | None = None
     color_high_2: str | None = None

@@ -448,7 +448,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Licht: Einrichten
         "light_setup_title": "Licht einrichten",
         "light_fixtures_title": "Lampen",
+        "light_fixture_new": "Lampe aus Vorlage erstellen",
         "light_templates_title": "Gerätevorlagen",
+        "light_template_new": "Eigene Vorlage erstellen",
         "light_name": "Name",
         "light_template": "Vorlage",
         "light_address": "Startadresse",
@@ -532,8 +534,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "kommen nicht mehr rein an, sondern mischen sich zu einem "
             "Mittelton. Trägheit verkürzen oder Farbwechsel verlängern."
         ),
-        "light_show_colors": "Farben der Frequenzbereiche",
-        "light_show_colors_2": "Farben für Hintergrundlicht 2",
+        "light_show_colors": "Farben: Effektlicht",
+        "light_show_colors_1": "Farben: Hintergrundlicht 1",
+        "light_show_colors_2": "Farben: Hintergrundlicht 2",
+        "light_show_colors_1_hint": (
+            "Nur für Lampen der Gruppe \"Hintergrundlicht 1\"."
+        ),
         "light_show_colors_2_hint": (
             "Nur für Lampen der Gruppe \"Hintergrundlicht 2\". Sie läuft um eine Farbe versetzt, damit immer zwei verschiedene Farben auf der Bühne stehen."
         ),
@@ -993,7 +999,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Lighting: setup
         "light_setup_title": "Set up lighting",
         "light_fixtures_title": "Fixtures",
+        "light_fixture_new": "Create a fixture from a template",
         "light_templates_title": "Fixture types",
+        "light_template_new": "Create your own template",
         "light_name": "Name",
         "light_template": "Type",
         "light_address": "Start address",
@@ -1076,8 +1084,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "longer arrive and blur into a mid tone. Shorten the inertia "
             "or lengthen the colour change."
         ),
-        "light_show_colors": "Colours for the frequency bands",
-        "light_show_colors_2": "Colours for background light 2",
+        "light_show_colors": "Colours: effect light",
+        "light_show_colors_1": "Colours: background light 1",
+        "light_show_colors_2": "Colours: background light 2",
+        "light_show_colors_1_hint": (
+            "Only for fixtures in the \"Background light 1\" group."
+        ),
         "light_show_colors_2_hint": (
             "Only for fixtures in the \"Background light 2\" group. It runs one colour offset so two different colours are always on stage."
         ),

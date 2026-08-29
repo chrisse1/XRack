@@ -1269,6 +1269,8 @@
 
                 <div id="light-fixture-list" class="list-group mb-3"></div>
 
+                <h6 class="fw-semibold">{{ t.light_fixture_new }}</h6>
+
                 <div class="row g-2 align-items-end mb-4">
 
                     <div class="col-12 col-sm-3">
@@ -1359,6 +1361,8 @@
                     eines hat, baut hier die Kanalliste aus dem
                     Handbuch nach - einmal, danach ist sie richtig.
                 #}
+                <h6 class="fw-semibold">{{ t.light_template_new }}</h6>
+
                 <div class="row g-2 align-items-end mb-2">
 
                     <div class="col-12 col-sm-6">
@@ -1423,13 +1427,18 @@
                         <label class="form-label small mb-1" for="light-show-channel">
                             {{ t.light_show_channel }}
                         </label>
-                        <input
+                        {#
+                            Auswahl statt Zahlenfeld: So wie ueberall
+                            sonst in XRack, und ein Paar, das es am
+                            Interface nicht gibt, laesst sich damit
+                            gar nicht erst waehlen. Gefuellt wird es
+                            in xrack.js aus der Kanalzahl des
+                            Interfaces.
+                        #}
+                        <select
                             id="light-show-channel"
-                            type="number"
-                            class="form-control form-control-sm"
-                            min="1"
-                            value="1"
-                        >
+                            class="form-select form-select-sm"
+                        ></select>
                         <div class="form-text">{{ t.light_show_channel_hint }}</div>
                     </div>
 
@@ -1610,6 +1619,52 @@
                 </div>
 
                 <div class="form-text mb-3">{{ t.light_show_colors_hint }}</div>
+
+                <label class="form-label small mb-1">
+                    {{ t.light_show_colors_1 }}
+                </label>
+
+                <div class="d-flex flex-wrap gap-3 mb-2">
+
+                    <div>
+                        <div class="text-body-secondary" style="font-size: 0.75rem;">
+                            {{ t.light_show_color_low }}
+                        </div>
+                        <input
+                            id="light-show-color-low-1"
+                            type="color"
+                            class="form-control form-control-color"
+                            value="#ff0000"
+                        >
+                    </div>
+
+                    <div>
+                        <div class="text-body-secondary" style="font-size: 0.75rem;">
+                            {{ t.light_show_color_mid }}
+                        </div>
+                        <input
+                            id="light-show-color-mid-1"
+                            type="color"
+                            class="form-control form-control-color"
+                            value="#00ff00"
+                        >
+                    </div>
+
+                    <div>
+                        <div class="text-body-secondary" style="font-size: 0.75rem;">
+                            {{ t.light_show_color_high }}
+                        </div>
+                        <input
+                            id="light-show-color-high-1"
+                            type="color"
+                            class="form-control form-control-color"
+                            value="#0000ff"
+                        >
+                    </div>
+
+                </div>
+
+                <div class="form-text mb-3">{{ t.light_show_colors_1_hint }}</div>
 
                 <label class="form-label small mb-1">
                     {{ t.light_show_colors_2 }}

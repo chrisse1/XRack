@@ -48,7 +48,19 @@ SHOW_VORGABE = {
     "color_high": "#0000ff",
 
     #
-    # Derselbe Satz noch einmal fuer die zweite Hintergrundgruppe.
+    # Derselbe Satz noch einmal fuer die ERSTE Hintergrundgruppe.
+    #
+    # Die Vorgabe ist mit Absicht dieselbe wie oben: Wer nichts
+    # umstellt, sieht genau das Bild von vorher, als sich Effektlicht
+    # und Hintergrund 1 noch einen Satz teilten. Es geht erst
+    # auseinander, wenn man es auseinanderzieht.
+    #
+    "color_low_1": "#ff0000",
+    "color_mid_1": "#00ff00",
+    "color_high_1": "#0000ff",
+
+    #
+    # Und fuer die zweite Hintergrundgruppe.
     #
     # Die Vorgabe ist bewusst eine ANDERE Palette - Magenta, Amber,
     # Cyan statt Rot, Gruen, Blau. Waeren beide gleich, saehe man den
@@ -376,6 +388,27 @@ class LightingStore:
         vorlagen = self.vorlagen()
         daten = self._laden()
 
+        #
+        # Kein zweites Mal derselbe Name.
+        #
+        # Szenen werden ueberall ueber ihren Namen ausgewaehlt - in
+        # der Karte und in der Rueckfall-Auswahl. Zwei Szenen "Pause"
+        # sind dort nicht auseinanderzuhalten: Man klickt eine und
+        # bekommt vielleicht die andere.
+        #
+        # Die eigene Szene muss ausgenommen bleiben. Diese Funktion
+        # legt naemlich nicht nur an, sie aendert auch - und eine
+        # vorhandene Szene unter ihrem eigenen Namen zu speichern
+        # duerfte nicht plötzlich scheitern.
+        #
+        for vorhanden in daten["scenes"]:
+
+            if vorhanden.get("id") == kennung:
+                continue
+
+            if str(vorhanden.get("name", "")).strip().lower() == name.lower():
+                return False, "Eine Szene mit diesem Namen gibt es schon.", ""
+
         bekannt = {lampe["id"] for lampe in daten["fixtures"]}
 
         werte = {}
@@ -466,8 +499,13 @@ class LightingStore:
 
             show["channel"] = kanal
 
-        for name in ("color_low", "color_mid", "color_high",
-                     "color_low_2", "color_mid_2", "color_high_2"):
+        farbnamen = tuple(
+            f"color_{band}{satz}"
+            for satz in ("", "_1", "_2")
+            for band in ("low", "mid", "high")
+        )
+
+        for name in farbnamen:
 
             if name not in werte:
                 continue

@@ -59,7 +59,12 @@ VORGABE_FARBEN = {
     "color_mid": "#00ff00",
     "color_high": "#0000ff",
 
-    # Der Satz der zweiten Hintergrundgruppe.
+    # Der Satz der ersten Hintergrundgruppe.
+    "color_low_1": "#ff0000",
+    "color_mid_1": "#00ff00",
+    "color_high_1": "#0000ff",
+
+    # Und der der zweiten.
     "color_low_2": "#ff00ff",
     "color_mid_2": "#ffaa00",
     "color_high_2": "#00ffff",
@@ -68,13 +73,17 @@ VORGABE_FARBEN = {
 #
 # Welchen Farbsatz eine Lampenart benutzt.
 #
-# Das Effektlicht und die erste Hintergrundgruppe teilen sich den
-# ersten Satz - so war es, bevor es eine zweite Gruppe gab, und so
-# bleibt eine vorhandene Einrichtung unveraendert.
+# Jede Art hat ihren eigenen Satz. Das ist die einzige Stelle, an der
+# die Zuordnung steht.
+#
+# Anfangs teilten sich Effektlicht und Hintergrund 1 den namenlosen
+# Satz. Das war nirgends aufgeschrieben und fiel erst auf, als die
+# Ueberschrift im Dialog "Farben der Frequenzbereiche" hiess und
+# stillschweigend fuer zwei Dinge galt.
 #
 FARBSATZ = {
     "effect": "",
-    "background": "",
+    "background": "_1",
     "background2": "_2",
 }
 
@@ -478,7 +487,7 @@ class LightEngine:
                 or VORGABE_FARBEN[einstellung + anhang]
             )
             for band, einstellung in BAENDER
-            for anhang in ("", "_2")
+            for anhang in ("", "_1", "_2")
         }
 
         vorlagen = self.application.lighting_store.vorlagen()

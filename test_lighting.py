@@ -429,6 +429,21 @@ class DmxAttrappe:
         return {"service_running": self.antwortet, "adapter_present": True}
 
 
+class RecorderAttrappe:
+    """
+    Nur so viel Recorder, wie die Lichtsteuerung liest.
+
+    Die Kanalzahl des Interfaces steht im Statusbericht - die
+    Oberfläche baut daraus die Auswahl des Kanalpaars.
+    """
+
+    class Backend:
+        channels = 8
+        rate = 48000
+
+    backend = Backend()
+
+
 class LichtApp(LichtMixin):
     """Nur die Teile von Application, die die Lichtsteuerung anfasst."""
 
@@ -436,6 +451,7 @@ class LichtApp(LichtMixin):
 
         self.lighting_store = store
         self.dmx_control = dmx
+        self.recorder = RecorderAttrappe()
         self.light_values = {}
         self.light_brightness = {}
 
@@ -2351,6 +2367,155 @@ with tempfile.TemporaryDirectory() as tmp:
     )
 
     print("OK: Von Hand eingestellte Helligkeit bleibt während der Show stehen")
+
+
+# ====================================================================
+# 17. Szenennamen sind eindeutig
+#
+# Szenen werden ueberall ueber ihren Namen ausgewaehlt - in der Karte
+# und in der Rueckfall-Auswahl. Zwei Szenen "Pause" sind dort nicht
+# auseinanderzuhalten: Man klickt eine und bekommt vielleicht die
+# andere.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+
+    ok, meldung, kennung = licht.szene_speichern("Pause", {})
+    assert ok, meldung
+
+    for zweiter in ("Pause", "pause", "  PAUSE  "):
+
+        ok, meldung, _ = licht.szene_speichern(zweiter, {})
+
+        assert not ok and "gibt es schon" in meldung, (
+            f"'{zweiter}' wurde angenommen: {meldung}"
+        )
+
+    print("OK: Ein zweites Mal derselbe Szenenname wird abgewiesen")
+
+    #
+    # Die Gegenseite, und die Stelle, an der eine zu strenge Pruefung
+    # Schaden anrichtet: Eine VORHANDENE Szene muss sich weiter unter
+    # ihrem eigenen Namen speichern lassen. Diese Funktion legt nicht
+    # nur an, sie aendert auch.
+    #
+    ok, meldung, zurueck = licht.szene_speichern("Pause", {}, kennung)
+
+    assert ok, f"Die eigene Szene lässt sich nicht mehr speichern: {meldung}"
+    assert zurueck == kennung, (zurueck, kennung)
+    assert len(licht.szenen()) == 1, licht.szenen()
+
+    print("OK: Eine vorhandene Szene lässt sich unter ihrem Namen speichern")
+
+
+# ====================================================================
+# 18. Drei getrennte Farbsätze
+#
+# Effektlicht, Hintergrundlicht 1 und Hintergrundlicht 2 haben jeder
+# einen eigenen. Anfangs teilten sich Effektlicht und Hintergrund 1
+# einen - das stand nirgends und fiel erst auf, als die Ueberschrift
+# im Dialog stillschweigend fuer zwei Dinge galt.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    #
+    # Die Vorgaben von Satz 1 und dem namenlosen muessen gleich sein:
+    # Eine vorhandene Einrichtung soll sich nach dem Update genauso
+    # verhalten wie vorher.
+    #
+    vorgabe = ablage(Path(tmp)).show_einstellungen()
+
+    for band in ("low", "mid", "high"):
+        assert vorgabe[f"color_{band}"] == vorgabe[f"color_{band}_1"], (
+            f"Satz 1 startet anders als der namenlose bei {band}: "
+            f"{vorgabe[f'color_{band}']} vs {vorgabe[f'color_{band}_1']}"
+        )
+
+    print("OK: Hintergrund 1 startet mit denselben Farben wie vorher")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+
+    for kennung, art, adresse in (
+        ("e", "effect", 1), ("h1", "background", 10), ("h2", "background2", 20),
+    ):
+        licht.lampe_speichern({
+            "id": kennung, "name": kennung, "template": "rgb",
+            "address": adresse, "kind": art,
+        })
+
+    app = LichtApp(licht, DmxAttrappe())
+    motor = app.light_engine
+
+    #
+    # Drei Saetze, die sich an einem einzigen Kanal unterscheiden
+    # lassen: rein rot, rein gruen, rein blau.
+    #
+    motor.einstellungen = {
+        "sensitivity": 1.0,
+        "background_seconds": 1.0,
+        "background_beats": 8,
+        "color_low": "#ff0000", "color_mid": "#ff0000", "color_high": "#ff0000",
+        "color_low_1": "#00ff00", "color_mid_1": "#00ff00",
+        "color_high_1": "#00ff00",
+        "color_low_2": "#0000ff", "color_mid_2": "#0000ff",
+        "color_high_2": "#0000ff",
+    }
+
+    motor.stand = {"low": 1.0, "mid": 1.0, "high": 1.0,
+                   "level": 0.9, "beat": False}
+
+    for _ in range(300):
+        werte = motor.werte_je_lampe()
+
+    assert werte["e"][0] > 200 and werte["e"][1] == 0, (
+        f"Das Effektlicht nimmt nicht den namenlosen Satz: {werte['e']}"
+    )
+    assert werte["h1"][1] > 200 and werte["h1"][0] == 0, (
+        f"Hintergrund 1 nimmt nicht seinen eigenen Satz: {werte['h1']}"
+    )
+    assert werte["h2"][2] > 200 and werte["h2"][0] == 0, (
+        f"Hintergrund 2 nimmt nicht seinen Satz: {werte['h2']}"
+    )
+
+    print("OK: Jede der drei Arten benutzt ihren eigenen Farbsatz")
+
+    #
+    # Und eine unsinnige Farbe im neuen Satz wird genauso abgewiesen
+    # wie in den anderen.
+    #
+    ok, meldung = licht.set_show_einstellungen({"color_mid_1": "grün"})
+    assert not ok and "Farbe" in meldung, meldung
+
+    ok, meldung = licht.set_show_einstellungen({"color_mid_1": "#123456"})
+    assert ok, meldung
+
+    print("OK: Auch der neue Satz wird auf gültige Farben geprüft")
+
+
+# ====================================================================
+# 19. Die Kanalzahl des Interfaces steht im Statusbericht
+#
+# Ohne sie kann die Oberflaeche die Auswahl der Kanalpaare nicht
+# bauen, und man muesste die Zahl wieder eintippen.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    app, _ = aufbau(Path(tmp))
+
+    assert app.get_lighting_status()["input_channels"] == 8, (
+        app.get_lighting_status().get("input_channels")
+    )
+
+    print("OK: Die Kanalzahl des Interfaces steht im Bericht")
 
 
 print("Alle Licht-Tests erfolgreich.")
