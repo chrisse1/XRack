@@ -516,15 +516,59 @@ configure_hostname_and_avahi() {
 # ("Verbindung ist nicht privat" o.ä.) - "Erweitert" -> "Trotzdem
 # fortfahren" reicht, danach merkt sich der Browser die Ausnahme für
 # dieses Gerät. Zehn Jahre Gültigkeit, damit das nicht regelmäßig
-# erneut bestätigt werden muss. Wird bei jedem install.sh-Lauf neu
-# erzeugt (falls sich der Hostname geändert hat), eine bereits erteilte
-# Browser-Ausnahme muss dann einmalig erneut bestätigt werden.
+# erneut bestätigt werden muss.
 #
+# Ein vorhandenes, passendes Zertifikat wird behalten.
+#
+# Vorher wurde bei jedem Lauf ein neues erzeugt. Das war vertretbar,
+# solange man den Installer selten laufen ließ - nur muss man ihn
+# nach einem Update mit geänderter install.sh ausdrücklich noch
+# einmal starten, und dann wäre auf JEDEM Handy, Tablet und Rechner
+# die Sicherheitswarnung wieder da. Der Grund fürs Neuerzeugen war
+# ein möglicherweise geänderter Hostname, und genau das lässt sich
+# nachsehen, statt es vorsorglich anzunehmen.
+#
+# Wer trotzdem ein frisches will, löscht certs/ und lässt install.sh
+# noch einmal laufen.
+#
+zertifikat_passt() {
+
+    local crt="${INSTALL_DIR}/certs/xrack.crt"
+    local key="${INSTALL_DIR}/certs/xrack.key"
+
+    [ -f "${crt}" ] && [ -f "${key}" ] || return 1
+
+    #
+    # Läuft es noch mindestens 30 Tage? Bei zehn Jahren Laufzeit ist
+    # das eine Rückversicherung, kein Regelfall - aber ein
+    # abgelaufenes Zertifikat stillschweigend zu behalten wäre die
+    # schlechteste aller Möglichkeiten.
+    #
+    openssl x509 -in "${crt}" -noout -checkend 2592000 >/dev/null 2>&1 \
+        || return 1
+
+    #
+    # Deckt es den aktuellen Hostnamen ab? Auf den genauen Eintrag
+    # geprüft und nicht nur auf das Vorkommen: Sonst würde bei
+    # Hostname "pi" auch ein Zertifikat für "pi-studio" passen.
+    #
+    openssl x509 -in "${crt}" -noout -text 2>/dev/null \
+        | grep -qE "(^|[ ,])DNS:${XRACK_HOSTNAME}([ ,]|\$)" || return 1
+
+    return 0
+}
+
 generate_tls_certificate() {
 
-    echo "$(L "XRack: Selbstsigniertes TLS-Zertifikat wird erzeugt..." "XRack: Generating self-signed TLS certificate...")"
-
     mkdir -p "${INSTALL_DIR}/certs"
+
+    if zertifikat_passt; then
+
+        echo "$(L "XRack: Vorhandenes TLS-Zertifikat wird behalten (Browser-Ausnahmen bleiben gültig)." "XRack: Keeping the existing TLS certificate (browser exceptions stay valid).")"
+        return 0
+    fi
+
+    echo "$(L "XRack: Selbstsigniertes TLS-Zertifikat wird erzeugt..." "XRack: Generating self-signed TLS certificate...")"
 
     openssl req -x509 -nodes -newkey rsa:2048 \
         -keyout "${INSTALL_DIR}/certs/xrack.key" \

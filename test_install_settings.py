@@ -159,4 +159,119 @@ for kaputt in (
 print("OK: Eine unlesbare Datei führt zu den Vorgaben, nicht zum Abbruch")
 
 
+# ====================================================================
+# 4. Ein vorhandenes TLS-Zertifikat wird behalten
+#
+# Vorher wurde bei jedem Lauf ein neues erzeugt. Das war vertretbar,
+# solange man den Installer selten startete - nur muss man ihn nach
+# einem Update mit geaenderter install.sh ausdruecklich noch einmal
+# laufen lassen, und dann waere auf JEDEM Handy, Tablet und Rechner
+# die Sicherheitswarnung wieder da und muesste neu bestaetigt werden.
+#
+# Der Grund fuers Neuerzeugen war ein moeglicherweise geaenderter
+# Hostname. Genau das laesst sich nachsehen, statt es vorsorglich
+# anzunehmen.
+# ====================================================================
+
+def zertifikat_bauen(ordner: Path, hostname: str, tage: int) -> None:
+    """Ein echtes Zertifikat mit openssl - keine Attrappe."""
+
+    (ordner / "certs").mkdir(exist_ok=True)
+
+    subprocess.run(
+        [
+            "openssl", "req", "-x509", "-nodes", "-newkey", "rsa:2048",
+            "-keyout", str(ordner / "certs" / "xrack.key"),
+            "-out", str(ordner / "certs" / "xrack.crt"),
+            "-days", str(tage),
+            "-subj", f"/CN={hostname}",
+            "-addext",
+            f"subjectAltName=DNS:{hostname},DNS:{hostname}.local,"
+            "DNS:localhost,IP:127.0.0.1",
+        ],
+        capture_output=True, timeout=60, check=True,
+    )
+
+
+def passt(ordner: Path, hostname: str) -> bool:
+    """Ruft zertifikat_passt aus install.sh auf."""
+
+    skript = ordner / "zert.sh"
+    skript.write_text(
+        "export XRACK_INSTALL_SOURCE_ONLY=1\n"
+        f"source {INSTALL}\n"
+        f'INSTALL_DIR="{ordner}"\n'
+        f'XRACK_HOSTNAME="{hostname}"\n'
+        "zertifikat_passt\n",
+        encoding="utf-8",
+    )
+
+    return subprocess.run(
+        ["bash", str(skript)], capture_output=True, timeout=60
+    ).returncode == 0
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    ordner = Path(tmp)
+
+    zertifikat_bauen(ordner, "xrack", 3650)
+
+    assert passt(ordner, "xrack"), (
+        "Ein passendes Zertifikat wird verworfen - jede Browser-Ausnahme "
+        "müsste danach neu bestätigt werden."
+    )
+
+    #
+    # Auf den GENAUEN Eintrag geprueft, nicht auf das Vorkommen: Sonst
+    # wuerde bei Hostname "xra" ein Zertifikat fuer "xrack" passen,
+    # und der Browser bekaeme eines, das seinen Namen gar nicht nennt.
+    #
+    assert not passt(ordner, "xra"), (
+        "Ein Zertifikat für 'xrack' gilt fälschlich auch für 'xra'."
+    )
+    assert not passt(ordner, "xrackstudio"), (
+        "Ein Zertifikat für 'xrack' gilt fälschlich auch für 'xrackstudio'."
+    )
+    assert not passt(ordner, "x18rack"), (
+        "Ein geänderter Hostname muss ein neues Zertifikat auslösen."
+    )
+
+    print("OK: Ein passendes Zertifikat bleibt, ein fremder Name nicht")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    #
+    # Ein bald ablaufendes Zertifikat stillschweigend zu behalten
+    # waere die schlechteste aller Moeglichkeiten.
+    #
+    ordner = Path(tmp)
+
+    zertifikat_bauen(ordner, "xrack", 10)
+
+    assert not passt(ordner, "xrack"), (
+        "Ein in 10 Tagen ablaufendes Zertifikat wird behalten."
+    )
+
+    print("OK: Ein bald ablaufendes Zertifikat wird erneuert")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    ordner = Path(tmp)
+
+    assert not passt(ordner, "xrack"), "Ohne Zertifikat muss neu erzeugt werden."
+
+    zertifikat_bauen(ordner, "xrack", 3650)
+    (ordner / "certs" / "xrack.key").unlink()
+
+    assert not passt(ordner, "xrack"), (
+        "Ohne Schlüssel nützt das Zertifikat nichts - es muss neu erzeugt "
+        "werden."
+    )
+
+    print("OK: Fehlt Zertifikat oder Schlüssel, wird neu erzeugt")
+
+
 print("Alle Installer-Einstellungstests erfolgreich.")
