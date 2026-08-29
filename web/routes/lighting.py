@@ -1,0 +1,198 @@
+"""
+Lichtsteuerung über DMX.
+"""
+
+from fastapi import APIRouter, Request
+from pydantic import BaseModel
+
+router = APIRouter()
+
+
+class LightingEnabledSelection(BaseModel):
+    enabled: bool
+
+
+class LightingTemplateSelection(BaseModel):
+    id: str = ""
+    name: str
+    channels: list[str]
+
+
+class LightingIdSelection(BaseModel):
+    id: str
+
+
+class LightingFixtureSelection(BaseModel):
+    id: str = ""
+    name: str
+    template: str
+    address: int
+
+
+class LightingValuesSelection(BaseModel):
+    id: str
+    values: list[int]
+
+
+class LightingBrightnessSelection(BaseModel):
+    id: str
+    brightness: int
+
+
+class LightingSceneSelection(BaseModel):
+    name: str
+    id: str = ""
+
+
+@router.get("/api/lighting/status")
+def lighting_status(request: Request):
+
+    application = request.app.state.application
+
+    return application.get_lighting_status()
+
+
+@router.post("/api/lighting/enabled")
+def lighting_enabled(
+    selection: LightingEnabledSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.set_lighting_enabled(selection.enabled)
+
+    return {"success": success, "message": message}
+
+
+@router.post("/api/lighting/template")
+def lighting_template(
+    selection: LightingTemplateSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.save_light_template(selection.model_dump())
+
+    return {"success": success, "message": message}
+
+
+@router.post("/api/lighting/template/delete")
+def lighting_template_delete(
+    selection: LightingIdSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.delete_light_template(selection.id)
+
+    return {"success": success, "message": message}
+
+
+@router.post("/api/lighting/fixture")
+def lighting_fixture(
+    selection: LightingFixtureSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.save_light_fixture(selection.model_dump())
+
+    return {"success": success, "message": message}
+
+
+@router.post("/api/lighting/fixture/delete")
+def lighting_fixture_delete(
+    selection: LightingIdSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.delete_light_fixture(selection.id)
+
+    return {"success": success, "message": message}
+
+
+@router.post("/api/lighting/values")
+def lighting_values(
+    selection: LightingValuesSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.set_light_fixture_values(
+        selection.id, selection.values
+    )
+
+    return {"success": success, "message": message}
+
+
+@router.post("/api/lighting/brightness")
+def lighting_brightness(
+    selection: LightingBrightnessSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.set_light_fixture_brightness(
+        selection.id, selection.brightness
+    )
+
+    return {"success": success, "message": message}
+
+
+@router.post("/api/lighting/blackout")
+def lighting_blackout(request: Request):
+
+    application = request.app.state.application
+
+    success, message = application.light_blackout()
+
+    return {"success": success, "message": message}
+
+
+@router.post("/api/lighting/scene")
+def lighting_scene(
+    selection: LightingSceneSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.save_light_scene(
+        selection.name, selection.id
+    )
+
+    return {"success": success, "message": message}
+
+
+@router.post("/api/lighting/scene/activate")
+def lighting_scene_activate(
+    selection: LightingIdSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.activate_light_scene(selection.id)
+
+    return {"success": success, "message": message}
+
+
+@router.post("/api/lighting/scene/delete")
+def lighting_scene_delete(
+    selection: LightingIdSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.delete_light_scene(selection.id)
+
+    return {"success": success, "message": message}

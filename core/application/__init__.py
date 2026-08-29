@@ -34,6 +34,8 @@ from core.updater import Updater
 from core.console_control import ConsoleControl, MIN_DB
 from core.diagnostics import Diagnostics
 from core.state_store import StateStore
+from core.dmx_control import DmxControl
+from lighting.store import LightingStore
 from core.pin import hash_pin, verify_pin
 from core.stem_combiner import combine_stems, StemCombineError
 import getpass
@@ -48,6 +50,7 @@ from core.application.audio import AudioMixin
 from core.application.aufnahme import AufnahmeMixin
 from core.application.bluetooth import BluetoothMixin
 from core.application.einstellungen import EinstellungenMixin
+from core.application.licht import LichtMixin
 from core.application.musik import MusikMixin
 from core.application.netzwerk import NetzwerkMixin
 from core.application.pult import PultMixin
@@ -60,6 +63,7 @@ class Application(
     AufnahmeMixin,
     BluetoothMixin,
     EinstellungenMixin,
+    LichtMixin,
     MusikMixin,
     NetzwerkMixin,
     PultMixin,
@@ -153,6 +157,18 @@ class Application(
         self.updater = Updater(self.usb_storage)
 
         self.console_control = ConsoleControl()
+
+        self.dmx_control = DmxControl()
+
+        self.lighting_store = LightingStore(self.state_store)
+
+        #
+        # Der aktuelle Lichtzustand: Lampen-Kennung -> Kanalwerte,
+        # relativ zum ersten Kanal der Lampe. Nur im Arbeitsspeicher -
+        # nach einem Neustart ist es dunkel, bis jemand eine Szene
+        # aufruft.
+        #
+        self.light_values: dict = {}
 
         self._usb_copy_lock = threading.Lock()
 
