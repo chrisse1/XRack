@@ -887,4 +887,71 @@ assert "3.5 s" in ergebnis["beschriftung"], ergebnis
 print("OK: Die Ausblendzeit steht in Sekunden im Dialog")
 
 
+# ====================================================================
+# 16. Die Auswahlfelder im Einrichten-Dialog bleiben offen
+#
+# Am Geraet gemeldet: "Die Dropdowns unter Lampen im Einstellungen
+# Modal bleiben nicht offen. Man kann also bei bereits angelegten
+# Lichtern den Modus nicht mehr aendern."
+#
+# Der Dialog wurde bei JEDEM Statusabruf neu aufgebaut, waehrend der
+# Show also zweimal pro Sekunde. Ein geoeffnetes Auswahlfeld wurde
+# dabei mitsamt seinem DOM-Knoten weggeworfen.
+#
+# Geprueft wird am KNOTEN, nicht am sichtbaren Inhalt: Der saehe nach
+# einem Neuaufbau genauso aus, und genau daran waere der Test
+# vorbeigelaufen.
+# ====================================================================
+
+ergebnis = ausfuehren(stand(show_running=True), """function () {
+    return {
+        gleich: window.__merker ===
+            document.querySelector('#light-fixture-list select'),
+        gefunden: !!document.querySelector('#light-fixture-list select')
+    };
+}""", vorher="""
+    document.getElementById('btn-light-setup').click();
+    window.__merker = document.querySelector('#light-fixture-list select');
+    renderLighting(lightState);
+    renderLighting(lightState);
+""")
+
+assert ergebnis["gefunden"], "Die Lampenzeile hat gar kein Auswahlfeld."
+assert ergebnis["gleich"], (
+    "Das Auswahlfeld wurde beim Neuzeichnen ersetzt - ein geöffnetes "
+    "Dropdown klappt damit zu."
+)
+
+print("OK: Das Auswahlfeld in der Lampenliste überlebt das Neuzeichnen")
+
+
+#
+# Aendert sich aber die Art einer Lampe, MUSS neu gezeichnet werden -
+# sonst bliebe die Rueckmeldung aus, und man wuesste nicht, ob die
+# Aenderung angekommen ist.
+#
+ergebnis = ausfuehren(stand(), """function () {
+    const feld = document.querySelector('#light-fixture-list select');
+    return { wert: feld ? feld.value : null };
+}""", vorher="""
+    //
+    // Ohne den Dialog zu oeffnen: Das Oeffnen stoesst selbst einen
+    // Statusabruf an, der asynchron mit dem urspruenglichen Zustand
+    // zurueckkommt und das geaenderte Bild wieder ueberschreiben
+    // wuerde. Die Liste steht ohnehin im DOM.
+    //
+    renderLighting(lightState);
+
+    const neu = JSON.parse(JSON.stringify(lightState));
+    neu.fixtures[0].kind = 'static';
+    renderLighting(neu);
+""")
+
+assert ergebnis["wert"] == "static", (
+    f"Nach einer Änderung wird nicht neu gezeichnet: {ergebnis}"
+)
+
+print("OK: Eine geänderte Art wird sofort im Feld angezeigt")
+
+
 print("Alle Lichtkarten-Tests erfolgreich.")

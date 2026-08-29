@@ -236,6 +236,14 @@ class LichtMixin:
         #
         self._blende_abbrechen()
 
+        #
+        # Laeuft die Show, ueberschreibt sie die Farbwerte ohnehin im
+        # naechsten Bild. Dann soll auch die Helligkeit der Szene
+        # nicht haengenbleiben.
+        #
+        if self.light_engine.running:
+            self._show_uebernahme = True
+
         self.light_values = {
             lampe: list(werte)
             for lampe, werte in (szene.get("values") or {}).items()
@@ -279,7 +287,13 @@ class LichtMixin:
         return erfolg, meldung
 
     def start_light_show(self) -> tuple[bool, str]:
-        """Die musikgesteuerte Show starten."""
+        """
+        Die musikgesteuerte Show starten.
+
+        Was vorher an Helligkeit eingestellt war - etwa aus einer von
+        Hand aufgerufenen Szene -, gilt fuer die Show nicht: Ihr
+        erstes Bild dreht die Lampen, die sie faehrt, wieder auf.
+        """
 
         if not self.lighting_store.enabled:
             return False, "Die Lichtsteuerung ist ausgeschaltet."
@@ -317,6 +331,8 @@ class LichtMixin:
         #
         self.recorder.add_consumer(self.light_engine.block_empfangen)
         self.recorder.start_analysis()
+
+        self._show_uebernahme = True
 
         self.light_engine.start(
             rate=self.recorder.backend.rate,
@@ -483,6 +499,43 @@ class LichtMixin:
             #
             self._blende_abbrechen()
 
+            #
+            # Hatte gerade etwas anderes das Licht in der Hand - der
+            # Rueckfall, eine Szene, ein frischer Start -, dann steht
+            # in light_brightness noch DEREN Helligkeit.
+            #
+            # Am Geraet sah das so aus: Wer die Rueckfallszene mit
+            # heruntergezogenen Reglern angelegt hatte, bekam
+            # anschliessend eine Show, die dauerhaft gedimmt lief. Die
+            # Farbwerte stimmten, die Helligkeit darunter nicht.
+            #
+            # Zurueckgesetzt wird nur beim Uebernehmen, nicht bei
+            # jedem Bild: Sonst waere der Helligkeitsregler in der
+            # Karte waehrend der Show wirkungslos und spraenge nach
+            # jedem Ziehen auf voll zurueck - genau der Fehler, der in
+            # 1.13 schon einmal behoben wurde.
+            #
+            if self._show_uebernahme:
+
+                self._show_uebernahme = False
+
+                ausgenommen = {
+                    lampe["id"]
+                    for lampe in self.lighting_store.lampen()
+                    if lampe.get("kind") == "static"
+                }
+
+                #
+                # Eintrag weg heisst volle Helligkeit - so liest es
+                # fixtures.bild(). Es muss also nichts auf 255 gesetzt
+                # werden.
+                #
+                self.light_brightness = {
+                    lampe: wert
+                    for lampe, wert in self.light_brightness.items()
+                    if lampe in ausgenommen
+                }
+
             self.light_values = werte
 
             self._licht_senden()
@@ -559,6 +612,12 @@ class LichtMixin:
             ziel_helligkeit.update(bewahrte_helligkeit)
 
             self._blende_starten(ziel, ziel_helligkeit, dauer)
+
+            #
+            # Kommt die Musik zurueck, soll die Show nicht mit der
+            # Helligkeit dieser Szene weiterlaufen.
+            #
+            self._show_uebernahme = True
 
             #
             # Den ersten Schritt gleich hier: Ist die Blende auf 0

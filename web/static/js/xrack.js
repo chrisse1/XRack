@@ -4959,6 +4959,18 @@ function renderLightScenes(stand) {
     const container = document.getElementById("light-scenes");
     if (!container) return;
 
+    //
+    // Auch hier nur bei Aenderung: Ein Knopf, der zwischen Druecken
+    // und Loslassen ausgetauscht wird, verschluckt den Klick.
+    //
+    const abdruck = JSON.stringify(
+        (stand.scenes || []).map((s) => [s.id, s.name])
+    );
+
+    if (abdruck === lightSzenenAbdruck) return;
+
+    lightSzenenAbdruck = abdruck;
+
     container.innerHTML = "";
 
     if (!stand.scenes || stand.scenes.length === 0) {
@@ -5109,6 +5121,24 @@ async function lightBlackout() {
 // Einrichten
 // ------------------------------------------------------------
 
+//
+// Fingerabdruecke der Listen im Einrichten-Dialog.
+//
+// Sie sind der Grund, warum die Auswahlfelder darin ueberhaupt
+// bedienbar sind: Frueher wurde der ganze Dialog bei JEDEM
+// Statusabruf neu aufgebaut, waehrend der Show also zweimal pro
+// Sekunde. Ein geoeffnetes Auswahlfeld wurde dabei mitsamt seinem
+// DOM-Knoten weggeworfen und klappte zu - die Art einer schon
+// angelegten Lampe liess sich damit gar nicht mehr aendern.
+//
+// Jetzt wird nur gezeichnet, wenn sich wirklich etwas geaendert hat.
+// Eine Zeitsperre wie in der Lichtkarte braucht es dann nicht mehr:
+// Wo nichts grundlos passiert, gibt es auch nichts abzufangen.
+//
+let lightSetupAbdruck = null;
+let lightVorlagenAbdruck = null;
+let lightSzenenAbdruck = null;
+
 function renderLightSetup(stand) {
     const lampen = document.getElementById("light-fixture-list");
     const vorlagenListe = document.getElementById("light-template-list");
@@ -5117,7 +5147,23 @@ function renderLightSetup(stand) {
     const vorlagen = {};
     (stand.templates || []).forEach((v) => { vorlagen[v.id] = v; });
 
-    if (auswahl) {
+    const vorlagenAbdruck = JSON.stringify(
+        (stand.templates || []).map((v) => [v.id, v.name, v.channels.length])
+    );
+
+    const lampenAbdruck = JSON.stringify(
+        (stand.fixtures || []).map((l) => [
+            l.id, l.name, l.template, l.address, l.last_address, l.kind
+        ])
+    );
+
+    const vorlagenNeu = vorlagenAbdruck !== lightVorlagenAbdruck;
+    const lampenNeu = lampenAbdruck !== lightSetupAbdruck;
+
+    lightVorlagenAbdruck = vorlagenAbdruck;
+    lightSetupAbdruck = lampenAbdruck;
+
+    if (auswahl && vorlagenNeu) {
         const gemerkt = auswahl.value;
         auswahl.innerHTML = "";
 
@@ -5154,7 +5200,7 @@ function renderLightSetup(stand) {
 
     renderLightFixtureRange();
 
-    if (lampen) {
+    if (lampen && (lampenNeu || vorlagenNeu)) {
         lampen.innerHTML = "";
 
         for (const lampe of stand.fixtures || []) {
@@ -5207,7 +5253,7 @@ function renderLightSetup(stand) {
         }
     }
 
-    if (vorlagenListe) {
+    if (vorlagenListe && vorlagenNeu) {
         vorlagenListe.innerHTML = "";
 
         for (const vorlage of stand.templates || []) {

@@ -449,6 +449,7 @@ class LichtApp(LichtMixin):
         self._blende_helligkeit_ziel = {}
         self._blende_dauer = 0.0
         self._blende_rest = 0.0
+        self._show_uebernahme = False
 
         self._light_lock = threading.Lock()
         self.logger = logging.getLogger("XRack-Test")
@@ -2243,6 +2244,113 @@ with tempfile.TemporaryDirectory() as tmp:
     assert app.light_values["p"] == [0, 0, 120], app.light_values["p"]
 
     print("OK: Ausgenommene Lampen stehen auch während der Blende still")
+
+
+# ====================================================================
+# 16. Die Show erbt die Helligkeit der Rückfallszene nicht
+#
+# Am Geraet gemeldet: Wer die statische Szene mit heruntergezogenen
+# Reglern angelegt hatte, bekam anschliessend eine Show, die dauerhaft
+# gedimmt lief.
+#
+# Ursache: licht_show_bild() setzte nur light_values. light_brightness
+# blieb stehen, wie der Rueckfall es aus der Szene uebernommen hatte -
+# und _licht_senden() legt es beim Senden wieder drauf. Die Farbwerte
+# stimmten, die Helligkeit darunter nicht.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+    licht.lampe_speichern({
+        "id": "p", "name": "Par", "template": "rgb", "address": 1,
+    })
+    licht.lampe_speichern({
+        "id": "fest", "name": "Ambient", "template": "rgb",
+        "address": 10, "kind": "static",
+    })
+
+    dmx = DmxAttrappe()
+    app = LichtApp(licht, dmx)
+
+    #
+    # Eine Szene mit deutlich heruntergezogener Helligkeit - genau
+    # der gemeldete Fall.
+    #
+    app.set_light_fixture_values("p", [255, 255, 255])
+    app.set_light_fixture_brightness("p", 51)
+    app.set_light_fixture_values("fest", [255, 0, 0])
+    app.set_light_fixture_brightness("fest", 80)
+
+    ok, meldung = app.save_light_scene("Pause")
+    assert ok, meldung
+
+    szene = licht.szenen()[0]["id"]
+
+    ok, meldung = licht.set_show_einstellungen({
+        "fallback_scene": szene, "fade_seconds": 0.0,
+    })
+    assert ok, meldung
+
+    #
+    # Songende: Rueckfall auf die gedimmte Szene.
+    #
+    app.licht_rueckfall("silence")
+    blende_zuende(app)
+
+    assert dmx.gesendet[-1][0:3] == [51, 51, 51], (
+        f"Die Szene muss gedimmt zurückkommen: {dmx.gesendet[-1][0:3]}"
+    )
+
+    #
+    # Und jetzt kommt die Musik zurück. Geprüft wird am gesendeten
+    # Rahmen, nicht an light_brightness: Auf dem Kabel steht, was die
+    # Lampen wirklich bekommen.
+    #
+    #
+    # So, wie der Show-Thread es tut: Ausgenommene Lampen sind im Bild
+    # mit drin, mit ihren bisherigen Werten (siehe
+    # LightEngine.werte_je_lampe). Sie wegzulassen waere hier ein
+    # Fehler im Test, nicht im Programm.
+    #
+    app.licht_show_bild({"p": [255, 255, 255], "fest": [255, 0, 0]})
+
+    assert dmx.gesendet[-1][0:3] == [255, 255, 255], (
+        f"Die Show läuft auf der Helligkeit der Szene weiter: "
+        f"{dmx.gesendet[-1][0:3]}"
+    )
+
+    #
+    # Die ausgenommene Lampe behält ihre - sie gehört nicht der Show.
+    #
+    assert dmx.gesendet[-1][9] == 80, (
+        f"Die Helligkeit der ausgenommenen Lampe wurde mit "
+        f"zurückgesetzt: {dmx.gesendet[-1][9]}"
+    )
+
+    print("OK: Die Show dreht auf, statt die Helligkeit der Szene zu erben")
+
+    #
+    # Die Gegenseite, und der eigentlich wichtige Teil: Ein von Hand
+    # eingestellter Wert muss die Show ueberleben.
+    #
+    # Wuerde jedes Show-Bild die Helligkeit zuruecksetzen, waere der
+    # Regler in der Karte waehrend der Show wirkungslos und spraenge
+    # nach jedem Ziehen auf voll zurueck - genau der Fehler aus 1.13.
+    #
+    ok, meldung = app.set_light_fixture_brightness("p", 128)
+    assert ok, meldung
+
+    for _ in range(20):
+        app.licht_show_bild({"p": [255, 255, 255], "fest": [255, 0, 0]})
+
+    assert dmx.gesendet[-1][0:3] == [128, 128, 128], (
+        f"Ein von Hand eingestellter Wert überlebt die Show nicht: "
+        f"{dmx.gesendet[-1][0:3]}"
+    )
+
+    print("OK: Von Hand eingestellte Helligkeit bleibt während der Show stehen")
 
 
 print("Alle Licht-Tests erfolgreich.")

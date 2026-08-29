@@ -197,6 +197,14 @@ class Application(
         self._blende_dauer = 0.0
         self._blende_rest = 0.0
 
+        #
+        # Merker: Etwas anderes als die Show hatte gerade das Licht in
+        # der Hand - eine Szene, der Rueckfall, ein frischer Start.
+        # Das naechste Show-Bild dreht die von ihr gefahrenen Lampen
+        # dann wieder auf volle Helligkeit.
+        #
+        self._show_uebernahme = False
+
         self.light_engine = LightEngine(self)
 
         self._usb_copy_lock = threading.Lock()
