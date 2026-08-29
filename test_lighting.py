@@ -1088,7 +1088,7 @@ with tempfile.TemporaryDirectory() as tmp:
     #
     # Was die Show unter keinen Umstaenden anfassen darf.
     #
-    # Laser sind kein Geschmacksthema, sondern eine Gefahr; die
+    # Ein Blitzlicht, das von selbst angeht, will niemand; die
     # Programmkanaele wuerden das Geraet sein eigenes Ding machen
     # lassen und alles uebersteuern, was XRack sendet. Beides muss
     # ueber jede Position des Lauflichts hinweg auf 0 bleiben.
@@ -1105,8 +1105,7 @@ with tempfile.TemporaryDirectory() as tmp:
         assert k[20] == 0, f"Programme über DMX angesteuert: {k[20]}"
         assert k[1] == 0 and k[3] == 0, "Strobe angesteuert"
 
-        assert b[20] == 0 and b[21] == 0, f"Laser angesteuert: {b[20:22]}"
-        assert b[4] == 0 and b[19] == 0 and b[22] == 0, "Rotation angesteuert"
+        assert b[3] == 0 and b[8] == 0, "Strobe angesteuert"
         assert b[23:] == [0] * 5, f"Strobe-LEDs angesteuert: {b[23:]}"
 
         s = werte["sechs29"]
@@ -1116,7 +1115,72 @@ with tempfile.TemporaryDirectory() as tmp:
             f"Bar- oder Programmkanal angesteuert: {s[27:]}"
         )
 
-    print("OK: Laser, Strobe und Programmkanäle bleiben unangetastet")
+    print("OK: Strobe- und Programmkanäle bleiben unangetastet")
+
+
+    #
+    # Drehung und Laser dagegen fährt die Show mit.
+    #
+    # Die Werte sind nicht beliebig: Laut Handbuch steht ein
+    # Drehkanal bei 0-4 still und laeuft erst ab 5 vorwaerts, in der
+    # oberen Haelfte aber rueckwaerts. Ein Laser ist bei 0-4 aus,
+    # bei 5-9 an, und ab 10 blitzt er. Landet ein Wert im falschen
+    # Bereich, dreht der Derby rueckwaerts oder der Laser blitzt -
+    # beides sieht man erst am Geraet, und beim Laser will man es
+    # nicht sehen.
+    #
+    motor.stand = {"low": 1.0, "mid": 1.0, "high": 1.0,
+                   "level": 0.9, "beat": False}
+
+    b = motor.werte_je_lampe()["laser"]
+
+    for kanal in (4, 19, 22):
+        assert 5 <= b[kanal] <= 127, (
+            f"Kanal {kanal + 1} dreht nicht vorwärts: {b[kanal]}"
+        )
+
+    for kanal in (20, 21):
+        assert 5 <= b[kanal] <= 9, (
+            f"Kanal {kanal + 1} ist kein sauberes \"Laser an\": {b[kanal]}"
+        )
+
+    print("OK: Drehung läuft vorwärts, die Laser stehen auf \"an\" statt Blitz")
+
+    #
+    # Bei Stille muessen die Laser aus sein - und die Drehung darf
+    # trotzdem nicht stehenbleiben, sonst sieht der Derby kaputt aus.
+    #
+    motor.stand = {"low": 0.0, "mid": 0.0, "high": 0.0,
+                   "level": 0.0, "beat": False}
+
+    b = motor.werte_je_lampe()["laser"]
+
+    assert b[20] == 0 and b[21] == 0, f"Laser bleibt an: {b[20:22]}"
+
+    for kanal in (4, 19, 22):
+        assert 5 <= b[kanal] <= 127, (
+            f"Die Drehung bleibt stehen: Kanal {kanal + 1} = {b[kanal]}"
+        )
+
+    print("OK: Ohne Musik gehen die Laser aus, die Drehung läuft weiter")
+
+    #
+    # Und die beiden Laser haengen an verschiedenen Baendern - sonst
+    # koennte man sie auch zusammenschalten.
+    #
+    motor.stand = {"low": 1.0, "mid": 0.0, "high": 0.0,
+                   "level": 0.5, "beat": False}
+
+    b = motor.werte_je_lampe()["laser"]
+
+    assert b[20] > 0 and b[21] == 0, (
+        f"Beide Laser hängen am selben Band: {b[20:22]}"
+    )
+
+    print("OK: Die beiden Laser hängen an verschiedenen Frequenzbändern")
+
+    motor.stand = {"low": 1.0, "mid": 1.0, "high": 1.0,
+                   "level": 0.9, "beat": False}
 
     #
     # Und der wandernde Punkt muss in JEDEM Takt auf einer Gruppe
@@ -1180,9 +1244,9 @@ with tempfile.TemporaryDirectory() as tmp:
     app.light_brightness = {}
 
     vonHand = [0] * 28
-    vonHand[20] = 200      # roter Laser
     vonHand[3] = 90        # Strobe Derby 1
-    vonHand[4] = 150       # Drehung Derby 1
+    vonHand[9] = 140       # "Keine Funktion" - Rolle generic
+    vonHand[26] = 200      # weisse Strobe-LED 3
 
     ok, meldung = app.set_light_fixture_values("laser", vonHand)
     assert ok, meldung
@@ -1194,9 +1258,9 @@ with tempfile.TemporaryDirectory() as tmp:
 
     stand29 = app.light_values["laser"]
 
-    assert stand29[20] == 200, f"Laser von der Show gelöscht: {stand29[20]}"
     assert stand29[3] == 90, f"Strobe von der Show gelöscht: {stand29[3]}"
-    assert stand29[4] == 150, f"Drehung von der Show gelöscht: {stand29[4]}"
+    assert stand29[9] == 140, f"Sonstiger Kanal gelöscht: {stand29[9]}"
+    assert stand29[26] == 200, f"Strobe-LED von der Show gelöscht: {stand29[26]}"
 
     #
     # Die Farbe muss die Show trotzdem stellen - sonst waere aus dem

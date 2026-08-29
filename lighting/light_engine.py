@@ -103,6 +103,37 @@ class LightEngine:
     #
     GRUNDHELLIGKEIT = 0.35
 
+    #
+    # Drehung eines Derby-/Effektspiegels.
+    #
+    # Die Handbuecher der Eurolite-Geraete kodieren das gleich:
+    # 0-4 steht, ab etwa 5 vorwaerts von langsam nach schnell, in
+    # der oberen Haelfte rueckwaerts. Angesteuert wird nur die
+    # untere, vorwaerts laufende Haelfte, und auch die nur zur
+    # Haelfte - ein Derby, der auf Anschlag rotiert, ist nach zwei
+    # Minuten anstrengend.
+    #
+    DREHUNG_MIN = 10
+    DREHUNG_SPANNE = 60
+
+    #
+    # Laser.
+    #
+    # Laut Handbuch ist 0-4 aus, 5-9 an, ab 10 Strobe. Angesteuert
+    # wird nur "an" - ein blitzender Laser ist eine ganz andere
+    # Hausnummer als ein stehender, und niemand will ihn ungefragt.
+    # 7 sitzt in der Mitte des An-Bereichs, also weit weg von
+    # beiden Kanten.
+    #
+    LASER_AN = 7
+
+    #
+    # Ab dieser Bandstaerke geht ein Laser an. Die Baender sind
+    # ueber 250 ms geglaettet (siehe analysis.py), deshalb flackert
+    # das nicht im Takt der Bildrate.
+    #
+    LASER_SCHWELLE = 0.25
+
     def __init__(self, application):
 
         self.application = application
@@ -472,11 +503,54 @@ class LightEngine:
                     127 + 60 * math.sin(self.phase * 0.5)
                 )
 
+            elif rolle == "rotation":
+
+                #
+                # Der Spiegel dreht sich mit dem Bass. Immer ein
+                # wenig, auch in leisen Passagen - ein Derby, der
+                # zwischendurch stehenbleibt, sieht kaputt aus.
+                #
+                werte[index] = fixtures.begrenzen(
+                    self.DREHUNG_MIN + self.DREHUNG_SPANNE * baender["low"]
+                )
+
             #
             # Strobe und Shutter bleiben, wo sie sind: Ein Blitzlicht,
             # das von selbst angeht, ist auf einer Buehne keine
             # Ueberraschung, die jemand haben will.
             #
+            # Gobo und Farbrad ebenso, aber aus einem anderen Grund:
+            # Was hinter einem Wert steckt, steht in keiner Norm,
+            # sondern in der Tabelle des jeweiligen Geraets. 42 heisst
+            # an einem Scheinwerfer "Sterne" und am naechsten "offen".
+            # Ohne ein Geraet zum Ausprobieren waere jede Ansteuerung
+            # geraten - und niemand koennte pruefen, ob sie stimmt.
+            #
+
+        #
+        # Die Laser.
+        #
+        # Der erste Laserkanal haengt am tiefen Band, der zweite am
+        # mittleren, der dritte am hohen - danach von vorn. An der
+        # Laser Bar sind das der rote und der gruene, die damit
+        # abwechselnd auf Bass und Stimmen ansprechen statt beide
+        # dasselbe zu tun.
+        #
+        nummer = 0
+
+        for index, rolle in enumerate(kanaele):
+
+            if rolle != "laser":
+                continue
+
+            band = BAENDER[nummer % len(BAENDER)][0]
+            nummer += 1
+
+            werte[index] = (
+                self.LASER_AN
+                if baender[band] >= self.LASER_SCHWELLE
+                else 0
+            )
 
         return werte
 

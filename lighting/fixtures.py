@@ -61,10 +61,11 @@ ROLLEN = (
     # Drehung eines Derby-/Effektspiegels und Laser-Kanaele.
     #
     # Beide gibt es an den Eurolite-Sets, und beide werden von der
-    # Show NICHT angesteuert - Laser wegen der offensichtlichen
-    # Gefahr, Drehung weil ein dauernd rotierender Effekt schnell
-    # unangenehm wird. Sie bekommen eigene Rollen statt "generic",
-    # damit in der Karte lesbar dasteht, was der Regler tut.
+    # Show angesteuert: die Drehung mit dem Bass, die Laser je nach
+    # Frequenzband an oder aus (siehe light_engine._werte). Sie
+    # bekommen eigene Rollen statt "generic", weil die Show sie
+    # unterschiedlich behandeln muss - und weil in der Karte lesbar
+    # dastehen soll, was der Regler tut.
     #
     "rotation",
     "laser",
@@ -203,9 +204,10 @@ EINGEBAUTE_VORLAGEN = (
         # mit je Rot/Gruen/Blau und einem Strobe-Kanal, dazu die
         # Laser und die weissen/UV-Strobe-LEDs.
         #
-        # Weder die Laser (Kanal 21/22) noch die Rotation (5/20/23)
-        # noch die Strobe-LEDs (24-28) werden von der Show
-        # angesteuert - siehe die Rollen weiter oben.
+        # Die Laser (Kanal 21/22) und die Drehung der beiden Derbys
+        # (5/20) und des Lasers (23) fährt die Show mit. Die
+        # Strobe-LEDs (24-28) nicht - ein Blitzlicht, das von selbst
+        # angeht, will niemand.
         #
         "id": "eurolite-kls-laser-bar-pro-fx-28",
         "name": "Eurolite LED KLS Laser Bar PRO FX (28-Kanal-Modus)",
