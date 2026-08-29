@@ -274,4 +274,99 @@ with tempfile.TemporaryDirectory() as tmp:
     print("OK: Fehlt Zertifikat oder Schlüssel, wird neu erzeugt")
 
 
+# ====================================================================
+# 5. Der Access-Point-Name faellt nicht auf "XRack" zurueck
+#
+# Vorher war "XRack" der feste Vorgabename. Wer seinen Access Point
+# anders genannt hatte, das Passwort beim zweiten Lauf aber neu
+# eintippte (weil leer den Schritt ueberspringt, tun das viele), und
+# beim Namen nur Enter drueckte, benannte ihn stillschweigend um -
+# und jedes gekoppelte Handy fand das Netz nicht mehr.
+# ====================================================================
+
+def ap_vorgabe(ordner: Path, conf_inhalt: str | None) -> str:
+    """Ruft ap_ssid_vorgabe aus install.sh auf."""
+
+    conf = ordner / "hostapd.conf"
+
+    if conf_inhalt is not None:
+        conf.write_text(conf_inhalt, encoding="utf-8")
+
+    #
+    # sudo wegdenken: Der Test laeuft nicht als root, und geprueft
+    # wird hier das Auslesen, nicht die Rechtevergabe.
+    #
+    binordner = ordner / "bin"
+    binordner.mkdir(exist_ok=True)
+
+    fake_sudo = binordner / "sudo"
+    fake_sudo.write_text('#!/bin/sh\nexec "$@"\n', encoding="utf-8")
+    fake_sudo.chmod(0o755)
+
+    skript = ordner / "ap.sh"
+    skript.write_text(
+        "export XRACK_INSTALL_SOURCE_ONLY=1\n"
+        f'export XRACK_HOSTAPD_CONF="{conf}"\n'
+        f"source {INSTALL}\n"
+        "ap_ssid_vorgabe\n",
+        encoding="utf-8",
+    )
+
+    umgebung = dict(os.environ)
+    umgebung["PATH"] = f"{binordner}:{os.environ['PATH']}"
+
+    return subprocess.run(
+        ["bash", str(skript)], capture_output=True, text=True,
+        env=umgebung, timeout=60,
+    ).stdout.strip()
+
+
+AP_CONF = """interface=wlan1
+ssid=Bandbus
+wpa_passphrase=geheim123
+country_code=DE
+"""
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    assert ap_vorgabe(Path(tmp), AP_CONF) == "Bandbus", (
+        "Der eingerichtete Access-Point-Name wird nicht übernommen - "
+        "Enter würde ihn auf 'XRack' umbenennen."
+    )
+
+    print("OK: Der eingerichtete Access-Point-Name ist die Vorgabe")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    #
+    # Neuinstallation: dann weiter "XRack".
+    #
+    assert ap_vorgabe(Path(tmp), None) == "XRack", (
+        "Ohne eingerichteten Access Point muss 'XRack' die Vorgabe bleiben."
+    )
+
+    #
+    # Und eine Datei ohne SSID-Zeile darf nichts Halbes liefern.
+    #
+    assert ap_vorgabe(Path(tmp), "interface=wlan1\ncountry_code=DE\n") == "XRack", (
+        "Ohne ssid-Zeile muss die Vorgabe greifen."
+    )
+
+    print("OK: Ohne eingerichteten Access Point bleibt es bei 'XRack'")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    #
+    # Ein Name mit Leerzeichen und Gleichheitszeichen - beides ist in
+    # einer SSID erlaubt und beides bringt naives Zerlegen aus dem
+    # Tritt.
+    #
+    assert ap_vorgabe(Path(tmp), "ssid=Bus 7 = laut\nwpa_passphrase=x\n") \
+        == "Bus 7 = laut", "Eine SSID mit Leer- und Gleichheitszeichen wird verstümmelt."
+
+    print("OK: Auch eine SSID mit Sonderzeichen kommt vollständig an")
+
+
 print("Alle Installer-Einstellungstests erfolgreich.")

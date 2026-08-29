@@ -740,6 +740,48 @@ disable_foreign_wifi_profiles() {
 # Der Heimnetz-Client läuft über NetworkManager (nmcli), der Access
 # Point über hostapd - siehe den Kommentarblock weiter oben.
 #
+#
+# Was ist schon eingerichtet?
+#
+# Gebraucht wird das, damit beim zweiten Lauf die Enter-Taste nichts
+# umbenennt und nichts loescht. Ein Installer, den man nach einem
+# Update ausdruecklich noch einmal starten soll, darf auf dem
+# bequemsten Weg nicht der gefaehrlichste sein.
+#
+aktuelle_home_ssid() {
+    nmcli -g 802-11-wireless.ssid connection show "XRack-Home" 2>/dev/null
+}
+
+aktuelle_ap_ssid() {
+
+    local conf="${XRACK_HOSTAPD_CONF:-/etc/hostapd/xrack.conf}"
+
+    #
+    # Die Datei gehoert root (das Passwort steht darin im Klartext),
+    # deshalb ueber sudo lesen. Gelesen wird nur die SSID-Zeile.
+    #
+    sudo test -f "${conf}" 2>/dev/null || return 0
+
+    sudo grep -m1 '^ssid=' "${conf}" 2>/dev/null | cut -d= -f2-
+}
+
+#
+# Der Vorgabename fuer den Access Point: der eingerichtete, sonst
+# "XRack".
+#
+# Vorher stand hier fest "XRack". Wer seinen Access Point anders
+# genannt hatte und beim zweiten Lauf nur Enter drueckte, benannte ihn
+# damit stillschweigend um - und jedes gekoppelte Handy fand das Netz
+# nicht mehr.
+#
+ap_ssid_vorgabe() {
+
+    local vorhanden
+    vorhanden="$(aktuelle_ap_ssid)"
+
+    echo "${vorhanden:-XRack}"
+}
+
 configure_wifi() {
 
     XRACK_WLAN_CLIENT_SSID=""
@@ -814,10 +856,29 @@ configure_wifi() {
     # ----------------------------------------------------------------
 
     echo ""
-    read -r -p "$(L "Wollen Sie eine WLAN-Verbindung zu einem bestehenden Netzwerk einrichten? [J/n]: " "Do you want to set up a Wi-Fi connection to an existing network? [Y/n]: ")" XRACK_WLAN_SETUP || true
 
-    if [ "$(lower "${XRACK_WLAN_SETUP}")" != "n" ]; then
-        configure_wifi_client
+    XRACK_HOME_VORHANDEN="$(aktuelle_home_ssid)"
+
+    if [ -n "${XRACK_HOME_VORHANDEN}" ]; then
+
+        #
+        # Steht schon eine Verbindung, ist "nein" die Vorgabe: Enter
+        # behaelt sie. Sonst muesste man SSID und Passwort nur
+        # deshalb neu eintippen, weil man den Installer wegen einer
+        # ganz anderen Aenderung noch einmal gestartet hat.
+        #
+        read -r -p "$(L "WLAN-Verbindung neu einrichten? Eingerichtet ist '${XRACK_HOME_VORHANDEN}'. [j/N]: " "Set up the Wi-Fi connection again? '${XRACK_HOME_VORHANDEN}' is configured. [y/N]: ")" XRACK_WLAN_SETUP || true
+
+        [ "$(lower "${XRACK_WLAN_SETUP}")" = "j" ] || [ "$(lower "${XRACK_WLAN_SETUP}")" = "y" ] \
+            && configure_wifi_client
+
+    else
+
+        read -r -p "$(L "Wollen Sie eine WLAN-Verbindung zu einem bestehenden Netzwerk einrichten? [J/n]: " "Do you want to set up a Wi-Fi connection to an existing network? [Y/n]: ")" XRACK_WLAN_SETUP || true
+
+        if [ "$(lower "${XRACK_WLAN_SETUP}")" != "n" ]; then
+            configure_wifi_client
+        fi
     fi
 
     # ----------------------------------------------------------------
@@ -825,10 +886,23 @@ configure_wifi() {
     # ----------------------------------------------------------------
 
     echo ""
-    read -r -p "$(L "Wollen Sie einen Access Point einrichten? [J/n]: " "Do you want to set up an access point? [Y/n]: ")" XRACK_AP_SETUP || true
 
-    if [ "$(lower "${XRACK_AP_SETUP}")" != "n" ]; then
-        configure_access_point
+    XRACK_AP_VORHANDEN="$(aktuelle_ap_ssid)"
+
+    if [ -n "${XRACK_AP_VORHANDEN}" ]; then
+
+        read -r -p "$(L "Access Point neu einrichten? Eingerichtet ist '${XRACK_AP_VORHANDEN}'. [j/N]: " "Set up the access point again? '${XRACK_AP_VORHANDEN}' is configured. [y/N]: ")" XRACK_AP_SETUP || true
+
+        [ "$(lower "${XRACK_AP_SETUP}")" = "j" ] || [ "$(lower "${XRACK_AP_SETUP}")" = "y" ] \
+            && configure_access_point
+
+    else
+
+        read -r -p "$(L "Wollen Sie einen Access Point einrichten? [J/n]: " "Do you want to set up an access point? [Y/n]: ")" XRACK_AP_SETUP || true
+
+        if [ "$(lower "${XRACK_AP_SETUP}")" != "n" ]; then
+            configure_access_point
+        fi
     fi
 }
 
@@ -967,8 +1041,10 @@ configure_access_point() {
     frage_wlan_land
 
     echo ""
-    read -r -p "$(L "Name des Access Points (Standard: XRack): " "Access point name (default: XRack): ")" AP_SSID_INPUT || true
-    AP_SSID="${AP_SSID_INPUT:-XRack}"
+    AP_VORGABE="$(ap_ssid_vorgabe)"
+
+    read -r -p "$(L "Name des Access Points (aktuell: ${AP_VORGABE}): " "Access point name (current: ${AP_VORGABE}): ")" AP_SSID_INPUT || true
+    AP_SSID="${AP_SSID_INPUT:-${AP_VORGABE}}"
 
     read_confirmed_secret "$(L "Passwort für den Access Point (mind. 8 Zeichen)" "Access point password (min. 8 characters)")" 8 AP_PASSWORD
 
