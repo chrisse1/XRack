@@ -56,6 +56,19 @@ ROLLEN = (
     "color_wheel",
     "strobe",
     "shutter",
+
+    #
+    # Drehung eines Derby-/Effektspiegels und Laser-Kanaele.
+    #
+    # Beide gibt es an den Eurolite-Sets, und beide werden von der
+    # Show NICHT angesteuert - Laser wegen der offensichtlichen
+    # Gefahr, Drehung weil ein dauernd rotierender Effekt schnell
+    # unangenehm wird. Sie bekommen eigene Rollen statt "generic",
+    # damit in der Karte lesbar dasteht, was der Regler tut.
+    #
+    "rotation",
+    "laser",
+
     "generic",
 )
 
@@ -110,6 +123,60 @@ EINGEBAUTE_VORLAGEN = (
         "id": "bar-8-rgb",
         "name": "LED-Bar, 8 Segmente RGB (24 Kanäle)",
         "channels": ["red", "green", "blue"] * 8,
+        "builtin": True,
+    },
+    {
+        #
+        # Eurolite LED KLS-180, 21-Kanal-Modus (Handbuch Seite 16).
+        #
+        # Vier Spots mit je Rot/Gruen/Blau/Weiss, davor ein Dimmer
+        # und zwei Strobe-Kanaele.
+        #
+        # Kanal 3 ("Interne Programme") und Kanal 21 ("Programme
+        # ueber DMX") bekommen mit Absicht die Rolle "generic": Die
+        # Show schreibt generic nie, und damit bleiben beide auf 0.
+        # Stuende dort ein Wert ueber 9, liefe das Geraet sein
+        # eigenes Programm und wuerde alles ueberstimmen, was XRack
+        # sendet.
+        #
+        "id": "eurolite-kls-180-21",
+        "name": "Eurolite LED KLS-180 (21-Kanal-Modus)",
+        "channels": (
+            ["dimmer", "strobe", "generic", "strobe"]
+            + ["red", "green", "blue", "white"] * 4
+            + ["generic"]
+        ),
+        "builtin": True,
+    },
+    {
+        #
+        # Eurolite LED KLS Laser Bar PRO FX, 28-Kanal-Modus
+        # (Handbuch Seite 19).
+        #
+        # Vier Farbeinheiten (zwei Derbys aussen, zwei Spots innen)
+        # mit je Rot/Gruen/Blau und einem Strobe-Kanal, dazu die
+        # Laser und die weissen/UV-Strobe-LEDs.
+        #
+        # Weder die Laser (Kanal 21/22) noch die Rotation (5/20/23)
+        # noch die Strobe-LEDs (24-28) werden von der Show
+        # angesteuert - siehe die Rollen weiter oben.
+        #
+        "id": "eurolite-kls-laser-bar-pro-fx-28",
+        "name": "Eurolite LED KLS Laser Bar PRO FX (28-Kanal-Modus)",
+        "channels": [
+            # Derby 1
+            "red", "green", "blue", "strobe", "rotation",
+            # Spot 2
+            "red", "green", "blue", "strobe", "generic",
+            # Spot 3
+            "red", "green", "blue", "strobe", "generic",
+            # Derby 4
+            "red", "green", "blue", "strobe", "rotation",
+            # Laser
+            "laser", "laser", "rotation",
+            # Weisse LEDs 1-4 und UV
+            "shutter", "shutter", "shutter", "shutter", "shutter",
+        ],
         "builtin": True,
     },
 )

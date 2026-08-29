@@ -495,6 +495,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_role_color_wheel": "Farbrad",
         "light_role_strobe": "Strobe",
         "light_role_shutter": "Shutter",
+        "light_role_rotation": "Drehung",
+        "light_role_laser": "Laser",
         "light_role_generic": "Sonstiger Kanal",
 
         # Licht: musikgesteuerte Show
@@ -1011,6 +1013,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_role_color_wheel": "Colour wheel",
         "light_role_strobe": "Strobe",
         "light_role_shutter": "Shutter",
+        "light_role_rotation": "Rotation",
+        "light_role_laser": "Laser",
         "light_role_generic": "Other channel",
 
         # Lighting: music-driven show

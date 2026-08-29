@@ -65,6 +65,15 @@ VORGABE_FARBEN = {
 #
 RGB_ROLLEN = ("red", "green", "blue")
 
+#
+# Alle Rollen, die ueberhaupt Licht machen.
+#
+# Gebraucht wird das fuer das Lauflicht: Eine Gruppe ohne einen
+# einzigen dieser Kanaele kann nicht leuchten, also darf der
+# wandernde Punkt auch nicht auf ihr stehenbleiben.
+#
+FARB_ROLLEN = RGB_ROLLEN + ("white", "amber", "uv")
+
 
 def farbe_zerlegen(text: str) -> tuple[int, int, int]:
     """
@@ -365,16 +374,37 @@ class LightEngine:
 
         gruppen = self._gruppen(kanaele)
 
+        #
+        # Nur Gruppen mit Farbkanaelen kommen fuer das Lauflicht in
+        # Frage.
+        #
+        # Bei einer schlichten LED-Bar sind das alle, und es aendert
+        # sich nichts. An den grossen Sets aber landen Kanaele wie
+        # "interne Programme", Laser oder Strobe-LEDs in eigenen
+        # Gruppen ohne jede Farbe. Zaehlte man die mit, stuende der
+        # Punkt bei der Laser-Bar in fuenf von neun Takten auf einer
+        # Gruppe, die gar nicht leuchten kann - das Licht wuerde
+        # scheinbar grundlos aussetzen.
+        #
+        farbig = [
+            nummer
+            for nummer, gruppe in enumerate(gruppen)
+            if any(kanaele[index] in FARB_ROLLEN for index in gruppe)
+        ]
+
+        dran_gruppe = (
+            farbig[self.position % len(farbig)] if farbig else -1
+        )
+
         for nummer, gruppe in enumerate(gruppen):
 
             #
             # Der wandernde Punkt: das Segment, das gerade "dran" ist,
             # leuchtet voll, die anderen mit Grundhelligkeit. Bei
-            # einer einzelnen Gruppe faellt das weg.
+            # einer einzelnen leuchtenden Gruppe faellt das weg.
             #
-            if len(gruppen) > 1:
-                dran = (self.position % len(gruppen)) == nummer
-                staerke = 1.0 if dran else self.GRUNDHELLIGKEIT
+            if len(farbig) > 1:
+                staerke = 1.0 if nummer == dran_gruppe else self.GRUNDHELLIGKEIT
             else:
                 staerke = 1.0
 

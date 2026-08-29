@@ -993,4 +993,127 @@ with tempfile.TemporaryDirectory() as tmp:
 
 
 
+
+# ====================================================================
+# 9. Die mitgelieferten Eurolite-Vorlagen
+#
+# Bei einer Vorlage aus einem Handbuch ist die Kanalzahl kein Detail:
+# Steht sie falsch, ruecken alle folgenden Lampen im Universum um
+# genau diesen Fehler, und was leuchtet, hat mit dem Gewollten nichts
+# mehr zu tun. Deshalb wird hier Kanal fuer Kanal gegen die Tabelle
+# aus dem Handbuch geprueft.
+# ====================================================================
+
+eingebaut = {v["id"]: v for v in fixtures.eingebaute_vorlagen()}
+
+kls = eingebaut["eurolite-kls-180-21"]
+
+assert len(kls["channels"]) == 21, len(kls["channels"])
+
+# Handbuch Seite 16: 1 Dimmer, 2 Strobe-Tempo, 3 interne Programme,
+# 4 Strobe Weiss, 5-20 vier Spots RGBW, 21 Programme ueber DMX.
+assert kls["channels"][:4] == ["dimmer", "strobe", "generic", "strobe"]
+assert kls["channels"][4:8] == ["red", "green", "blue", "white"]
+assert kls["channels"][16:20] == ["red", "green", "blue", "white"]
+assert kls["channels"][20] == "generic"
+
+bar = eingebaut["eurolite-kls-laser-bar-pro-fx-28"]
+
+assert len(bar["channels"]) == 28, len(bar["channels"])
+
+# Handbuch Seite 19: vier Farbeinheiten zu je 5 Kanaelen, dann
+# Laser/Laser/Rotation, dann fuenf Strobe-LED-Kanaele.
+for start in (0, 5, 10, 15):
+    assert bar["channels"][start:start + 4] == [
+        "red", "green", "blue", "strobe",
+    ], (start, bar["channels"][start:start + 5])
+
+assert bar["channels"][4] == "rotation"
+assert bar["channels"][19] == "rotation"
+assert bar["channels"][20:23] == ["laser", "laser", "rotation"]
+assert bar["channels"][23:] == ["shutter"] * 5
+
+#
+# Beide Vorlagen muessen auch durch die normale Pruefung gehen -
+# sonst waeren es Vorlagen, die der Nutzer selbst nie anlegen
+# koennte.
+#
+for vorlage in (kls, bar):
+    assert fixtures.pruefe_vorlage(vorlage) == "", vorlage["name"]
+
+print("OK: Die Eurolite-Vorlagen stimmen mit den Handbüchern überein")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+
+    licht.lampe_speichern({
+        "id": "kls", "name": "KLS", "template": "eurolite-kls-180-21",
+        "address": 1,
+    })
+    licht.lampe_speichern({
+        "id": "laser", "name": "Laser-Bar",
+        "template": "eurolite-kls-laser-bar-pro-fx-28", "address": 30,
+    })
+
+    app = LichtApp(licht, DmxAttrappe())
+    motor = app.light_engine
+
+    motor.einstellungen = {"sensitivity": 1.0}
+    motor.stand = {"low": 1.0, "mid": 1.0, "high": 1.0,
+                   "level": 0.9, "beat": False}
+
+    #
+    # Was die Show unter keinen Umstaenden anfassen darf.
+    #
+    # Laser sind kein Geschmacksthema, sondern eine Gefahr; die
+    # Programmkanaele wuerden das Geraet sein eigenes Ding machen
+    # lassen und alles uebersteuern, was XRack sendet. Beides muss
+    # ueber jede Position des Lauflichts hinweg auf 0 bleiben.
+    #
+    for schritt in range(20):
+
+        motor.position = schritt
+        werte = motor.werte_je_lampe()
+
+        k = werte["kls"]
+        b = werte["laser"]
+
+        assert k[2] == 0, f"Interne Programme angesteuert: {k[2]}"
+        assert k[20] == 0, f"Programme über DMX angesteuert: {k[20]}"
+        assert k[1] == 0 and k[3] == 0, "Strobe angesteuert"
+
+        assert b[20] == 0 and b[21] == 0, f"Laser angesteuert: {b[20:22]}"
+        assert b[4] == 0 and b[19] == 0 and b[22] == 0, "Rotation angesteuert"
+        assert b[23:] == [0] * 5, f"Strobe-LEDs angesteuert: {b[23:]}"
+
+    print("OK: Laser, Strobe und Programmkanäle bleiben unangetastet")
+
+    #
+    # Und der wandernde Punkt muss in JEDEM Takt auf einer Gruppe
+    # stehen, die auch leuchten kann.
+    #
+    # Bei der Laser-Bar sind fuenf der neun Gruppen reine
+    # Laser-/Strobe-/Rotationskanaele. Zaehlte das Lauflicht die mit,
+    # saehe man in fuenf von neun Takten kein volles Segment - das
+    # Licht wuerde scheinbar grundlos aussetzen.
+    #
+    for schritt in range(20):
+
+        motor.position = schritt
+
+        for kennung in ("kls", "laser"):
+
+            werte = motor.werte_je_lampe()[kennung]
+
+            assert max(werte) > 200, (
+                f"{kennung}, Takt {schritt}: kein Segment voll an - "
+                f"das Lauflicht steht auf einer Gruppe ohne Farbe. {werte}"
+            )
+
+    print("OK: Das Lauflicht steht nie auf einer Gruppe ohne Farbkanäle")
+
+
 print("Alle Licht-Tests erfolgreich.")
