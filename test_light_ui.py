@@ -177,7 +177,8 @@ def ausfuehren(stand: dict, pruefung: str, vorher: str = "") -> dict:
 # Der Zustand, den der Server liefern wuerde
 # --------------------------------------------------------------------
 
-def stand(enabled=True, service=True, adapter=True, overlaps=None) -> dict:
+def stand(enabled=True, service=True, adapter=True, overlaps=None,
+          show_running=False, show_state="music") -> dict:
 
     return {
         "enabled": enabled,
@@ -205,6 +206,17 @@ def stand(enabled=True, service=True, adapter=True, overlaps=None) -> dict:
         "values": {"bar": [255, 0, 0] * 8},
         "brightness": {"bar": 64},
         "dmx": {"service_running": service, "adapter_present": adapter},
+        "show_running": show_running,
+        "show_state": show_state,
+        "show_levels": {"low": 0.8, "mid": 0.4, "high": 0.1, "level": 0.5},
+        "show": {
+            "channel": 3,
+            "sensitivity": 1.5,
+            "fallback_scene": "s1",
+            "silence_threshold": 0.03,
+            "silence_seconds": 8.0,
+            "speech_seconds": 15.0,
+        },
     }
 
 
@@ -379,6 +391,106 @@ assert ergebnis["auswahl"] == 2, (
 )
 
 print("OK: Der Einrichten-Dialog öffnet sich und ist gefüllt")
+
+
+# ====================================================================
+# 5. Die musikgesteuerte Show
+# ====================================================================
+
+ergebnis = ausfuehren(stand(show_running=False), """function () {
+    return {
+        versteckt: document.getElementById('light-show-status')
+                           .classList.contains('d-none')
+    };
+}""")
+
+assert ergebnis["versteckt"], (
+    "Ohne laufende Show darf die Pegelanzeige nicht dastehen."
+)
+
+ergebnis = ausfuehren(stand(show_running=True), """function () {
+    const anzeige = document.getElementById('light-show-status');
+    const balken = document.getElementById('light-show-bands')
+                           .querySelectorAll('.progress-bar');
+
+    return {
+        sichtbar: !anzeige.classList.contains('d-none'),
+        zustand: document.getElementById('light-show-state').textContent,
+        erfolgsfarbe: document.getElementById('light-show-state')
+                              .classList.contains('text-bg-success'),
+        balken: balken.length,
+        breiten: Array.from(balken).map((b) => b.style.width),
+        knopf_aktiv: document.getElementById('btn-light-show')
+                             .classList.contains('btn-primary')
+    };
+}""")
+
+assert ergebnis["sichtbar"], "Bei laufender Show fehlt die Anzeige."
+assert ergebnis["zustand"] == "Musik", ergebnis["zustand"]
+assert ergebnis["erfolgsfarbe"], "Bei Musik muss der Zustand hervorgehoben sein."
+assert ergebnis["knopf_aktiv"], "Der Show-Knopf muss als aktiv zu erkennen sein."
+
+#
+# Drei Baender, und die Balken muessen den gemeldeten Pegeln
+# entsprechen - sonst sieht man eine Anzeige, die nichts mit dem
+# Signal zu tun hat.
+#
+assert ergebnis["balken"] == 3, ergebnis["balken"]
+assert ergebnis["breiten"] == ["80%", "40%", "10%"], ergebnis["breiten"]
+
+print("OK: Bei laufender Show zeigen die Balken die gemeldeten Pegel")
+
+#
+# Sprache: Die Show haelt sich heraus, und das soll man sehen.
+#
+ergebnis = ausfuehren(stand(show_running=True, show_state="speech"), """function () {
+    const zustand = document.getElementById('light-show-state');
+    return {
+        text: zustand.textContent,
+        erfolgsfarbe: zustand.classList.contains('text-bg-success')
+    };
+}""")
+
+assert ergebnis["text"] == "Sprache", ergebnis["text"]
+assert not ergebnis["erfolgsfarbe"], (
+    "Bei Sprache darf der Zustand nicht wie 'laeuft gut' aussehen."
+)
+
+print("OK: Sprache und Stille sind von Musik zu unterscheiden")
+
+
+# ====================================================================
+# 6. Die Show-Einstellungen stehen im Dialog
+# ====================================================================
+
+ergebnis = ausfuehren(stand(), """function () {
+    const auswahl = document.getElementById('light-show-fallback');
+
+    return {
+        kanal: document.getElementById('light-show-channel').value,
+        empfindlichkeit: document.getElementById('light-show-sensitivity').value,
+        stille: document.getElementById('light-show-silence-seconds').value,
+        sprache: document.getElementById('light-show-speech-seconds').value,
+        rueckfall: auswahl.value,
+        auswahl_erste: auswahl.options[0].textContent,
+        auswahl_anzahl: auswahl.options.length
+    };
+}""")
+
+assert ergebnis["kanal"] == "3", ergebnis
+assert ergebnis["empfindlichkeit"] == "1.5", ergebnis
+assert ergebnis["stille"] == "8", ergebnis
+assert ergebnis["sprache"] == "15", ergebnis
+
+#
+# Die Rueckfallszene muss auswaehlbar sein - und "Licht aus" muss es
+# als ausdrueckliche Wahl geben, nicht nur als leeres Feld.
+#
+assert ergebnis["rueckfall"] == "s1", ergebnis
+assert ergebnis["auswahl_erste"] == "Licht aus", ergebnis
+assert ergebnis["auswahl_anzahl"] == 2, ergebnis
+
+print("OK: Die Show-Einstellungen stehen im Dialog, samt Rückfallszene")
 
 
 print("Alle Lichtkarten-Tests erfolgreich.")

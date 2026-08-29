@@ -4896,7 +4896,10 @@ function renderLighting(stand) {
         zustand.textContent = teile.join(" ");
     }
 
-    if (!stand.enabled) return;
+    if (!stand.enabled) {
+        lightShowPulsSetzen(false);
+        return;
+    }
 
     const warnungen = [];
     const dmx = stand.dmx || {};
@@ -4913,6 +4916,10 @@ function renderLighting(stand) {
     renderLightFixtures(stand);
     renderLightScenes(stand);
     renderLightSetup(stand);
+    renderLightShow(stand);
+    renderLightShowSettings(stand);
+
+    lightShowPulsSetzen(!!stand.show_running);
 }
 
 async function refreshLighting() {
@@ -5214,4 +5221,174 @@ async function toggleLighting(event) {
     }
 
     refreshLighting();
+})();
+
+
+// ------------------------------------------------------------
+// Die musikgesteuerte Show
+// ------------------------------------------------------------
+
+const LIGHT_SHOW_BANDS = [
+    ["low", "light_show_band_low"],
+    ["mid", "light_show_band_mid"],
+    ["high", "light_show_band_high"]
+];
+
+function renderLightShow(stand) {
+    const knopf = document.getElementById("btn-light-show");
+    const anzeige = document.getElementById("light-show-status");
+
+    const laeuft = !!stand.show_running;
+
+    if (knopf) {
+        knopf.classList.toggle("btn-primary", laeuft);
+        knopf.classList.toggle("btn-outline-primary", !laeuft);
+        knopf.title = laeuft ? I18N.light_show_stop : I18N.light_show_start;
+    }
+
+    if (anzeige) anzeige.classList.toggle("d-none", !laeuft);
+
+    if (!laeuft) return;
+
+    const zustand = document.getElementById("light-show-state");
+
+    if (zustand) {
+        const text = {
+            music: I18N.light_show_state_music,
+            speech: I18N.light_show_state_speech,
+            silence: I18N.light_show_state_silence
+        }[stand.show_state] || stand.show_state || "";
+
+        zustand.textContent = text;
+
+        // Nur bei Musik laeuft die Show wirklich - sonst haelt die
+        // Rueckfallszene das Licht, und das soll man sehen.
+        zustand.classList.toggle("text-bg-success", stand.show_state === "music");
+        zustand.classList.toggle("text-bg-secondary", stand.show_state !== "music");
+    }
+
+    const balken = document.getElementById("light-show-bands");
+    if (!balken) return;
+
+    balken.innerHTML = "";
+
+    const pegel = stand.show_levels || {};
+
+    for (const [name, textschluessel] of LIGHT_SHOW_BANDS) {
+
+        const zeile = document.createElement("div");
+        zeile.className = "d-flex align-items-center gap-2";
+
+        const beschriftung = document.createElement("span");
+        beschriftung.className = "text-body-secondary small";
+        beschriftung.style.minWidth = "3.5rem";
+        beschriftung.textContent = I18N[textschluessel];
+        zeile.appendChild(beschriftung);
+
+        const rahmen = document.createElement("div");
+        rahmen.className = "progress flex-grow-1";
+        rahmen.style.height = "0.5rem";
+
+        const fuellung = document.createElement("div");
+        fuellung.className = "progress-bar";
+        fuellung.style.width = Math.round((pegel[name] || 0) * 100) + "%";
+        rahmen.appendChild(fuellung);
+
+        zeile.appendChild(rahmen);
+        balken.appendChild(zeile);
+    }
+}
+
+function renderLightShowSettings(stand) {
+    const show = stand.show || {};
+
+    const setzen = (kennung, wert) => {
+        const element = document.getElementById(kennung);
+        if (element && document.activeElement !== element) element.value = wert;
+    };
+
+    setzen("light-show-channel", show.channel);
+    setzen("light-show-sensitivity", show.sensitivity);
+    setzen("light-show-silence-threshold", show.silence_threshold);
+    setzen("light-show-silence-seconds", show.silence_seconds);
+    setzen("light-show-speech-seconds", show.speech_seconds);
+
+    const auswahl = document.getElementById("light-show-fallback");
+    if (!auswahl) return;
+
+    auswahl.innerHTML = "";
+
+    const aus = document.createElement("option");
+    aus.value = "";
+    aus.textContent = I18N.light_show_fallback_none;
+    auswahl.appendChild(aus);
+
+    for (const szene of stand.scenes || []) {
+        const eintrag = document.createElement("option");
+        eintrag.value = szene.id;
+        eintrag.textContent = szene.name;
+        auswahl.appendChild(eintrag);
+    }
+
+    auswahl.value = show.fallback_scene || "";
+}
+
+async function toggleLightShow() {
+    const laeuft = lightState && lightState.show_running;
+
+    await lightRequest(
+        laeuft ? "/api/lighting/show/stop" : "/api/lighting/show/start", {}
+    );
+
+    await refreshLighting();
+}
+
+async function saveLightShowSettings() {
+    const zahl = (kennung) => {
+        const element = document.getElementById(kennung);
+        return element ? parseFloat(element.value) : null;
+    };
+
+    const auswahl = document.getElementById("light-show-fallback");
+
+    await lightRequest("/api/lighting/show/settings", {
+        channel: zahl("light-show-channel"),
+        sensitivity: zahl("light-show-sensitivity"),
+        silence_threshold: zahl("light-show-silence-threshold"),
+        silence_seconds: zahl("light-show-silence-seconds"),
+        speech_seconds: zahl("light-show-speech-seconds"),
+        fallback_scene: auswahl ? auswahl.value : ""
+    });
+
+    await refreshLighting();
+}
+
+//
+// Laeuft die Show, muss die Karte oefter nachsehen - sonst stuenden
+// die Pegelbalken still, und es saehe aus, als kaeme nichts an.
+// Ohne laufende Show waere das nur unnoetiger Verkehr.
+//
+let lightShowTimer = null;
+
+function lightShowPulsSetzen(laeuft) {
+    if (laeuft && lightShowTimer === null) {
+        lightShowTimer = setInterval(refreshLighting, 500);
+    } else if (!laeuft && lightShowTimer !== null) {
+        clearInterval(lightShowTimer);
+        lightShowTimer = null;
+    }
+}
+
+(function verdrahteShow() {
+    const knopf = document.getElementById("btn-light-show");
+    if (knopf) knopf.addEventListener("click", toggleLightShow);
+
+    for (const kennung of [
+        "light-show-channel", "light-show-sensitivity",
+        "light-show-silence-threshold", "light-show-silence-seconds",
+        "light-show-speech-seconds", "light-show-fallback"
+    ]) {
+        const element = document.getElementById(kennung);
+        if (element) element.addEventListener("change", saveLightShowSettings);
+    }
 })();

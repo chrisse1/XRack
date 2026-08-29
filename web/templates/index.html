@@ -478,6 +478,14 @@
 
             {% set header_right %}
             <button
+                id="btn-light-show"
+                class="btn btn-outline-primary btn-sm me-1"
+                title="{{ t.light_show_start }}"
+            >
+                <i class="bi bi-music-note-beamed"></i>
+            </button>
+
+            <button
                 id="btn-light-blackout"
                 class="btn btn-outline-secondary btn-sm me-1"
                 title="{{ t.light_blackout }}"
@@ -499,6 +507,23 @@
                 id="light-warning"
                 class="alert alert-warning py-2 px-3 small d-none"
             ></div>
+
+            {#
+                Laeuft die Show, zeigt diese Zeile, was sie hoert -
+                sonst steht man vor einer Lampe, die nichts tut, und
+                weiss nicht, ob das Signal fehlt oder die Erkennung
+                gerade "Sprache" meint.
+            #}
+            <div id="light-show-status" class="d-none mb-3">
+
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                    <span class="badge text-bg-primary">{{ t.light_show_title }}</span>
+                    <span id="light-show-state" class="badge text-bg-secondary"></span>
+                </div>
+
+                <div class="d-flex flex-column gap-1" id="light-show-bands"></div>
+
+            </div>
 
             <div id="light-fixtures"></div>
 

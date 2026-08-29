@@ -1382,6 +1382,99 @@
 
                 <div class="form-text">{{ t.light_template_repeat_hint }}</div>
 
+                <hr class="my-4">
+
+                <h6 class="fw-semibold">{{ t.light_show_settings }}</h6>
+
+                <div class="row g-2 mb-2">
+
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label small mb-1" for="light-show-channel">
+                            {{ t.light_show_channel }}
+                        </label>
+                        <input
+                            id="light-show-channel"
+                            type="number"
+                            class="form-control form-control-sm"
+                            min="1"
+                            value="1"
+                        >
+                        <div class="form-text">{{ t.light_show_channel_hint }}</div>
+                    </div>
+
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label small mb-1" for="light-show-fallback">
+                            {{ t.light_show_fallback }}
+                        </label>
+                        <select
+                            id="light-show-fallback"
+                            class="form-select form-select-sm"
+                        ></select>
+                        <div class="form-text">{{ t.light_show_fallback_hint }}</div>
+                    </div>
+
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label small mb-1" for="light-show-sensitivity">
+                            {{ t.light_show_sensitivity }}
+                        </label>
+                        <input
+                            id="light-show-sensitivity"
+                            type="range"
+                            class="form-range"
+                            min="0.2"
+                            max="3"
+                            step="0.1"
+                            value="1"
+                        >
+                    </div>
+
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label small mb-1" for="light-show-silence-threshold">
+                            {{ t.light_show_silence_threshold }}
+                        </label>
+                        <input
+                            id="light-show-silence-threshold"
+                            type="range"
+                            class="form-range"
+                            min="0"
+                            max="0.2"
+                            step="0.005"
+                            value="0.02"
+                        >
+                    </div>
+
+                    <div class="col-6">
+                        <label class="form-label small mb-1" for="light-show-silence-seconds">
+                            {{ t.light_show_silence_seconds }}
+                        </label>
+                        <input
+                            id="light-show-silence-seconds"
+                            type="number"
+                            class="form-control form-control-sm"
+                            min="1"
+                            max="120"
+                            value="6"
+                        >
+                    </div>
+
+                    <div class="col-6">
+                        <label class="form-label small mb-1" for="light-show-speech-seconds">
+                            {{ t.light_show_speech_seconds }}
+                        </label>
+                        <input
+                            id="light-show-speech-seconds"
+                            type="number"
+                            class="form-control form-control-sm"
+                            min="1"
+                            max="300"
+                            value="12"
+                        >
+                    </div>
+
+                </div>
+
+                <div class="form-text">{{ t.light_show_tuning_hint }}</div>
+
             </div>
 
             <div class="modal-footer">

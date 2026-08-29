@@ -496,6 +496,36 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_role_strobe": "Strobe",
         "light_role_shutter": "Shutter",
         "light_role_generic": "Sonstiger Kanal",
+
+        # Licht: musikgesteuerte Show
+        "light_show_title": "Musikshow",
+        "light_show_start": "Show starten",
+        "light_show_stop": "Show anhalten",
+        "light_show_settings": "Show-Einstellungen",
+        "light_show_channel": "Kanalpaar zum Mithören",
+        "light_show_channel_hint": (
+            "Der linke Kanal des Stereopaars, das vom Mischpult kommt. "
+            "Der rechte ist der daneben."
+        ),
+        "light_show_sensitivity": "Empfindlichkeit",
+        "light_show_fallback": "Szene bei Sprache oder Stille",
+        "light_show_fallback_none": "Licht aus",
+        "light_show_fallback_hint": (
+            "Läuft keine Musik mehr, schaltet XRack hierauf um."
+        ),
+        "light_show_silence_threshold": "Ab wann gilt es als still",
+        "light_show_silence_seconds": "Wartezeit bis Stille (Sekunden)",
+        "light_show_speech_seconds": "Wartezeit bis Sprache (Sekunden)",
+        "light_show_tuning_hint": (
+            "Diese Werte hängen vom Signal ab, das bei dir ankommt - "
+            "vor Ort ausprobieren."
+        ),
+        "light_show_state_music": "Musik",
+        "light_show_state_speech": "Sprache",
+        "light_show_state_silence": "Stille",
+        "light_show_band_low": "Tief",
+        "light_show_band_mid": "Mitte",
+        "light_show_band_high": "Hoch",
     },
     "en": {
         # Audio interface
@@ -966,6 +996,36 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_role_strobe": "Strobe",
         "light_role_shutter": "Shutter",
         "light_role_generic": "Other channel",
+
+        # Lighting: music-driven show
+        "light_show_title": "Music show",
+        "light_show_start": "Start show",
+        "light_show_stop": "Stop show",
+        "light_show_settings": "Show settings",
+        "light_show_channel": "Channel pair to listen on",
+        "light_show_channel_hint": (
+            "The left channel of the stereo pair coming from the mixer. "
+            "The right one is next to it."
+        ),
+        "light_show_sensitivity": "Sensitivity",
+        "light_show_fallback": "Scene for speech or silence",
+        "light_show_fallback_none": "Lights off",
+        "light_show_fallback_hint": (
+            "When the music stops, XRack switches to this."
+        ),
+        "light_show_silence_threshold": "Level counted as silence",
+        "light_show_silence_seconds": "Wait before silence (seconds)",
+        "light_show_speech_seconds": "Wait before speech (seconds)",
+        "light_show_tuning_hint": (
+            "These depend on the signal that reaches you - try them out "
+            "on site."
+        ),
+        "light_show_state_music": "Music",
+        "light_show_state_speech": "Speech",
+        "light_show_state_silence": "Silence",
+        "light_show_band_low": "Low",
+        "light_show_band_mid": "Mid",
+        "light_show_band_high": "High",
     },
 }
 

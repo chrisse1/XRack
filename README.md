@@ -105,6 +105,14 @@ the Pi itself.
   untouched. Scenes are stored relative to the fixture, so moving a
   fixture to a different start address does not invalidate them.
 
+- **Music-driven light show**: XRack listens to a stereo channel pair
+  from the mixer and turns it into light - lows become red, mids
+  green, highs blue, and a bright spot moves one segment on every bass
+  hit. Sensitivity, channel pair and the debounce times are sliders in
+  the setup dialog. When the music stops, XRack switches to a chosen
+  scene; without one the lights go out. Strobe is never triggered
+  automatically.
+
   XRack does not generate the DMX signal itself - OLA (Open Lighting
   Architecture) does, as its own system service set up by the
   installer. Lighting never affects recording or playback: if the
@@ -323,6 +331,18 @@ am Pi nötig.
   (hostapd) und bei Bluetooth (bluetoothd). Licht stört Aufnahme und
   Wiedergabe nie: Fehlt der Dienst oder das Kabel, läuft XRack
   einfach ohne Licht.
+
+- **Musikgesteuerte Lichtshow**: XRack hört auf ein Stereo-Kanalpaar
+  vom Mischpult und macht daraus Licht - tiefe Töne werden zu Rot,
+  mittlere zu Grün, hohe zu Blau, und bei jedem Bassschlag wandert ein
+  heller Punkt ein Segment weiter. Empfindlichkeit, Kanalpaar und die
+  Wartezeiten liegen als Regler im Einrichten-Dialog; sie hängen vom
+  Signal ab, das vor Ort ankommt.
+
+  Läuft keine Musik mehr - Pause oder eine Ansage -, schaltet XRack
+  auf eine gewählte Szene um; ohne eine solche geht das Licht aus.
+  Blitzlicht (Strobe) fasst die Show nicht an, und Bewegtlicht wird
+  bewusst nur langsam geschwenkt.
 
   Angesteuert werden USB-DMX-Kabel mit FTDI-Chip (FT232R und
   Verwandte) - das verbreitetste und günstigste Genre, dazu gehören
