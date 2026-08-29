@@ -150,6 +150,52 @@ EINGEBAUTE_VORLAGEN = (
     },
     {
         #
+        # Eurolite LED KLS-180/6, 24-Kanal-Modus.
+        #
+        # Sechs Spots mit je Rot/Gruen/Blau/Weiss - und sonst gar
+        # nichts. Das ist der aufgeraeumteste Modus des Geraets:
+        # kein Programmkanal, der das Geraet sein eigenes Ding machen
+        # lassen koennte, und jeder Spot einzeln ansteuerbar. Die
+        # Helligkeit entsteht durch Herunterrechnen der Farben, weil
+        # es keinen Dimmerkanal gibt (siehe dimmen()).
+        #
+        "id": "eurolite-kls-180-6-24",
+        "name": "Eurolite LED KLS-180/6 (24-Kanal-Modus)",
+        "channels": ["red", "green", "blue", "white"] * 6,
+        "builtin": True,
+    },
+    {
+        #
+        # Eurolite LED KLS-180/6, 29-Kanal-Modus.
+        #
+        # Dieselben sechs Spots, davor ein Master-Dimmer und der
+        # Strobe der Spots, dahinter die beiden Bar-Kanaele und der
+        # Programmkanal.
+        #
+        # Der Master-Dimmer ist der Grund, diesen Modus zu waehlen:
+        # Mit ihm dimmt der Regler in der Oberflaeche das Geraet
+        # wirklich, statt die Farbwerte herunterzurechnen - das
+        # bleibt bis ganz unten sauber, weil die Farbmischung dabei
+        # unangetastet bleibt.
+        #
+        # Kanal 29 ("Auto- und musikgesteuerte Programme") bekommt
+        # mit Absicht "generic" und bleibt damit auf 0. Stuende dort
+        # ein Wert ueber 9, liefe das Geraet sein eigenes Programm
+        # und wuerde alles ueberstimmen, was XRack sendet. Kanal 28
+        # ("Bar") ebenso - auf 0 zeigt die Bar laut Handbuch alle
+        # LEDs, und das ist als ruhiger Hintergrund genau richtig.
+        #
+        "id": "eurolite-kls-180-6-29",
+        "name": "Eurolite LED KLS-180/6 (29-Kanal-Modus)",
+        "channels": (
+            ["dimmer", "strobe"]
+            + ["red", "green", "blue", "white"] * 6
+            + ["strobe", "generic", "generic"]
+        ),
+        "builtin": True,
+    },
+    {
+        #
         # Eurolite LED KLS Laser Bar PRO FX, 28-Kanal-Modus
         # (Handbuch Seite 19).
         #

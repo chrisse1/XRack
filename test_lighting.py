@@ -1034,11 +1034,23 @@ assert bar["channels"][20:23] == ["laser", "laser", "rotation"]
 assert bar["channels"][23:] == ["shutter"] * 5
 
 #
-# Beide Vorlagen muessen auch durch die normale Pruefung gehen -
-# sonst waeren es Vorlagen, die der Nutzer selbst nie anlegen
-# koennte.
+# Die KLS-180/6 hat sechs Spots statt vier und eigene Modi. Der
+# 24-Kanal-Modus ist reine Farbe, der 29er hat davor Dimmer und
+# Strobe und dahinter die Bar- und Programmkanaele.
 #
-for vorlage in (kls, bar):
+sechs = eingebaut["eurolite-kls-180-6-24"]
+
+assert len(sechs["channels"]) == 24, len(sechs["channels"])
+assert sechs["channels"] == ["red", "green", "blue", "white"] * 6
+
+sechs29 = eingebaut["eurolite-kls-180-6-29"]
+
+assert len(sechs29["channels"]) == 29, len(sechs29["channels"])
+assert sechs29["channels"][:2] == ["dimmer", "strobe"]
+assert sechs29["channels"][2:26] == ["red", "green", "blue", "white"] * 6
+assert sechs29["channels"][26:] == ["strobe", "generic", "generic"]
+
+for vorlage in (kls, bar, sechs, sechs29):
     assert fixtures.pruefe_vorlage(vorlage) == "", vorlage["name"]
 
 print("OK: Die Eurolite-Vorlagen stimmen mit den Handbüchern überein")
@@ -1056,6 +1068,14 @@ with tempfile.TemporaryDirectory() as tmp:
     licht.lampe_speichern({
         "id": "laser", "name": "Laser-Bar",
         "template": "eurolite-kls-laser-bar-pro-fx-28", "address": 30,
+    })
+    licht.lampe_speichern({
+        "id": "sechs", "name": "KLS-180/6",
+        "template": "eurolite-kls-180-6-24", "address": 70,
+    })
+    licht.lampe_speichern({
+        "id": "sechs29", "name": "KLS-180/6 gross",
+        "template": "eurolite-kls-180-6-29", "address": 100,
     })
 
     app = LichtApp(licht, DmxAttrappe())
@@ -1089,6 +1109,13 @@ with tempfile.TemporaryDirectory() as tmp:
         assert b[4] == 0 and b[19] == 0 and b[22] == 0, "Rotation angesteuert"
         assert b[23:] == [0] * 5, f"Strobe-LEDs angesteuert: {b[23:]}"
 
+        s = werte["sechs29"]
+
+        assert s[1] == 0 and s[26] == 0, "Strobe angesteuert"
+        assert s[27] == 0 and s[28] == 0, (
+            f"Bar- oder Programmkanal angesteuert: {s[27:]}"
+        )
+
     print("OK: Laser, Strobe und Programmkanäle bleiben unangetastet")
 
     #
@@ -1104,7 +1131,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
         motor.position = schritt
 
-        for kennung in ("kls", "laser"):
+        for kennung in ("kls", "laser", "sechs", "sechs29"):
 
             werte = motor.werte_je_lampe()[kennung]
 
@@ -1114,6 +1141,32 @@ with tempfile.TemporaryDirectory() as tmp:
             )
 
     print("OK: Das Lauflicht steht nie auf einer Gruppe ohne Farbkanäle")
+
+    #
+    # Der 29-Kanal-Modus ist genau deshalb da: Er hat einen
+    # Master-Dimmer, und mit dem dimmt der Regler das Geraet
+    # wirklich, statt die Farbwerte herunterzurechnen. Das ist kein
+    # Schoenheitsfehler - heruntergerechnete Farben verlieren unten
+    # herum ihre Mischung, ein Dimmerkanal nicht.
+    #
+    app.light_values = {"sechs29": motor.werte_je_lampe()["sechs29"]}
+
+    farben_voll = list(app.light_values["sechs29"][2:26])
+
+    ok, meldung = app.set_light_fixture_brightness("sechs29", 40)
+    assert ok, meldung
+
+    rahmen = app.dmx_control.gesendet[-1]
+
+    # Adresse 100 -> Kanal 100 ist der Master-Dimmer (Index 99).
+    assert rahmen[99] == 40, f"Master-Dimmer nicht gesetzt: {rahmen[99]}"
+
+    assert rahmen[101:125] == farben_voll, (
+        "Die Farben wurden heruntergerechnet, obwohl es einen "
+        "Dimmerkanal gibt."
+    )
+
+    print("OK: Der 29-Kanal-Modus dimmt über den Master-Dimmer")
 
 
 print("Alle Licht-Tests erfolgreich.")

@@ -65,15 +65,6 @@ VORGABE_FARBEN = {
 #
 RGB_ROLLEN = ("red", "green", "blue")
 
-#
-# Alle Rollen, die ueberhaupt Licht machen.
-#
-# Gebraucht wird das fuer das Lauflicht: Eine Gruppe ohne einen
-# einzigen dieser Kanaele kann nicht leuchten, also darf der
-# wandernde Punkt auch nicht auf ihr stehenbleiben.
-#
-FARB_ROLLEN = RGB_ROLLEN + ("white", "amber", "uv")
-
 
 def farbe_zerlegen(text: str) -> tuple[int, int, int]:
     """
@@ -376,7 +367,7 @@ class LightEngine:
 
         #
         # Nur Gruppen mit Farbkanaelen kommen fuer das Lauflicht in
-        # Frage.
+        # Frage - was leuchten kann, steht in fixtures.FARBROLLEN.
         #
         # Bei einer schlichten LED-Bar sind das alle, und es aendert
         # sich nichts. An den grossen Sets aber landen Kanaele wie
@@ -389,7 +380,7 @@ class LightEngine:
         farbig = [
             nummer
             for nummer, gruppe in enumerate(gruppen)
-            if any(kanaele[index] in FARB_ROLLEN for index in gruppe)
+            if any(kanaele[index] in fixtures.FARBROLLEN for index in gruppe)
         ]
 
         dran_gruppe = (
