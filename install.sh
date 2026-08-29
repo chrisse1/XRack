@@ -1357,6 +1357,28 @@ EOF
     esac
 
     sudo systemctl daemon-reload
+
+    #
+    # Und einschalten. Genau dieser Schritt hat gefehlt.
+    #
+    # Weiter oben in configure_dmx wird schon einmal "enable"
+    # gerufen - das galt aber der Unit, die es DAMALS gab. Auf einem
+    # System mit SysV-Startskript war das die von systemd erzeugte,
+    # und die Startverknüpfung entstand über die Runlevel-Links des
+    # Init-Skripts. Die eigene Unit, die hier gerade daneben
+    # geschrieben wurde, hat davon nichts: Sie braucht ihre eigene
+    # Verknüpfung in multi-user.target.wants.
+    #
+    # Am Gerät sah das heimtückisch aus. Bis zum nächsten Neustart
+    # lief alles, weil der alte Daemon noch lief - der Fehler zeigte
+    # sich erst beim Hochfahren, mit "disabled" und "inactive (dead)",
+    # und dann blieb das Licht aus. Also genau dann, wenn man ihn am
+    # wenigsten gebrauchen kann.
+    #
+    # Ein zweites "enable" schadet nicht: Auf einem System mit echter
+    # systemd-Unit ist es ein Nichts-Tun.
+    #
+    sudo systemctl enable "${unit}" >/dev/null 2>&1 || true
 }
 
 #

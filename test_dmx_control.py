@@ -342,8 +342,19 @@ def werkzeuge(ordner: Path, unit_datei: Path) -> dict:
     binordner = ordner / "bin"
     binordner.mkdir(parents=True, exist_ok=True)
 
+    #
+    # Der nachgestellte systemctl schreibt mit, was mit ihm gemacht
+    # wird.
+    #
+    # Ohne dieses Mitschreiben konnte ein fehlendes "enable" gar nicht
+    # auffallen - und genau daran lag es am Geraet: Die eigene Unit
+    # wurde geschrieben und gestartet, aber nie eingeschaltet.
+    #
+    protokoll = ordner / "systemctl.log"
+
     fake_systemctl = (
         "#!/bin/sh\n"
+        f'echo "$@" >> "{protokoll}"\n'
         'if [ "$1" = "show" ]; then\n'
         f'    echo "{unit_datei}"\n'
         "    exit 0\n"
@@ -381,8 +392,20 @@ def werkzeuge(ordner: Path, unit_datei: Path) -> dict:
     umgebung["PATH"] = f"{binordner}:{os.environ['PATH']}"
     umgebung["XRACK_SYSTEMD_DIR"] = str(ordner / "systemd")
     umgebung["XRACK_LANGUAGE"] = "de"
+    umgebung["XRACK_SYSTEMCTL_LOG"] = str(protokoll)
 
     return umgebung
+
+
+def systemctl_aufrufe(umgebung: dict) -> list[str]:
+    """Was mit systemctl gemacht wurde, in der Reihenfolge."""
+
+    protokoll = Path(umgebung["XRACK_SYSTEMCTL_LOG"])
+
+    if not protokoll.exists():
+        return []
+
+    return protokoll.read_text(encoding="utf-8").splitlines()
 
 
 def install_funktion(ordner: Path, umgebung: dict, aufrufe: list[str]) -> str:
@@ -654,6 +677,104 @@ assert "ola-ftdidmx.conf\" true" in quelltext, (
 )
 
 print("OK: Alle Plugins, die sich um das Kabel streiten, werden abgeschaltet")
+
+
+# ====================================================================
+# 9. Die eigene Unit muss auch eingeschaltet werden
+#
+# Am Geraet gefunden, nach einem Neustart des Raspberry:
+#
+#   olad.service - OLA-Dienst fuers Licht (von XRack eingerichtet)
+#        Loaded: loaded (/etc/systemd/system/olad.service; disabled)
+#        Active: inactive (dead)
+#
+# In configure_dmx wird zwar "enable" gerufen - aber fuer die Unit,
+# die es zu DIESEM Zeitpunkt gab. Auf einem System mit SysV-Startskript
+# ist das die von systemd erzeugte, und die Startverknuepfung entsteht
+# ueber die Runlevel-Links des Init-Skripts. Die eigene Unit, die
+# restrict_ola_to_loopback danach daneben schreibt, hat davon nichts.
+#
+# Heimtueckisch ist der Zeitpunkt: Bis zum naechsten Neustart laeuft
+# alles, weil der alte Daemon noch laeuft. Der Fehler zeigt sich erst
+# beim Hochfahren - also genau dann, wenn man ihn am wenigsten
+# gebrauchen kann.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    ordner = Path(tmp)
+
+    #
+    # Der SysV-Fall: Hier schreibt install.sh eine eigene Unit, und
+    # genau hier fehlte das Einschalten.
+    #
+    erzeugt = ordner / "generator" / "olad.service"
+    erzeugt.parent.mkdir(parents=True)
+    erzeugt.write_text(
+        "[Service]\nExecStart=/etc/init.d/olad start\n", encoding="utf-8"
+    )
+
+    umgebung = werkzeuge(ordner, erzeugt)
+
+    install_funktion(
+        ordner, umgebung,
+        ['restrict_ola_to_loopback "olad.service" "/etc/ola"'],
+    )
+
+    assert (ordner / "systemd" / "olad.service").exists(), (
+        "Es wurde keine eigene Unit geschrieben."
+    )
+
+    aufrufe = systemctl_aufrufe(umgebung)
+
+    assert any("enable olad.service" in a for a in aufrufe), (
+        "Die eigene Unit wurde geschrieben, aber nie eingeschaltet - nach "
+        "einem Neustart bliebe das Licht tot. Aufrufe: " + str(aufrufe)
+    )
+
+    #
+    # Und zwar NACH dem Neuladen: Vorher kennt systemd die Datei noch
+    # gar nicht, und das Einschalten ginge ins Leere.
+    #
+    reload_stelle = next(
+        i for i, a in enumerate(aufrufe) if a.startswith("daemon-reload")
+    )
+    enable_stelle = next(
+        i for i, a in enumerate(aufrufe) if "enable olad.service" in a
+    )
+
+    assert enable_stelle > reload_stelle, (
+        "Eingeschaltet wurde vor dem Neuladen - systemd kennt die neue "
+        f"Unit da noch nicht. Aufrufe: {aufrufe}"
+    )
+
+    print("OK: Die eigene Unit wird nach dem Neuladen auch eingeschaltet")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    #
+    # Und bei einer echten systemd-Unit ebenso. Dort ist es zwar ein
+    # Nichts-Tun, weil configure_dmx sie schon eingeschaltet hat -
+    # aber es darf nicht davon abhaengen, in welchem Zweig man landet.
+    #
+    ordner = Path(tmp)
+
+    unit = ordner / "olad.service"
+    unit.write_text(
+        "[Service]\nExecStart=/usr/bin/olad --config-dir /etc/ola\n",
+        encoding="utf-8",
+    )
+
+    umgebung = werkzeuge(ordner, unit)
+
+    install_funktion(ordner, umgebung, ['restrict_ola_to_loopback "olad.service"'])
+
+    assert any(
+        "enable olad.service" in a for a in systemctl_aufrufe(umgebung)
+    ), systemctl_aufrufe(umgebung)
+
+    print("OK: Auch bei einer echten systemd-Unit wird eingeschaltet")
 
 
 print("Alle DMX-Tests erfolgreich.")
