@@ -360,7 +360,6 @@ async function setRecordChannels(channels) {
         body: JSON.stringify({ channels })
     });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
@@ -393,7 +392,6 @@ async function loadAudioDevices() {
                 body: JSON.stringify({ device_id: this.value })
             });
             const result = await response.json();
-            console.log(result);
             await refreshDashboard();
         });
         select.dataset.initialized = "true";
@@ -406,7 +404,6 @@ async function rescanAudioDevices() {
 
     const response = await fetch("/api/audio/rescan", { method: "POST" });
     const result = await response.json();
-    console.log(result);
 
     await loadAudioDevices();
     await refreshDashboard();
@@ -428,7 +425,6 @@ async function toggleRecording() {
 async function startRecorder() {
     const response = await fetch("/api/recorder/start", { method: "POST" });
     const result = await response.json();
-    console.log(result);
     selectedRecording = null;
     selectedRecordingInfo = null;
     await refreshDashboard();
@@ -437,7 +433,6 @@ async function startRecorder() {
 async function stopRecorder() {
     const response = await fetch("/api/recorder/stop", { method: "POST" });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
@@ -491,14 +486,12 @@ async function startSoundcheck() {
         body: JSON.stringify({ filename: selectedRecording })
     });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
 async function stopSoundcheck() {
     const response = await fetch("/api/recorder/soundcheck/stop", { method: "POST" });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
@@ -539,14 +532,12 @@ async function toggleLevelCheck() {
 async function startLevelCheck() {
     const response = await fetch("/api/recorder/monitor/start", { method: "POST" });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
 async function stopLevelCheck() {
     const response = await fetch("/api/recorder/monitor/stop", { method: "POST" });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
@@ -1686,7 +1677,6 @@ async function loadRecordingInfo() {
     if (result.success) {
         selectedRecordingInfo = result;
         updateRecorderKindBadge();
-        console.log(result);
     }
 }
 
@@ -2147,7 +2137,6 @@ async function uploadRecordingFiles(event) {
 
     try {
         const result = await uploadRecordingsWithProgress(formData);
-        console.log(result);
 
         if (result.uploaded.length === 0) {
             alert(I18N.alert_no_files_uploaded);
@@ -2435,7 +2424,6 @@ async function setMusicChannelPreference(startChannel) {
         body: JSON.stringify({ start_channel: startChannel })
     });
     const result = await response.json();
-    console.log(result);
 }
 
 function formatTrackLabel(data) {
@@ -2502,14 +2490,12 @@ async function toggleMusicPause() {
 async function pauseMusic() {
     const response = await fetch("/api/music/pause", { method: "POST" });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
 async function resumeMusic() {
     const response = await fetch("/api/music/resume", { method: "POST" });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
@@ -2539,7 +2525,6 @@ async function seekMusic(position) {
         body: JSON.stringify({ position })
     });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
@@ -2559,14 +2544,12 @@ function getSelectedMusicChannel() {
 async function stopMusic() {
     const response = await fetch("/api/music/stop", { method: "POST" });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
 async function skipMusic() {
     const response = await fetch("/api/music/skip", { method: "POST" });
     const result = await response.json();
-    console.log(result);
     await refreshDashboard();
 }
 
@@ -2787,7 +2770,6 @@ async function playMusicFolder(path) {
         body: JSON.stringify({ path, start_channel: getSelectedMusicChannel() })
     });
     const result = await response.json();
-    console.log(result);
 
     if (!result.success) {
         alert(I18N.alert_playback_start_failed);
@@ -2805,7 +2787,6 @@ async function playMusicFile(path) {
         body: JSON.stringify({ path, start_channel: getSelectedMusicChannel() })
     });
     const result = await response.json();
-    console.log(result);
 
     if (!result.success) {
         alert(I18N.alert_playback_start_failed);
@@ -2851,7 +2832,6 @@ async function createMusicFolder() {
         body: JSON.stringify({ path: musicCurrentPath, name })
     });
     const result = await response.json();
-    console.log(result);
 
     if (!result.success) {
         alert(I18N.alert_folder_create_failed);
@@ -2926,7 +2906,6 @@ async function uploadMusicFiles(event) {
 
     try {
         const result = await uploadWithProgress(formData);
-        console.log(result);
 
         if (result.count === 0) {
             alert(I18N.alert_no_files_uploaded);
@@ -2958,7 +2937,6 @@ async function shutdownSystem() {
 
     const response = await fetch("/api/system/shutdown", { method: "POST" });
     const result = await response.json();
-    console.log(result);
 
     if (!result.success) {
         alert(I18N.shutdown_failed);
@@ -3880,7 +3858,6 @@ async function restartService() {
 
     const response = await fetch("/api/system/restart", { method: "POST" });
     const result = await response.json();
-    console.log(result);
 
     if (!result.success) {
         alert(I18N.alert_change_failed);
@@ -4557,7 +4534,6 @@ async function setBluetoothChannelPreference(startChannel) {
         body: JSON.stringify({ start_channel: startChannel })
     });
     const result = await response.json();
-    console.log(result);
 }
 
 

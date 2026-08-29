@@ -289,23 +289,105 @@ install_system_dependencies() {
 }
 
 #
+# Liest eine vorhandene config/local.yaml ein.
+#
+# Setzt XRACK_ALT_PORT, XRACK_ALT_SPRACHE und XRACK_ALT_PIN_HASH auf
+# das, was dort steht - oder auf leer, wenn es die Datei nicht gibt
+# oder sie unlesbar ist. Eine kaputte Datei darf die Installation nicht
+# anhalten; dann gelten eben die Vorgaben.
+#
+vorhandene_einstellungen_lesen() {
+
+    XRACK_ALT_PORT=""
+    XRACK_ALT_SPRACHE=""
+    XRACK_ALT_PIN_HASH=""
+
+    local datei="${XRACK_LOCAL_CONFIG:-config/local.yaml}"
+
+    [ -f "${datei}" ] || return 0
+
+    local gelesen
+    gelesen="$(XRACK_DATEI="${datei}" python3 -c "
+import os
+import sys
+
+try:
+    import yaml
+
+    with open(os.environ['XRACK_DATEI'], encoding='utf-8') as f:
+        daten = yaml.safe_load(f) or {}
+
+    if not isinstance(daten, dict):
+        raise ValueError('kein Wörterbuch')
+
+    def hole(gruppe, name):
+        teil = daten.get(gruppe) or {}
+        return str(teil.get(name, '') or '') if isinstance(teil, dict) else ''
+
+    print(hole('server', 'port'))
+    print(hole('application', 'language'))
+    print(hole('security', 'pin_hash'))
+
+except Exception:
+    sys.exit(1)
+" 2>/dev/null)" || return 0
+
+    XRACK_ALT_PORT="$(echo "${gelesen}" | sed -n '1p')"
+    XRACK_ALT_SPRACHE="$(echo "${gelesen}" | sed -n '2p')"
+    XRACK_ALT_PIN_HASH="$(echo "${gelesen}" | sed -n '3p')"
+}
+
+#
 # Port, Hostname und PIN abfragen und nach config/local.yaml
 # schreiben (die Sprache wurde bereits von choose_language() gesetzt).
 #
+# Gibt es die Datei schon, sind ihre Werte die Vorgaben - Enter behält
+# also, was da ist.
+#
+# Das ist nicht Bequemlichkeit, sondern eine Reparatur: Vorher wurde
+# die Datei bedingungslos überschrieben. Wer den Installer ein zweites
+# Mal laufen ließ - und genau dazu fordert der Updater auf, wenn sich
+# install.sh geändert hat -, verlor durch bloßes Enterdrücken seinen
+# abweichenden Port und seinen PIN-Schutz. Nicht interaktiv wurde nicht
+# einmal gefragt.
+#
 # Läuft das Skript nicht interaktiv (z.B. per "curl | bash"), werden
-# stillschweigend die Standardwerte (Port 8080, Hostname "xrack",
-# kein PIN-Schutz) verwendet.
+# die vorhandenen Werte übernommen, und bei einer Neuinstallation die
+# Standardwerte (Port 8080, Hostname "xrack", kein PIN-Schutz).
 #
 configure_basic_settings() {
 
-    XRACK_PORT="8080"
-    XRACK_HOSTNAME="xrack"
+    vorhandene_einstellungen_lesen
+
+    XRACK_PORT="${XRACK_ALT_PORT:-8080}"
     XRACK_PIN=""
+
+    #
+    # Beim ZWEITEN Lauf ist der laufende Hostname der richtige
+    # Vorgabewert - er wurde ja beim ersten gesetzt. Bei einer
+    # Neuinstallation bleibt es bei "xrack"; der Name, den der
+    # Raspberry Pi ab Werk hat, wäre hier eine schlechte Vorgabe.
+    #
+    if [ -n "${XRACK_ALT_PORT}${XRACK_ALT_SPRACHE}${XRACK_ALT_PIN_HASH}" ]; then
+        XRACK_HOSTNAME="$(hostname 2>/dev/null || echo xrack)"
+    else
+        XRACK_HOSTNAME="xrack"
+    fi
+
+    #
+    # Die Sprache hat choose_language() schon gesetzt. Steht in der
+    # Datei eine andere und wurde nicht interaktiv gefragt, gilt die
+    # gespeicherte - sonst spräche XRack nach einem stillen zweiten
+    # Lauf plötzlich Deutsch.
+    #
+    if [ ! -t 0 ] && [ -n "${XRACK_ALT_SPRACHE}" ]; then
+        XRACK_LANGUAGE="${XRACK_ALT_SPRACHE}"
+    fi
 
     if [ -t 0 ]; then
 
         echo ""
-        read -r -p "$(L "Port fürs Webinterface (Standard: 8080): " "Port for the web interface (default: 8080): ")" XRACK_PORT_INPUT || true
+        read -r -p "$(L "Port fürs Webinterface (aktuell: ${XRACK_PORT}): " "Port for the web interface (current: ${XRACK_PORT}): ")" XRACK_PORT_INPUT || true
 
         if [ -n "${XRACK_PORT_INPUT}" ] && [ "${XRACK_PORT_INPUT}" -eq "${XRACK_PORT_INPUT}" ] 2>/dev/null; then
             XRACK_PORT="${XRACK_PORT_INPUT}"
@@ -319,27 +401,41 @@ configure_basic_settings() {
         # sonst mit einer Adresse in die Irre geschickt, die bei ihm
         # nie geht.
         #
-        read -r -p "$(L "Hostname (Standard: xrack): " "Hostname (default: xrack): ")" XRACK_HOSTNAME_INPUT || true
+        read -r -p "$(L "Hostname (aktuell: ${XRACK_HOSTNAME}): " "Hostname (current: ${XRACK_HOSTNAME}): ")" XRACK_HOSTNAME_INPUT || true
 
         if [ -n "${XRACK_HOSTNAME_INPUT}" ]; then
             if [[ "${XRACK_HOSTNAME_INPUT}" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]]; then
                 XRACK_HOSTNAME="${XRACK_HOSTNAME_INPUT}"
             else
-                echo "$(L "Ungültiger Hostname (nur Buchstaben, Ziffern, Bindestriche) - verwende 'xrack'." "Invalid hostname (letters, digits, hyphens only) - using 'xrack'.")"
+                echo "$(L "Ungültiger Hostname (nur Buchstaben, Ziffern, Bindestriche) - behalte '${XRACK_HOSTNAME}'." "Invalid hostname (letters, digits, hyphens only) - keeping '${XRACK_HOSTNAME}'.")"
             fi
         fi
 
         echo ""
         echo "$(L "Eine 4-stellige PIN schützt das Einstellungen-Menü vor unbefugtem Zugriff. Sie lässt sich später jederzeit im Einstellungen-Menü selbst ändern." "A 4-digit PIN protects the settings menu from unauthorized access. You can change it any time later in the settings menu itself.")"
-        read_confirmed_secret "$(L "PIN fürs Einstellungen-Menü (4 Ziffern, leer = kein Schutz)" "PIN for the settings menu (4 digits, empty = no protection)")" 4 XRACK_PIN "^[0-9]{4}$"
 
-        if [ -z "${XRACK_PIN}" ]; then
+        #
+        # Steht schon eine PIN in der Ablage, heisst Enter "behalten"
+        # und nicht "abschalten". Eine vorhandene PIN darf nur durch
+        # eine ausdrueckliche Eingabe ersetzt werden - abschalten geht
+        # ueber das Einstellungen-Menue.
+        #
+        if [ -n "${XRACK_ALT_PIN_HASH}" ]; then
+            read_confirmed_secret "$(L "PIN fürs Einstellungen-Menü (4 Ziffern, leer = die vorhandene behalten)" "PIN for the settings menu (4 digits, empty = keep the existing one)")" 4 XRACK_PIN "^[0-9]{4}$"
+        else
+            read_confirmed_secret "$(L "PIN fürs Einstellungen-Menü (4 Ziffern, leer = kein Schutz)" "PIN for the settings menu (4 digits, empty = no protection)")" 4 XRACK_PIN "^[0-9]{4}$"
+        fi
+
+        if [ -z "${XRACK_PIN}" ] && [ -z "${XRACK_ALT_PIN_HASH}" ]; then
             echo "$(L "Kein PIN-Schutz eingerichtet - die Einstellungen sind ungeschützt (später im Einstellungen-Menü nachholbar)." "No PIN protection set up - the settings are unprotected (can be added later in the settings menu).")"
         fi
 
     fi
 
-    XRACK_PIN_HASH=""
+    #
+    # Ohne neue Eingabe bleibt der gespeicherte Hash stehen.
+    #
+    XRACK_PIN_HASH="${XRACK_ALT_PIN_HASH}"
 
     if [ -n "${XRACK_PIN}" ]; then
         XRACK_PIN_HASH="$(XRACK_PIN="${XRACK_PIN}" python3 -c "
@@ -356,7 +452,7 @@ print(hash_pin(os.environ['XRACK_PIN']))
 
     echo "$(L "XRack: Konfiguration wird geschrieben (Sprache: ${XRACK_LANGUAGE}, Port: ${XRACK_PORT})..." "XRack: Writing configuration (language: ${XRACK_LANGUAGE}, port: ${XRACK_PORT})...")"
 
-    cat > config/local.yaml <<EOF
+    cat > "${XRACK_LOCAL_CONFIG:-config/local.yaml}" <<EOF
 application:
   language: "${XRACK_LANGUAGE}"
 

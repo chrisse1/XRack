@@ -1036,4 +1036,24 @@ for schluessel in ("light_show_colors", "light_show_colors_1",
 print("OK: Jeder Farbblock sagt, für welche Lampenart er gilt")
 
 
+# ====================================================================
+# 18. Der dBFS-Hinweis steht unter den Pegelbalken
+#
+# Er stand als Textschluessel im Programm, aber in keiner Vorlage.
+# Ohne ihn haelt man 0.02 fuer "ein bisschen" statt fuer -34 dBFS und
+# wundert sich, warum die Show bei normal laufender Musik auf die
+# Rueckfallszene springt - genau das ist am Geraet passiert.
+# ====================================================================
+
+ergebnis = ausfuehren(stand(show_running=True), """function () {
+    return { text: document.getElementById('light-show-status').textContent };
+}""")
+
+assert TEXTE["light_show_level_hint"] in ergebnis["text"], (
+    "Der dBFS-Hinweis fehlt unter den Pegelbalken: " + ergebnis["text"][:200]
+)
+
+print("OK: Unter den Pegelbalken steht, dass die Skala dBFS ist")
+
+
 print("Alle Lichtkarten-Tests erfolgreich.")

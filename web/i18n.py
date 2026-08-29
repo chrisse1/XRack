@@ -216,7 +216,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_console_access_hint": "Das Pult an der Netzwerkbuchse wird aus dem Heimnetz erreichbar - für X32-Edit, X-AIR-Edit und Mixing Station.",
         "faders_snapshot_label": "Snapshot",
         "faders_snapshot_load": "Laden",
-        "faders_snapshot_none": "Keine Snapshots gefunden",
         "faders_snapshot_unnamed": "Snapshot {n}",
         "confirm_snapshot_load": (
             "Snapshot \"{name}\" wirklich laden? Das stellt am Mischpult "
@@ -468,8 +467,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_address_range": "DMX {von}–{bis}",
         "light_address_occupies": "Belegt DMX {von}–{bis}.",
         "light_channels_count": "{n} Kanäle",
-        "light_add_fixture": "Lampe hinzufügen",
-        "light_add_template": "Vorlage anlegen",
         "light_template_name": "Name der Vorlage",
         "light_template_pattern": "Kanäle (Muster)",
         "light_template_repeat": "Wiederholungen",
@@ -479,7 +476,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "light_template_add_channel": "Kanal",
         "light_template_builtin": "mitgeliefert",
-        "light_save": "Speichern",
         "confirm_light_fixture_delete": "Lampe \"{name}\" wirklich löschen?",
         "confirm_light_template_delete": "Vorlage \"{name}\" wirklich löschen?",
         "confirm_light_scene_delete": "Szene \"{name}\" wirklich löschen?",
@@ -782,7 +778,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_console_access_hint": "The console on the Ethernet port becomes reachable from the home network - for X32-Edit, X-AIR-Edit and Mixing Station.",
         "faders_snapshot_label": "Snapshot",
         "faders_snapshot_load": "Load",
-        "faders_snapshot_none": "No snapshots found",
         "faders_snapshot_unnamed": "Snapshot {n}",
         "confirm_snapshot_load": (
             "Really load snapshot \"{name}\"? This changes every fader, "
@@ -1020,8 +1015,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_address_range": "DMX {von}–{bis}",
         "light_address_occupies": "Occupies DMX {von}–{bis}.",
         "light_channels_count": "{n} channels",
-        "light_add_fixture": "Add fixture",
-        "light_add_template": "Add type",
         "light_template_name": "Type name",
         "light_template_pattern": "Channels (pattern)",
         "light_template_repeat": "Repeats",
@@ -1031,7 +1024,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "light_template_add_channel": "Channel",
         "light_template_builtin": "built in",
-        "light_save": "Save",
         "confirm_light_fixture_delete": "Really delete fixture \"{name}\"?",
         "confirm_light_template_delete": "Really delete type \"{name}\"?",
         "confirm_light_scene_delete": "Really delete scene \"{name}\"?",

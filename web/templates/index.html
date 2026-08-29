@@ -523,6 +523,15 @@
 
                 <div class="d-flex flex-column gap-1" id="light-show-bands"></div>
 
+                {#
+                    Ohne diesen Satz haelt man 0.02 fuer "ein
+                    bisschen" statt fuer -34 dBFS - und wundert sich,
+                    warum die Show bei normal laufender Musik auf die
+                    Rueckfallszene springt. Genau das ist am Geraet
+                    passiert.
+                #}
+                <div class="form-text mt-1">{{ t.light_show_level_hint }}</div>
+
             </div>
 
             {#
