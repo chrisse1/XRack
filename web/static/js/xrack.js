@@ -4911,6 +4911,15 @@ function renderLighting(stand) {
         warnungen.push(I18N.light_overlap_warning);
     }
 
+    //
+    // Show laeuft, aber es kommt nichts herein: Das ist ein anderer
+    // Fehler als "die Musik gefaellt der Erkennung nicht", und er
+    // muss auch anders dastehen.
+    //
+    if (stand.show_running && !stand.show_stream) {
+        warnungen.push(I18N.light_show_no_stream);
+    }
+
     showLightWarning(warnungen.join(" "));
 
     renderLightFixtures(stand);
@@ -5231,7 +5240,14 @@ async function toggleLighting(event) {
 const LIGHT_SHOW_BANDS = [
     ["low", "light_show_band_low"],
     ["mid", "light_show_band_mid"],
-    ["high", "light_show_band_high"]
+    ["high", "light_show_band_high"],
+    //
+    // Der Gesamtpegel gehoert dazu, auch wenn er kein Band ist: An
+    // ihm haengt die Stille-Erkennung. Ohne ihn sieht man nicht,
+    // warum die Show auf die Rueckfallszene umschaltet, und dreht
+    // an der falschen Schraube.
+    //
+    ["level", "light_show_band_level"]
 ];
 
 function renderLightShow(stand) {

@@ -208,6 +208,8 @@ def stand(enabled=True, service=True, adapter=True, overlaps=None,
         "dmx": {"service_running": service, "adapter_present": adapter},
         "show_running": show_running,
         "show_state": show_state,
+        "show_stream": show_running,
+        "show_blocks": 100 if show_running else 0,
         "show_levels": {"low": 0.8, "mid": 0.4, "high": 0.1, "level": 0.5},
         "show": {
             "channel": 3,
@@ -435,8 +437,8 @@ assert ergebnis["knopf_aktiv"], "Der Show-Knopf muss als aktiv zu erkennen sein.
 # entsprechen - sonst sieht man eine Anzeige, die nichts mit dem
 # Signal zu tun hat.
 #
-assert ergebnis["balken"] == 3, ergebnis["balken"]
-assert ergebnis["breiten"] == ["80%", "40%", "10%"], ergebnis["breiten"]
+assert ergebnis["balken"] == 4, ergebnis["balken"]
+assert ergebnis["breiten"] == ["80%", "40%", "10%", "50%"], ergebnis["breiten"]
 
 print("OK: Bei laufender Show zeigen die Balken die gemeldeten Pegel")
 
@@ -491,6 +493,30 @@ assert ergebnis["auswahl_erste"] == "Licht aus", ergebnis
 assert ergebnis["auswahl_anzahl"] == 2, ergebnis
 
 print("OK: Die Show-Einstellungen stehen im Dialog, samt Rückfallszene")
+
+
+# ====================================================================
+# 7. Show laeuft, aber es kommt kein Audio
+#
+# Das ist ein anderer Fehler als "die Erkennung meint Sprache", und
+# er muss auch anders dastehen. Vorher stand in der Karte "Show
+# laeuft", waehrend in Wirklichkeit nichts mehr hereinkam - und man
+# sucht dann bei der Musik statt beim Eingang.
+# ====================================================================
+
+ohne_strom = stand(show_running=True)
+ohne_strom["show_stream"] = False
+ohne_strom["show_blocks"] = 0
+
+ergebnis = ausfuehren(ohne_strom, """function () {
+    const box = document.getElementById('light-warning');
+    return { sichtbar: !box.classList.contains('d-none'), text: box.textContent };
+}""")
+
+assert ergebnis["sichtbar"], "Fehlendes Audio muss in der Karte stehen."
+assert "kein Audio" in ergebnis["text"], ergebnis["text"]
+
+print("OK: Läuft die Show ohne ankommendes Audio, steht das in der Karte")
 
 
 print("Alle Lichtkarten-Tests erfolgreich.")

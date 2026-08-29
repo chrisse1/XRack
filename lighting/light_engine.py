@@ -27,6 +27,7 @@ import logging
 import math
 import queue
 import threading
+import time
 
 from lighting import fixtures
 from lighting.analysis import Bandanalyse, Stimmungserkennung
@@ -96,13 +97,44 @@ class LightEngine:
 
         self.verworfen = 0
 
+        #
+        # Wann kam der letzte Block? Bleibt der Audiostrom weg -
+        # etwa weil der Lesethread gestorben ist -, wartet dieser
+        # Thread stumm weiter, und in der Karte sieht alles aus wie
+        # zuvor. Genau das war am Geraet nicht zu unterscheiden von
+        # "die Show tut nichts mehr".
+        #
+        self.letzter_block = 0.0
+        self.bloecke = 0
+
     # ----------------------------------------------------------------
     # An und aus
     # ----------------------------------------------------------------
 
+    #
+    # Nach so vielen Sekunden ohne Block gilt der Strom als weg.
+    # Ein Block kommt alle ~20 ms; zwei Sekunden sind also eine
+    # Ewigkeit und kein Grenzfall.
+    #
+    STROM_WEG_S = 2.0
+
     @property
     def running(self) -> bool:
         return self._laeuft
+
+    @property
+    def strom_da(self) -> bool:
+        """
+        True, wenn in letzter Zeit noch Bloecke angekommen sind.
+
+        Ohne diese Auskunft steht in der Karte "Show laeuft", waehrend
+        in Wirklichkeit nichts mehr hereinkommt.
+        """
+
+        if not self._laeuft or self.letzter_block == 0.0:
+            return False
+
+        return (time.monotonic() - self.letzter_block) < self.STROM_WEG_S
 
     def start(self, rate: int, channels: int,
               links: int, rechts: int, einstellungen: dict) -> None:
@@ -122,6 +154,10 @@ class LightEngine:
         )
 
         self.einstellungen = dict(einstellungen)
+
+        self.letzter_block = 0.0
+        self.bloecke = 0
+        self.verworfen = 0
 
         self._laeuft = True
 
@@ -166,6 +202,9 @@ class LightEngine:
 
         if not self._laeuft:
             return
+
+        self.letzter_block = time.monotonic()
+        self.bloecke += 1
 
         try:
             self._queue.put_nowait(block)

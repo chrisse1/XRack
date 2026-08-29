@@ -42,6 +42,14 @@ class LichtMixin:
             for name in ("low", "mid", "high", "level")
         }
 
+        #
+        # Ob ueberhaupt noch Audio hereinkommt. Ohne diese Auskunft
+        # steht in der Karte "Show laeuft", waehrend der Lesethread
+        # laengst weg ist - und man sucht den Fehler bei der Musik.
+        #
+        stand["show_stream"] = self.light_engine.strom_da
+        stand["show_blocks"] = self.light_engine.bloecke
+
         return stand
 
     def set_lighting_enabled(self, enabled: bool) -> tuple[bool, str]:

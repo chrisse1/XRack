@@ -349,6 +349,19 @@ class Recorder:
                     exc,
                 )
                 self._active = False
+
+                #
+                # Die Gruende muessen mit weg.
+                #
+                # Ohne das bleibt "pegel"/"licht" stehen, obwohl der
+                # Thread tot ist: monitoring meldet weiter True, die
+                # Lichtshow haelt sich fuer laufend, und niemand
+                # bekommt gesagt, dass keine Bloecke mehr kommen. Es
+                # sieht aus, als sei das Programm einmal gelaufen und
+                # habe dann aufgehoert - genau so.
+                #
+                self._gruende.clear()
+
                 self._write_to_file = False
                 self.meter = None
                 if self.writer is not None:

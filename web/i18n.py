@@ -526,6 +526,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_show_band_low": "Tief",
         "light_show_band_mid": "Mitte",
         "light_show_band_high": "Hoch",
+        "light_show_band_level": "Gesamt",
+        "light_show_no_stream": (
+            "Es kommt kein Audio an. Ist das richtige Kanalpaar gewählt, "
+            "und liegt dort ein Signal?"
+        ),
     },
     "en": {
         # Audio interface
@@ -1026,6 +1031,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_show_band_low": "Low",
         "light_show_band_mid": "Mid",
         "light_show_band_high": "High",
+        "light_show_band_level": "Total",
+        "light_show_no_stream": (
+            "No audio is arriving. Is the right channel pair selected, and "
+            "is there a signal on it?"
+        ),
     },
 }
 
