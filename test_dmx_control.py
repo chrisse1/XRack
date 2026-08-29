@@ -377,12 +377,50 @@ def werkzeuge(ordner: Path, unit_datei: Path) -> dict:
         "exit 2\n"
     )
 
+    #
+    # dpkg-query und apt-get. Beide schreiben mit, und beide lassen
+    # sich ueber Dateien steuern:
+    #
+    #   paket_da   - existiert sie, gilt ola als installiert
+    #   apt_bricht - existiert sie, scheitert apt-get
+    #   apt_legt   - existiert sie, legt apt-get "paket_da" an
+    #
+    # Ueber Dateien und nicht ueber Umgebungsvariablen, weil sich der
+    # Zustand so MITTEN im Lauf aendern kann - genau das braucht der
+    # Fall "erst nicht da, nach dem apt-Aufruf da".
+    #
+    apt_log = ordner / "apt.log"
+
+    fake_dpkg = (
+        "#!/bin/sh\n"
+        f'echo "$@" >> "{ordner}/dpkg.log"\n'
+        f'if [ -f "{ordner}/paket_da" ]; then\n'
+        "    echo 'install ok installed'\n"
+        "    exit 0\n"
+        "fi\n"
+        "echo 'unknown ok not-installed'\n"
+        "exit 1\n"
+    )
+
+    fake_apt = (
+        "#!/bin/sh\n"
+        f'echo "$@" >> "{apt_log}"\n'
+        f'if [ -f "{ordner}/apt_legt" ]; then touch "{ordner}/paket_da"; fi\n'
+        f'if [ -f "{ordner}/apt_bricht" ]; then\n'
+        "    echo 'E: Unable to locate package ola' >&2\n"
+        "    exit 100\n"
+        "fi\n"
+        "exit 0\n"
+    )
+
     for name, inhalt in (
         ("sudo", FAKE_SUDO),
         ("chown", FAKE_CHOWN),
         ("systemctl", fake_systemctl),
         ("olad", FAKE_OLAD),
         ("getent", FAKE_GETENT),
+        ("dpkg-query", fake_dpkg),
+        ("apt-get", fake_apt),
     ):
         datei = binordner / name
         datei.write_text(inhalt, encoding="utf-8")
@@ -393,8 +431,20 @@ def werkzeuge(ordner: Path, unit_datei: Path) -> dict:
     umgebung["XRACK_SYSTEMD_DIR"] = str(ordner / "systemd")
     umgebung["XRACK_LANGUAGE"] = "de"
     umgebung["XRACK_SYSTEMCTL_LOG"] = str(protokoll)
+    umgebung["XRACK_APT_LOG"] = str(apt_log)
 
     return umgebung
+
+
+def apt_aufrufe(umgebung: dict) -> list[str]:
+    """Womit apt-get aufgerufen wurde, in der Reihenfolge."""
+
+    protokoll = Path(umgebung["XRACK_APT_LOG"])
+
+    if not protokoll.exists():
+        return []
+
+    return protokoll.read_text(encoding="utf-8").splitlines()
 
 
 def systemctl_aufrufe(umgebung: dict) -> list[str]:
@@ -775,6 +825,164 @@ with tempfile.TemporaryDirectory() as tmp:
     ), systemctl_aufrufe(umgebung)
 
     print("OK: Auch bei einer echten systemd-Unit wird eingeschaltet")
+
+
+# ====================================================================
+# 10. Die Paketpruefung darf nicht falsch anschlagen
+#
+# Am Geraet gemeldet, beim zweiten Lauf des Installers:
+#
+#   Hinweis: Paket 'ola' nicht installierbar - Lichtsteuerung nicht
+#   verfuegbar.
+#
+# waehrend "sudo apt install ola" meldete, es sei laengst die neueste
+# Version. Auf den Fehlschlag folgte ein return - uebersprungen wurden
+# damit udev-Regel, Plugin-Einstellungen, die eigene Unit und der
+# systemctl-enable-Aufruf, wegen dem der Installer ueberhaupt noch
+# einmal lief.
+#
+# Ursache war "sudo VAR=wert apt-get ...": Ob sudo eine auf der
+# Kommandozeile gesetzte Umgebungsvariable durchlaesst, haengt an der
+# sudoers-Regel. Laesst sie es nicht, bricht sudo ab, BEVOR apt
+# startet - und die Ausgabe war zusaetzlich verschluckt.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    #
+    # Der gemeldete Fall: Das Paket ist schon da.
+    #
+    ordner = Path(tmp)
+    umgebung = werkzeuge(ordner, ordner / "olad.service")
+
+    (ordner / "paket_da").touch()
+
+    #
+    # Damit apt, falls es doch gerufen wuerde, auch scheitern WUERDE -
+    # so faellt ein ueberfluessiger Aufruf gleich doppelt auf.
+    #
+    (ordner / "apt_bricht").touch()
+
+    ausgabe = install_funktion(ordner, umgebung, ["dmx_paket_sicherstellen"])
+
+    assert apt_aufrufe(umgebung) == [], (
+        "Das Paket ist da, trotzdem wurde apt-get aufgerufen: "
+        + str(apt_aufrufe(umgebung))
+    )
+    assert "nicht installierbar" not in ausgabe, ausgabe
+
+    print("OK: Ein vorhandenes Paket wird gar nicht erst angefasst")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    #
+    # Paket fehlt, apt kann es holen.
+    #
+    ordner = Path(tmp)
+    umgebung = werkzeuge(ordner, ordner / "olad.service")
+
+    (ordner / "apt_legt").touch()
+
+    ausgabe = install_funktion(ordner, umgebung, ["dmx_paket_sicherstellen"])
+
+    assert len(apt_aufrufe(umgebung)) == 1, apt_aufrufe(umgebung)
+    assert "nicht installierbar" not in ausgabe, ausgabe
+
+    print("OK: Fehlt das Paket, wird es installiert")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    #
+    # DER Fall, an dem es gescheitert ist: apt gibt einen Fehler
+    # zurueck, das Paket liegt aber vor. Frueher hiess das "nicht
+    # installierbar" und die ganze DMX-Einrichtung fiel aus.
+    #
+    ordner = Path(tmp)
+    umgebung = werkzeuge(ordner, ordner / "olad.service")
+
+    (ordner / "apt_bricht").touch()
+    (ordner / "apt_legt").touch()      # apt meckert, legt es aber an
+
+    skript = ordner / "lauf.sh"
+    skript.write_text(
+        "\n".join([
+            "export XRACK_INSTALL_SOURCE_ONLY=1",
+            f"source {INSTALL}",
+            "dmx_paket_sicherstellen && echo ERGEBNIS_OK || echo ERGEBNIS_AUS",
+        ]),
+        encoding="utf-8",
+    )
+
+    lauf = subprocess.run(["bash", str(skript)], capture_output=True,
+                          text=True, env=umgebung, timeout=60)
+
+    assert "ERGEBNIS_OK" in lauf.stdout, (
+        "apt hat gemeckert, das Paket liegt aber vor - trotzdem gilt die "
+        "Lichtsteuerung als nicht verfügbar:\n" + lauf.stdout
+    )
+
+    print("OK: Meckert apt, ist das Paket aber da, geht es weiter")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    #
+    # Und wenn es wirklich nicht geht: Meldung MIT Grund. Ohne den
+    # sucht man an der falschen Stelle - genau das ist passiert.
+    #
+    ordner = Path(tmp)
+    umgebung = werkzeuge(ordner, ordner / "olad.service")
+
+    (ordner / "apt_bricht").touch()
+
+    skript = ordner / "lauf.sh"
+    skript.write_text(
+        "\n".join([
+            "export XRACK_INSTALL_SOURCE_ONLY=1",
+            f"source {INSTALL}",
+            "dmx_paket_sicherstellen && echo ERGEBNIS_OK || echo ERGEBNIS_AUS",
+        ]),
+        encoding="utf-8",
+    )
+
+    lauf = subprocess.run(["bash", str(skript)], capture_output=True,
+                          text=True, env=umgebung, timeout=60)
+
+    assert "ERGEBNIS_AUS" in lauf.stdout, lauf.stdout
+    assert "nicht installierbar" in lauf.stdout, lauf.stdout
+    assert "Unable to locate package" in lauf.stdout, (
+        "Die Meldung nennt den Grund nicht - dann sucht man wieder an "
+        "der falschen Stelle:\n" + lauf.stdout
+    )
+
+    print("OK: Geht es wirklich nicht, steht der Grund von apt dabei")
+
+
+# --- "sudo VAR=wert" darf nirgends mehr stehen ----------------------
+#
+# Das ist die Sorte Fehler, die man beim naechsten Mal an anderer
+# Stelle wieder einbaut. Kommentarzeilen zaehlen nicht mit - dort wird
+# das Konstrukt absichtlich erwaehnt.
+
+import re  # noqa: E402
+
+for datei in [INSTALL] + sorted((INSTALL.parent / "scripts").glob("*.sh")):
+
+    for nummer, zeile in enumerate(
+        datei.read_text(encoding="utf-8").splitlines(), start=1
+    ):
+        if zeile.lstrip().startswith("#"):
+            continue
+
+        assert not re.search(r"\bsudo\s+[A-Z_]+=", zeile), (
+            f"{datei.name}:{nummer} setzt eine Umgebungsvariable direkt "
+            f"hinter sudo - das haengt an der sudoers-Regel. "
+            f"'sudo env VAR=wert' benutzen:\n    {zeile.strip()}"
+        )
+
+print("OK: Nirgends mehr 'sudo VAR=wert' statt 'sudo env VAR=wert'")
 
 
 print("Alle DMX-Tests erfolgreich.")

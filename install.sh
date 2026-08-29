@@ -1171,18 +1171,77 @@ EOF
 # klappt etwas nicht, läuft XRack ohne Licht weiter - Aufnahme und
 # Wiedergabe dürfen davon nie betroffen sein.
 #
+#
+# Ist ein Debian-Paket wirklich installiert?
+#
+# "apt-get install" als Prüfung zu missbrauchen ist unzuverlässig: Es
+# kann aus Gründen scheitern, die mit dem Paket nichts zu tun haben.
+# dpkg-query beantwortet genau die Frage, um die es geht.
+#
+paket_da() {
+    dpkg-query -W -f='${Status}' "$1" 2>/dev/null \
+        | grep -q "^install ok installed$"
+}
+
+#
+# Sorgt dafür, dass das ola-Paket da ist. Rückgabewert 0 heißt: da.
+#
+# In einem eigenen Schritt und nicht in der großen Paketliste: Wäre
+# "ola" dort nicht verfügbar, schlüge die Installation aller
+# Systempakete fehl - wegen des Lichts.
+#
+dmx_paket_sicherstellen() {
+
+    #
+    # Erst nachsehen. Ein Installer, der ausdrücklich mehrfach laufen
+    # darf, soll ein vorhandenes Paket gar nicht erst anfassen.
+    #
+    if paket_da ola; then
+        return 0
+    fi
+
+    #
+    # "sudo env VAR=wert" und nicht "sudo VAR=wert".
+    #
+    # Die zweite Form hing daran, ob die sudoers-Regel das Setzen von
+    # Umgebungsvariablen erlaubt (SETENV, env_keep). Tut sie es nicht,
+    # bricht sudo ab, BEVOR apt überhaupt startet - und weil die
+    # Ausgabe zusätzlich verschluckt wurde, stand am Gerät "Paket
+    # nicht installierbar", während "apt install ola" von Hand
+    # meldete, es sei längst installiert. env ist ein ganz
+    # gewöhnliches Programm; damit ist die Frage weg.
+    #
+    local ausgabe
+    ausgabe="$(sudo env DEBIAN_FRONTEND=noninteractive \
+        apt-get install -y -qq ola 2>&1)" || true
+
+    #
+    # Entscheidend ist, ob das Paket jetzt da ist - nicht, was apt
+    # zurückgegeben hat. Ein Aufruf, der aus einem Nebengrund meckert,
+    # darf nicht die ganze DMX-Einrichtung überspringen.
+    #
+    if paket_da ola; then
+        return 0
+    fi
+
+    echo "$(L "Hinweis: Paket 'ola' nicht installierbar - Lichtsteuerung nicht verfügbar." "Note: package 'ola' could not be installed - lighting control unavailable.")"
+
+    #
+    # Und den Grund dazusagen. Ohne ihn sucht man an der falschen
+    # Stelle - genau das ist am Gerät passiert.
+    #
+    if [ -n "${ausgabe}" ]; then
+        echo "${ausgabe}" | tail -n 5
+    fi
+
+    return 1
+}
+
 configure_dmx() {
 
     echo "$(L "XRack: Lichtsteuerung (DMX über OLA) wird eingerichtet..." "XRack: Setting up lighting control (DMX via OLA)...")"
 
-    #
-    # In einem eigenen Schritt und nicht in der großen Paketliste:
-    # Wäre "ola" dort nicht verfügbar, schlüge die Installation
-    # aller Systempakete fehl - wegen des Lichts.
-    #
-    if ! sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ola >/dev/null 2>&1; then
-
-        echo "$(L "Hinweis: Paket 'ola' nicht installierbar - Lichtsteuerung nicht verfügbar." "Note: package 'ola' could not be installed - lighting control unavailable.")"
+    if ! dmx_paket_sicherstellen; then
         return 0
     fi
 
