@@ -9,7 +9,9 @@ prüfen, was am Gerät am mühsamsten zu finden wäre: dass eine Lampe
 genau an ihrer Adresse landet und nirgends sonst.
 """
 
+import logging
 import tempfile
+import threading
 from pathlib import Path
 
 from core.state_store import StateStore
@@ -436,6 +438,17 @@ class LichtApp(LichtMixin):
         self.dmx_control = dmx
         self.light_values = {}
         self.light_brightness = {}
+        self._light_lock = threading.Lock()
+        self.logger = logging.getLogger("XRack-Test")
+
+        #
+        # Der Show-Motor haengt am Statusbericht, also gehoert er auch
+        # in die Attrappe - sonst prueft man eine Anwendung, die es so
+        # gar nicht gibt.
+        #
+        from lighting.light_engine import LightEngine
+
+        self.light_engine = LightEngine(self)
 
 
 def aufbau(ordner: Path, antwortet: bool = True):
@@ -669,6 +682,192 @@ with tempfile.TemporaryDirectory() as tmp:
 
     print("OK: Ohne Lichtdienst wird gemeldet statt abgestürzt - und die "
           "Einrichtung geht weiter")
+
+
+# ====================================================================
+# 9. Die musikgesteuerte Show: aus drei Zahlen wird ein Lichtbild
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+    licht.lampe_speichern({
+        "id": "bar", "name": "LED-Bar", "template": "bar-8-rgb", "address": 1,
+    })
+
+    dmx = DmxAttrappe()
+    app = LichtApp(licht, dmx)
+
+    motor = app.light_engine
+
+    #
+    # Dieselbe Segmentbildung wie in der Oberflaeche: aus 24 Kanaelen
+    # acht Segmente. Laufen die beiden auseinander, zeigt die Karte
+    # etwas anderes an, als die Show ansteuert.
+    #
+    gruppen = motor._gruppen(["red", "green", "blue"] * 8)
+
+    assert len(gruppen) == 8, len(gruppen)
+    assert all(len(g) == 3 for g in gruppen), gruppen
+
+    print("OK: Die Show teilt die Kanäle genauso in Segmente wie die Karte")
+
+    #
+    # Bass laut, Hoehen leise -> Rot deutlich ueber Blau.
+    #
+    motor.stand = {"low": 1.0, "mid": 0.5, "high": 0.0, "level": 0.5, "beat": False}
+    motor.position = 0
+
+    werte = motor.werte_je_lampe()["bar"]
+
+    assert werte[0] > 200, f"Rot muss bei vollem Bass hoch sein: {werte[:3]}"
+    assert werte[2] == 0, f"Blau muss bei fehlenden Hoehen aus sein: {werte[:3]}"
+    assert werte[1] > 0, werte[:3]
+
+    print("OK: Bass wird zu Rot, Höhen zu Blau")
+
+    #
+    # Der wandernde Punkt: Segment 0 ist dran und muss heller sein als
+    # die uebrigen.
+    #
+    assert werte[0] > werte[3], (
+        f"Das Segment, das dran ist, muss heller leuchten: {werte[0]} vs {werte[3]}"
+    )
+
+    motor.position = 3
+    werte = motor.werte_je_lampe()["bar"]
+
+    assert werte[9] > werte[0], (
+        "Nach dem Weiterruecken muss ein anderes Segment vorn sein."
+    )
+
+    print("OK: Der helle Punkt wandert über die Segmente")
+
+    #
+    # Ohne Signal bleibt es dunkel - kein Grundleuchten, das man
+    # nachher nicht mehr los wird.
+    #
+    motor.stand = {"low": 0.0, "mid": 0.0, "high": 0.0, "level": 0.0, "beat": False}
+
+    assert set(motor.werte_je_lampe()["bar"]) == {0}, motor.werte_je_lampe()["bar"]
+
+    print("OK: Ohne Signal bleibt die Show dunkel")
+
+
+# --- Bewegtlicht: Position ja, Blitzlicht nein ----------------------
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+    licht.vorlage_speichern({
+        "id": "kopf", "name": "Kopf",
+        "channels": ["pan", "tilt", "red", "green", "blue", "strobe"],
+    })
+    licht.lampe_speichern({
+        "id": "k", "name": "Kopf", "template": "kopf", "address": 1,
+    })
+
+    app = LichtApp(licht, DmxAttrappe())
+    motor = app.light_engine
+
+    motor.stand = {"low": 1.0, "mid": 0.5, "high": 0.2, "level": 0.5, "beat": False}
+    motor.phase = 1.0
+
+    werte = motor.werte_je_lampe()["k"]
+
+    assert werte[0] > 0 and werte[1] > 0, f"Pan/Tilt muessen bewegt werden: {werte}"
+
+    #
+    # Und das Wichtigste: Der Strobe-Kanal bleibt aus. Ein Blitzlicht,
+    # das von selbst angeht, ist auf einer Buehne keine Ueberraschung,
+    # die jemand haben will.
+    #
+    assert werte[5] == 0, f"Strobe darf die Show nicht von selbst ausloesen: {werte}"
+
+    print("OK: Bewegtlicht wird geschwenkt - aber das Blitzlicht bleibt aus")
+
+
+# --- Der Rückfall bei Sprache und Stille ----------------------------
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+    licht.lampe_speichern({
+        "id": "bar", "name": "LED-Bar", "template": "rgb", "address": 1,
+    })
+
+    dmx = DmxAttrappe()
+    app = LichtApp(licht, dmx)
+
+    #
+    # Ohne hinterlegte Szene: Licht aus. Das ist die ehrlichere
+    # Vorgabe - Licht, das bei einer Ansage weiterzuckt, ist
+    # schlimmer als Dunkelheit.
+    #
+    app.light_values = {"bar": [255, 255, 255]}
+    dmx.gesendet.clear()
+
+    app.licht_rueckfall("speech")
+
+    assert set(dmx.gesendet[-1]) == {0}, dmx.gesendet[-1][:6]
+
+    print("OK: Ohne Rückfallszene geht das Licht bei einer Ansage aus")
+
+    #
+    # Mit Szene: genau diese Szene.
+    #
+    app.set_light_fixture_values("bar", [0, 0, 255])
+    app.save_light_scene("Pause")
+
+    szenen_id = licht.szenen()[0]["id"]
+
+    ok, meldung = licht.set_show_einstellungen({"fallback_scene": szenen_id})
+    assert ok, meldung
+
+    app.set_light_fixture_values("bar", [255, 0, 0])
+    app.licht_rueckfall("silence")
+
+    assert dmx.gesendet[-1][0:3] == [0, 0, 255], dmx.gesendet[-1][0:3]
+
+    print("OK: Mit Rückfallszene wird genau diese aufgerufen")
+
+    #
+    # Eine Szene, die es nicht gibt, wird abgewiesen - sonst passierte
+    # bei Stille einfach nichts, und niemand wuesste warum.
+    #
+    ok, meldung = licht.set_show_einstellungen({"fallback_scene": "gibtsnicht"})
+
+    assert not ok and "gibt es nicht" in meldung, meldung
+
+    print("OK: Eine nicht vorhandene Rückfallszene wird abgewiesen")
+
+
+# --- Die Warteschlange darf den Lesethread nie aufhalten ------------
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+
+    app = LichtApp(licht, DmxAttrappe())
+    motor = app.light_engine
+
+    motor._laeuft = True   # ohne Thread: die Warteschlange laeuft voll
+
+    for _ in range(50):
+        motor.block_empfangen(b"\x00" * 64)
+
+    assert motor.verworfen > 0, (
+        "Bei voller Warteschlange muss verworfen werden, nicht gewartet."
+    )
+
+    motor._laeuft = False
+
+    print(f"OK: Volle Warteschlange verwirft ({motor.verworfen} Blöcke), "
+          f"statt den Lesethread aufzuhalten")
 
 
 print("Alle Licht-Tests erfolgreich.")

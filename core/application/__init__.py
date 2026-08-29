@@ -35,6 +35,7 @@ from core.console_control import ConsoleControl, MIN_DB
 from core.diagnostics import Diagnostics
 from core.state_store import StateStore
 from core.dmx_control import DmxControl
+from lighting.light_engine import LightEngine
 from lighting.store import LightingStore
 from core.pin import hash_pin, verify_pin
 from core.stem_combiner import combine_stems, StemCombineError
@@ -176,6 +177,15 @@ class Application(
         # ungedimmt und die Helligkeit kommt erst beim Senden dazu.
         #
         self.light_brightness: dict = {}
+
+        #
+        # Show-Thread und Bedienung koennen gleichzeitig senden
+        # wollen. Ohne Sperre waere, was auf dem Kabel landet, eine
+        # Mischung aus beidem.
+        #
+        self._light_lock = threading.Lock()
+
+        self.light_engine = LightEngine(self)
 
         self._usb_copy_lock = threading.Lock()
 

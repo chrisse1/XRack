@@ -14,6 +14,8 @@ Nichts hier darf Aufnahme oder Wiedergabe stören. Fehlt der Dienst
 oder das Kabel, bleibt es dunkel und XRack läuft weiter.
 """
 
+import threading
+
 from lighting import fixtures
 
 
@@ -33,6 +35,13 @@ class LichtMixin:
         stand["brightness"] = self.light_brightness
         stand["dmx"] = self.dmx_control.status()
 
+        stand["show_running"] = self.light_engine.running
+        stand["show_state"] = self.light_engine.zustand
+        stand["show_levels"] = {
+            name: round(float(self.light_engine.stand.get(name, 0.0)), 3)
+            for name in ("low", "mid", "high", "level")
+        }
+
         return stand
 
     def set_lighting_enabled(self, enabled: bool) -> tuple[bool, str]:
@@ -47,6 +56,14 @@ class LichtMixin:
         self.lighting_store.set_enabled(enabled)
 
         if not enabled:
+
+            #
+            # Erst die Show anhalten, dann ausschalten: Sonst
+            # schriebe ihr Thread noch ein Lichtbild, nachdem das
+            # Blackout schon durch ist - und die Lampen blieben an.
+            #
+            self.stop_light_show()
+
             self.light_values = {}
             self.light_brightness = {}
             self.dmx_control.blackout()
@@ -200,6 +217,149 @@ class LichtMixin:
     def delete_light_scene(self, kennung: str) -> tuple[bool, str]:
 
         return self.lighting_store.szene_loeschen(kennung)
+
+
+    # ----------------------------------------------------------------
+    # Die musikgesteuerte Show
+    # ----------------------------------------------------------------
+
+    def set_light_show_settings(self, werte: dict) -> tuple[bool, str]:
+        """
+        Einstellungen der Show ändern.
+
+        Läuft die Show gerade, wird sie neu gestartet - Empfindlichkeit
+        und Kanalpaar stecken in der Analyse und lassen sich nicht
+        unterwegs umstellen, ohne dass der Filterzustand unsinnig
+        wird.
+        """
+
+        erfolg, meldung = self.lighting_store.set_show_einstellungen(werte)
+
+        if erfolg and self.light_engine.running:
+
+            self.stop_light_show()
+            self.start_light_show()
+
+        return erfolg, meldung
+
+    def start_light_show(self) -> tuple[bool, str]:
+        """Die musikgesteuerte Show starten."""
+
+        if not self.lighting_store.enabled:
+            return False, "Die Lichtsteuerung ist ausgeschaltet."
+
+        if self.light_engine.running:
+            return True, ""
+
+        if self.selected_audio_device is None:
+            return False, (
+                "Kein Audiogerät gewählt - ohne Eingang gibt es nichts zu "
+                "hören."
+            )
+
+        einstellungen = self.lighting_store.show_einstellungen()
+
+        kanaele = self.recorder.backend.channels
+
+        #
+        # Der Nutzer gibt den linken Kanal 1-basiert an; der rechte
+        # ist der daneben. Liegt das Paar ausserhalb dessen, was das
+        # Interface hat, wird abgewiesen statt still danebenzugreifen.
+        #
+        links = int(einstellungen.get("channel", 1)) - 1
+        rechts = links + 1
+
+        if links < 0 or rechts >= kanaele:
+            return False, (
+                f"Das Interface hat {kanaele} Kanäle - das Paar "
+                f"{links + 1}+{rechts + 1} gibt es dort nicht."
+            )
+
+        #
+        # Den Audiostrom offen halten, ohne als Pegelprüfung zu
+        # gelten (siehe recorder/recorder.py).
+        #
+        self.recorder.add_consumer(self.light_engine.block_empfangen)
+        self.recorder.start_analysis()
+
+        self.light_engine.start(
+            rate=self.recorder.backend.rate,
+            channels=kanaele,
+            links=links,
+            rechts=rechts,
+            einstellungen=einstellungen,
+        )
+
+        return True, ""
+
+    def stop_light_show(self) -> tuple[bool, str]:
+        """Die Show anhalten und den Audiostrom wieder freigeben."""
+
+        if not self.light_engine.running:
+            return True, ""
+
+        self.light_engine.stop()
+
+        self.recorder.remove_consumer(self.light_engine.block_empfangen)
+        self.recorder.stop_analysis()
+
+        return True, ""
+
+    # ----------------------------------------------------------------
+    # Rueckrufe aus dem Show-Thread
+    # ----------------------------------------------------------------
+
+    def licht_show_bild(self, werte: dict) -> None:
+        """
+        Ein von der Show berechnetes Lichtbild uebernehmen.
+
+        Laeuft im Show-Thread, nicht im Webserver - deshalb die
+        Sperre: Sonst koennten Show und Bedienung gleichzeitig senden,
+        und was auf dem Kabel landet, waere eine Mischung aus beidem.
+        """
+
+        with self._light_lock:
+
+            self.light_values = werte
+
+            self._licht_senden()
+
+    def licht_rueckfall(self, zustand: str) -> None:
+        """
+        Keine Musik mehr: auf die eingestellte Szene umschalten.
+
+        Ist keine hinterlegt, geht das Licht aus. Das ist die
+        ehrlichere Vorgabe - Licht, das bei einer Ansage einfach
+        weiterzuckt, ist schlimmer als Dunkelheit.
+        """
+
+        einstellungen = self.lighting_store.show_einstellungen()
+
+        kennung = einstellungen.get("fallback_scene") or ""
+
+        self.logger.info(
+            "Lichtshow: %s erkannt, Rückfall auf %s.",
+            zustand,
+            f"Szene {kennung}" if kennung else "Blackout",
+        )
+
+        with self._light_lock:
+
+            if kennung and self.lighting_store.szene(kennung):
+
+                szene = self.lighting_store.szene(kennung)
+
+                self.light_values = {
+                    lampe: list(liste)
+                    for lampe, liste in (szene.get("values") or {}).items()
+                }
+                self.light_brightness = dict(szene.get("brightness") or {})
+
+            else:
+                self.light_values = {}
+                self.light_brightness = {}
+
+            self._licht_senden()
 
     # ----------------------------------------------------------------
     # Ausgabe

@@ -196,3 +196,56 @@ def lighting_scene_delete(
     success, message = application.delete_light_scene(selection.id)
 
     return {"success": success, "message": message}
+
+
+class LightingShowSettings(BaseModel):
+    channel: int | None = None
+    sensitivity: float | None = None
+    fallback_scene: str | None = None
+    silence_threshold: float | None = None
+    silence_seconds: float | None = None
+    speech_seconds: float | None = None
+
+
+@router.post("/api/lighting/show/start")
+def lighting_show_start(request: Request):
+
+    application = request.app.state.application
+
+    success, message = application.start_light_show()
+
+    return {"success": success, "message": message}
+
+
+@router.post("/api/lighting/show/stop")
+def lighting_show_stop(request: Request):
+
+    application = request.app.state.application
+
+    success, message = application.stop_light_show()
+
+    return {"success": success, "message": message}
+
+
+@router.post("/api/lighting/show/settings")
+def lighting_show_settings(
+    selection: LightingShowSettings,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    #
+    # Nur mitgeschickte Felder weiterreichen: Ein Formular, das nur
+    # die Empfindlichkeit aendert, soll nicht nebenbei das Kanalpaar
+    # zurueckstellen.
+    #
+    werte = {
+        name: wert
+        for name, wert in selection.model_dump().items()
+        if wert is not None
+    }
+
+    success, message = application.set_light_show_settings(werte)
+
+    return {"success": success, "message": message}

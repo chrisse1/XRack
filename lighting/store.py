@@ -20,6 +20,33 @@ from uuid import uuid4
 from lighting import fixtures
 
 
+#
+# Vorgaben der musikgesteuerten Show.
+#
+# Die Schwellen der Stimmungserkennung stehen bewusst hier und nicht
+# fest im Code: Ob eine leise Stelle noch Musik ist oder schon eine
+# Ansage, haengt vom Signal ab, das vor Ort ankommt. Nachjustieren
+# muss ohne Codeaenderung gehen.
+#
+SHOW_VORGABE = {
+    #
+    # 1-basierter linker Kanal des Paares, das die Show hoert.
+    #
+    "channel": 1,
+    "sensitivity": 1.0,
+
+    #
+    # Szene, auf die bei Sprache oder Stille umgeschaltet wird.
+    # Leer heisst: dann geht das Licht aus.
+    #
+    "fallback_scene": "",
+
+    "silence_threshold": 0.02,
+    "silence_seconds": 6.0,
+    "speech_seconds": 12.0,
+}
+
+
 class LightingStore:
     """Liest und schreibt die Lichteinrichtung."""
 
@@ -47,6 +74,7 @@ class LightingStore:
             "templates": list(daten.get("templates") or []),
             "fixtures": list(daten.get("fixtures") or []),
             "scenes": list(daten.get("scenes") or []),
+            "show": {**SHOW_VORGABE, **(daten.get("show") or {})},
         }
 
     def _sichern(self, daten: dict) -> None:
@@ -332,6 +360,70 @@ class LightingStore:
         return True, ""
 
     # ----------------------------------------------------------------
+    # Die musikgesteuerte Show
+    # ----------------------------------------------------------------
+
+    def show_einstellungen(self) -> dict:
+
+        return self._laden()["show"]
+
+    def set_show_einstellungen(self, werte: dict) -> tuple[bool, str]:
+        """
+        Die Einstellungen der Show aendern. Nur bekannte Schluessel,
+        und alles in vernuenftigen Grenzen.
+        """
+
+        daten = self._laden()
+        show = dict(daten["show"])
+
+        if "channel" in werte:
+
+            try:
+                kanal = int(werte["channel"])
+            except (TypeError, ValueError):
+                return False, "Der Kanal muss eine Zahl sein."
+
+            if kanal < 1:
+                return False, "Der Kanal muss mindestens 1 sein."
+
+            show["channel"] = kanal
+
+        if "sensitivity" in werte:
+            show["sensitivity"] = max(0.1, min(4.0, float(werte["sensitivity"])))
+
+        if "fallback_scene" in werte:
+
+            kennung = str(werte["fallback_scene"] or "")
+
+            #
+            # Eine Szene, die es nicht gibt, waere ein stiller
+            # Ausfall: Bei Stille passierte dann einfach nichts.
+            #
+            if kennung and not any(
+                szene.get("id") == kennung for szene in daten["scenes"]
+            ):
+                return False, "Diese Szene gibt es nicht."
+
+            show["fallback_scene"] = kennung
+
+        if "silence_threshold" in werte:
+            show["silence_threshold"] = max(
+                0.0, min(0.5, float(werte["silence_threshold"]))
+            )
+
+        if "silence_seconds" in werte:
+            show["silence_seconds"] = max(1.0, min(120.0, float(werte["silence_seconds"])))
+
+        if "speech_seconds" in werte:
+            show["speech_seconds"] = max(1.0, min(300.0, float(werte["speech_seconds"])))
+
+        daten["show"] = show
+
+        self._sichern(daten)
+
+        return True, ""
+
+    # ----------------------------------------------------------------
     # Übersicht
     # ----------------------------------------------------------------
 
@@ -348,4 +440,5 @@ class LightingStore:
             "scenes": self.szenen(),
             "roles": list(fixtures.ROLLEN),
             "overlaps": fixtures.ueberschneidungen(lampen, vorlagen),
+            "show": self.show_einstellungen(),
         }
