@@ -521,8 +521,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_show_settings": "Show-Einstellungen",
         "light_show_channel": "Kanalpaar zum Mithören",
         "light_show_channel_hint": (
-            "Der linke Kanal des Stereopaars, das vom Mischpult kommt. "
-            "Der rechte ist der daneben."
+            "Auf dieses Kanalpaar hört die Lichtshow. Am besten ein "
+            "Ausspielweg, auf dem die Musik liegt - nicht ein einzelnes "
+            "Instrument."
         ),
         "light_show_sensitivity": "Empfindlichkeit",
         "light_show_background_seconds": "Hintergrund: Trägheit",
@@ -1071,8 +1072,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_show_settings": "Show settings",
         "light_show_channel": "Channel pair to listen on",
         "light_show_channel_hint": (
-            "The left channel of the stereo pair coming from the mixer. "
-            "The right one is next to it."
+            "The light show listens to this channel pair. Best a send "
+            "carrying the music - not a single instrument."
         ),
         "light_show_sensitivity": "Sensitivity",
         "light_show_background_seconds": "Background: inertia",
