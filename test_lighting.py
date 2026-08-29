@@ -870,4 +870,39 @@ with tempfile.TemporaryDirectory() as tmp:
           f"statt den Lesethread aufzuhalten")
 
 
+# --- Die Stille-Schwelle muss zu echten Pegeln passen ---------------
+#
+# Am Geraet: Die Show schaltete bei laufender Musik auf die
+# Rueckfallszene, weil die Schwelle bei 0.02 lag - das sind -34 dBFS.
+# Ein normaler Ausspielweg vom Pult liegt weit darunter; erst mit dem
+# Kanal auf 0 dB kam das Signal darueber.
+#
+# Die Zusicherung ist bewusst grosszuegig: Es geht nicht um einen
+# bestimmten Wert, sondern darum, dass die Vorgabe im Bereich eines
+# Rauschteppichs liegt und nicht im Bereich normaler Musik.
+
+import math
+
+from lighting.store import SHOW_VORGABE
+
+schwelle_db = 20 * math.log10(SHOW_VORGABE["silence_threshold"])
+
+assert schwelle_db <= -46, (
+    f"Die Stille-Schwelle liegt bei {schwelle_db:.0f} dBFS - damit haelt die "
+    f"Show einen normal ausgesteuerten Ausspielweg fuer Stille."
+)
+
+#
+# Und nicht so tief, dass sie nie greift: Rauschen und Brummen sollen
+# noch als Stille durchgehen.
+#
+assert schwelle_db >= -70, (
+    f"Die Stille-Schwelle liegt bei {schwelle_db:.0f} dBFS - so tief greift "
+    f"sie bei einem rauschenden Eingang nie."
+)
+
+print(f"OK: Die Stille-Schwelle liegt bei {schwelle_db:.0f} dBFS - "
+      f"unter normaler Musik, über dem Rauschen")
+
+
 print("Alle Licht-Tests erfolgreich.")

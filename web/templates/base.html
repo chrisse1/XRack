@@ -1431,15 +1431,17 @@
                     <div class="col-12 col-sm-6">
                         <label class="form-label small mb-1" for="light-show-silence-threshold">
                             {{ t.light_show_silence_threshold }}
+                            <span id="light-show-silence-threshold-value"
+                                  class="text-body-secondary"></span>
                         </label>
                         <input
                             id="light-show-silence-threshold"
                             type="range"
                             class="form-range"
-                            min="0"
-                            max="0.2"
-                            step="0.005"
-                            value="0.02"
+                            min="-80"
+                            max="-20"
+                            step="1"
+                            value="-54"
                         >
                     </div>
 

@@ -4586,6 +4586,33 @@ const LIGHT_COLOR_ROLES = ["red", "green", "blue"];
 //
 const lightSendTimers = {};
 
+//
+// Pegel gehoeren auf eine dB-Skala, nicht auf eine lineare.
+//
+// Linear sieht -40 dBFS - ein voellig normaler Ausspielweg - wie
+// 1 Prozent aus, also wie nichts. Genau daran ist die Show
+// gescheitert: Der Balken schlug nicht aus, und die Stille-Erkennung
+// hielt laufende Musik fuer Stille. Am Pult wird in dB gedacht, hier
+// jetzt auch.
+//
+const LIGHT_METER_MIN_DB = -60;
+
+function lightLinearZuDb(wert) {
+    if (!wert || wert <= 0) return LIGHT_METER_MIN_DB;
+    return Math.max(LIGHT_METER_MIN_DB, 20 * Math.log10(wert));
+}
+
+function lightDbZuLinear(db) {
+    return Math.pow(10, db / 20);
+}
+
+function lightPegelProzent(wert) {
+    const db = lightLinearZuDb(wert);
+    return Math.max(0, Math.min(100,
+        ((db - LIGHT_METER_MIN_DB) / -LIGHT_METER_MIN_DB) * 100
+    ));
+}
+
 function lightRoleLabel(role) {
     return I18N["light_role_" + role] || role;
 }
@@ -5307,7 +5334,15 @@ function renderLightShow(stand) {
 
         const fuellung = document.createElement("div");
         fuellung.className = "progress-bar";
-        fuellung.style.width = Math.round((pegel[name] || 0) * 100) + "%";
+        //
+        // Nur der Gesamtpegel ist ein echter Pegel und gehoert auf
+        // die dB-Skala. Die drei Baender sind schon auf 0-1 normiert.
+        //
+        fuellung.style.width = (
+            name === "level"
+                ? Math.round(lightPegelProzent(pegel[name] || 0))
+                : Math.round((pegel[name] || 0) * 100)
+        ) + "%";
         rahmen.appendChild(fuellung);
 
         zeile.appendChild(rahmen);
@@ -5325,7 +5360,13 @@ function renderLightShowSettings(stand) {
 
     setzen("light-show-channel", show.channel);
     setzen("light-show-sensitivity", show.sensitivity);
-    setzen("light-show-silence-threshold", show.silence_threshold);
+    const schwelle = document.getElementById("light-show-silence-threshold");
+
+    if (schwelle && document.activeElement !== schwelle) {
+        schwelle.value = Math.round(lightLinearZuDb(show.silence_threshold));
+    }
+
+    lightSchwelleBeschriften();
     setzen("light-show-silence-seconds", show.silence_seconds);
     setzen("light-show-speech-seconds", show.speech_seconds);
 
@@ -5359,6 +5400,13 @@ async function toggleLightShow() {
     await refreshLighting();
 }
 
+function lightSchwelleBeschriften() {
+    const regler = document.getElementById("light-show-silence-threshold");
+    const anzeige = document.getElementById("light-show-silence-threshold-value");
+
+    if (regler && anzeige) anzeige.textContent = regler.value + " dBFS";
+}
+
 async function saveLightShowSettings() {
     const zahl = (kennung) => {
         const element = document.getElementById(kennung);
@@ -5370,7 +5418,7 @@ async function saveLightShowSettings() {
     await lightRequest("/api/lighting/show/settings", {
         channel: zahl("light-show-channel"),
         sensitivity: zahl("light-show-sensitivity"),
-        silence_threshold: zahl("light-show-silence-threshold"),
+        silence_threshold: lightDbZuLinear(zahl("light-show-silence-threshold")),
         silence_seconds: zahl("light-show-silence-seconds"),
         speech_seconds: zahl("light-show-speech-seconds"),
         fallback_scene: auswahl ? auswahl.value : ""
@@ -5407,4 +5455,7 @@ function lightShowPulsSetzen(laeuft) {
         const element = document.getElementById(kennung);
         if (element) element.addEventListener("change", saveLightShowSettings);
     }
+
+    const schwelle = document.getElementById("light-show-silence-threshold");
+    if (schwelle) schwelle.addEventListener("input", lightSchwelleBeschriften);
 })();

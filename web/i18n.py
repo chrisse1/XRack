@@ -514,6 +514,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Läuft keine Musik mehr, schaltet XRack hierauf um."
         ),
         "light_show_silence_threshold": "Ab wann gilt es als still",
+        "light_show_level_hint": (
+            "Der Balken \"Gesamt\" und die Schwelle sind in dBFS - dieselbe Skala wie am Pult."
+        ),
         "light_show_silence_seconds": "Wartezeit bis Stille (Sekunden)",
         "light_show_speech_seconds": "Wartezeit bis Sprache (0 = aus)",
         "light_show_tuning_hint": (
@@ -1019,6 +1022,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "When the music stops, XRack switches to this."
         ),
         "light_show_silence_threshold": "Level counted as silence",
+        "light_show_level_hint": (
+            "The \"Total\" bar and the threshold are in dBFS - the same scale as on the mixer."
+        ),
         "light_show_silence_seconds": "Wait before silence (seconds)",
         "light_show_speech_seconds": "Wait before speech (0 = off)",
         "light_show_tuning_hint": (

@@ -41,7 +41,18 @@ SHOW_VORGABE = {
     #
     "fallback_scene": "",
 
-    "silence_threshold": 0.02,
+    #
+    # Stille-Schwelle als linearer RMS-Wert. 0.002 sind rund
+    # -54 dBFS.
+    #
+    # Vorher standen hier 0.02, also -34 dBFS - und das war schlicht
+    # falsch gedacht. Ein normaler Ausspielweg vom Pult liegt weit
+    # darunter; erst mit dem Kanal auf 0 dB kam das Signal darueber.
+    # Die Show hielt also normal laufende Musik fuer Stille und
+    # schaltete nach sechs Sekunden auf die Rueckfallszene. Genau das
+    # war am Geraet zu sehen.
+    #
+    "silence_threshold": 0.002,
     "silence_seconds": 6.0,
 
     #

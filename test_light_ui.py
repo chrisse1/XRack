@@ -438,7 +438,12 @@ assert ergebnis["knopf_aktiv"], "Der Show-Knopf muss als aktiv zu erkennen sein.
 # Signal zu tun hat.
 #
 assert ergebnis["balken"] == 4, ergebnis["balken"]
-assert ergebnis["breiten"] == ["80%", "40%", "10%", "50%"], ergebnis["breiten"]
+#
+# Die drei Baender sind schon auf 0-1 normiert und werden linear
+# gezeigt. Der Gesamtpegel ist ein echter Pegel und gehoert auf die
+# dB-Skala: 0,5 sind -6 dBFS, auf -60..0 dBFS abgebildet also 90 %.
+#
+assert ergebnis["breiten"] == ["80%", "40%", "10%", "90%"], ergebnis["breiten"]
 
 print("OK: Bei laufender Show zeigen die Balken die gemeldeten Pegel")
 
@@ -517,6 +522,63 @@ assert ergebnis["sichtbar"], "Fehlendes Audio muss in der Karte stehen."
 assert "kein Audio" in ergebnis["text"], ergebnis["text"]
 
 print("OK: Läuft die Show ohne ankommendes Audio, steht das in der Karte")
+
+
+# ====================================================================
+# 8. Ein leiser, aber normaler Ausspielweg muss sichtbar sein
+#
+# Genau daran ist es am Gerät gescheitert: Der Balken war linear
+# skaliert. Ein Ausspielweg bei -42 dBFS - völlig normal, wenn der
+# Kanal nicht auf 0 dB steht - ergab damit 0,8 Prozent, also optisch
+# nichts. Der Nutzer sah einen Balken, der "gar nicht ausschlug", und
+# die Stille-Erkennung hielt laufende Musik für Stille.
+# ====================================================================
+
+leise = stand(show_running=True)
+leise["show_levels"] = {"low": 0.5, "mid": 0.3, "high": 0.2, "level": 0.008}
+
+ergebnis = ausfuehren(leise, """function () {
+    const balken = document.getElementById('light-show-bands')
+                           .querySelectorAll('.progress-bar');
+    return { gesamt: balken[balken.length - 1].style.width };
+}""")
+
+prozent = float(ergebnis["gesamt"].rstrip("%"))
+
+#
+# -42 dBFS auf der Skala -60..0 sind rund 30 Prozent. Entscheidend
+# ist nicht die genaue Zahl, sondern dass man etwas SIEHT.
+#
+assert 20 < prozent < 45, (
+    f"Ein Signal bei -42 dBFS muss deutlich sichtbar sein, zeigt aber "
+    f"{prozent} Prozent."
+)
+
+print(f"OK: Ein leiser Ausspielweg (-42 dBFS) ist mit {prozent:.0f} % sichtbar")
+
+
+# ====================================================================
+# 9. Die Stille-Schwelle steht in dB im Dialog
+# ====================================================================
+
+in_db = stand()
+in_db["show"] = {**in_db["show"], "silence_threshold": 0.002}
+
+ergebnis = ausfuehren(in_db, """function () {
+    return {
+        regler: document.getElementById('light-show-silence-threshold').value,
+        beschriftung: document.getElementById(
+            'light-show-silence-threshold-value').textContent
+    };
+}""")
+
+#
+# 0.002 sind rund -54 dBFS.
+#
+assert ergebnis["regler"] == "-54", ergebnis
+assert "dBFS" in ergebnis["beschriftung"], ergebnis
+
+print("OK: Die Stille-Schwelle steht in dBFS - derselben Skala wie am Pult")
 
 
 print("Alle Lichtkarten-Tests erfolgreich.")
