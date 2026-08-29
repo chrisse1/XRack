@@ -714,18 +714,36 @@ with tempfile.TemporaryDirectory() as tmp:
     print("OK: Die Show teilt die Kanäle genauso in Segmente wie die Karte")
 
     #
-    # Bass laut, Hoehen leise -> Rot deutlich ueber Blau.
+    # Jedes Segment bekommt SEIN Band, nicht die Mischung aller drei.
+    #
+    # Vorher bekam jedes dieselbe gemischte Farbe. Bei Musik, in der
+    # alle drei Baender vorkommen, ist diese Mischung mit Rot plus
+    # Gruen plus Blau schlicht Weiss - am Geraet standen sechs weisse
+    # Spots, die sich nur in der Helligkeit unterschieden.
     #
     motor.stand = {"low": 1.0, "mid": 0.5, "high": 0.0, "level": 0.5, "beat": False}
     motor.position = 0
 
     werte = motor.werte_je_lampe()["bar"]
 
-    assert werte[0] > 200, f"Rot muss bei vollem Bass hoch sein: {werte[:3]}"
-    assert werte[2] == 0, f"Blau muss bei fehlenden Hoehen aus sein: {werte[:3]}"
-    assert werte[1] > 0, werte[:3]
+    # Segment 1 haengt am Bass: nur Rot.
+    assert werte[0] > 200, f"Segment 1 muss bei vollem Bass rot sein: {werte[0:3]}"
+    assert werte[1] == 0 and werte[2] == 0, (
+        f"Segment 1 darf nur Rot bekommen, nicht die Mischung: {werte[0:3]}"
+    )
 
-    print("OK: Bass wird zu Rot, Höhen zu Blau")
+    # Segment 2 haengt an den Mitten: nur Gruen, und nur halb.
+    assert 0 < werte[4] < 200, f"Segment 2 muss grün und halb sein: {werte[3:6]}"
+    assert werte[3] == 0 and werte[5] == 0, (
+        f"Segment 2 darf nur Grün bekommen: {werte[3:6]}"
+    )
+
+    # Segment 3 haengt an den Hoehen, und die fehlen: dunkel.
+    assert werte[6:9] == [0, 0, 0], (
+        f"Segment 3 muss bei fehlenden Höhen dunkel sein: {werte[6:9]}"
+    )
+
+    print("OK: Jedes Segment bekommt sein eigenes Frequenzband")
 
     #
     # Der wandernde Punkt: Segment 0 ist dran und muss heller sein als
@@ -1760,6 +1778,173 @@ with tempfile.TemporaryDirectory() as tmp:
     )
 
     print(f"OK: Die Gruppen laufen versetzt ({proben} Proben, keine gleich)")
+
+
+# ====================================================================
+# 14. Kein Weiß mehr auf den Effektlampen
+#
+# Am Geraet gemeldet: "Bei den KLS-180/6 und den Lampen an der Laser
+# Bar sieht das Licht groesstenteils weiss aus." Zwei Ursachen, beide
+# hier geprueft:
+#
+#   1. Jedes Segment bekam die MISCHUNG aller drei Baender. Rot plus
+#      Gruen plus Blau ist Weiss.
+#   2. Auf einem RGBW-Spot lief der Weiss-Kanal mit dem mittleren Band
+#      mit und wusch die Farbe zusaetzlich aus.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+
+    licht.lampe_speichern({
+        "id": "kls", "name": "KLS", "template": "eurolite-kls-180-6-24",
+        "address": 1, "kind": "effect",
+    })
+    licht.lampe_speichern({
+        "id": "bar", "name": "Laser-Bar",
+        "template": "eurolite-kls-laser-bar-pro-fx-28",
+        "address": 40, "kind": "effect",
+    })
+
+    app = LichtApp(licht, DmxAttrappe())
+    motor = app.light_engine
+
+    motor.einstellungen = {
+        "sensitivity": 1.0,
+        "color_low": "#ff0000",
+        "color_mid": "#00ff00",
+        "color_high": "#0000ff",
+    }
+
+    #
+    # Der gemeldete Fall: Musik mit allem drin.
+    #
+    motor.stand = {"low": 1.0, "mid": 1.0, "high": 1.0,
+                   "level": 0.9, "beat": False}
+
+    for schritt in range(12):
+
+        motor.position = schritt
+        werte = motor.werte_je_lampe()
+
+        #
+        # Die sechs Spots der KLS: jeder darf nur EINEN Farbkanal
+        # anhaben. Sind zwei oder drei an, ist es wieder eine
+        # Mischung - und drei sind Weiss.
+        #
+        for spot in range(6):
+
+            rot, gruen, blau, weiss = werte["kls"][spot * 4:spot * 4 + 4]
+
+            an = [wert for wert in (rot, gruen, blau) if wert > 0]
+
+            assert len(an) == 1, (
+                f"Spot {spot + 1} bekommt eine Mischung statt einer Farbe: "
+                f"R{rot} G{gruen} B{blau}"
+            )
+
+            assert weiss == 0, (
+                f"Spot {spot + 1} bekommt Weiß dazu, das wäscht die Farbe "
+                f"aus: {weiss}"
+            )
+
+        #
+        # Und die vier Farbeinheiten der Laser Bar genauso.
+        #
+        for start in (0, 5, 10, 15):
+
+            rot, gruen, blau = werte["bar"][start:start + 3]
+
+            an = [wert for wert in (rot, gruen, blau) if wert > 0]
+
+            assert len(an) == 1, (
+                f"Laser-Bar ab Kanal {start + 1} bekommt eine Mischung: "
+                f"R{rot} G{gruen} B{blau}"
+            )
+
+    print("OK: Jede Einheit zeigt genau eine Farbe, kein Weiß")
+
+    #
+    # Über die sechs Spots hinweg muessen ALLE drei Baender vorkommen -
+    # sonst waere aus dem Weiss nur eine einzige Farbe geworden.
+    #
+    motor.position = 0
+    werte = motor.werte_je_lampe()["kls"]
+
+    baender = set()
+
+    for spot in range(6):
+        rot, gruen, blau, _ = werte[spot * 4:spot * 4 + 4]
+        if rot: baender.add("rot")
+        if gruen: baender.add("gruen")
+        if blau: baender.add("blau")
+
+    assert baender == {"rot", "gruen", "blau"}, (
+        f"Nicht alle drei Bänder kommen auf der Lampe vor: {baender}"
+    )
+
+    print("OK: Über die sechs Spots verteilen sich alle drei Bänder")
+
+    #
+    # Ein von Hand gesetzter Weissanteil bleibt jetzt stehen - die
+    # Show fasst diese Kanaele nicht mehr an. Damit ist der
+    # Weiss-Kanal nicht verloren, sondern nur nicht mehr
+    # aufgezwungen.
+    #
+    vonHand = [0] * 24
+    vonHand[3] = 120        # Weiss von Spot 1
+
+    ok, meldung = app.set_light_fixture_values("kls", vonHand)
+    assert ok, meldung
+
+    for _ in range(20):
+        app.licht_show_bild(motor.werte_je_lampe())
+
+    assert app.light_values["kls"][3] == 120, (
+        f"Ein von Hand gesetzter Weißanteil überlebt die Show nicht: "
+        f"{app.light_values['kls'][3]}"
+    )
+
+    print("OK: Weiß von Hand eingestellt bleibt während der Show stehen")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    #
+    # Eine Lampe ohne Segmente kann die Baender nicht nebeneinander
+    # zeigen - fuer sie bleibt es bei der Mischung. Bekaeme sie ein
+    # einzelnes Band, reagierte ein einzelner RGB-Strahler nur noch
+    # auf den Bass und ignorierte die halbe Musik.
+    #
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+
+    licht.lampe_speichern({
+        "id": "par", "name": "Par", "template": "rgb",
+        "address": 1, "kind": "effect",
+    })
+
+    app = LichtApp(licht, DmxAttrappe())
+    motor = app.light_engine
+
+    motor.einstellungen = {
+        "sensitivity": 1.0,
+        "color_low": "#ff0000",
+        "color_mid": "#00ff00",
+        "color_high": "#0000ff",
+    }
+    motor.stand = {"low": 1.0, "mid": 1.0, "high": 1.0,
+                   "level": 0.9, "beat": False}
+
+    werte = motor.werte_je_lampe()["par"]
+
+    assert werte == [255, 255, 255], (
+        f"Eine einzelne Lampe soll weiter mischen: {werte}"
+    )
+
+    print("OK: Eine Lampe ohne Segmente mischt weiterhin alle drei Bänder")
 
 
 print("Alle Licht-Tests erfolgreich.")

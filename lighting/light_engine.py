@@ -639,6 +639,14 @@ class LightEngine:
         for nummer, gruppe in enumerate(gruppen):
 
             #
+            # Gruppen ohne Farbkanal haben hier nichts zu suchen. In
+            # ihnen stehen Laser, Strobe oder Programmkanaele, und die
+            # werden weiter unten einzeln behandelt.
+            #
+            if nummer not in farbig:
+                continue
+
+            #
             # Der wandernde Punkt: das Segment, das gerade "dran" ist,
             # leuchtet voll, die anderen mit Grundhelligkeit. Bei
             # einer einzelnen leuchtenden Gruppe faellt das weg.
@@ -713,15 +721,48 @@ class LightEngine:
                     [rot * laut, gruen * laut, blau * laut],
                 )
 
+            elif len(farbig) > 1:
+
                 #
-                # Weiss, Amber und UV bleiben beim Hintergrundlicht
-                # aus. Sie wuerden genau die Farbe verwaschen, um die
-                # es hier geht.
+                # Effektlicht mit mehreren Segmenten: Jedes bekommt
+                # SEIN EIGENES Frequenzband, nicht die Mischung aller
+                # drei.
                 #
-                mittelband = 0.0
+                # Vorher bekam jedes Segment dieselbe gemischte Farbe.
+                # Bei Musik, in der Bass, Mitten und Hoehen alle
+                # vorkommen - also bei so ziemlich jeder -, ist diese
+                # Mischung mit den ueblichen Farben Rot plus Gruen
+                # plus Blau schlicht Weiss. Am Geraet sah man deshalb
+                # sechs weisse Spots, die nur unterschiedlich hell
+                # waren. Von einer Lichtorgel war nichts zu erkennen.
+                #
+                # Gezaehlt wird ueber die FARBIGEN Gruppen, nicht ueber
+                # alle: An der Laser Bar liegen zwischen den Spots
+                # Gruppen aus Laser- und Strobekanaelen. Zaehlte man
+                # die mit, saehe die Verteilung der Baender
+                # willkuerlich aus.
+                #
+                stelle = farbig.index(nummer) % len(BAENDER)
+
+                band = BAENDER[stelle][0]
+
+                rot, gruen, blau = farben[band + satz]
+
+                gemischt = [
+                    rot * baender[band],
+                    gruen * baender[band],
+                    blau * baender[band],
+                ]
 
             else:
 
+                #
+                # Eine einzelne Lampe ohne Segmente kann die Baender
+                # nicht nebeneinander zeigen - fuer sie bleibt es bei
+                # der Mischung. Ihr ein einzelnes Band zu geben hiesse,
+                # dass ein RGB-Strahler allein nur noch auf den Bass
+                # reagiert und die halbe Musik ignoriert.
+                #
                 gemischt = [0.0, 0.0, 0.0]
 
                 for band, einstellung in BAENDER:
@@ -731,8 +772,6 @@ class LightEngine:
                     gemischt[0] += baender[band] * rot
                     gemischt[1] += baender[band] * gruen
                     gemischt[2] += baender[band] * blau
-
-                mittelband = baender["mid"]
 
             for stelle, rolle in enumerate(RGB_ROLLEN):
 
@@ -744,15 +783,19 @@ class LightEngine:
                         )
 
             #
-            # Weiss/Amber/UV bekommen den Mittelwert - sonst blieben
-            # sie bei einem RGBW-Geraet dauerhaft dunkel.
+            # Weiss, Amber und UV faehrt die Show NICHT mehr.
             #
-            for index in gruppe:
-
-                if kanaele[index] in ("white", "amber", "uv"):
-                    werte[index] = fixtures.begrenzen(
-                        mittelband * staerke * 180
-                    )
+            # Sie liefen frueher mit dem mittleren Band mit. Genau das
+            # war die zweite Haelfte des Weiss-Problems: Auf einem
+            # RGBW-Spot lag damit dauerhaft Weiss ueber der Farbe und
+            # wusch sie aus - der Spot zeigte kein Rot, sondern ein
+            # helles Rosa.
+            #
+            # Sie werden jetzt behandelt wie Strobe und Shutter: Die
+            # Show laesst sie stehen, und wer einen Weissanteil haben
+            # will, stellt ihn in der Lichtkarte von Hand ein. Er
+            # bleibt dann auch waehrend der Show stehen.
+            #
 
         #
         # Bewegung: ein langsamer Schwenk, dessen Tempo am Bass haengt.
