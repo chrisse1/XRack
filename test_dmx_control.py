@@ -351,10 +351,27 @@ def werkzeuge(ordner: Path, unit_datei: Path) -> dict:
         "exit 0\n"
     )
 
+    #
+    # "command -v olad" muss etwas finden, und "getent passwd olad"
+    # muss den Dienstbenutzer melden - beides entscheidet, was in die
+    # eigene Unit geschrieben wird.
+    #
+    FAKE_OLAD = "#!/bin/sh\nexit 0\n"
+    FAKE_GETENT = (
+        "#!/bin/sh\n"
+        'if [ "$1" = "passwd" ] && [ "$2" = "olad" ]; then\n'
+        "    echo 'olad:x:102:65534::/var/lib/ola:/usr/sbin/nologin'\n"
+        "    exit 0\n"
+        "fi\n"
+        "exit 2\n"
+    )
+
     for name, inhalt in (
         ("sudo", FAKE_SUDO),
         ("chown", FAKE_CHOWN),
         ("systemctl", fake_systemctl),
+        ("olad", FAKE_OLAD),
+        ("getent", FAKE_GETENT),
     ):
         datei = binordner / name
         datei.write_text(inhalt, encoding="utf-8")
@@ -523,6 +540,120 @@ with tempfile.TemporaryDirectory() as tmp:
     )
 
     print("OK: Ohne lesbare Startzeile wird nichts erfunden, sondern gewarnt")
+
+
+# --- Der SysV-Fall: eigene Unit statt wirkungsloser Ergaenzung ------
+#
+# Am Geraet kam heraus: Dort gibt es keine echte systemd-Unit,
+# sondern ein altes Startskript, das systemd nur einpackt. Die
+# Ergaenzung haengte "-i 127.0.0.1" an den Aufruf des Startskripts,
+# das die Option ignoriert - eingerichtet sah es aus, gewirkt hat es
+# nicht. Deshalb in diesem Fall eine eigene Unit.
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    ordner = Path(tmp)
+
+    #
+    # systemd legt aus einem SysV-Skript erzeugte Units unter
+    # .../generator.late/ ab - daran wird der Fall erkannt.
+    #
+    erzeugt = ordner / "generator.late"
+    erzeugt.mkdir()
+
+    unit = erzeugt / "olad.service"
+    unit.write_text(
+        "[Unit]\n"
+        "Description=LSB: OLA daemon\n"
+        "\n"
+        "[Service]\n"
+        "ExecStart=/etc/init.d/olad start\n",
+        encoding="utf-8",
+    )
+
+    umgebung = werkzeuge(ordner, unit)
+
+    #
+    # Eine alte, wirkungslose Ergaenzung aus einem frueheren Lauf.
+    # Die muss verschwinden: Sonst setzte sie ExecStart der eigenen
+    # Unit wieder auf den Aufruf des Startskripts zurueck.
+    #
+    alte_ergaenzung = ordner / "systemd" / "olad.service.d" / "xrack.conf"
+    alte_ergaenzung.parent.mkdir(parents=True)
+    alte_ergaenzung.write_text(
+        "[Service]\nExecStart=\nExecStart=/etc/init.d/olad start -i 127.0.0.1\n",
+        encoding="utf-8",
+    )
+
+    install_funktion(ordner, umgebung, [
+        f'restrict_ola_to_loopback "olad.service" "{ordner}/ola"'
+    ])
+
+    eigene = ordner / "systemd" / "olad.service"
+
+    assert eigene.exists(), "Es wurde keine eigene Unit geschrieben."
+
+    inhalt = eigene.read_text(encoding="utf-8")
+
+    assert inhalt.count("-i 127.0.0.1") == 1, inhalt
+    assert f"--config-dir {ordner}/ola" in inhalt, inhalt
+    assert "/olad --syslog" in inhalt, (
+        "Die eigene Unit muss olad direkt starten, nicht das Startskript:\n"
+        + inhalt
+    )
+    assert "/etc/init.d/olad" not in inhalt, (
+        "Die eigene Unit darf nicht wieder das Startskript aufrufen:\n" + inhalt
+    )
+    assert "User=olad" in inhalt, inhalt
+
+    assert not alte_ergaenzung.exists(), (
+        "Die alte, wirkungslose Ergänzung wurde nicht entfernt - sie würde "
+        "ExecStart der eigenen Unit wieder überschreiben."
+    )
+
+    print("OK: Beim SysV-Startskript entsteht eine eigene Unit, und die alte "
+          "Ergänzung verschwindet")
+
+    #
+    # Ein zweiter Lauf darf nichts doppeln.
+    #
+    install_funktion(ordner, umgebung, [
+        f'restrict_ola_to_loopback "olad.service" "{ordner}/ola"'
+    ])
+
+    assert eigene.read_text(encoding="utf-8").count("-i 127.0.0.1") == 1, (
+        eigene.read_text(encoding="utf-8")
+    )
+
+    print("OK: Ein zweiter Lauf lässt die eigene Unit unverändert")
+
+
+# --- Die Streithaehne muessen alle in der Abschaltliste stehen -------
+#
+# Das ist bewusst eine Pruefung am Quelltext und keine am Verhalten:
+# configure_dmx laesst sich nicht durchspielen, ohne apt-get
+# loszuschicken. Trotzdem gehoert die Zusicherung hierher, denn genau
+# hier war der Fehler: stageprofi fehlte in der Liste, griff sich das
+# Kabel im Sekundentakt, und es blieb dunkel - ohne dass irgendwo
+# eine Fehlermeldung stand.
+
+quelltext = INSTALL.read_text(encoding="utf-8")
+
+zeile = [z for z in quelltext.splitlines() if "for streithahn in" in z]
+
+assert len(zeile) == 1, f"Abschaltliste nicht eindeutig gefunden: {zeile}"
+
+for plugin in ("usbserial", "opendmx", "stageprofi"):
+    assert plugin in zeile[0], (
+        f"'{plugin}' fehlt in der Abschaltliste - dieses Plugin greift sich "
+        f"dasselbe Kabel wie ftdidmx: {zeile[0]}"
+    )
+
+assert "ola-ftdidmx.conf\" true" in quelltext, (
+    "ftdidmx muss ausdrücklich eingeschaltet werden."
+)
+
+print("OK: Alle Plugins, die sich um das Kabel streiten, werden abgeschaltet")
 
 
 print("Alle DMX-Tests erfolgreich.")

@@ -1166,18 +1166,33 @@ EOF
     #                bei denen der Rechner das Timing macht. Das ist
     #                unser Fall (Open DMX USB und Nachbauten).
     #   usbserial  - für Kabel MIT eigenem Prozessor (Enttec USB Pro).
-    #   opendmx    - dasselbe wie ftdidmx, aber über ein eigenes
-    #                Kernelmodul.
+    #   opendmx    - dasselbe wie ftdidmx, über ein eigenes Kernelmodul.
+    #   stageprofi - für StageProfi-Widgets, ebenfalls über die
+    #                serielle Schnittstelle.
     #
-    # Alle drei erkennen dieselbe Hardware. Bleiben mehrere aktiv,
-    # streiten sie sich darum, wer das Kabel bekommt - und das
-    # Ergebnis hängt davon ab, wer zuerst da war.
+    # Alle erkennen dieselbe Hardware. Bleiben mehrere aktiv, streiten
+    # sie sich darum, wer das Kabel bekommt.
     #
-    ola_plugin_schalten "${DMX_CONF_DIR}/ola-ftdidmx.conf"   true
-    ola_plugin_schalten "${DMX_CONF_DIR}/ola-usbserial.conf" false
-    ola_plugin_schalten "${DMX_CONF_DIR}/ola-opendmx.conf"   false
+    # stageprofi stand hier zuerst nicht drin, und genau das ist am
+    # Gerät aufgefallen: Es griff sich /dev/ttyUSB0 im Sekundentakt,
+    # fragte an, bekam keine Antwort, gab wieder frei - endlos. In der
+    # Zeit kam ftdidmx nicht an das Kabel heran, und es blieb dunkel.
+    #
+    ola_plugin_schalten "${DMX_CONF_DIR}/ola-ftdidmx.conf" true
 
-    restrict_ola_to_loopback "${DMX_UNIT}"
+    for streithahn in usbserial opendmx stageprofi; do
+
+        #
+        # Nur vorhandene Dateien anfassen: Ein Plugin, das dieses
+        # Paket gar nicht kennt, soll hier keine Karteileiche
+        # bekommen.
+        #
+        if sudo test -f "${DMX_CONF_DIR}/ola-${streithahn}.conf"; then
+            ola_plugin_schalten "${DMX_CONF_DIR}/ola-${streithahn}.conf" false
+        fi
+    done
+
+    restrict_ola_to_loopback "${DMX_UNIT}" "${DMX_CONF_DIR}"
 
     sudo systemctl restart "${DMX_UNIT}" >/dev/null 2>&1 || true
 }
@@ -1213,19 +1228,44 @@ ola_plugin_schalten() {
 #
 # Die Weboberfläche von OLA auf localhost beschränken.
 #
-# olad bringt eine eigene, ungeschützte Weboberfläche mit (Port
-# 9090) - über sie spricht XRack den Dienst an. Ohne Einschränkung
-# wäre sie aber auch aus dem ganzen Netzwerk erreichbar: eine
-# zweite Oberfläche neben XRacks eigener, ohne PIN, mit der jeder
-# das Licht übernehmen könnte.
+# olad bringt eine eigene, ungeschützte Weboberfläche mit (Port 9090)
+# - über sie spricht XRack den Dienst an. Ohne Einschränkung wäre sie
+# aber auch aus dem ganzen Netzwerk erreichbar: eine zweite
+# Oberfläche neben XRacks eigener, ohne PIN und ohne TLS, mit der
+# jeder das Licht übernehmen und OLA umkonfigurieren könnte. Und
+# dieses Netzwerk ist im Betrieb der Access Point, in dem Pult und
+# Handys hängen.
 #
-# "-i 127.0.0.1" bindet sie an die Loopback-Adresse. Die vorhandene
-# Startzeile wird dafür ausgelesen und ergänzt, statt sie neu zu
-# erfinden - je nach Paketstand steht dort Verschiedenes.
+# "-i 127.0.0.1" bindet sie an die Loopback-Adresse.
+#
+# Wie das gesetzt wird, hängt davon ab, was für eine Unit da ist -
+# und das ist der Punkt, an dem der erste Versuch danebenlag:
+#
+#   Echte systemd-Unit -> eine Ergänzung genügt: ExecStart leeren
+#                         und mit der ergänzten Zeile neu setzen.
+#
+#   SysV-Startskript   -> ExecStart zeigt auf /etc/init.d/olad. Eine
+#                         Ergänzung hängte "-i 127.0.0.1" dort an den
+#                         Aufruf des Startskripts, das die Option
+#                         schlicht ignoriert. Sah eingerichtet aus,
+#                         tat aber nichts (am Gerät gesehen: der
+#                         Daemon lief weiter ohne die Bindung).
+#                         Deshalb hier eine eigene Unit, die olad
+#                         direkt startet. Sie liegt in
+#                         /etc/systemd/system und hat damit Vorrang
+#                         vor der erzeugten - überschrieben wird
+#                         nichts, und Löschen macht es rückgängig.
 #
 restrict_ola_to_loopback() {
 
     unit="$1"
+    conf_dir="${2:-/etc/ola}"
+
+    #
+    # Überschreibbar, damit der Test das prüfen kann, ohne an /etc zu
+    # rühren - wie XRACK_HOSTAPD_CONF anderswo.
+    #
+    systemd_dir="${XRACK_SYSTEMD_DIR:-/etc/systemd/system}"
 
     unit_datei="$(systemctl show -p FragmentPath --value "${unit}" 2>/dev/null)"
 
@@ -1234,34 +1274,87 @@ restrict_ola_to_loopback() {
         return 0
     fi
 
-    start_zeile="$(grep -m1 '^ExecStart=' "${unit_datei}" | sed 's/^ExecStart=//')"
-
-    if [ -z "${start_zeile}" ]; then
-        echo "$(L "Hinweis: OLA-Startzeile nicht lesbar - die OLA-Weboberfläche (Port 9090) bleibt im Netzwerk erreichbar." "Note: OLA start command unreadable - the OLA web interface (port 9090) stays reachable on the network.")"
-        return 0
-    fi
-
     #
-    # Steht die Bindung schon drin, nichts tun - sonst stünde sie
-    # nach einem zweiten Installationslauf doppelt da.
+    # Aus einem SysV-Startskript erzeugt? Dann eigene Unit.
     #
-    case "${start_zeile}" in
-        *"-i 127.0.0.1"*) return 0 ;;
-    esac
+    case "${unit_datei}" in
 
-    #
-    # Überschreibbar, damit der Test das prüfen kann, ohne an
-    # /etc zu rühren - wie XRACK_HOSTAPD_CONF anderswo.
-    #
-    systemd_dir="${XRACK_SYSTEMD_DIR:-/etc/systemd/system}"
+        */generator*|/etc/init.d/*)
 
-    sudo mkdir -p "${systemd_dir}/${unit}.d"
+            olad_pfad="$(command -v olad 2>/dev/null)"
 
-    sudo tee "${systemd_dir}/${unit}.d/xrack.conf" > /dev/null <<EOF
+            if [ -z "${olad_pfad}" ]; then
+                echo "$(L "Hinweis: olad nicht gefunden - die OLA-Weboberfläche (Port 9090) bleibt im Netzwerk erreichbar." "Note: olad not found - the OLA web interface (port 9090) stays reachable on the network.")"
+                return 0
+            fi
+
+            #
+            # Die alte, wirkungslose Ergänzung muss weg: Sie würde
+            # ExecStart der eigenen Unit wieder durch den Aufruf des
+            # Startskripts ersetzen.
+            #
+            sudo rm -f "${systemd_dir}/${unit}.d/xrack.conf"
+            sudo rmdir "${systemd_dir}/${unit}.d" 2>/dev/null || true
+
+            #
+            # Unter welchem Benutzer? Das ola-Paket legt "olad" an und
+            # steckt ihn in dialout und plugdev - genau die Gruppen,
+            # die für den Zugriff aufs Kabel gebraucht werden. Gibt es
+            # ihn nicht, bleibt es beim Standard, statt einen Benutzer
+            # zu erfinden, den es nicht gibt.
+            #
+            if getent passwd olad >/dev/null 2>&1; then
+                olad_benutzer="User=olad"
+            else
+                olad_benutzer=""
+            fi
+
+            sudo mkdir -p "${systemd_dir}"
+
+            sudo tee "${systemd_dir}/${unit}" > /dev/null <<EOF
+[Unit]
+Description=OLA-Dienst fürs Licht (von XRack eingerichtet)
+Documentation=man:olad(1)
+After=network-online.target
+
+[Service]
+Type=simple
+${olad_benutzer}
+ExecStart=${olad_pfad} --syslog --log-level 3 --config-dir ${conf_dir} -i 127.0.0.1
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+            ;;
+
+        *)
+
+            start_zeile="$(grep -m1 '^ExecStart=' "${unit_datei}" | sed 's/^ExecStart=//')"
+
+            if [ -z "${start_zeile}" ]; then
+                echo "$(L "Hinweis: OLA-Startzeile nicht lesbar - die OLA-Weboberfläche (Port 9090) bleibt im Netzwerk erreichbar." "Note: OLA start command unreadable - the OLA web interface (port 9090) stays reachable on the network.")"
+                return 0
+            fi
+
+            #
+            # Steht die Bindung schon drin, nichts tun - sonst stünde
+            # sie nach einem zweiten Installationslauf doppelt da.
+            #
+            case "${start_zeile}" in
+                *"-i 127.0.0.1"*) return 0 ;;
+            esac
+
+            sudo mkdir -p "${systemd_dir}/${unit}.d"
+
+            sudo tee "${systemd_dir}/${unit}.d/xrack.conf" > /dev/null <<EOF
 [Service]
 ExecStart=
 ExecStart=${start_zeile} -i 127.0.0.1
 EOF
+            ;;
+    esac
 
     sudo systemctl daemon-reload
 }
