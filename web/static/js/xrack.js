@@ -4711,6 +4711,17 @@ function showLightWarning(text) {
 // (siehe LightingStore.uebersicht); fehlt er - etwa weil zu der
 // Lampe die Vorlage fehlt -, steht nur die Startadresse da.
 //
+//
+// Die drei Arten, die eine Lampe haben kann. Reihenfolge und
+// Beschriftung stehen hier einmal - im Anlege-Feld, in der Liste und
+// im Abzeichen der Karte wird darauf zurueckgegriffen.
+//
+const LIGHT_KINDS = ["effect", "background", "static"];
+
+function lightKindLabel(art) {
+    return I18N["light_kind_" + (art || "effect")] || art || "";
+}
+
 function lightAddressLabel(lampe) {
     if (typeof lampe.last_address !== "number" ||
         lampe.last_address === lampe.address) {
@@ -4815,6 +4826,16 @@ function renderLightFixtures(stand) {
         adresse.className = "text-body-secondary small";
         adresse.textContent = lightAddressLabel(lampe);
         kopf.appendChild(adresse);
+
+        //
+        // Welche Art die Lampe hat, ohne dass man den Dialog oeffnen
+        // muss. Vor allem bei "ausgenommen" wichtig: Sonst wundert man
+        // sich, warum genau diese Lampe bei der Show nicht mitmacht.
+        //
+        const art = document.createElement("span");
+        art.className = "badge text-bg-light border fw-normal";
+        art.textContent = lightKindLabel(lampe.kind);
+        kopf.appendChild(art);
 
         zeile.appendChild(kopf);
 
@@ -5139,6 +5160,22 @@ function renderLightSetup(stand) {
 
             eintrag.appendChild(info);
 
+            const art = document.createElement("select");
+            art.className = "form-select form-select-sm w-auto flex-shrink-0";
+
+            for (const wert of LIGHT_KINDS) {
+                const option = document.createElement("option");
+                option.value = wert;
+                option.textContent = lightKindLabel(wert);
+                art.appendChild(option);
+            }
+
+            art.value = lampe.kind || "effect";
+            art.addEventListener("change", () =>
+                setLightFixtureKind(lampe, art.value));
+
+            eintrag.appendChild(art);
+
             const weg = document.createElement("button");
             weg.className = "btn btn-outline-danger btn-sm flex-shrink-0";
             weg.innerHTML = '<i class="bi bi-trash"></i>';
@@ -5260,14 +5297,37 @@ async function addLightFixture() {
     const vorlage = document.getElementById("light-fixture-template");
     const adresse = document.getElementById("light-fixture-address");
 
+    const art = document.getElementById("light-fixture-kind");
+
     const erfolg = await lightRequest("/api/lighting/fixture", {
         id: "",
         name: name.value,
         template: vorlage.value,
-        address: parseInt(adresse.value, 10) || 0
+        address: parseInt(adresse.value, 10) || 0,
+        kind: art ? art.value : "effect"
     });
 
     if (erfolg) name.value = "";
+
+    await refreshLighting();
+}
+
+//
+// Die Art einer schon angelegten Lampe aendern.
+//
+// Ohne das muesste man sie loeschen und neu anlegen - und verloere
+// dabei ihre Werte in allen Szenen (siehe LightingStore.
+// lampe_loeschen). Fuer eine Einstellung, die man beim Einrichten
+// eines Rigs mehrfach umwirft, waere das absurd.
+//
+async function setLightFixtureKind(lampe, art) {
+    await lightRequest("/api/lighting/fixture", {
+        id: lampe.id,
+        name: lampe.name,
+        template: lampe.template,
+        address: lampe.address,
+        kind: art
+    });
 
     await refreshLighting();
 }
@@ -5537,6 +5597,8 @@ function renderLightShowSettings(stand) {
     setzen("light-show-color-mid", show.color_mid);
     setzen("light-show-color-high", show.color_high);
     setzen("light-show-sensitivity", show.sensitivity);
+    setzen("light-show-background-seconds", show.background_seconds);
+    lightTraegheitBeschriften();
     const schwelle = document.getElementById("light-show-silence-threshold");
 
     if (schwelle && document.activeElement !== schwelle) {
@@ -5577,6 +5639,13 @@ async function toggleLightShow() {
     await refreshLighting();
 }
 
+function lightTraegheitBeschriften() {
+    const regler = document.getElementById("light-show-background-seconds");
+    const text = document.getElementById("light-show-background-seconds-value");
+
+    if (regler && text) text.textContent = regler.value + " s";
+}
+
 function lightSchwelleBeschriften() {
     const regler = document.getElementById("light-show-silence-threshold");
     const anzeige = document.getElementById("light-show-silence-threshold-value");
@@ -5603,6 +5672,7 @@ async function saveLightShowSettings() {
         color_mid: farbe("light-show-color-mid"),
         color_high: farbe("light-show-color-high"),
         sensitivity: zahl("light-show-sensitivity"),
+        background_seconds: zahl("light-show-background-seconds"),
         silence_threshold: lightDbZuLinear(zahl("light-show-silence-threshold")),
         silence_seconds: zahl("light-show-silence-seconds"),
         speech_seconds: zahl("light-show-speech-seconds"),
@@ -5636,6 +5706,7 @@ function lightShowPulsSetzen(laeuft) {
         "light-show-channel", "light-show-sensitivity",
         "light-show-silence-threshold", "light-show-silence-seconds",
         "light-show-speech-seconds", "light-show-fallback",
+        "light-show-background-seconds",
         "light-show-color-low", "light-show-color-mid",
         "light-show-color-high"
     ]) {
@@ -5645,4 +5716,7 @@ function lightShowPulsSetzen(laeuft) {
 
     const schwelle = document.getElementById("light-show-silence-threshold");
     if (schwelle) schwelle.addEventListener("input", lightSchwelleBeschriften);
+
+    const traegheit = document.getElementById("light-show-background-seconds");
+    if (traegheit) traegheit.addEventListener("input", lightTraegheitBeschriften);
 })();

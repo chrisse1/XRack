@@ -1301,4 +1301,202 @@ with tempfile.TemporaryDirectory() as tmp:
     print("OK: Zu jeder Lampe steht der letzte belegte Kanal im Bericht")
 
 
+# ====================================================================
+# 11. Lampenarten: Effekt, Hintergrund, ausgenommen
+#
+# Der Grund fuer die Arten: Bisher zuckelte jede Lampe im Takt. Bei
+# einem ganzen Rig fehlt damit das ruhige Grundlicht, vor dem sich
+# ein Effekt ueberhaupt erst abheben kann.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    #
+    # Eine Lampe, die noch ohne Art in der Ablage liegt - so sieht
+    # jede Einrichtung aus, die vor diesem Umbau angelegt wurde. Sie
+    # muss sich nach dem Update genau wie vorher verhalten.
+    #
+    speicher = StateStore(Path(tmp) / "state.json")
+    speicher.set("dmx_config", {
+        "enabled": True,
+        "templates": [],
+        "fixtures": [{"id": "alt", "name": "Alt", "template": "rgb",
+                      "address": 1}],
+        "scenes": [],
+        "show": {},
+    })
+
+    licht = LightingStore(speicher)
+
+    assert licht.lampen()[0]["kind"] == "effect", licht.lampen()[0]
+
+    print("OK: Eine Lampe ohne Art gilt als Effektlicht - wie vor dem Umbau")
+
+    ok, meldung = licht.lampe_speichern({
+        "id": "x", "name": "X", "template": "rgb", "address": 20,
+        "kind": "irgendwas",
+    })
+
+    assert not ok and "Art" in meldung, meldung
+
+    print("OK: Eine unbekannte Art wird abgewiesen")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+
+    licht.lampe_speichern({
+        "id": "effekt", "name": "Effekt", "template": "bar-8-rgb",
+        "address": 1, "kind": "effect",
+    })
+    licht.lampe_speichern({
+        "id": "wash", "name": "Wash", "template": "bar-8-rgb",
+        "address": 30, "kind": "background",
+    })
+    licht.lampe_speichern({
+        "id": "fest", "name": "Ambient", "template": "rgb",
+        "address": 100, "kind": "static",
+    })
+
+    app = LichtApp(licht, DmxAttrappe())
+    motor = app.light_engine
+
+    motor.einstellungen = {"sensitivity": 1.0, "background_seconds": 4.0}
+
+    #
+    # Erst Stille, damit die Glaettung von unten losfaehrt.
+    #
+    motor.stand = {"low": 0.0, "mid": 0.0, "high": 0.0,
+                   "level": 0.0, "beat": False}
+    motor.werte_je_lampe()
+
+    #
+    # Jetzt volle Musik. Die entscheidende Eigenschaft ist NICHT,
+    # dass der Hintergrund ankommt - das taete er auch ohne jede
+    # Glaettung, nur sofort. Entscheidend ist beides zusammen: nach
+    # einem Block kaum bewegt, nach sechs Sekunden weitgehend da.
+    #
+    motor.stand = {"low": 1.0, "mid": 1.0, "high": 1.0,
+                   "level": 0.9, "beat": False}
+
+    nach_einem = max(motor.werte_je_lampe()["wash"])
+
+    for _ in range(299):
+        werte = motor.werte_je_lampe()
+
+    nach_sechs = max(werte["wash"])
+    sofort = max(werte["effekt"])
+
+    assert nach_einem < 0.05 * sofort, (
+        f"Der Hintergrund springt: nach einem Block schon {nach_einem} "
+        f"von {sofort}."
+    )
+    assert nach_sechs > 0.70 * sofort, (
+        f"Der Hintergrund kommt nicht an: nach 6 s erst {nach_sechs} "
+        f"von {sofort}."
+    )
+
+    print(
+        f"OK: Das Hintergrundlicht zieht langsam nach "
+        f"({nach_einem} nach 20 ms, {nach_sechs} nach 6 s, Ziel {sofort})"
+    )
+
+    #
+    # Und es hat kein Lauflicht. Geprueft wird gegen das Effektlicht
+    # im selben Bild - sonst belegt der Test nur, dass irgendetwas
+    # gleichfoermig ist.
+    #
+    for schritt in range(20):
+
+        motor.position = schritt
+        werte = motor.werte_je_lampe()
+
+        wash = [werte["wash"][i] for i in range(0, 24, 3)]
+        effekt = [werte["effekt"][i] for i in range(0, 24, 3)]
+
+        assert len(set(wash)) == 1, (
+            f"Das Hintergrundlicht hat ein Lauflicht: {wash}"
+        )
+        assert len(set(effekt)) > 1, (
+            f"Dem Effektlicht fehlt das Lauflicht: {effekt}"
+        )
+
+    print("OK: Nur das Effektlicht hat ein Lauflicht, der Hintergrund nicht")
+
+
+    #
+    # Eine ausgenommene Lampe behaelt, was von Hand eingestellt wurde -
+    # ueber viele Bilder hinweg.
+    #
+    ok, meldung = app.set_light_fixture_values("fest", [10, 20, 30])
+    assert ok, meldung
+
+    for _ in range(50):
+        app.licht_show_bild(motor.werte_je_lampe())
+
+    assert app.light_values["fest"] == [10, 20, 30], app.light_values["fest"]
+
+    print("OK: Eine ausgenommene Lampe überlebt 50 Show-Bilder")
+
+    #
+    # Auch der Rueckfall auf die Stille-Szene laesst sie stehen. Das
+    # ist der Punkt, an dem eine Ausnahme am ehesten durchgerutscht
+    # waere: Der Rueckfall ersetzt sonst das ganze Bild.
+    #
+    app.light_values["effekt"] = [255] * 24
+    ok, meldung = app.save_light_scene("Pause")
+    assert ok, meldung
+
+    szene = licht.szenen()[0]["id"]
+
+    ok, meldung = app.set_light_show_settings({"fallback_scene": szene})
+    assert ok, meldung
+
+    app.set_light_fixture_values("fest", [7, 8, 9])
+
+    app.licht_rueckfall("silence")
+
+    assert app.light_values["fest"] == [7, 8, 9], (
+        f"Der Rückfall hat die ausgenommene Lampe überschrieben: "
+        f"{app.light_values['fest']}"
+    )
+    assert app.light_values["effekt"] == [255] * 24, (
+        "Der Rückfall hat die Szene nicht aufgerufen."
+    )
+
+    print("OK: Auch der Rückfall auf eine Szene lässt sie in Ruhe")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    #
+    # Drehung und Laser bleiben beim Hintergrundlicht aus. Ein
+    # rotierender Derby als Grundlicht waere ein Widerspruch.
+    #
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+
+    licht.lampe_speichern({
+        "id": "bar", "name": "Laser-Bar",
+        "template": "eurolite-kls-laser-bar-pro-fx-28",
+        "address": 1, "kind": "background",
+    })
+
+    app = LichtApp(licht, DmxAttrappe())
+    motor = app.light_engine
+
+    motor.einstellungen = {"sensitivity": 1.0}
+    motor.stand = {"low": 1.0, "mid": 1.0, "high": 1.0,
+                   "level": 0.9, "beat": False}
+
+    werte = motor.werte_je_lampe()["bar"]
+
+    assert werte[20] == 0 and werte[21] == 0, f"Laser an: {werte[20:22]}"
+    assert werte[4] == 0 and werte[19] == 0, f"Drehung an: {werte[4]}"
+
+    print("OK: Als Hintergrundlicht bleiben Drehung und Laser aus")
+
+
 print("Alle Licht-Tests erfolgreich.")

@@ -274,6 +274,29 @@ def pruefe_vorlage(vorlage: dict) -> str:
     return ""
 
 
+#
+# Die Arten, die eine Lampe haben kann.
+#
+# Die Art haengt an der LAMPE, nicht an der Vorlage: Dieselbe LED-Bar
+# kann in einem Aufbau das Effektlicht sein und im naechsten das
+# ruhige Grundlicht davor.
+#
+#   effect      - wie bisher: Bandfarben, Lauflicht auf dem Schlag,
+#                 Drehung und Laser.
+#   background  - dieselben Farben, aber ueber Sekunden geglaettet,
+#                 ohne Lauflicht, ohne Drehung und Laser.
+#   static      - die Show fasst die Lampe nicht an.
+#
+LAMPENARTEN = ("effect", "background", "static")
+
+#
+# Vorgabe ist "effect" - das ist das Verhalten, das es vor den Arten
+# gab. Eine Einrichtung, die aus einer aelteren Fassung stammt, muss
+# sich nach einem Update genauso verhalten wie vorher.
+#
+ART_VORGABE = "effect"
+
+
 def pruefe_lampe(lampe: dict, vorlagen: dict) -> str:
     """
     Prüft eine Lampe gegen die vorhandenen Vorlagen. Leerer Text
@@ -287,6 +310,9 @@ def pruefe_lampe(lampe: dict, vorlagen: dict) -> str:
 
     if vorlage is None:
         return "Zu dieser Lampe gibt es keine Vorlage."
+
+    if lampe.get("kind", ART_VORGABE) not in LAMPENARTEN:
+        return f"'{lampe.get('kind')}' ist keine bekannte Art von Lampe."
 
     try:
         adresse = int(lampe.get("address"))

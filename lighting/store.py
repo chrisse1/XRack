@@ -74,6 +74,16 @@ SHOW_VORGABE = {
     # Stueck ist schlimmer als gar keine Erkennung.
     #
     "speech_seconds": 0.0,
+
+    #
+    # Wie traege das Hintergrundlicht der Musik folgt, in Sekunden.
+    #
+    # Vier Sekunden sind so gewaehlt, dass ein Wash einem Wechsel der
+    # Stimmung noch folgt, aber keinem einzelnen Schlag mehr. Kuerzer
+    # waere es wieder Effektlicht, laenger merkt man den Bezug zur
+    # Musik nicht mehr.
+    #
+    "background_seconds": 4.0,
 }
 
 
@@ -231,7 +241,17 @@ class LightingStore:
 
     def lampen(self) -> list[dict]:
 
-        return self._laden()["fixtures"]
+        #
+        # Fehlt die Art, gilt "effect". Damit lesen Oberflaeche und
+        # Show bei einer Einrichtung aus einer aelteren Fassung
+        # dasselbe, ohne dass die Ablage einmal umgeschrieben werden
+        # muesste - ein Wanderungsschritt, der schiefgehen kann, fuer
+        # eine Vorgabe, die man auch beim Lesen setzen kann.
+        #
+        return [
+            {"kind": fixtures.ART_VORGABE, **lampe}
+            for lampe in self._laden()["fixtures"]
+        ]
 
     def lampe_speichern(self, lampe: dict) -> tuple[bool, str]:
         """Eine Lampe anlegen oder ändern."""
@@ -241,6 +261,7 @@ class LightingStore:
             "name": str(lampe.get("name", "")).strip(),
             "template": str(lampe.get("template", "")),
             "address": lampe.get("address"),
+            "kind": str(lampe.get("kind") or fixtures.ART_VORGABE),
         }
 
         fehler = fixtures.pruefe_lampe(lampe, self.vorlagen())
@@ -438,6 +459,11 @@ class LightingStore:
 
         if "sensitivity" in werte:
             show["sensitivity"] = max(0.1, min(4.0, float(werte["sensitivity"])))
+
+        if "background_seconds" in werte:
+            show["background_seconds"] = max(
+                1.0, min(15.0, float(werte["background_seconds"]))
+            )
 
         if "fallback_scene" in werte:
 

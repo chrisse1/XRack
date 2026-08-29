@@ -111,6 +111,18 @@ class LichtMixin:
 
             self.light_values.pop(kennung, None)
             self.light_brightness.pop(kennung, None)
+
+            #
+            # Auch den Glättungszustand der Show wegräumen. Bliebe er
+            # stehen, käme eine später gleich benannte Lampe mit der
+            # Farbe der alten zurück.
+            #
+            for schluessel in [
+                s for s in self.light_engine._hintergrund
+                if s.split(":", 1)[0] == kennung
+            ]:
+                self.light_engine._hintergrund.pop(schluessel, None)
+
             self._licht_senden()
 
         return erfolg, meldung
@@ -351,7 +363,33 @@ class LichtMixin:
             f"Szene {kennung}" if kennung else "Blackout",
         )
 
+        #
+        # Lampen, die von der Show ausgenommen sind, bleiben auch hier
+        # stehen.
+        #
+        # Der Rückfall gehört zur Show, und die Regel soll in einem
+        # Satz erklärbar bleiben: Diese Lampen fasst die Show nie an.
+        # Eine Ausnahme ausgerechnet bei der Ansage wäre genau die
+        # Sorte Sonderfall, die man später nicht mehr erklären kann.
+        #
+        ausgenommen = {
+            lampe["id"]
+            for lampe in self.lighting_store.lampen()
+            if lampe.get("kind") == "static"
+        }
+
         with self._light_lock:
+
+            bewahrt = {
+                lampe: list(werte)
+                for lampe, werte in self.light_values.items()
+                if lampe in ausgenommen
+            }
+            bewahrte_helligkeit = {
+                lampe: wert
+                for lampe, wert in self.light_brightness.items()
+                if lampe in ausgenommen
+            }
 
             if kennung and self.lighting_store.szene(kennung):
 
@@ -360,12 +398,20 @@ class LichtMixin:
                 self.light_values = {
                     lampe: list(liste)
                     for lampe, liste in (szene.get("values") or {}).items()
+                    if lampe not in ausgenommen
                 }
-                self.light_brightness = dict(szene.get("brightness") or {})
+                self.light_brightness = {
+                    lampe: wert
+                    for lampe, wert in (szene.get("brightness") or {}).items()
+                    if lampe not in ausgenommen
+                }
 
             else:
                 self.light_values = {}
                 self.light_brightness = {}
+
+            self.light_values.update(bewahrt)
+            self.light_brightness.update(bewahrte_helligkeit)
 
             self._licht_senden()
 

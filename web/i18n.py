@@ -452,6 +452,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_name": "Name",
         "light_template": "Vorlage",
         "light_address": "Startadresse",
+        "light_kind": "Art",
+        "light_kind_effect": "Effektlicht",
+        "light_kind_background": "Hintergrundlicht",
+        "light_kind_static": "Von der Show ausgenommen",
+        "light_kind_hint": (
+            "Effektlicht folgt dem Takt. Hintergrundlicht wechselt die "
+            "Farbe langsam. Ausgenommene Lampen behalten, was von Hand "
+            "oder über eine Szene eingestellt ist."
+        ),
         "light_address_range": "DMX {von}–{bis}",
         "light_address_occupies": "Belegt DMX {von}–{bis}.",
         "light_channels_count": "{n} Kanäle",
@@ -512,6 +521,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Der rechte ist der daneben."
         ),
         "light_show_sensitivity": "Empfindlichkeit",
+        "light_show_background_seconds": "Hintergrund: Trägheit",
         "light_show_colors": "Farben der Frequenzbereiche",
         "light_show_color_low": "Tiefe Töne",
         "light_show_color_mid": "Mitten",
@@ -973,6 +983,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_name": "Name",
         "light_template": "Type",
         "light_address": "Start address",
+        "light_kind": "Kind",
+        "light_kind_effect": "Effect light",
+        "light_kind_background": "Background light",
+        "light_kind_static": "Left out of the show",
+        "light_kind_hint": (
+            "Effect lights follow the beat. Background lights change "
+            "colour slowly. Fixtures left out keep whatever was set by "
+            "hand or from a scene."
+        ),
         "light_address_range": "DMX {von}–{bis}",
         "light_address_occupies": "Occupies DMX {von}–{bis}.",
         "light_channels_count": "{n} channels",
@@ -1032,6 +1051,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "The right one is next to it."
         ),
         "light_show_sensitivity": "Sensitivity",
+        "light_show_background_seconds": "Background: inertia",
         "light_show_colors": "Colours for the frequency bands",
         "light_show_color_low": "Lows",
         "light_show_color_mid": "Mids",

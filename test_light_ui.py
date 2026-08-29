@@ -198,7 +198,8 @@ def stand(enabled=True, service=True, adapter=True, overlaps=None,
         ],
         "fixtures": [
             {"id": "bar", "name": "LED-Bar links",
-             "template": "bar-8-rgb", "address": 1, "last_address": 24},
+             "template": "bar-8-rgb", "address": 1, "last_address": 24,
+             "kind": "background"},
         ],
         "scenes": [{"id": "s1", "name": "Pause", "values": {}}],
         "roles": ["dimmer", "red", "green", "blue", "pan", "tilt", "generic"],
@@ -751,6 +752,65 @@ assert "Bewegtlicht" in ergebnis["inhalt"], (
 )
 
 print("OK: Eine neue Lampe erscheint trotzdem sofort")
+
+
+# ====================================================================
+# 13. Die Art einer Lampe steht in der Karte und ist änderbar
+#
+# Vor allem "ausgenommen" muss sichtbar sein: Sonst wundert man sich,
+# warum genau diese eine Lampe bei der Show nicht mitmacht, und sucht
+# den Fehler im Gerät.
+# ====================================================================
+
+ergebnis = ausfuehren(stand(), """function () {
+    const zeile = document.querySelector('#light-fixture-list select');
+
+    return {
+        karte: document.getElementById('light-fixtures').textContent,
+        zeilenwert: zeile ? zeile.value : null,
+        zeilenarten: zeile
+            ? Array.from(zeile.options).map((o) => o.value) : [],
+        anlegen: Array.from(
+            document.getElementById('light-fixture-kind').options
+        ).map((o) => o.value)
+    };
+}""", vorher="document.getElementById('btn-light-setup').click();")
+
+assert TEXTE["light_kind_background"] in ergebnis["karte"], (
+    "Die Art fehlt in der Karte: " + ergebnis["karte"][:200]
+)
+
+assert ergebnis["anlegen"] == ["effect", "background", "static"], ergebnis
+
+#
+# Und die Zeile der vorhandenen Lampe zeigt DEREN Art vorausgewählt -
+# nicht stumpf die erste. Sonst verstellte ein unbedachter Klick die
+# Lampe, statt sie zu lassen, wie sie ist.
+#
+assert ergebnis["zeilenarten"] == ["effect", "background", "static"], ergebnis
+assert ergebnis["zeilenwert"] == "background", ergebnis
+
+print("OK: Die Art steht in der Karte und ist an der Lampe vorausgewählt")
+
+
+#
+# Der Regler für die Trägheit zeigt seinen Wert in Sekunden an.
+#
+traege = stand()
+traege["show"] = {**traege["show"], "background_seconds": 9}
+
+ergebnis = ausfuehren(traege, """function () {
+    return {
+        regler: document.getElementById('light-show-background-seconds').value,
+        beschriftung: document.getElementById(
+            'light-show-background-seconds-value').textContent
+    };
+}""")
+
+assert ergebnis["regler"] == "9", ergebnis
+assert "9 s" in ergebnis["beschriftung"], ergebnis
+
+print("OK: Die Trägheit des Hintergrundlichts steht in Sekunden im Dialog")
 
 
 print("Alle Lichtkarten-Tests erfolgreich.")

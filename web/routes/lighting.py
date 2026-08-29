@@ -28,6 +28,12 @@ class LightingFixtureSelection(BaseModel):
     template: str
     address: int
 
+    #
+    # Vorgabe wie im Modell: Wer die Art nicht mitschickt, bekommt
+    # das Verhalten, das es vor den Arten gab.
+    #
+    kind: str = "effect"
+
 
 class LightingValuesSelection(BaseModel):
     id: str
@@ -208,6 +214,7 @@ class LightingShowSettings(BaseModel):
     silence_threshold: float | None = None
     silence_seconds: float | None = None
     speech_seconds: float | None = None
+    background_seconds: float | None = None
 
 
 @router.post("/api/lighting/show/start")

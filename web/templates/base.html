@@ -1271,7 +1271,7 @@
 
                 <div class="row g-2 align-items-end mb-4">
 
-                    <div class="col-12 col-sm-4">
+                    <div class="col-12 col-sm-3">
                         <label class="form-label small mb-1" for="light-fixture-name">
                             {{ t.light_name }}
                         </label>
@@ -1283,7 +1283,7 @@
                         >
                     </div>
 
-                    <div class="col-12 col-sm-4">
+                    <div class="col-12 col-sm-4 col-lg-3">
                         <label class="form-label small mb-1" for="light-fixture-template">
                             {{ t.light_template }}
                         </label>
@@ -1291,6 +1291,20 @@
                             id="light-fixture-template"
                             class="form-select form-select-sm"
                         ></select>
+                    </div>
+
+                    <div class="col-12 col-sm-3">
+                        <label class="form-label small mb-1" for="light-fixture-kind">
+                            {{ t.light_kind }}
+                        </label>
+                        <select
+                            id="light-fixture-kind"
+                            class="form-select form-select-sm"
+                        >
+                            <option value="effect">{{ t.light_kind_effect }}</option>
+                            <option value="background">{{ t.light_kind_background }}</option>
+                            <option value="static">{{ t.light_kind_static }}</option>
+                        </select>
                     </div>
 
                     <div class="col-8 col-sm-2">
@@ -1325,6 +1339,7 @@
                     #}
                     <div class="col-12">
                         <div id="light-fixture-range" class="form-text"></div>
+                        <div class="form-text">{{ t.light_kind_hint }}</div>
                     </div>
 
                 </div>
@@ -1436,6 +1451,24 @@
                             max="3"
                             step="0.1"
                             value="1"
+                        >
+                    </div>
+
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label small mb-1"
+                               for="light-show-background-seconds">
+                            {{ t.light_show_background_seconds }}
+                            <span id="light-show-background-seconds-value"
+                                  class="text-body-secondary"></span>
+                        </label>
+                        <input
+                            id="light-show-background-seconds"
+                            type="range"
+                            class="form-range"
+                            min="1"
+                            max="15"
+                            step="1"
+                            value="4"
                         >
                     </div>
 

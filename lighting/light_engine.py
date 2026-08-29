@@ -134,6 +134,21 @@ class LightEngine:
     #
     LASER_SCHWELLE = 0.25
 
+    #
+    # Wie traege das Hintergrundlicht folgt, falls in den
+    # Einstellungen nichts steht.
+    #
+    HINTERGRUND_VORGABE_S = 4.0
+
+    #
+    # Wie lange ein Block dauert, wenn niemand es besser weiss.
+    #
+    # Gebraucht wird das nur, wenn werte_je_lampe() ohne einen
+    # vorangegangenen _schritt() aufgerufen wird - im Test. Im Betrieb
+    # setzt _schritt() den echten Wert.
+    #
+    BLOCK_VORGABE_S = 0.02
+
     def __init__(self, application):
 
         self.application = application
@@ -178,6 +193,22 @@ class LightEngine:
         #
         self.letzter_block = 0.0
         self.bloecke = 0
+
+        #
+        # Je Hintergrundlampe die geglaettete Farbe als
+        # [rot, gruen, blau, mitte].
+        #
+        # "mitte" muss mit hinein, weil Weiss/Amber/UV aus dem
+        # mittleren Band kommen - sonst waere die Farbe ruhig und das
+        # Weiss daneben zappelig.
+        #
+        self._hintergrund: dict[str, list[float]] = {}
+
+        #
+        # Die Dauer des zuletzt verarbeiteten Blocks. Die Glaettung
+        # braucht sie, und nur _schritt() kennt sie.
+        #
+        self.letzte_dauer = self.BLOCK_VORGABE_S
 
     # ----------------------------------------------------------------
     # An und aus
@@ -230,6 +261,15 @@ class LightEngine:
         self.letzter_block = 0.0
         self.bloecke = 0
         self.verworfen = 0
+
+        #
+        # Ohne das haengt die Farbe der letzten Show nach: Man
+        # startet neu und das Hintergrundlicht braucht Sekunden, um
+        # von einer Farbe wegzukommen, die zu ganz anderer Musik
+        # gehoerte.
+        #
+        self._hintergrund.clear()
+        self.letzte_dauer = self.BLOCK_VORGABE_S
 
         self._laeuft = True
 
@@ -321,6 +361,8 @@ class LightEngine:
 
         dauer = len(block) / max(1, self.analyse.channels * 4 * self.analyse.rate)
 
+        self.letzte_dauer = dauer or self.BLOCK_VORGABE_S
+
         vorher = self.zustand
         self.zustand = self.erkennung.aktualisieren(self.stand, dauer)
 
@@ -383,16 +425,79 @@ class LightEngine:
             if vorlage is None:
                 continue
 
+            vorher = self.application.light_values.get(lampe["id"])
+
+            art = lampe.get("kind", fixtures.ART_VORGABE)
+
+            #
+            # Eine ausgenommene Lampe bekommt zurueck, was schon an
+            # ihr steht - sie einfach WEGZULASSEN waere ein Fehler:
+            # licht_show_bild() ersetzt das Bild vollstaendig, die
+            # Lampe fehlte darin, und fixtures.bild() liest fehlende
+            # Werte als Nullen. Sie ginge also aus, statt stehen zu
+            # bleiben.
+            #
+            if art == "static":
+
+                anzahl = len(vorlage["channels"])
+
+                werte = list(vorher or [])[:anzahl]
+                werte += [0] * (anzahl - len(werte))
+
+                ergebnis[lampe["id"]] = werte
+                continue
+
             ergebnis[lampe["id"]] = self._werte(
-                vorlage, baender, farben,
-                self.application.light_values.get(lampe["id"]),
+                vorlage, baender, farben, vorher,
+                art=art, kennung=lampe["id"],
             )
 
         return ergebnis
 
+    def _geglaettet(self, kennung: str, ziel: list[float]) -> list[float]:
+        """
+        Einen Wert je Lampe langsam an sein Ziel heranfuehren.
+
+        Dieselbe Rechnung wie beim Bass-Mittelwert in analysis.py -
+        ein Tiefpass erster Ordnung, dessen Zeitkonstante in Sekunden
+        angegeben ist. Ein zweites Glaettungsverfahren im Programm
+        waere eines zu viel.
+        """
+
+        traegheit = max(0.1, float(
+            self.einstellungen.get("background_seconds")
+            or self.HINTERGRUND_VORGABE_S
+        ))
+
+        stand = self._hintergrund.get(kennung)
+
+        #
+        # Beim ersten Bild direkt auf den Zielwert, statt aus dem
+        # Dunkeln hochzufahren: Sonst braeuchte jede Hintergrundlampe
+        # nach dem Start der Show erst mal Sekunden, bis ueberhaupt
+        # etwas zu sehen ist.
+        #
+        if stand is None or len(stand) != len(ziel):
+            stand = list(ziel)
+
+        else:
+            anteil = min(1.0, self.letzte_dauer / traegheit)
+
+            stand = [
+                wert + anteil * (z - wert)
+                for wert, z in zip(stand, ziel)
+            ]
+
+        self._hintergrund[kennung] = stand
+
+        return stand
+
     def _werte(self, vorlage: dict, baender: dict, farben: dict,
-               vorher: list[int] | None = None) -> list[int]:
+               vorher: list[int] | None = None,
+               art: str = "effect", kennung: str = "") -> list[int]:
         """Die Kanalwerte einer einzelnen Lampe."""
+
+        hintergrund = art == "background"
 
         kanaele = vorlage["channels"]
 
@@ -442,9 +547,15 @@ class LightEngine:
             # leuchtet voll, die anderen mit Grundhelligkeit. Bei
             # einer einzelnen leuchtenden Gruppe faellt das weg.
             #
-            if len(farbig) > 1:
+            if len(farbig) > 1 and not hintergrund:
                 staerke = 1.0 if nummer == dran_gruppe else self.GRUNDHELLIGKEIT
             else:
+
+                #
+                # Beim Hintergrundlicht leuchten alle Segmente gleich.
+                # Der wandernde Punkt ist genau das, was zuckelt - und
+                # ein Wash soll nicht zuckeln.
+                #
                 staerke = 1.0
 
             #
@@ -464,6 +575,31 @@ class LightEngine:
                 gemischt[1] += baender[band] * gruen
                 gemischt[2] += baender[band] * blau
 
+            #
+            # Beim Hintergrundlicht wird genau dieses Tripel
+            # geglaettet - und damit Farbe UND Helligkeit in einem
+            # Schritt, denn die Bandstaerke steckt oben schon mit
+            # drin. Der mittlere Bandwert kommt mit, weil
+            # Weiss/Amber/UV daraus entstehen.
+            #
+            if hintergrund:
+
+                # Der Schluessel enthaelt die Gruppe, nicht nur die
+                # Lampe. Das ist kein Beiwerk: Jeder Schluessel darf
+                # je Bild genau einmal weiterlaufen. Bei einer Lampe
+                # mit acht Segmenten waere die Glaettung sonst
+                # achtmal so schnell - und damit gar keine mehr.
+                rot, gruen, blau, mitte = self._geglaettet(
+                    f"{kennung}:{nummer}",
+                    [gemischt[0], gemischt[1], gemischt[2], baender["mid"]],
+                )
+
+                gemischt = [rot, gruen, blau]
+                mittelband = mitte
+
+            else:
+                mittelband = baender["mid"]
+
             for stelle, rolle in enumerate(RGB_ROLLEN):
 
                 for index in gruppe:
@@ -481,7 +617,7 @@ class LightEngine:
 
                 if kanaele[index] in ("white", "amber", "uv"):
                     werte[index] = fixtures.begrenzen(
-                        baender["mid"] * staerke * 180
+                        mittelband * staerke * 180
                     )
 
         #
@@ -503,12 +639,16 @@ class LightEngine:
                     127 + 60 * math.sin(self.phase * 0.5)
                 )
 
-            elif rolle == "rotation":
+            elif rolle == "rotation" and not hintergrund:
 
                 #
                 # Der Spiegel dreht sich mit dem Bass. Immer ein
                 # wenig, auch in leisen Passagen - ein Derby, der
                 # zwischendurch stehenbleibt, sieht kaputt aus.
+                #
+                # Beim Hintergrundlicht bleibt die Drehung aus. Ein
+                # rotierender Derby als Grundlicht waere ein
+                # Widerspruch in sich.
                 #
                 werte[index] = fixtures.begrenzen(
                     self.DREHUNG_MIN + self.DREHUNG_SPANNE * baender["low"]
@@ -540,7 +680,11 @@ class LightEngine:
 
         for index, rolle in enumerate(kanaele):
 
-            if rolle != "laser":
+            #
+            # Beim Hintergrundlicht bleiben die Laser aus - aus
+            # demselben Grund wie die Drehung.
+            #
+            if rolle != "laser" or hintergrund:
                 continue
 
             band = BAENDER[nummer % len(BAENDER)][0]
