@@ -223,6 +223,34 @@ bei DMX (RS-485, bis 1000 m) selten das Problem ist.
 
 ---
 
+## Die Lichtshow
+
+### Warum der Puls eine Hüllkurve ist und kein An/Aus
+
+Im zweiten Show-Modus atmen alle Segmente gemeinsam im Takt. Der
+naheliegende Weg wäre, sie auf den Schlag anzuschalten und danach
+wieder aus — das sieht aber aus wie ein Stroboskop mit Taktgefühl,
+nicht wie Musik.
+
+Stattdessen läuft eine Hüllkurve: hart auf 1 beim Schlag, dann
+derselbe Ein-Pol-Abfall, mit dem auch die Bänder in `analysis.py`
+zurückgehen (0,25 s). Hart hoch ist Absicht — ein Puls, der erst
+anschwillt, kommt hinter dem Schlag her, und dann sieht das Licht aus,
+als hinke es der Musik hinterher.
+
+Unten bleibt derselbe Boden stehen wie beim wandernden Punkt
+(`GRUNDHELLIGKEIT`). Dort heißt er „wie hell ist ein Segment, das
+gerade nicht dran ist", hier „wie hell zwischen zwei Schlägen" — es
+ist dieselbe Frage. Der Boden multipliziert dabei den Bandpegel und
+addiert nichts dazu: Bei Stille bleibt es deshalb dunkel, statt ein
+Grundleuchten stehen zu lassen, das man nicht mehr los wird.
+
+Das Hintergrundlicht bekommt vom Puls nichts mit. Es hat sein eigenes
+Bild — eine Farbe, über mehrere Schläge weich übergeblendet —, und ein
+Wash, der im Takt zuckt, ist kein Wash mehr.
+
+---
+
 ## Wave64 statt WAV
 
 Aufnahmen liegen als `.w64`. Das klassische WAV-Format kann wegen seiner

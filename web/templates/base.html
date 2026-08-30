@@ -1458,6 +1458,30 @@
 
                 <div class="row g-2 mb-2">
 
+                    {#
+                        Das Bild, das die Show fuer Effektlicht faehrt.
+                        Steht bewusst obenan: Es bestimmt den Charakter
+                        der ganzen Show, waehrend alles Weitere daran
+                        nur schraubt.
+                    #}
+                    <div class="col-12">
+                        <label class="form-label small mb-1" for="light-show-effect-mode">
+                            {{ t.light_show_effect_mode }}
+                        </label>
+                        <select
+                            id="light-show-effect-mode"
+                            class="form-select form-select-sm"
+                        >
+                            <option value="runner">
+                                {{ t.light_show_effect_mode_runner }}
+                            </option>
+                            <option value="pulse">
+                                {{ t.light_show_effect_mode_pulse }}
+                            </option>
+                        </select>
+                        <div class="form-text">{{ t.light_show_effect_mode_hint }}</div>
+                    </div>
+
                     <div class="col-12 col-sm-6">
                         <label class="form-label small mb-1" for="light-show-channel">
                             {{ t.light_show_channel }}

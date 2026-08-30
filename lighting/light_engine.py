@@ -131,6 +131,17 @@ class LightEngine:
     GRUNDHELLIGKEIT = 0.35
 
     #
+    # Wie schnell der Puls nach einem Schlag wieder abfaellt.
+    #
+    # Derselbe Wert wie die Release-Zeit der Huellkurven in
+    # analysis.py (ABFALL_S) und aus demselben Grund: Bei 120 BPM
+    # liegt eine halbe Sekunde zwischen zwei Schlaegen, der Puls ist
+    # bis dahin also weitgehend unten - und trotzdem traege genug,
+    # dass es zwischendurch nicht flackert.
+    #
+    PULS_ABFALL_S = 0.25
+
+    #
     # Drehung eines Derby-/Effektspiegels.
     #
     # Die Handbuecher der Eurolite-Geraete kodieren das gleich:
@@ -231,6 +242,15 @@ class LightEngine:
         #
         self.position = 0
         self.phase = 0.0
+
+        #
+        # Die Pulshuellkurve (0-1) fuer den zweiten Show-Modus.
+        #
+        # EINE Zahl fuer alle Effektlampen, so wie hintergrund_farbe
+        # eine fuer alle Hintergrundlampen ist: Ein Puls, bei dem
+        # jede Lampe woanders steht, ist kein Puls mehr.
+        #
+        self.puls = 0.0
 
         self.verworfen = 0
 
@@ -333,6 +353,7 @@ class LightEngine:
         self.hintergrund_farbe = 0
         self.hintergrund_schlaege = 0
         self.hintergrund_zeit = 0.0
+        self.puls = 0.0
         self.letzte_dauer = self.BLOCK_VORGABE_S
 
         self._laeuft = True
@@ -457,6 +478,7 @@ class LightEngine:
             self.position += 1
 
         self._farbe_weiterschalten(dauer, bool(self.stand["beat"]))
+        self._puls_weiterschalten(dauer, bool(self.stand["beat"]))
 
         self.phase += 0.02 + 0.08 * self.stand["low"]
 
@@ -562,6 +584,28 @@ class LightEngine:
             self.hintergrund_schlaege = 0
             self.hintergrund_zeit = 0.0
 
+    def _puls_weiterschalten(self, dauer: float, schlag: bool) -> None:
+        """
+        Die Pulshuellkurve fuehren: bei einem Schlag auf voll, sonst
+        abfallen.
+
+        Dieselbe Ein-Pol-Rechnung wie ueberall sonst im Programm
+        (analysis.py, _geglaettet), nur mit einer eigenen
+        Zeitkonstante und einer einzelnen Zahl statt einer Farbe.
+
+        Bewusst hart auf 1.0 statt weich hoch: Ein Puls, der erst
+        anschwillt, kommt hinter dem Schlag her - und dann sieht das
+        Licht aus, als haenge es der Musik hinterher.
+        """
+
+        if schlag:
+            self.puls = 1.0
+            return
+
+        anteil = min(1.0, dauer / self.PULS_ABFALL_S)
+
+        self.puls += anteil * (0.0 - self.puls)
+
     def _geglaettet(self, kennung: str, ziel: list[float]) -> list[float]:
         """
         Einen Wert je Lampe langsam an sein Ziel heranfuehren.
@@ -606,6 +650,19 @@ class LightEngine:
         """Die Kanalwerte einer einzelnen Lampe."""
 
         hintergrund = art in fixtures.HINTERGRUND_ARTEN
+
+        #
+        # Der zweite Show-Modus: Statt des wandernden Punktes atmen
+        # alle Segmente gemeinsam im Takt.
+        #
+        # Nur fuer Effektlicht. Das Hintergrundlicht hat sein eigenes
+        # Bild - eine Farbe, weich uebergeblendet -, und ein Wash,
+        # der im Takt zuckt, ist kein Wash mehr.
+        #
+        pulsieren = (
+            not hintergrund
+            and self.einstellungen.get("effect_mode") == "pulse"
+        )
 
         #
         # Welcher Farbsatz gilt: der erste oder der der zweiten
@@ -664,12 +721,39 @@ class LightEngine:
             if nummer not in farbig:
                 continue
 
+            if pulsieren:
+
+                #
+                # Der Puls: ALLE Segmente gehen bei jedem Schlag auf
+                # voll und fallen bis zum naechsten zurueck. Jedes
+                # behaelt dabei seine Bandfarbe und seinen Bandpegel -
+                # man sieht also weiter, welches Band was macht, aber
+                # die ganze Lampe atmet.
+                #
+                # Der Boden ist derselbe wie beim wandernden Punkt:
+                # GRUNDHELLIGKEIT heisst dort "wie hell ist ein
+                # Segment, das gerade nicht dran ist", hier "wie hell
+                # zwischen zwei Schlaegen". Ohne Boden waere es kein
+                # Atmen, sondern ein Blitzen.
+                #
+                # Das gilt auch fuer Lampen mit nur EINER farbigen
+                # Gruppe. Der wandernde Punkt laesst die aus - er
+                # braucht mehrere Segmente, ueber die er wandern kann
+                # -, ein einzelner RGB-Strahler tat in der Show
+                # deshalb bisher nicht viel. Der Puls wirkt auf ihm
+                # genauso wie auf einer achtsegmentigen Bar.
+                #
+                staerke = (
+                    self.GRUNDHELLIGKEIT
+                    + (1.0 - self.GRUNDHELLIGKEIT) * self.puls
+                )
+
             #
             # Der wandernde Punkt: das Segment, das gerade "dran" ist,
             # leuchtet voll, die anderen mit Grundhelligkeit. Bei
             # einer einzelnen leuchtenden Gruppe faellt das weg.
             #
-            if len(farbig) > 1 and not hintergrund:
+            elif len(farbig) > 1 and not hintergrund:
                 staerke = 1.0 if nummer == dran_gruppe else self.GRUNDHELLIGKEIT
             else:
 

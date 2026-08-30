@@ -541,6 +541,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "light_show_sensitivity": "Empfindlichkeit",
         "light_show_background_seconds": "Hintergrund: Trägheit",
+        "light_show_effect_mode": "Effektlicht: Bild",
+        "light_show_effect_mode_runner": "Wandernder Punkt",
+        "light_show_effect_mode_pulse": "Puls im Takt",
+        "light_show_effect_mode_hint": (
+            "Wandernder Punkt: ein Segment nach dem anderen leuchtet "
+            "auf. Puls: alle Segmente atmen gemeinsam im Takt. Das "
+            "Hintergrundlicht bleibt in beiden Fällen ein Wash."
+        ),
         "light_show_background_beats": "Hintergrund: Farbwechsel",
         "light_show_fade_seconds": "Ausblenden in die Szene",
         "light_show_beats_unit": "{n} Schläge",
@@ -1105,6 +1113,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "light_show_sensitivity": "Sensitivity",
         "light_show_background_seconds": "Background: inertia",
+        "light_show_effect_mode": "Effect light: look",
+        "light_show_effect_mode_runner": "Moving point",
+        "light_show_effect_mode_pulse": "Pulse on the beat",
+        "light_show_effect_mode_hint": (
+            "Moving point: one segment after another lights up. "
+            "Pulse: all segments breathe together on the beat. The "
+            "background light stays a wash either way."
+        ),
         "light_show_background_beats": "Background: colour change",
         "light_show_fade_seconds": "Fade into the scene",
         "light_show_beats_unit": "every {n} beats",

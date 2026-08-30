@@ -28,12 +28,33 @@ from lighting import fixtures
 # Ansage, haengt vom Signal ab, das vor Ort ankommt. Nachjustieren
 # muss ohne Codeaenderung gehen.
 #
+#
+# Die beiden Bilder, in denen die Show Effektlicht faehrt.
+#
+#   runner - der wandernde Punkt: ein Segment leuchtet voll, die
+#            uebrigen mit Grundhelligkeit, weitergerueckt bei jedem
+#            Schlag.
+#   pulse  - alles atmet im Takt: jedes Segment behaelt seine
+#            Bandfarbe, bei jedem Schlag gehen alle auf voll und
+#            fallen bis zum naechsten zurueck.
+#
+# Hintergrundlicht ist davon nicht betroffen - ein Wash soll weder
+# wandern noch zucken.
+#
+EFFEKT_MODI = ("runner", "pulse")
+
 SHOW_VORGABE = {
     #
     # 1-basierter linker Kanal des Paares, das die Show hoert.
     #
     "channel": 1,
     "sensitivity": 1.0,
+
+    #
+    # Welches Bild das Effektlicht faehrt. Vorgabe ist der bisherige
+    # Zustand: Wer nichts umstellt, sieht genau das von vorher.
+    #
+    "effect_mode": "runner",
 
     #
     # Welche Farbe welches Band bekommt.
@@ -522,6 +543,20 @@ class LightingStore:
                 return False, f"'{werte[name]}' ist keine gültige Farbe."
 
             show[name] = farbe
+
+        if "effect_mode" in werte:
+
+            modus = str(werte["effect_mode"] or "").strip().lower()
+
+            #
+            # Ein unbekannter Modus waere ein stiller Ausfall: Die
+            # Show faellt auf das Lauflicht zurueck, und man sucht
+            # den Fehler bei den Lampen.
+            #
+            if modus not in EFFEKT_MODI:
+                return False, f"'{werte['effect_mode']}' ist kein bekannter Modus."
+
+            show["effect_mode"] = modus
 
         if "sensitivity" in werte:
             show["sensitivity"] = max(0.1, min(4.0, float(werte["sensitivity"])))

@@ -250,6 +250,7 @@ def stand(enabled=True, service=True, adapter=True, overlaps=None,
         "show_levels": {"low": 0.8, "mid": 0.4, "high": 0.1, "level": 0.5},
         "show": {
             "channel": 3,
+            "effect_mode": "pulse",
             "sensitivity": 1.5,
             "fallback_scene": "s1",
             "silence_threshold": 0.03,
@@ -1197,6 +1198,66 @@ assert ergebnis["knopf_aus"] is True, ergebnis
 assert ergebnis["zustand"] == TEXTE["light_output_none"], ergebnis
 
 print("OK: Ohne angebotene Anschlüsse bleibt der Knopf gesperrt")
+
+
+# ====================================================================
+# 20. Das Bild der Show laesst sich umschalten
+#
+# Der zweite Modus nuetzt nichts, wenn man nicht an ihn herankommt -
+# und die Auswahl nuetzt nichts, wenn sie beim Umstellen nichts
+# losschickt.
+# ====================================================================
+
+ergebnis = ausfuehren(stand(), """function () {
+    const feld = document.getElementById('light-show-effect-mode');
+
+    return {
+        art: feld.tagName,
+        werte: Array.from(feld.options).map((o) => o.value),
+        texte: Array.from(feld.options).map((o) => o.textContent.trim()),
+        gewaehlt: feld.value
+    };
+}""")
+
+assert ergebnis["art"] == "SELECT", ergebnis
+assert ergebnis["werte"] == ["runner", "pulse"], ergebnis
+
+assert ergebnis["texte"] == [
+    TEXTE["light_show_effect_mode_runner"],
+    TEXTE["light_show_effect_mode_pulse"],
+], ergebnis
+
+#
+# Der gespeicherte Modus muss auch dastehen. Zeigte die Auswahl
+# stumm den ersten Eintrag, glaubte man, es sei Lauflicht
+# eingestellt - waehrend die Show pulst.
+#
+assert ergebnis["gewaehlt"] == "pulse", ergebnis
+
+print("OK: Das Bild der Show steht als Auswahl im Dialog")
+
+
+ergebnis = ausfuehren(stand(), """function () {
+    const gesendet = window.aufrufe.filter(
+        a => a[0].indexOf('/api/lighting/show/settings') === 0
+    );
+
+    return {
+        anzahl: gesendet.length,
+        koerper: gesendet.length ? gesendet[gesendet.length - 1][1] : ''
+    };
+}""", vorher="""
+    const feld = document.getElementById('light-show-effect-mode');
+    feld.value = 'runner';
+    feld.dispatchEvent(new Event('change'));
+""")
+
+assert ergebnis["anzahl"] >= 1, "Das Umstellen hat nichts losgeschickt."
+assert '"effect_mode":"runner"' in ergebnis["koerper"].replace(" ", ""), (
+    ergebnis["koerper"]
+)
+
+print("OK: Ein umgestelltes Bild wird sofort gespeichert")
 
 
 print("Alle Lichtkarten-Tests erfolgreich.")

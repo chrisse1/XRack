@@ -5745,6 +5745,7 @@ function renderLightShowSettings(stand) {
         buildChannelOptions(kanal, stand.input_channels || 2, show.channel);
         setzen("light-show-channel", show.channel);
     }
+    setzen("light-show-effect-mode", show.effect_mode);
     setzen("light-show-color-low", show.color_low);
     setzen("light-show-color-mid", show.color_mid);
     setzen("light-show-color-high", show.color_high);
@@ -5852,6 +5853,7 @@ async function saveLightShowSettings() {
     };
 
     const auswahl = document.getElementById("light-show-fallback");
+    const modus = document.getElementById("light-show-effect-mode");
 
     const farbe = (kennung) => {
         const element = document.getElementById(kennung);
@@ -5870,6 +5872,7 @@ async function saveLightShowSettings() {
         color_mid_2: farbe("light-show-color-mid-2"),
         color_high_2: farbe("light-show-color-high-2"),
         sensitivity: zahl("light-show-sensitivity"),
+        effect_mode: modus ? modus.value : null,
         background_seconds: zahl("light-show-background-seconds"),
         background_beats: zahl("light-show-background-beats"),
         fade_seconds: zahl("light-show-fade-seconds"),
@@ -5903,7 +5906,8 @@ function lightShowPulsSetzen(laeuft) {
     if (knopf) knopf.addEventListener("click", toggleLightShow);
 
     for (const kennung of [
-        "light-show-channel", "light-show-sensitivity",
+        "light-show-channel", "light-show-effect-mode",
+        "light-show-sensitivity",
         "light-show-silence-threshold", "light-show-silence-seconds",
         "light-show-speech-seconds", "light-show-fallback",
         "light-show-background-seconds", "light-show-background-beats",
