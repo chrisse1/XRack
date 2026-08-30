@@ -1361,6 +1361,8 @@ configure_dmx() {
 
     echo "$(L "XRack: Lichtsteuerung (DMX über OLA) wird eingerichtet..." "XRack: Setting up lighting control (DMX via OLA)...")"
 
+    XRACK_DMX_BEREIT=""
+
     if ! dmx_paket_sicherstellen; then
         return 0
     fi
@@ -1470,6 +1472,15 @@ EOF
     restrict_ola_to_loopback "${DMX_UNIT}" "${DMX_CONF_DIR}"
 
     sudo systemctl restart "${DMX_UNIT}" >/dev/null 2>&1 || true
+
+    #
+    # Nur gemerkt, um am Ende darauf hinzuweisen: Der Dienst laeuft
+    # jetzt, sendet aber noch nichts. Dafuer muss der Anschluss des
+    # Kabels einmal einem Universum zugeordnet werden - das geht in
+    # den Einstellungen und ist der Schritt, den man vergisst, weil
+    # von aussen alles heil aussieht.
+    #
+    XRACK_DMX_BEREIT="ja"
 }
 
 #
@@ -1816,6 +1827,13 @@ print_summary() {
         echo ""
         echo "$(L "Ein Access Point lässt sich jederzeit im Einstellungen-Menü nachrüsten -" "An access point can be added at any time from the settings menu -")"
         echo "$(L "install.sh muss dafür nicht noch einmal laufen." "install.sh does not need to run again for that.")"
+    fi
+
+    if [ "${XRACK_DMX_BEREIT}" = "ja" ]; then
+        echo ""
+        echo "$(L "Licht: Der DMX-Ausgang muss einmal zugeordnet werden - im" "Lighting: the DMX output has to be assigned once - in the")"
+        echo "$(L "Einstellungen-Menü unter 'Licht' den Anschluss auswählen und" "settings menu under 'Lighting', pick the port and press")"
+        echo "$(L "auf 'Zuordnen' drücken. Ohne das bleiben die Lampen dunkel." "'Assign'. Without that the fixtures stay dark.")"
     fi
 
     if [ -n "${XRACK_WLAN_CLIENT_SSID}" ] || [ -n "${XRACK_WLAN_AP_SSID}" ]; then

@@ -25,7 +25,10 @@ läuft über einen gewöhnlichen HTTP-Aufruf auf localhost. XRack
 braucht dafür keinerlei erhöhte Rechte.
 """
 
+import json
 import logging
+import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -36,6 +39,14 @@ from pathlib import Path
 # unterschieben kann - wie in core/network_report.py.
 #
 USB_DEVICES = Path("/sys/bus/usb/devices")
+
+#
+# So schreibt olad die Kennung eines Anschlusses: die Nummer des
+# Geraets, die Richtung (O = Ausgang, I = Eingang) und die Nummer
+# des Anschlusses am Geraet, etwa "2-O-1". Genau die drei Angaben
+# will auch "ola_patch -d 2 -p 1" auf der Kommandozeile.
+#
+PORT_MUSTER = re.compile(r"^(\d+)-([IO])-(\d+)$")
 
 #
 # Alle gängigen USB-DMX-Kabel dieser Preisklasse hängen an einem
@@ -83,6 +94,18 @@ class DmxControl:
     CHANNELS = 512
 
     #
+    # Unter diesem Namen legt XRack das Universum an, falls es noch
+    # keines gibt. Ein vorhandenes behaelt seinen Namen.
+    #
+    UNIVERSE_NAME = "XRack"
+
+    #
+    # So lange gilt die gemerkte Auskunft, ob ein Ausgang zugeordnet
+    # ist (siehe __init__).
+    #
+    ZUORDNUNG_GILT_S = 5.0
+
+    #
     # Kurz gehalten: Der Aufruf geht über localhost und darf den
     # Licht-Thread nicht aufhalten. Antwortet olad nicht binnen
     # zwei Sekunden, ist ohnehin etwas grundlegend kaputt - dann
@@ -111,6 +134,19 @@ class DmxControl:
         self._opener = urllib.request.build_opener(
             urllib.request.ProxyHandler({})
         )
+
+        #
+        # Gemerkt, ob ein Ausgang zugeordnet ist.
+        #
+        # Die Lichtkarte fragt den Zustand zweimal je Sekunde ab.
+        # Diese eine Auskunft aendert sich aber nur, wenn jemand sie
+        # von Hand aendert - sie jedes Mal bei olad zu erfragen,
+        # waere ein Dauerfeuer auf denselben Dienst, der nebenbei
+        # das DMX-Bild takten soll. Nach einer Zuordnung wird der
+        # Merker verworfen, damit die Karte sofort umspringt.
+        #
+        self._zuordnung = None
+        self._zuordnung_zeit = 0.0
 
     # ----------------------------------------------------------------
     # Ist überhaupt etwas da?
@@ -195,13 +231,298 @@ class DmxControl:
 
         adapter = self.adapters()
 
+        #
+        # Einmal fragen, zweimal verwenden: Laeuft der Dienst nicht,
+        # braucht die Zuordnung gar nicht erst erfragt zu werden.
+        #
+        laeuft = self.service_running
+
         return {
-            "service_running": self.service_running,
+            "service_running": laeuft,
             "adapter_present": bool(adapter),
             "adapters": adapter,
             "universe": self.UNIVERSE,
             "channels": self.CHANNELS,
+            "patched": self.patched if laeuft else False,
         }
+
+    # ----------------------------------------------------------------
+    # Den Ausgang dem Universum zuordnen
+    #
+    # Nach der Installation kennt olad das Kabel zwar, schickt aber
+    # noch nichts hinaus: Ein Anschluss muss erst einem Universum
+    # zugeordnet werden ("patchen"). Auf der Kommandozeile ist das
+    #
+    #     ola_dev_info                        # Geraet und Port suchen
+    #     ola_patch -d <Geraet> -p <Port> -u 1
+    #
+    # Genau diese beiden Schritte macht XRack hier selbst - ueber
+    # dieselbe Web-Schnittstelle von olad, ueber die auch die
+    # Kanalwerte gehen. Es braucht also weiterhin kein sudo und kein
+    # Terminal.
+    #
+    # Ohne diesen Schritt sieht alles heil aus: Der Dienst laeuft,
+    # das Kabel steckt, XRack meldet erfolgreich gesendete Bilder -
+    # und es bleibt trotzdem dunkel. Deshalb steht die Zuordnung mit
+    # im Zustand, damit die Oberflaeche den Fall benennen kann.
+    # ----------------------------------------------------------------
+
+    def _abfragen(self, pfad: str):
+        """Eine JSON-Auskunft von olad holen. None, wenn es nicht klappt."""
+
+        try:
+
+            with self._opener.open(self.base_url + pfad,
+                                   timeout=self.STATUS_TIMEOUT) as antwort:
+
+                return json.loads(antwort.read().decode("utf-8", "replace"))
+
+        except Exception as fehler:
+
+            self.logger.warning("DMX: %s nicht abrufbar (%s)", pfad, fehler)
+            return None
+
+    def _auftrag(self, pfad: str, felder: dict) -> tuple[bool, str]:
+        """Einen Auftrag an olad schicken. (Erfolg, Grund bei Fehlschlag)."""
+
+        daten = urllib.parse.urlencode(felder).encode("utf-8")
+
+        anfrage = urllib.request.Request(
+            self.base_url + pfad,
+            data=daten,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+        try:
+
+            with self._opener.open(anfrage, timeout=self.STATUS_TIMEOUT):
+                return True, ""
+
+        except Exception as fehler:
+
+            self.logger.warning("DMX: %s fehlgeschlagen (%s)", pfad, fehler)
+            return False, str(fehler)
+
+    def _universum(self) -> dict | None:
+        """
+        Der Eintrag zu Universum 1 aus der Uebersicht - oder None.
+
+        Bewusst ueber die Uebersicht aller Universen und nicht ueber
+        /json/universe_info: Gibt es das Universum noch nicht,
+        antwortet olad dort mit einem Fehler. Ein Fehler, der jedes
+        Mal im Protokoll steht, obwohl er der Normalfall vor der
+        ersten Zuordnung ist, verdeckt nur die echten.
+        """
+
+        daten = self._abfragen("/json/universe_plugin_list")
+
+        if not isinstance(daten, dict):
+            return None
+
+        for eintrag in daten.get("universes") or []:
+
+            if not isinstance(eintrag, dict):
+                continue
+
+            if str(eintrag.get("id")) == str(self.UNIVERSE):
+                return eintrag
+
+        return None
+
+    def _zugeordnete(self) -> list[dict]:
+        """Die Ausgaenge, die gerade in Universum 1 haengen."""
+
+        daten = self._abfragen(f"/json/universe_info?id={self.UNIVERSE}")
+
+        if not isinstance(daten, dict):
+            return []
+
+        return [
+            eintrag for eintrag in daten.get("output_ports") or []
+            if isinstance(eintrag, dict)
+        ]
+
+    @staticmethod
+    def _beschriftung(eintrag: dict) -> str:
+        """Wie der Anschluss in der Auswahl heissen soll."""
+
+        teile = [
+            str(eintrag.get(feld) or "").strip()
+            for feld in ("device", "description")
+        ]
+
+        text = " - ".join(teil for teil in teile if teil)
+
+        treffer = PORT_MUSTER.match(str(eintrag.get("id") or ""))
+
+        if not text:
+            text = str(eintrag.get("id") or "")
+
+        return f"{text} (Ausgang {treffer.group(3)})" if treffer else text
+
+    @staticmethod
+    def _reihenfolge(eintrag: dict) -> tuple:
+        """
+        Sortierung der Auswahl.
+
+        OLAs eingebautes Dummy-Plugin bietet Anschluesse an, die
+        nirgendwohin fuehren; sie sind zum Ausprobieren gedacht.
+        Verstecken waere falsch, aber obenan gehoeren sie nicht -
+        sonst steht der erste Vorschlag auf einem Anschluss, an dem
+        garantiert keine Lampe haengt.
+        """
+
+        blind = "dummy" in str(eintrag.get("device") or "").lower()
+
+        treffer = PORT_MUSTER.match(str(eintrag.get("id") or ""))
+
+        nummern = (
+            (int(treffer.group(1)), int(treffer.group(3)))
+            if treffer else (0, 0)
+        )
+
+        return (1 if blind else 0, nummern)
+
+    def ports(self) -> list[dict]:
+        """
+        Alle DMX-Ausgaenge, die olad anbietet.
+
+        Zusammengesetzt aus zwei Auskuenften: den noch freien
+        Anschluessen und denen, die schon in Universum 1 haengen.
+        Ein zugeordneter Anschluss taucht unter den freien naemlich
+        nicht mehr auf - und genau der soll in der Auswahl stehen
+        bleiben, damit man sieht, worauf XRack gerade sendet.
+
+        Eingaenge bleiben draussen: Dorthin kann XRack nichts
+        schicken.
+        """
+
+        gefunden: dict[str, dict] = {}
+
+        def aufnehmen(eintrag, zugeordnet: bool):
+
+            if not isinstance(eintrag, dict):
+                return
+
+            kennung = str(eintrag.get("id") or "")
+            treffer = PORT_MUSTER.match(kennung)
+
+            if not treffer or treffer.group(2) != "O":
+                return
+
+            gefunden[kennung] = {
+                "id": kennung,
+                "device": str(eintrag.get("device") or ""),
+                "description": str(eintrag.get("description") or ""),
+                "label": self._beschriftung(eintrag),
+                "patched": zugeordnet,
+            }
+
+        frei = self._abfragen("/json/get_ports")
+
+        for eintrag in frei if isinstance(frei, list) else []:
+            aufnehmen(eintrag, False)
+
+        if self._universum() is not None:
+
+            for eintrag in self._zugeordnete():
+                aufnehmen(eintrag, True)
+
+        return sorted(gefunden.values(), key=self._reihenfolge)
+
+    @property
+    def patched(self) -> bool:
+        """True, wenn Universum 1 mindestens einen Ausgang hat."""
+
+        jetzt = time.monotonic()
+
+        if (self._zuordnung is not None
+                and jetzt - self._zuordnung_zeit < self.ZUORDNUNG_GILT_S):
+            return self._zuordnung
+
+        eintrag = self._universum() or {}
+
+        try:
+            anzahl = int(eintrag.get("output_ports", 0))
+
+        except (TypeError, ValueError):
+            anzahl = 0
+
+        self._zuordnung = anzahl > 0
+        self._zuordnung_zeit = jetzt
+
+        return self._zuordnung
+
+    def patch(self, port_id: str) -> tuple[bool, str]:
+        """
+        Einen Ausgang dem Universum zuordnen. (Erfolg, Meldung).
+
+        XRack sendet in genau ein Universum, also gibt es auch genau
+        einen Ausgang: Eine vorherige Zuordnung wird ersetzt. Sonst
+        bliebe ein einmal falsch gewaehlter Anschluss fuer immer
+        drin, und man braeuchte doch wieder ein Terminal, um ihn
+        loszuwerden.
+        """
+
+        kennung = str(port_id or "").strip()
+        treffer = PORT_MUSTER.match(kennung)
+
+        if not treffer or treffer.group(2) != "O":
+            return False, "Das ist keine gültige Kennung für einen DMX-Ausgang."
+
+        eintrag = self._universum()
+
+        felder = {
+            "id": self.UNIVERSE,
+            "name": self.UNIVERSE_NAME,
+            "add_ports": kennung,
+        }
+
+        if eintrag is None:
+            erfolg, grund = self._auftrag("/new_universe", felder)
+
+        else:
+
+            #
+            # Den vorhandenen Namen behalten - modify_universe
+            # verlangt ihn und wuerde eine von Hand vergebene
+            # Bezeichnung sonst ueberschreiben.
+            #
+            felder["name"] = str(eintrag.get("name") or self.UNIVERSE_NAME)
+
+            alte = [
+                str(port.get("id"))
+                for port in self._zugeordnete()
+                if str(port.get("id")) != kennung
+            ]
+
+            if alte:
+                felder["remove_ports"] = ",".join(alte)
+
+            erfolg, grund = self._auftrag("/modify_universe", felder)
+
+        #
+        # Den Merker verwerfen, egal wie es ausging: Die Karte soll
+        # den neuen Stand zeigen und nicht den von vor fuenf
+        # Sekunden.
+        #
+        self._zuordnung = None
+
+        if not erfolg:
+            return False, f"Der Lichtdienst hat die Zuordnung abgelehnt ({grund})."
+
+        #
+        # Nachsehen statt glauben: olad beantwortet den Auftrag auch
+        # dann mit 200, wenn die Zuordnung im Hintergrund scheitert
+        # (etwa weil ein anderes Plugin das Kabel haelt).
+        #
+        if kennung not in [str(port.get("id")) for port in self._zugeordnete()]:
+            return False, (
+                "Der Ausgang ist nicht angekommen. Steckt das Kabel, "
+                "und läuft der Lichtdienst?"
+            )
+
+        return True, ""
 
     # ----------------------------------------------------------------
     # Senden

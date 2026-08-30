@@ -5013,6 +5013,7 @@ function renderLighting(stand) {
 
     if (!dmx.service_running) warnungen.push(I18N.light_service_missing);
     else if (!dmx.adapter_present) warnungen.push(I18N.light_adapter_missing);
+    else if (!dmx.patched) warnungen.push(I18N.light_unpatched);
 
     if (stand.overlaps && stand.overlaps.length > 0) {
         warnungen.push(I18N.light_overlap_warning);
@@ -5061,6 +5062,91 @@ async function lightRequest(url, koerper) {
     }
 
     return result.success;
+}
+
+// ------------------------------------------------------------
+// Der DMX-Ausgang
+//
+// Nach der Installation kennt der Lichtdienst das Kabel, schickt
+// aber noch nichts hinaus: Der Anschluss muss erst dem Universum
+// zugeordnet werden. Das ging bisher nur im Terminal.
+//
+// Die Auswahl wird bewusst NICHT aus renderLighting gefuellt. Die
+// Lichtkarte zeichnet sich zweimal je Sekunde neu; ein Auswahlfeld,
+// das dabei jedes Mal neu entsteht, klappt beim Anklicken sofort
+// wieder zu. Geladen wird deshalb nur beim Oeffnen der
+// Einstellungen und nach einer Zuordnung.
+// ------------------------------------------------------------
+
+let lightPorts = [];
+
+async function loadLightPorts() {
+    const auswahl = document.getElementById("settings-light-port");
+    if (!auswahl) return;
+
+    const knopf = document.getElementById("btn-light-port-patch");
+    const zustand = document.getElementById("settings-light-port-state");
+
+    let daten = {};
+
+    try {
+        const response = await fetch("/api/lighting/dmx/ports");
+        daten = await response.json();
+    } catch (error) {
+        console.error(error);
+    }
+
+    lightPorts = daten.ports || [];
+
+    //
+    // Eine schon getroffene Wahl ueberlebt das Neuaufbauen - sonst
+    // springt die Auswahl unter der Hand zurueck.
+    //
+    const vorher = auswahl.value;
+
+    auswahl.innerHTML = "";
+
+    for (const port of lightPorts) {
+        const eintrag = document.createElement("option");
+        eintrag.value = port.id;
+        eintrag.textContent = port.label;
+        auswahl.appendChild(eintrag);
+    }
+
+    const zugeordnet = lightPorts.find(port => port.patched);
+
+    if (lightPorts.some(port => port.id === vorher)) auswahl.value = vorher;
+    else if (zugeordnet) auswahl.value = zugeordnet.id;
+
+    auswahl.disabled = lightPorts.length === 0;
+    if (knopf) knopf.disabled = lightPorts.length === 0;
+
+    if (!zustand) return;
+
+    if (lightPorts.length === 0) {
+        zustand.textContent = I18N.light_output_none;
+        zustand.className = "small text-danger-emphasis";
+    } else if (zugeordnet) {
+        zustand.textContent =
+            I18N.light_output_patched.replace("{name}", zugeordnet.label);
+        zustand.className = "small text-success-emphasis";
+    } else {
+        zustand.textContent = I18N.light_output_unpatched;
+        zustand.className = "small text-danger-emphasis";
+    }
+}
+
+async function assignLightPort() {
+    const auswahl = document.getElementById("settings-light-port");
+    if (!auswahl || !auswahl.value) return;
+
+    const erfolg = await lightRequest(
+        "/api/lighting/dmx/patch", { port: auswahl.value }
+    );
+
+    await loadLightPorts();
+
+    if (erfolg) await refreshLighting();
 }
 
 async function setLightBrightness(fixtureId, brightness) {
@@ -5419,6 +5505,13 @@ async function toggleLighting(event) {
 
     await lightRequest("/api/lighting/enabled", { enabled: schalter.checked });
     await refreshLighting();
+
+    //
+    // Wer die Lichtsteuerung gerade erst einschaltet, hat den
+    // Ausgang noch nicht zugeordnet - dann soll die Auswahl darunter
+    // sofort etwas anzeigen und nicht erst beim naechsten Oeffnen.
+    //
+    if (schalter.checked) await loadLightPorts();
 }
 
 (function verdrahteLicht() {
@@ -5528,9 +5621,14 @@ async function toggleLighting(event) {
         });
     }
 
+    knopf("btn-light-port-patch", assignLightPort);
+
     const einstellungen = document.getElementById("settingsModal");
     if (einstellungen) {
-        einstellungen.addEventListener("show.bs.modal", refreshLighting);
+        einstellungen.addEventListener("show.bs.modal", () => {
+            refreshLighting();
+            loadLightPorts();
+        });
     }
 
     refreshLighting();
@@ -5647,6 +5745,16 @@ function renderLightShowSettings(stand) {
         buildChannelOptions(kanal, stand.input_channels || 2, show.channel);
         setzen("light-show-channel", show.channel);
     }
+    setzen("light-show-effect-mode", show.effect_mode);
+    setzen("light-show-pulse-seconds", show.pulse_seconds);
+    setzen("light-show-pulse-base", show.pulse_base);
+
+    //
+    // Direkt hier und nicht am Ende der Funktion: Die kehrt weiter
+    // unten vorzeitig zurueck, wenn es die Szenenauswahl nicht gibt.
+    //
+    lightPulsAnzeigen();
+
     setzen("light-show-color-low", show.color_low);
     setzen("light-show-color-mid", show.color_mid);
     setzen("light-show-color-high", show.color_high);
@@ -5720,6 +5828,19 @@ function lightTraegheitBeschriften() {
             I18N.light_show_beats_unit.replace("{n}", takte.value);
     }
 
+    const nachleuchten = document.getElementById("light-show-pulse-seconds");
+    const nachtext = document.getElementById("light-show-pulse-seconds-value");
+
+    if (nachleuchten && nachtext) nachtext.textContent = nachleuchten.value + " s";
+
+    const boden = document.getElementById("light-show-pulse-base");
+    const bodentext = document.getElementById("light-show-pulse-base-value");
+
+    if (boden && bodentext) {
+        bodentext.textContent =
+            Math.round(parseFloat(boden.value) * 100) + " %";
+    }
+
     //
     // Warnen, wenn die Blende laenger dauert als die halbe Standzeit.
     //
@@ -5740,6 +5861,18 @@ function lightTraegheitBeschriften() {
     }
 }
 
+function lightPulsAnzeigen() {
+    const modus = document.getElementById("light-show-effect-mode");
+    const block = document.getElementById("light-show-pulse-options");
+
+    //
+    // Nachleuchten und Grundhelligkeit gehoeren zum Puls. Im
+    // Lauflicht stuenden dort zwei Regler, die nichts tun - und wer
+    // an ihnen dreht, sucht den Fehler danach bei den Lampen.
+    //
+    if (modus && block) block.classList.toggle("d-none", modus.value !== "pulse");
+}
+
 function lightSchwelleBeschriften() {
     const regler = document.getElementById("light-show-silence-threshold");
     const anzeige = document.getElementById("light-show-silence-threshold-value");
@@ -5754,6 +5887,7 @@ async function saveLightShowSettings() {
     };
 
     const auswahl = document.getElementById("light-show-fallback");
+    const modus = document.getElementById("light-show-effect-mode");
 
     const farbe = (kennung) => {
         const element = document.getElementById(kennung);
@@ -5772,6 +5906,9 @@ async function saveLightShowSettings() {
         color_mid_2: farbe("light-show-color-mid-2"),
         color_high_2: farbe("light-show-color-high-2"),
         sensitivity: zahl("light-show-sensitivity"),
+        effect_mode: modus ? modus.value : null,
+        pulse_seconds: zahl("light-show-pulse-seconds"),
+        pulse_base: zahl("light-show-pulse-base"),
         background_seconds: zahl("light-show-background-seconds"),
         background_beats: zahl("light-show-background-beats"),
         fade_seconds: zahl("light-show-fade-seconds"),
@@ -5805,11 +5942,13 @@ function lightShowPulsSetzen(laeuft) {
     if (knopf) knopf.addEventListener("click", toggleLightShow);
 
     for (const kennung of [
-        "light-show-channel", "light-show-sensitivity",
+        "light-show-channel", "light-show-effect-mode",
+        "light-show-sensitivity",
         "light-show-silence-threshold", "light-show-silence-seconds",
         "light-show-speech-seconds", "light-show-fallback",
         "light-show-background-seconds", "light-show-background-beats",
         "light-show-fade-seconds",
+        "light-show-pulse-seconds", "light-show-pulse-base",
         "light-show-color-low", "light-show-color-mid",
         "light-show-color-high",
         "light-show-color-low-1", "light-show-color-mid-1",
@@ -5826,8 +5965,17 @@ function lightShowPulsSetzen(laeuft) {
 
     for (const kennung of ["light-show-background-seconds",
                           "light-show-background-beats",
-                          "light-show-fade-seconds"]) {
+                          "light-show-fade-seconds",
+                          "light-show-pulse-seconds",
+                          "light-show-pulse-base"]) {
         const element = document.getElementById(kennung);
         if (element) element.addEventListener("input", lightTraegheitBeschriften);
     }
+
+    //
+    // Der Block mit den Puls-Reglern muss sofort erscheinen, nicht
+    // erst, wenn der gespeicherte Stand zurueckkommt.
+    //
+    const modus = document.getElementById("light-show-effect-mode");
+    if (modus) modus.addEventListener("change", lightPulsAnzeigen);
 })();

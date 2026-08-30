@@ -61,7 +61,24 @@ from web.i18n import get_translations  # noqa: E402
 TEXTE = get_translations("de")
 
 
-def seite_bauen(stand: dict, pruefung: str) -> str:
+#
+# Die Auswahl der DMX-Anschluesse, wie /api/lighting/dmx/ports sie
+# liefern wuerde.
+#
+ANSCHLUESSE = {
+    "patched": True,
+    "ports": [
+        {"id": "2-O-0", "device": "FT232R USB UART",
+         "description": "Serial: A5", "label": "FT232R USB UART (Ausgang 0)",
+         "patched": False},
+        {"id": "2-O-1", "device": "FT232R USB UART",
+         "description": "Serial: A5", "label": "FT232R USB UART (Ausgang 1)",
+         "patched": True},
+    ],
+}
+
+
+def seite_bauen(stand: dict, pruefung: str, ports: dict | None = None) -> str:
     """
     Baut die fertige Seite: echte Vorlage, echtes Bootstrap, echtes
     xrack.js - nur die Netzwerkaufrufe sind nachgestellt.
@@ -88,9 +105,20 @@ def seite_bauen(stand: dict, pruefung: str) -> str:
 
     vorspann = (
         "<script>window.I18N = " + json.dumps(TEXTE) + ";\n"
-        "window.fetch = async (url) => {\n"
+        #
+        # Mitgeschrieben wird jeder Aufruf: Nur so laesst sich
+        # pruefen, dass ein Knopf wirklich etwas losschickt - und
+        # nicht bloss huebsch aussieht.
+        #
+        "window.aufrufe = [];\n"
+        "window.fetch = async (url, optionen) => {\n"
+        "  window.aufrufe.push([String(url),\n"
+        "    optionen && optionen.body ? String(optionen.body) : '']);\n"
         "  if (String(url).indexOf('/api/lighting/status') === 0)\n"
         "    return { json: async () => (" + json.dumps(stand) + ") };\n"
+        "  if (String(url).indexOf('/api/lighting/dmx/ports') === 0)\n"
+        "    return { json: async () => ("
+        + json.dumps(ports if ports is not None else ANSCHLUESSE) + ") };\n"
         "  return { json: async () => ({ success: true, message: '' }) };\n"
         "};\n"
         "window.alert = () => {};\n"
@@ -110,7 +138,8 @@ def seite_bauen(stand: dict, pruefung: str) -> str:
     )
 
 
-def ausfuehren(stand: dict, pruefung: str, vorher: str = "") -> dict:
+def ausfuehren(stand: dict, pruefung: str, vorher: str = "",
+               ports: dict | None = None) -> dict:
     """
     Laedt die Seite im Browser und liefert, was das Pruefskript in
     #pruefergebnis geschrieben hat.
@@ -141,7 +170,7 @@ def ausfuehren(stand: dict, pruefung: str, vorher: str = "") -> dict:
     with tempfile.TemporaryDirectory() as tmp:
 
         datei = Path(tmp) / "seite.html"
-        datei.write_text(seite_bauen(stand, rahmen), encoding="utf-8")
+        datei.write_text(seite_bauen(stand, rahmen, ports), encoding="utf-8")
 
         lauf = subprocess.run(
             [
@@ -178,7 +207,7 @@ def ausfuehren(stand: dict, pruefung: str, vorher: str = "") -> dict:
 # --------------------------------------------------------------------
 
 def stand(enabled=True, service=True, adapter=True, overlaps=None,
-          show_running=False, show_state="music") -> dict:
+          show_running=False, show_state="music", patched=True) -> dict:
 
     return {
         "enabled": enabled,
@@ -206,7 +235,8 @@ def stand(enabled=True, service=True, adapter=True, overlaps=None,
         "overlaps": overlaps or [],
         "values": {"bar": [255, 0, 0] * 8},
         "brightness": {"bar": 64},
-        "dmx": {"service_running": service, "adapter_present": adapter},
+        "dmx": {"service_running": service, "adapter_present": adapter,
+                "patched": patched},
 
         #
         # Wie viele Kanaele das Interface hat - daraus baut die
@@ -220,6 +250,9 @@ def stand(enabled=True, service=True, adapter=True, overlaps=None,
         "show_levels": {"low": 0.8, "mid": 0.4, "high": 0.1, "level": 0.5},
         "show": {
             "channel": 3,
+            "effect_mode": "pulse",
+            "pulse_seconds": 0.5,
+            "pulse_base": 0.2,
             "sensitivity": 1.5,
             "fallback_scene": "s1",
             "silence_threshold": 0.03,
@@ -1054,6 +1087,286 @@ assert TEXTE["light_show_level_hint"] in ergebnis["text"], (
 )
 
 print("OK: Unter den Pegelbalken steht, dass die Skala dBFS ist")
+
+
+# ====================================================================
+# 19. Der DMX-Ausgang laesst sich aus den Einstellungen zuordnen
+#
+# Ohne Zuordnung sieht von aussen alles heil aus: Dienst laeuft,
+# Kabel steckt, XRack meldet gesendete Bilder - und es bleibt dunkel.
+# Das muss in der Karte stehen, und der Schritt muss ohne Terminal
+# nachzuholen sein.
+# ====================================================================
+
+ergebnis = ausfuehren(stand(patched=False), """function () {
+    const box = document.getElementById('light-warning');
+    return { sichtbar: !box.classList.contains('d-none'), text: box.textContent };
+}""")
+
+assert ergebnis["sichtbar"], "Ein fehlender DMX-Ausgang muss in der Karte stehen."
+assert "DMX-Ausgang" in ergebnis["text"], ergebnis["text"]
+
+print("OK: Ist kein DMX-Ausgang zugeordnet, steht das in der Lichtkarte")
+
+
+#
+# Und jetzt der Weg dorthin: Einstellungen oeffnen, Auswahl fuellen.
+#
+ergebnis = ausfuehren(
+    stand(patched=False),
+    """function () {
+        const auswahl = document.getElementById('settings-light-port');
+        const zustand = document.getElementById('settings-light-port-state');
+
+        return {
+            anzahl: auswahl.options.length,
+            gewaehlt: auswahl.value,
+            erster: auswahl.options[0] ? auswahl.options[0].textContent : '',
+            zustand: zustand.textContent,
+            knopf_aus: document.getElementById('btn-light-port-patch').disabled
+        };
+    }""",
+    vorher=(
+        "bootstrap.Modal.getOrCreateInstance("
+        "document.getElementById('settingsModal')).show();"
+    ),
+)
+
+assert ergebnis["anzahl"] == 2, ergebnis
+assert ergebnis["erster"] == "FT232R USB UART (Ausgang 0)", ergebnis
+
+#
+# Vorgewaehlt gehoert der Anschluss, auf den XRack schon sendet -
+# sonst zeigt die Auswahl auf etwas anderes als die Wirklichkeit,
+# und ein unbedachter Klick auf "Zuordnen" legt das Kabel um.
+#
+assert ergebnis["gewaehlt"] == "2-O-1", ergebnis
+assert "Ausgang 1" in ergebnis["zustand"], ergebnis
+assert ergebnis["knopf_aus"] is False, ergebnis
+
+print("OK: Die Einstellungen zeigen die Anschlüsse und den zugeordneten")
+
+
+#
+# Der Knopf muss auch wirklich etwas losschicken.
+#
+ergebnis = ausfuehren(
+    stand(patched=False),
+    """function () {
+        const patch = window.aufrufe.filter(
+            a => a[0].indexOf('/api/lighting/dmx/patch') === 0
+        );
+
+        return { anzahl: patch.length, koerper: patch.length ? patch[0][1] : '' };
+    }""",
+    vorher=(
+        "bootstrap.Modal.getOrCreateInstance("
+        "document.getElementById('settingsModal')).show();"
+        "setTimeout(() => "
+        "document.getElementById('btn-light-port-patch').click(), 400);"
+    ),
+)
+
+assert ergebnis["anzahl"] >= 1, "Der Knopf hat nichts losgeschickt."
+assert '"port"' in ergebnis["koerper"], ergebnis
+assert "2-O-1" in ergebnis["koerper"], ergebnis
+
+print("OK: \"Zuordnen\" schickt den gewählten Anschluss zum Server")
+
+
+#
+# Bietet olad gar nichts an, darf der Knopf nicht klickbar sein -
+# sonst schickt man ins Leere und bekommt eine Fehlermeldung, die
+# nichts erklaert.
+#
+ergebnis = ausfuehren(
+    stand(patched=False),
+    """function () {
+        return {
+            anzahl: document.getElementById('settings-light-port').options.length,
+            knopf_aus: document.getElementById('btn-light-port-patch').disabled,
+            zustand: document.getElementById('settings-light-port-state').textContent
+        };
+    }""",
+    vorher=(
+        "bootstrap.Modal.getOrCreateInstance("
+        "document.getElementById('settingsModal')).show();"
+    ),
+    ports={"patched": False, "ports": []},
+)
+
+assert ergebnis["anzahl"] == 0, ergebnis
+assert ergebnis["knopf_aus"] is True, ergebnis
+assert ergebnis["zustand"] == TEXTE["light_output_none"], ergebnis
+
+print("OK: Ohne angebotene Anschlüsse bleibt der Knopf gesperrt")
+
+
+# ====================================================================
+# 20. Das Bild der Show laesst sich umschalten
+#
+# Der zweite Modus nuetzt nichts, wenn man nicht an ihn herankommt -
+# und die Auswahl nuetzt nichts, wenn sie beim Umstellen nichts
+# losschickt.
+# ====================================================================
+
+ergebnis = ausfuehren(stand(), """function () {
+    const feld = document.getElementById('light-show-effect-mode');
+
+    return {
+        art: feld.tagName,
+        werte: Array.from(feld.options).map((o) => o.value),
+        texte: Array.from(feld.options).map((o) => o.textContent.trim()),
+        gewaehlt: feld.value
+    };
+}""")
+
+assert ergebnis["art"] == "SELECT", ergebnis
+assert ergebnis["werte"] == ["runner", "pulse"], ergebnis
+
+assert ergebnis["texte"] == [
+    TEXTE["light_show_effect_mode_runner"],
+    TEXTE["light_show_effect_mode_pulse"],
+], ergebnis
+
+#
+# Der gespeicherte Modus muss auch dastehen. Zeigte die Auswahl
+# stumm den ersten Eintrag, glaubte man, es sei Lauflicht
+# eingestellt - waehrend die Show pulst.
+#
+assert ergebnis["gewaehlt"] == "pulse", ergebnis
+
+print("OK: Das Bild der Show steht als Auswahl im Dialog")
+
+
+ergebnis = ausfuehren(stand(), """function () {
+    const gesendet = window.aufrufe.filter(
+        a => a[0].indexOf('/api/lighting/show/settings') === 0
+    );
+
+    return {
+        anzahl: gesendet.length,
+        koerper: gesendet.length ? gesendet[gesendet.length - 1][1] : ''
+    };
+}""", vorher="""
+    const feld = document.getElementById('light-show-effect-mode');
+    feld.value = 'runner';
+    feld.dispatchEvent(new Event('change'));
+""")
+
+assert ergebnis["anzahl"] >= 1, "Das Umstellen hat nichts losgeschickt."
+assert '"effect_mode":"runner"' in ergebnis["koerper"].replace(" ", ""), (
+    ergebnis["koerper"]
+)
+
+print("OK: Ein umgestelltes Bild wird sofort gespeichert")
+
+
+# ====================================================================
+# 21. Die zwei Schrauben am Puls
+#
+# Sie stehen nur da, wenn der Puls auch gewaehlt ist - im Lauflicht
+# waeren es zwei Regler ohne Wirkung, und wer an ihnen dreht, sucht
+# den Fehler danach bei den Lampen.
+# ====================================================================
+
+pulsstand = stand()
+lauflichtstand = stand()
+lauflichtstand["show"] = {**lauflichtstand["show"], "effect_mode": "runner"}
+
+pruefung = """function () {
+    const block = document.getElementById('light-show-pulse-options');
+
+    return {
+        sichtbar: !block.classList.contains('d-none'),
+        nachleuchten: document.getElementById('light-show-pulse-seconds').value,
+        boden: document.getElementById('light-show-pulse-base').value,
+        nachtext: document.getElementById(
+            'light-show-pulse-seconds-value').textContent,
+        bodentext: document.getElementById(
+            'light-show-pulse-base-value').textContent
+    };
+}"""
+
+ergebnis = ausfuehren(pulsstand, pruefung)
+
+assert ergebnis["sichtbar"], "Beim Puls müssen die beiden Regler dastehen."
+
+#
+# Und sie muessen den gespeicherten Stand zeigen. Stuenden sie stumm
+# auf ihrem Anfangswert, glaubte man, es sei etwas anderes
+# eingestellt, als die Show faehrt.
+#
+assert float(ergebnis["nachleuchten"]) == 0.5, ergebnis
+assert float(ergebnis["boden"]) == 0.2, ergebnis
+
+assert ergebnis["nachtext"] == "0.5 s", ergebnis
+assert ergebnis["bodentext"] == "20 %", ergebnis
+
+print("OK: Beim Puls stehen Nachleuchten und Grundhelligkeit im Dialog")
+
+
+ergebnis = ausfuehren(lauflichtstand, pruefung)
+
+assert not ergebnis["sichtbar"], (
+    "Im Lauflicht dürfen die Puls-Regler nicht dastehen."
+)
+
+print("OK: Im Lauflicht sind sie weg")
+
+
+#
+# Umgestellt wird der Block sofort sichtbar - nicht erst, wenn der
+# gespeicherte Stand vom Server zurueckkommt.
+#
+# Gemessen wird UNMITTELBAR nach dem Umstellen und in einem Merker
+# abgelegt. Spaeter nachzusehen ginge daneben: Das Umstellen stoesst
+# ein Speichern an, darauf folgt ein Statusabruf, und der bringt hier
+# den nachgestellten - also unveraenderten - Stand zurueck.
+#
+ergebnis = ausfuehren(lauflichtstand, """function () {
+    return { sichtbar: window.__sofort };
+}""", vorher="""
+    const feld = document.getElementById('light-show-effect-mode');
+    feld.value = 'pulse';
+    feld.dispatchEvent(new Event('change'));
+
+    window.__sofort = !document.getElementById(
+        'light-show-pulse-options').classList.contains('d-none');
+""")
+
+assert ergebnis["sichtbar"], (
+    "Nach dem Umstellen auf Puls müssen die Regler sofort erscheinen."
+)
+
+print("OK: Beim Umstellen erscheinen sie sofort")
+
+
+#
+# Und ein verschobener Regler muss ankommen.
+#
+ergebnis = ausfuehren(pulsstand, """function () {
+    const gesendet = window.aufrufe.filter(
+        a => a[0].indexOf('/api/lighting/show/settings') === 0
+    );
+
+    return {
+        anzahl: gesendet.length,
+        koerper: gesendet.length ? gesendet[gesendet.length - 1][1] : ''
+    };
+}""", vorher="""
+    const boden = document.getElementById('light-show-pulse-base');
+    boden.value = '0.6';
+    boden.dispatchEvent(new Event('change'));
+""")
+
+assert ergebnis["anzahl"] >= 1, "Der Regler hat nichts losgeschickt."
+
+assert '"pulse_base":0.6' in ergebnis["koerper"].replace(" ", ""), (
+    ergebnis["koerper"]
+)
+
+print("OK: Ein verschobener Regler wird sofort gespeichert")
 
 
 print("Alle Lichtkarten-Tests erfolgreich.")

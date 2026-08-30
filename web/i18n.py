@@ -428,6 +428,20 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Steuert DMX-Lampen über ein USB-DMX-Kabel. Ohne Kabel "
             "nicht nötig."
         ),
+        "light_output_title": "DMX-Ausgang",
+        "light_output_hint": (
+            "Einmalig nach der Installation: Hier steht, an welchen "
+            "Anschluss XRack sendet. XRack nutzt genau einen - wird "
+            "ein anderer gewählt, ersetzt er den bisherigen."
+        ),
+        "light_output_assign": "Zuordnen",
+        "light_output_none": (
+            "Kein Ausgang gefunden. Läuft der Lichtdienst, und steckt "
+            "das DMX-Kabel?"
+        ),
+        "light_output_patched": "Zugeordnet: {name}",
+        "light_output_unpatched": "Noch kein Ausgang zugeordnet.",
+        "light_output_done": "Zugeordnet.",
         "light_setup": "Einrichten",
         "light_blackout": "Alles aus",
         "light_no_fixtures": (
@@ -437,6 +451,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Der Lichtdienst antwortet nicht. Läuft olad?"
         ),
         "light_adapter_missing": "Kein DMX-Kabel erkannt.",
+        "light_unpatched": (
+            "Es ist noch kein DMX-Ausgang zugeordnet - die Lampen "
+            "bleiben dunkel. In den Einstellungen unter \"Licht\"."
+        ),
         "light_overlap_warning": (
             "Achtung: Zwei Lampen belegen dieselben Kanäle. Das ist "
             "erlaubt, aber selten gewollt."
@@ -523,6 +541,21 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "light_show_sensitivity": "Empfindlichkeit",
         "light_show_background_seconds": "Hintergrund: Trägheit",
+        "light_show_effect_mode": "Effektlicht: Bild",
+        "light_show_effect_mode_runner": "Wandernder Punkt",
+        "light_show_effect_mode_pulse": "Puls im Takt",
+        "light_show_effect_mode_hint": (
+            "Wandernder Punkt: ein Segment nach dem anderen leuchtet "
+            "auf. Puls: alle Segmente atmen gemeinsam im Takt. Das "
+            "Hintergrundlicht bleibt in beiden Fällen ein Wash."
+        ),
+        "light_show_pulse_seconds": "Puls: Nachleuchten",
+        "light_show_pulse_base": "Puls: Grundhelligkeit",
+        "light_show_pulse_hint": (
+            "Wie lange ein Schlag nachleuchtet und wie hell es "
+            "zwischen zwei Schlägen bleibt. 0 % heißt: dazwischen "
+            "ganz aus."
+        ),
         "light_show_background_beats": "Hintergrund: Farbwechsel",
         "light_show_fade_seconds": "Ausblenden in die Szene",
         "light_show_beats_unit": "{n} Schläge",
@@ -976,6 +1009,20 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Controls DMX fixtures through a USB-to-DMX cable. Not "
             "needed without one."
         ),
+        "light_output_title": "DMX output",
+        "light_output_hint": (
+            "Once after installation: this is the port XRack sends "
+            "to. XRack uses exactly one - picking another replaces "
+            "the current one."
+        ),
+        "light_output_assign": "Assign",
+        "light_output_none": (
+            "No output found. Is the lighting service running and the "
+            "DMX cable plugged in?"
+        ),
+        "light_output_patched": "Assigned: {name}",
+        "light_output_unpatched": "No output assigned yet.",
+        "light_output_done": "Assigned.",
         "light_setup": "Set up",
         "light_blackout": "All off",
         "light_no_fixtures": (
@@ -985,6 +1032,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "The lighting service is not responding. Is olad running?"
         ),
         "light_adapter_missing": "No DMX cable detected.",
+        "light_unpatched": (
+            "No DMX output assigned yet - the fixtures stay dark. "
+            "Under \"Lighting\" in the settings."
+        ),
         "light_overlap_warning": (
             "Careful: two fixtures use the same channels. That is "
             "allowed, but rarely intended."
@@ -1069,6 +1120,20 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "light_show_sensitivity": "Sensitivity",
         "light_show_background_seconds": "Background: inertia",
+        "light_show_effect_mode": "Effect light: look",
+        "light_show_effect_mode_runner": "Moving point",
+        "light_show_effect_mode_pulse": "Pulse on the beat",
+        "light_show_effect_mode_hint": (
+            "Moving point: one segment after another lights up. "
+            "Pulse: all segments breathe together on the beat. The "
+            "background light stays a wash either way."
+        ),
+        "light_show_pulse_seconds": "Pulse: afterglow",
+        "light_show_pulse_base": "Pulse: base brightness",
+        "light_show_pulse_hint": (
+            "How long a beat glows on, and how bright it stays "
+            "between two beats. 0 % means: fully dark in between."
+        ),
         "light_show_background_beats": "Background: colour change",
         "light_show_fade_seconds": "Fade into the scene",
         "light_show_beats_unit": "every {n} beats",

@@ -182,6 +182,33 @@ diesem Zeitpunkt gab. Bis zum nächsten Neustart lief alles, weil der alte
 Daemon noch lief — nach dem Hochfahren stand der Dienst auf `disabled`, und
 das Licht blieb aus.
 
+### Die Zuordnung zum Universum
+
+Ein eingerichtetes Plugin sendet noch nichts. Der Anschluss des
+Kabels muss erst einem Universum zugeordnet werden — auf der
+Kommandozeile `ola_patch -d <Gerät> -p <Port> -u 1`, nachdem
+`ola_dev_info` die beiden Nummern verraten hat.
+
+Das ist der Schritt, den man vergisst, weil von außen alles heil
+aussieht: Der Dienst läuft, das Kabel steckt, XRack meldet
+erfolgreich gesendete Bilder — und es bleibt dunkel. Deshalb steht
+die Zuordnung mit im Zustandsbericht, und die Lichtkarte benennt den
+Fall.
+
+Erledigen lässt er sich in den Einstellungen unter *Licht*. XRack
+spricht dafür dieselbe Web-Schnittstelle von olad an, über die auch
+die Kanalwerte gehen (`/json/get_ports`, `/new_universe`,
+`/modify_universe`) — kein Aufruf von `ola_patch`, kein sudo, kein
+Wrapper-Skript. Nach dem Auftrag wird nachgesehen, ob der Anschluss
+wirklich im Universum steht: olad antwortet auch dann mit „ok", wenn
+die Zuordnung im Hintergrund scheitert, etwa weil ein anderes Plugin
+das Kabel hält.
+
+XRack sendet in genau ein Universum, also gibt es genau einen
+Ausgang: Eine neue Zuordnung ersetzt die vorherige. Sonst bliebe ein
+einmal falsch gewählter Anschluss für immer drin, und man bräuchte
+doch wieder ein Terminal, um ihn loszuwerden.
+
 ### Kabel
 
 Angesteuert werden USB-DMX-Kabel mit FTDI-Chip (FT232R und Verwandte) —
@@ -193,6 +220,44 @@ sondern die galvanische Trennung zur DMX-Seite. Ohne Optokoppler hängt der
 Pi elektrisch an den Lampen. Bei Störungen, die sich nicht durch Software
 erklären lassen, ist das der erste Verdacht — noch vor der Kabellänge, die
 bei DMX (RS-485, bis 1000 m) selten das Problem ist.
+
+---
+
+## Die Lichtshow
+
+### Warum der Puls eine Hüllkurve ist und kein An/Aus
+
+Im zweiten Show-Modus atmen alle Segmente gemeinsam im Takt. Der
+naheliegende Weg wäre, sie auf den Schlag anzuschalten und danach
+wieder aus — das sieht aber aus wie ein Stroboskop mit Taktgefühl,
+nicht wie Musik.
+
+Stattdessen läuft eine Hüllkurve: hart auf 1 beim Schlag, dann
+derselbe Ein-Pol-Abfall, mit dem auch die Bänder in `analysis.py`
+zurückgehen (0,25 s). Hart hoch ist Absicht — ein Puls, der erst
+anschwillt, kommt hinter dem Schlag her, und dann sieht das Licht aus,
+als hinke es der Musik hinterher.
+
+Unten bleibt ein Boden stehen, vorgegeben mit demselben Wert wie beim
+wandernden Punkt (`GRUNDHELLIGKEIT`). Dort heißt er „wie hell ist ein
+Segment, das gerade nicht dran ist", hier „wie hell zwischen zwei
+Schlägen" — es ist dieselbe Frage. Der Boden multipliziert dabei den
+Bandpegel und addiert nichts dazu: Bei Stille bleibt es deshalb
+dunkel, statt ein Grundleuchten stehen zu lassen, das man nicht mehr
+los wird.
+
+Beide Zahlen sind Vorgaben, keine Festlegungen: Nachleuchten und
+Grundhelligkeit stehen als Regler in den Einstellungen, sobald der
+Puls gewählt ist. Ob 0,25 s und 35 % passen, entscheidet sich an den
+Lampen und am Musikgeschmack — auf einer Bar zu hartem Techno will man
+etwas anderes als bei ruhiger Musik. Der Boden darf dabei bis auf 0
+(zwischen den Schlägen ganz aus), aber nicht bis 1: Dort gäbe es
+überhaupt keinen Puls mehr, und ein Regler, der genau den Effekt
+abschaltet, den er einstellen soll, hört vorher auf.
+
+Das Hintergrundlicht bekommt vom Puls nichts mit. Es hat sein eigenes
+Bild — eine Farbe, über mehrere Schläge weich übergeblendet —, und ein
+Wash, der im Takt zuckt, ist kein Wash mehr.
 
 ---
 

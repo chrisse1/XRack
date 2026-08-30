@@ -1017,6 +1017,41 @@
 
                         <div id="settings-light-state" class="small text-body-secondary"></div>
 
+                        {#
+                            Der DMX-Ausgang.
+
+                            Nach der Installation kennt der Lichtdienst
+                            das Kabel, schickt aber noch nichts hinaus:
+                            Der Anschluss muss erst dem Universum
+                            zugeordnet werden. Frueher ein Gang ins
+                            Terminal (ola_dev_info, ola_patch) - und
+                            genau der Schritt, den man vergisst, weil
+                            von aussen alles heil aussieht.
+                        #}
+                        <div class="mt-3">
+                            <label class="form-label fw-semibold" for="settings-light-port">
+                                {{ t.light_output_title }}
+                            </label>
+
+                            <div class="input-group input-group-sm mb-1">
+                                <select id="settings-light-port" class="form-select"></select>
+
+                                <button
+                                    type="button"
+                                    id="btn-light-port-patch"
+                                    class="btn btn-outline-primary"
+                                >
+                                    {{ t.light_output_assign }}
+                                </button>
+                            </div>
+
+                            <div id="settings-light-port-state" class="small"></div>
+
+                            <small class="text-body-secondary">
+                                {{ t.light_output_hint }}
+                            </small>
+                        </div>
+
                             </div>
                         </div>
                     </div>
@@ -1422,6 +1457,82 @@
                 <h6 class="fw-semibold">{{ t.light_show_settings }}</h6>
 
                 <div class="row g-2 mb-2">
+
+                    {#
+                        Das Bild, das die Show fuer Effektlicht faehrt.
+                        Steht bewusst obenan: Es bestimmt den Charakter
+                        der ganzen Show, waehrend alles Weitere daran
+                        nur schraubt.
+                    #}
+                    <div class="col-12">
+                        <label class="form-label small mb-1" for="light-show-effect-mode">
+                            {{ t.light_show_effect_mode }}
+                        </label>
+                        <select
+                            id="light-show-effect-mode"
+                            class="form-select form-select-sm"
+                        >
+                            <option value="runner">
+                                {{ t.light_show_effect_mode_runner }}
+                            </option>
+                            <option value="pulse">
+                                {{ t.light_show_effect_mode_pulse }}
+                            </option>
+                        </select>
+                        <div class="form-text">{{ t.light_show_effect_mode_hint }}</div>
+                    </div>
+
+                    {#
+                        Die zwei Schrauben am Puls. Sichtbar nur, wenn
+                        er auch gewaehlt ist - im Lauflicht stuenden
+                        hier zwei Regler ohne jede Wirkung. Ein- und
+                        ausgeblendet wird in xrack.js.
+                    #}
+                    <div id="light-show-pulse-options" class="col-12 d-none">
+                        <div class="row g-2">
+
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small mb-1"
+                                       for="light-show-pulse-seconds">
+                                    {{ t.light_show_pulse_seconds }}
+                                    <span id="light-show-pulse-seconds-value"
+                                          class="text-body-secondary"></span>
+                                </label>
+                                <input
+                                    id="light-show-pulse-seconds"
+                                    type="range"
+                                    class="form-range"
+                                    min="0.05"
+                                    max="2"
+                                    step="0.05"
+                                    value="0.25"
+                                >
+                            </div>
+
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small mb-1"
+                                       for="light-show-pulse-base">
+                                    {{ t.light_show_pulse_base }}
+                                    <span id="light-show-pulse-base-value"
+                                          class="text-body-secondary"></span>
+                                </label>
+                                <input
+                                    id="light-show-pulse-base"
+                                    type="range"
+                                    class="form-range"
+                                    min="0"
+                                    max="0.9"
+                                    step="0.05"
+                                    value="0.35"
+                                >
+                            </div>
+
+                            <div class="col-12">
+                                <div class="form-text">{{ t.light_show_pulse_hint }}</div>
+                            </div>
+
+                        </div>
+                    </div>
 
                     <div class="col-12 col-sm-6">
                         <label class="form-label small mb-1" for="light-show-channel">

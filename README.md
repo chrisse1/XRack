@@ -128,7 +128,7 @@ without DMX you never see it.
 
   | Kind | What it does |
   | --- | --- |
-  | Effect light | every segment gets its own frequency band, a bright spot moves on each bass hit, derbys spin, lasers follow the music |
+  | Effect light | every segment gets its own frequency band, derbys spin, lasers follow the music — on top of that one of two looks (below) |
   | Background light 1 and 2 | one colour at a time, changing every few beats and fading across; each group has its own colours and they run offset from each other |
   | Left out of the show | keeps whatever you set by hand or from a scene |
 
@@ -136,18 +136,25 @@ without DMX you never see it.
   music stops, XRack fades into a scene you choose (or to black); when it
   starts again the show comes straight back in.
 
+  The effect light comes in two looks, switched in one place for the
+  whole show:
+
+  | Look | What it does |
+  | --- | --- |
+  | Moving point | one segment lights up fully and moves on with every bass hit, the others stay at a base level |
+  | Pulse on the beat | all segments breathe together: on every beat they go to full and fall back until the next one. Each keeps its own colour, so you still see which band is doing what — and it works on a single RGB par, which the moving point cannot. How long a beat glows on and how bright it stays in between are both sliders |
+
+  The background light is a wash in both cases.
+
   Strobe, shutter, gobo and the white channel are never driven
   automatically — they stay yours, and what you set by hand stays put
   while the show runs.
 
-After installing, the DMX output has to be assigned to universe 1 once:
-
-```bash
-ola_dev_info                              # find device and port
-ola_patch -d <device> -p <port> -u 1
-```
-
-OLA remembers that across restarts.
+After installing, the DMX output has to be assigned once — under
+*Settings → Lighting*, pick the port your cable is on and press
+*Assign*. Until then the fixtures stay dark even though service and
+cable are fine; XRack says so in the lighting card. The assignment
+survives restarts.
 
 #### Looking after it
 
@@ -321,7 +328,7 @@ Licht* — wer kein DMX hat, sieht es gar nicht erst.
 
   | Art | Was sie tut |
   | --- | --- |
-  | Effektlicht | jedes Segment bekommt sein eigenes Frequenzband, auf jedem Bassschlag wandert ein heller Punkt weiter, Derbys drehen sich, Laser gehen mit der Musik an |
+  | Effektlicht | jedes Segment bekommt sein eigenes Frequenzband, Derbys drehen sich, Laser gehen mit der Musik an — dazu eines von zwei Bildern (siehe unten) |
   | Hintergrundlicht 1 und 2 | eine Farbe nach der anderen, alle paar Schläge gewechselt und weich übergeblendet; jede Gruppe hat eigene Farben, und die beiden laufen gegeneinander versetzt |
   | Von der Show ausgenommen | behält, was von Hand oder über eine Szene eingestellt ist |
 
@@ -329,19 +336,25 @@ Licht* — wer kein DMX hat, sieht es gar nicht erst.
   Musik auf, blendet XRack in eine gewählte Szene (oder ins Dunkle);
   fängt sie wieder an, setzt die Show sofort ein.
 
+  Das Effektlicht kann zwei Bilder fahren, umgeschaltet an einer Stelle
+  für die ganze Show:
+
+  | Bild | Was es tut |
+  | --- | --- |
+  | Wandernder Punkt | ein Segment leuchtet voll und rückt bei jedem Bassschlag weiter, die übrigen bleiben auf Grundhelligkeit |
+  | Puls im Takt | alle Segmente atmen gemeinsam: bei jedem Schlag gehen sie auf voll und fallen bis zum nächsten zurück. Jedes behält seine Farbe, man sieht also weiter, welches Band was macht — und es wirkt auch auf einem einzelnen RGB-Strahler, den der wandernde Punkt nicht erreicht. Nachleuchten und Grundhelligkeit lassen sich einstellen |
+
+  Das Hintergrundlicht bleibt in beiden Fällen ein Wash.
+
   Strobe, Shutter, Gobo und der Weiß-Kanal werden nie von selbst
   angesteuert — die gehören dir, und was du von Hand einstellst, bleibt
   auch während der Show stehen.
 
-Nach der Installation muss der DMX-Ausgang einmal dem Universum 1
-zugeordnet werden:
-
-```bash
-ola_dev_info                              # Gerät und Port herausfinden
-ola_patch -d <Gerät> -p <Port> -u 1
-```
-
-OLA merkt sich das über Neustarts hinweg.
+Nach der Installation muss der DMX-Ausgang einmal zugeordnet werden:
+in den *Einstellungen* unter *Licht* den Anschluss auswählen, an dem
+das Kabel hängt, und auf *Zuordnen* drücken. Bis dahin bleiben die
+Lampen dunkel, obwohl Dienst und Kabel in Ordnung sind — die
+Lichtkarte sagt das auch. Die Zuordnung übersteht Neustarts.
 
 #### Pflege
 

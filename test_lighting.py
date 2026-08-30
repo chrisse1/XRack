@@ -2518,4 +2518,542 @@ with tempfile.TemporaryDirectory() as tmp:
     print("OK: Die Kanalzahl des Interfaces steht im Bericht")
 
 
+# ====================================================================
+# 20. Der zweite Show-Modus: Puls statt wandernder Punkt
+#
+# Bisher hatte die Show genau ein Bild fuer Effektlicht - ein heller
+# Punkt, der im Takt ueber die Segmente wandert. Im Puls-Modus atmen
+# stattdessen alle Segmente gemeinsam: Bei jedem Schlag gehen sie auf
+# voll und fallen bis zum naechsten zurueck.
+# ====================================================================
+
+# --- Die Huellkurve -------------------------------------------------
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+
+    motor = LichtApp(licht, DmxAttrappe()).light_engine
+
+    motor.puls = 0.0
+    motor._puls_weiterschalten(0.02, True)
+
+    assert motor.puls == 1.0, (
+        f"Ein Schlag muss den Puls sofort auf voll setzen: {motor.puls}"
+    )
+
+    #
+    # Hart hoch, weich runter - wie bei den Huellkurven in
+    # analysis.py. Ein Puls, der erst anschwillt, kaeme hinter dem
+    # Schlag her, und das Licht saehe aus, als hinke es der Musik
+    # hinterher.
+    #
+    vorher = motor.puls
+
+    motor._puls_weiterschalten(0.02, False)
+
+    assert motor.puls < vorher, "Ohne Schlag muss der Puls abfallen."
+
+    #
+    # Nach drei Zeitkonstanten ist praktisch nichts mehr da.
+    #
+    for _ in range(int(3 * motor.PULS_ABFALL_S / 0.02)):
+        motor._puls_weiterschalten(0.02, False)
+
+    assert 0.0 <= motor.puls < 0.1, (
+        f"Nach drei Zeitkonstanten muss der Puls unten sein: {motor.puls}"
+    )
+
+    #
+    # Und er darf nie unter Null rutschen - negative Helligkeit gaebe
+    # es zwar nicht auf dem Kabel (begrenzen() faengt das), aber der
+    # Fehler saesse dann hier und waere von aussen nicht zu sehen.
+    #
+    for _ in range(500):
+        motor._puls_weiterschalten(0.02, False)
+
+    assert motor.puls >= 0.0, motor.puls
+
+    print("OK: Der Puls springt auf den Schlag und fällt weich zurück")
+
+
+# --- Der Motor fuehrt den Puls auch wirklich ------------------------
+#
+# Die Huellkurve oben ist fuer sich geprueft. Sie nuetzt aber nichts,
+# wenn sie im Betrieb niemand weiterdreht: Der Puls stuende dann
+# stumm auf 0, und im Puls-Modus leuchteten alle Lampen dauerhaft mit
+# Grundhelligkeit vor sich hin.
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    from lighting.analysis import Stimmungserkennung
+
+    class AnalyseAttrappe:
+        """
+        Liefert einen festen Analysestand.
+
+        Der echten Bandanalyse einen Schlag unterzuschieben hiesse,
+        ein Signal zu bauen, das sie als Schlag erkennt - das ist in
+        test_light_analysis.py geprueft. Hier geht es allein darum,
+        ob _schritt() den Puls weiterdreht.
+        """
+
+        rate = 48000
+        channels = 2
+
+        def __init__(self, schlag: bool):
+            self.schlag = schlag
+
+        def verarbeite(self, block):
+            return {"low": 1.0, "mid": 0.2, "high": 0.1,
+                    "level": 0.5, "beat": self.schlag}
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+    licht.lampe_speichern({
+        "id": "par", "name": "Par", "template": "rgb", "address": 1,
+    })
+
+    motor = LichtApp(licht, DmxAttrappe()).light_engine
+
+    motor.erkennung = Stimmungserkennung(
+        stille_schwelle=0.002, stille_sekunden=6.0, sprache_sekunden=0.0
+    )
+
+    motor.einstellungen = {"sensitivity": 1.0, "effect_mode": "pulse"}
+
+    # 20 ms bei 48 kHz, zwei Kanaelen, 32 Bit.
+    block = bytes(int(0.02 * 2 * 4 * 48000))
+
+    motor.puls = 0.0
+    motor.analyse = AnalyseAttrappe(True)
+    motor._schritt(block)
+
+    assert motor.puls == 1.0, (
+        f"Ein Schlag im Betrieb muss den Puls setzen: {motor.puls}"
+    )
+
+    motor.analyse = AnalyseAttrappe(False)
+
+    for _ in range(10):
+        motor._schritt(block)
+
+    assert motor.puls < 0.5, (
+        f"Ohne Schlag muss der Puls im Betrieb abfallen: {motor.puls}"
+    )
+
+    print("OK: Der Show-Thread führt den Puls bei jedem Block weiter")
+
+
+# --- Kein wandernder Punkt mehr -------------------------------------
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+    licht.lampe_speichern({
+        "id": "bar", "name": "LED-Bar", "template": "bar-8-rgb", "address": 1,
+    })
+
+    app = LichtApp(licht, DmxAttrappe())
+    motor = app.light_engine
+
+    #
+    # Alle drei Baender gleich laut: Dann haengt der Unterschied
+    # zwischen den Segmenten nur noch am Modus, nicht am Signal.
+    #
+    motor.stand = {"low": 1.0, "mid": 1.0, "high": 1.0, "level": 1.0, "beat": False}
+
+    lauflicht = {
+        "sensitivity": 1.0,
+        "color_low": "#ff0000",
+        "color_mid": "#00ff00",
+        "color_high": "#0000ff",
+    }
+
+    motor.einstellungen = dict(lauflicht)
+    motor.position = 0
+
+    werte = motor.werte_je_lampe()["bar"]
+
+    assert werte[0] > werte[4], (
+        "Im Lauflicht muss das Segment, das dran ist, herausstechen: "
+        f"{werte[:9]}"
+    )
+
+    #
+    # Derselbe Augenblick im Puls-Modus, Puls auf voll: Jetzt sind
+    # alle Segmente gleich hell - jedes in seiner Bandfarbe.
+    #
+    motor.einstellungen = {**lauflicht, "effect_mode": "pulse"}
+    motor.puls = 1.0
+
+    voll = motor.werte_je_lampe()["bar"]
+
+    assert voll[0] == voll[4] == voll[8] == 255, (
+        f"Im Puls müssen alle Segmente gleich hell sein: {voll[:9]}"
+    )
+
+    #
+    # Und die Farbe je Segment bleibt: Segment 1 rot, 2 gruen, 3 blau.
+    # Der Puls aendert die Helligkeit, nicht die Aufteilung der
+    # Baender.
+    #
+    assert voll[0:3] == [255, 0, 0], voll[0:3]
+    assert voll[3:6] == [0, 255, 0], voll[3:6]
+    assert voll[6:9] == [0, 0, 255], voll[6:9]
+
+    #
+    # Die Position darf im Puls-Modus nichts mehr ausmachen. Sie
+    # laeuft im Betrieb weiter mit, damit beim Umschalten nichts
+    # springt - sichtbar sein darf sie aber nicht.
+    #
+    motor.position = 3
+
+    assert motor.werte_je_lampe()["bar"] == voll, (
+        "Im Puls-Modus darf die Position des Lauflichts nichts ändern."
+    )
+
+    print("OK: Im Puls-Modus leuchten alle Segmente gleich, ohne Punkt")
+
+    #
+    # Zwischen zwei Schlaegen faellt die Lampe auf den Boden zurueck -
+    # denselben, mit dem beim Lauflicht die Segmente leuchten, die
+    # gerade nicht dran sind. Ohne Boden waere es kein Atmen, sondern
+    # ein Blitzen.
+    #
+    motor.puls = 0.0
+
+    leer = motor.werte_je_lampe()["bar"]
+
+    assert leer[0] == fixtures.begrenzen(255 * motor.GRUNDHELLIGKEIT), (
+        f"Zwischen den Schlägen muss der Boden stehen bleiben: {leer[:3]}"
+    )
+
+    assert voll[0] > leer[0] * 2, (
+        f"Der Puls muss deutlich sichtbar sein: {voll[0]} gegen {leer[0]}"
+    )
+
+    print("OK: Zwischen den Schlägen bleibt die Grundhelligkeit stehen")
+
+    #
+    # Ohne Signal bleibt es auch bei vollem Puls dunkel. Der Puls
+    # skaliert, was die Baender hergeben - er erfindet kein Licht.
+    #
+    motor.stand = {"low": 0.0, "mid": 0.0, "high": 0.0, "level": 0.0, "beat": False}
+    motor.puls = 1.0
+
+    assert set(motor.werte_je_lampe()["bar"]) == {0}, (
+        motor.werte_je_lampe()["bar"]
+    )
+
+    print("OK: Auch im Puls-Modus bleibt es ohne Signal dunkel")
+
+
+# --- Der einzelne RGB-Strahler --------------------------------------
+#
+# Der wandernde Punkt braucht mehrere Segmente, ueber die er wandern
+# kann - eine Lampe mit einer einzigen Farbgruppe laesst er aus. Genau
+# die profitiert vom Puls.
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+    licht.lampe_speichern({
+        "id": "par", "name": "Par", "template": "rgb", "address": 1,
+    })
+
+    motor = LichtApp(licht, DmxAttrappe()).light_engine
+
+    motor.stand = {"low": 1.0, "mid": 0.0, "high": 0.0, "level": 1.0, "beat": False}
+
+    grund = {
+        "sensitivity": 1.0,
+        "color_low": "#ff0000",
+        "color_mid": "#00ff00",
+        "color_high": "#0000ff",
+    }
+
+    motor.einstellungen = dict(grund)
+
+    motor.puls = 1.0
+    mit = motor.werte_je_lampe()["par"][0]
+
+    motor.puls = 0.0
+    ohne = motor.werte_je_lampe()["par"][0]
+
+    assert mit == ohne, (
+        "Im Lauflicht darf der Puls nichts tun - sonst wirkt der Modus, "
+        f"der gar nicht eingestellt ist: {mit} gegen {ohne}"
+    )
+
+    motor.einstellungen = {**grund, "effect_mode": "pulse"}
+
+    motor.puls = 1.0
+    mit = motor.werte_je_lampe()["par"][0]
+
+    motor.puls = 0.0
+    ohne = motor.werte_je_lampe()["par"][0]
+
+    assert mit > ohne, (
+        f"Der Puls muss auch einen einzelnen Strahler bewegen: {mit} gegen {ohne}"
+    )
+
+    print("OK: Der Puls wirkt auch auf Lampen ohne Segmente")
+
+
+# --- Das Hintergrundlicht bleibt ein Wash ---------------------------
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+    licht.lampe_speichern({
+        "id": "wash", "name": "Wash", "template": "bar-8-rgb", "address": 1,
+        "kind": "background",
+    })
+
+    motor = LichtApp(licht, DmxAttrappe()).light_engine
+
+    motor.stand = {"low": 1.0, "mid": 0.5, "high": 0.2, "level": 1.0, "beat": False}
+
+    grund = {
+        "sensitivity": 1.0,
+        "color_low_1": "#ff0000",
+        "color_mid_1": "#00ff00",
+        "color_high_1": "#0000ff",
+        "background_seconds": 4.0,
+    }
+
+    #
+    # Derselbe Augenblick in beiden Modi - und jedes Mal von vorn,
+    # damit die Glaettung nicht das Ergebnis traegt.
+    #
+    motor.einstellungen = dict(grund)
+    motor._hintergrund.clear()
+    motor.puls = 0.0
+    lauflicht = motor.werte_je_lampe()["wash"]
+
+    #
+    # BEIDE Enden der Huellkurve pruefen. Nur mit vollem Puls zu
+    # messen faellt auf die Nase: Bei puls = 1.0 ist die Staerke
+    # ohnehin 1.0, also genau der Wert, den das Hintergrundlicht
+    # sowieso bekommt - ein durchgeschlagener Puls waere unsichtbar.
+    # Genau daran ist die Gegenprobe zuerst vorbeigelaufen.
+    #
+    for stand_puls in (0.0, 0.5, 1.0):
+
+        motor.einstellungen = {**grund, "effect_mode": "pulse"}
+        motor._hintergrund.clear()
+        motor.puls = stand_puls
+
+        puls = motor.werte_je_lampe()["wash"]
+
+        assert lauflicht == puls, (
+            f"Das Hintergrundlicht darf vom Puls nichts mitbekommen "
+            f"(puls={stand_puls}): {lauflicht[:6]} gegen {puls[:6]}"
+        )
+
+    print("OK: Der Puls lässt das Hintergrundlicht in Ruhe")
+
+
+# --- Nachleuchten und Boden sind einstellbar ------------------------
+#
+# Beide Zahlen waren geraten. Ob sie stimmen, entscheidet sich an den
+# Lampen und am Musikgeschmack - also gehoeren sie in die
+# Einstellungen.
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+    licht.lampe_speichern({
+        "id": "par", "name": "Par", "template": "rgb", "address": 1,
+    })
+
+    motor = LichtApp(licht, DmxAttrappe()).light_engine
+
+    #
+    # Nachleuchten: Nach derselben Zeit ohne Schlag muss vom langen
+    # Puls mehr uebrig sein als vom kurzen.
+    #
+    def nach_fuenf_bloecken(sekunden=None) -> float:
+
+        motor.einstellungen = {"effect_mode": "pulse"}
+
+        if sekunden is not None:
+            motor.einstellungen["pulse_seconds"] = sekunden
+
+        motor.puls = 1.0
+
+        for _ in range(5):
+            motor._puls_weiterschalten(0.02, False)
+
+        return motor.puls
+
+    kurz = nach_fuenf_bloecken(0.05)
+    lang = nach_fuenf_bloecken(1.0)
+
+    assert lang > kurz * 2, (
+        f"Das Nachleuchten wirkt nicht: kurz {kurz:.3f}, lang {lang:.3f}"
+    )
+
+    #
+    # Ohne Angabe bleibt es bei der Zahl, mit der der Puls gebaut
+    # wurde - eine alte Einrichtung sieht genau wie vorher aus.
+    #
+    ohne = nach_fuenf_bloecken()
+
+    erwartet = (1.0 - 0.02 / motor.PULS_ABFALL_S) ** 5
+
+    assert abs(ohne - erwartet) < 0.001, (
+        f"Ohne Einstellung muss PULS_ABFALL_S gelten: {ohne:.3f} statt "
+        f"{erwartet:.3f}"
+    )
+
+    print("OK: Das Nachleuchten des Pulses ist einstellbar")
+
+    #
+    # Der Boden: was zwischen zwei Schlaegen stehen bleibt.
+    #
+    motor.stand = {"low": 1.0, "mid": 0.0, "high": 0.0, "level": 1.0, "beat": False}
+
+    grund = {
+        "sensitivity": 1.0,
+        "color_low": "#ff0000",
+        "color_mid": "#00ff00",
+        "color_high": "#0000ff",
+        "effect_mode": "pulse",
+    }
+
+    def rot(boden=None, puls=0.0) -> int:
+
+        motor.einstellungen = dict(grund)
+
+        if boden is not None:
+            motor.einstellungen["pulse_base"] = boden
+
+        motor.puls = puls
+
+        return motor.werte_je_lampe()["par"][0]
+
+    assert rot(0.8) > rot(), f"Ein hoher Boden muss heller sein: {rot(0.8)}"
+
+    #
+    # Und der linke Anschlag: 0 heisst "zwischen den Schlaegen ganz
+    # aus". Genau der Wert faellt durch, wenn ihn jemand mit "or"
+    # abfragt - dann waere er still die Vorgabe, und der Regler taete
+    # am Anschlag nichts.
+    #
+    assert rot(0.0) == 0, (
+        f"Boden 0 muss die Lampe zwischen den Schlägen ausmachen: {rot(0.0)}"
+    )
+
+    assert rot(0.0, puls=1.0) == 255, (
+        "Auf dem Schlag muss auch mit Boden 0 voll aufgedreht werden: "
+        f"{rot(0.0, puls=1.0)}"
+    )
+
+    #
+    # Ohne Angabe die alte Zahl.
+    #
+    assert rot() == fixtures.begrenzen(255 * motor.GRUNDHELLIGKEIT), rot()
+
+    print("OK: Die Grundhelligkeit des Pulses ist einstellbar, auch auf 0")
+
+    #
+    # Der wandernde Punkt bleibt davon unberuehrt. Er hat seine
+    # eigene, feste Grundhelligkeit - sonst verstellte ein Regler,
+    # der nur beim Puls dasteht, heimlich auch das andere Bild.
+    #
+    # Geprueft an einer Bar: Beim einzelnen Strahler leuchtet im
+    # Lauflicht ohnehin alles voll, ein durchgeschlagener Boden waere
+    # dort gar nicht zu sehen. Es braucht ein Segment, das gerade
+    # NICHT dran ist.
+    #
+    licht.lampe_speichern({
+        "id": "bar", "name": "Bar", "template": "bar-8-rgb", "address": 10,
+    })
+
+    motor.stand = {"low": 1.0, "mid": 1.0, "high": 1.0, "level": 1.0, "beat": False}
+
+    motor.einstellungen = {
+        **grund, "effect_mode": "runner", "pulse_base": 0.0,
+        "pulse_seconds": 2.0,
+    }
+    motor.puls = 0.0
+    motor.position = 0
+
+    werte = motor.werte_je_lampe()["bar"]
+
+    assert werte[0] == 255, f"Das Segment, das dran ist, muss voll sein: {werte[:9]}"
+
+    assert werte[4] == fixtures.begrenzen(255 * motor.GRUNDHELLIGKEIT), (
+        "Im Lauflicht dürfen die Puls-Regler nichts ändern: "
+        f"{werte[3:6]}"
+    )
+
+    print("OK: Die Puls-Regler lassen den wandernden Punkt in Ruhe")
+
+
+# --- Die Ablage -----------------------------------------------------
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+
+    #
+    # Die Vorgaben muessen zu den Zahlen im Motor passen. Laufen sie
+    # auseinander, sieht eine frische Einrichtung anders aus als eine
+    # alte ohne die Schluessel - und niemand kaeme darauf, warum.
+    #
+    from lighting.light_engine import LightEngine
+
+    assert licht.show_einstellungen()["pulse_seconds"] == LightEngine.PULS_ABFALL_S
+    assert licht.show_einstellungen()["pulse_base"] == LightEngine.GRUNDHELLIGKEIT
+
+    #
+    # Unsinnige Werte werden gekappt, nicht abgewiesen: Ein Regler
+    # kann gar nichts anderes liefern als eine Zahl, und wer per Hand
+    # etwas schickt, soll dabei nicht die ganze Show anhalten.
+    #
+    licht.set_show_einstellungen({"pulse_seconds": 99.0, "pulse_base": 5.0})
+
+    assert licht.show_einstellungen()["pulse_seconds"] == 2.0
+    assert licht.show_einstellungen()["pulse_base"] == 0.9
+
+    licht.set_show_einstellungen({"pulse_seconds": 0.0, "pulse_base": -1.0})
+
+    assert licht.show_einstellungen()["pulse_seconds"] == 0.05
+    assert licht.show_einstellungen()["pulse_base"] == 0.0
+
+    print("OK: Nachleuchten und Boden werden in Grenzen gehalten")
+
+    assert licht.show_einstellungen()["effect_mode"] == "runner", (
+        "Vorgabe muss das bisherige Bild sein - wer nichts umstellt, "
+        "soll nichts umgestellt bekommen."
+    )
+
+    ok, meldung = licht.set_show_einstellungen({"effect_mode": "pulse"})
+
+    assert ok, meldung
+    assert licht.show_einstellungen()["effect_mode"] == "pulse"
+
+    #
+    # Ein unbekannter Modus waere ein stiller Ausfall: Die Show fiele
+    # auf das Lauflicht zurueck, und man suchte den Fehler bei den
+    # Lampen.
+    #
+    ok, meldung = licht.set_show_einstellungen({"effect_mode": "disko"})
+
+    assert not ok and "Modus" in meldung, meldung
+    assert licht.show_einstellungen()["effect_mode"] == "pulse", (
+        "Ein abgewiesener Wert darf den gespeicherten nicht anfassen."
+    )
+
+    print("OK: Der Modus wird gespeichert und auf bekannte Werte geprüft")
+
+
 print("Alle Licht-Tests erfolgreich.")
