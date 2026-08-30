@@ -30,7 +30,11 @@ import threading
 import time
 
 from lighting import fixtures
-from lighting.analysis import Bandanalyse, Stimmungserkennung
+from lighting.analysis import (
+    SNARE_EMPFINDLICHKEIT,
+    Bandanalyse,
+    Stimmungserkennung,
+)
 
 #
 # Die drei Bänder und die Einstellung, in der ihre Farbe steht.
@@ -142,6 +146,21 @@ class LightEngine:
     PULS_ABFALL_S = 0.25
 
     #
+    # Wie lange ein Blitz auf der Snare steht.
+    #
+    # 80 ms sind vier Lichtbilder - kurz genug, dass es ein Blitz
+    # bleibt und kein Blinken, lang genug, dass es auch ein Geraet
+    # zeigt, das den Kanal als Blitzgeschwindigkeit liest.
+    #
+    BLITZ_DAUER_S = 0.08
+
+    #
+    # Was ohne Einstellung waehrend des Blitzes auf dem Kanal steht
+    # (Anteil von 255).
+    #
+    BLITZ_STAERKE = 0.8
+
+    #
     # Drehung eines Derby-/Effektspiegels.
     #
     # Die Handbuecher der Eurolite-Geraete kodieren das gleich:
@@ -226,7 +245,7 @@ class LightEngine:
         # Der letzte Analysestand - fuer die Anzeige in der Karte.
         #
         self.stand: dict = {"low": 0.0, "mid": 0.0, "high": 0.0,
-                            "level": 0.0, "beat": False}
+                            "level": 0.0, "beat": False, "snare": False}
 
         self.zustand = "music"
 
@@ -251,6 +270,11 @@ class LightEngine:
         # jede Lampe woanders steht, ist kein Puls mehr.
         #
         self.puls = 0.0
+
+        #
+        # Wie lange der Blitz auf der Snare noch steht, in Sekunden.
+        #
+        self.blitz = 0.0
 
         self.verworfen = 0
 
@@ -327,8 +351,18 @@ class LightEngine:
         if self._laeuft:
             return
 
+        #
+        # Kein "or": 0 ist eine gueltige Empfindlichkeit (die
+        # strengste) und wuerde davon still in die Vorgabe verwandelt.
+        #
+        empfindlichkeit = einstellungen.get("snare_sense")
+
         self.analyse = Bandanalyse(
-            rate=rate, channels=channels, links=links, rechts=rechts
+            rate=rate, channels=channels, links=links, rechts=rechts,
+            snare_empfindlichkeit=(
+                SNARE_EMPFINDLICHKEIT if empfindlichkeit is None
+                else float(empfindlichkeit)
+            ),
         )
 
         self.erkennung = Stimmungserkennung(
@@ -354,6 +388,7 @@ class LightEngine:
         self.hintergrund_schlaege = 0
         self.hintergrund_zeit = 0.0
         self.puls = 0.0
+        self.blitz = 0.0
         self.letzte_dauer = self.BLOCK_VORGABE_S
 
         self._laeuft = True
@@ -479,6 +514,7 @@ class LightEngine:
 
         self._farbe_weiterschalten(dauer, bool(self.stand["beat"]))
         self._puls_weiterschalten(dauer, bool(self.stand["beat"]))
+        self._blitz_weiterschalten(dauer, bool(self.stand.get("snare")))
 
         self.phase += 0.02 + 0.08 * self.stand["low"]
 
@@ -610,6 +646,22 @@ class LightEngine:
 
         self.puls += anteil * (0.0 - self.puls)
 
+    def _blitz_weiterschalten(self, dauer: float, snare: bool) -> None:
+        """
+        Den Blitz auf der Snare fuehren: bei einem Schlag anwerfen,
+        sonst ablaufen lassen.
+
+        Kein weicher Abfall wie beim Puls - ein Blitz ist an oder aus.
+        Kommt waehrenddessen der naechste Schlag, faengt die Zeit von
+        vorne an.
+        """
+
+        if snare:
+            self.blitz = self.BLITZ_DAUER_S
+            return
+
+        self.blitz = max(0.0, self.blitz - dauer)
+
     def _geglaettet(self, kennung: str, ziel: list[float]) -> list[float]:
         """
         Einen Wert je Lampe langsam an sein Ziel heranfuehren.
@@ -683,6 +735,30 @@ class LightEngine:
             self.GRUNDHELLIGKEIT if boden is None
             else max(0.0, min(1.0, float(boden)))
         )
+
+        #
+        # Blitzt diese Lampe auf die Snare?
+        #
+        # Beim Hintergrundlicht nicht: Ein Wash, in den ein Blitz
+        # hineinfaehrt, ist kein Wash mehr - aus demselben Grund, aus
+        # dem dort auch der Puls und die Drehung ausbleiben.
+        #
+        blitzen = (
+            not hintergrund
+            and bool(self.einstellungen.get("snare_strobe"))
+        )
+
+        #
+        # Was waehrend des Blitzes auf dem Kanal steht. Auch hier kein
+        # "or": 0 ist ein gueltiger Wert, und er hiesse "gar kein
+        # Blitz" - das darf nicht still zur Vorgabe werden.
+        #
+        wucht = self.einstellungen.get("snare_power")
+
+        blitzwert = fixtures.begrenzen(255 * (
+            self.BLITZ_STAERKE if wucht is None
+            else max(0.0, min(1.0, float(wucht)))
+        ))
 
         #
         # Welcher Farbsatz gilt: der erste oder der der zweiten
@@ -952,15 +1028,34 @@ class LightEngine:
                     self.DREHUNG_MIN + self.DREHUNG_SPANNE * baender["low"]
                 )
 
+            elif rolle == "strobe" and blitzen:
+
+                #
+                # Der Blitz auf der Snare - nur, wenn er in den
+                # Einstellungen ausdruecklich eingeschaltet ist.
+                #
+                # Solange er aus ist, faehrt die Show die
+                # Strobe-Kanaele wie bisher gar nicht: Ein Blitzlicht,
+                # das von selbst angeht, ist auf einer Buehne keine
+                # Ueberraschung, die jemand haben will.
+                #
+                # Ist er an, gehoert der Kanal aber der Show, und sie
+                # schreibt zwischen den Blitzen ausdruecklich 0. Ihn
+                # einfach stehen zu lassen ginge nicht: Das naechste
+                # Bild beginnt bei dem, was zuletzt drin stand - der
+                # Blitzwert bliebe also stehen, und das Strobe liefe
+                # durch, bis jemand die Show anhaelt.
+                #
+                werte[index] = blitzwert if self.blitz > 0.0 else 0
+
             #
-            # Strobe und Shutter bleiben, wo sie sind: Ein Blitzlicht,
-            # das von selbst angeht, ist auf einer Buehne keine
-            # Ueberraschung, die jemand haben will.
+            # Shutter bleibt, wo er ist: Auf einem Bewegtlicht heisst
+            # "zu" schlicht dunkel, und was dazwischen liegt, steht in
+            # der Tabelle des jeweiligen Geraets.
             #
-            # Gobo und Farbrad ebenso, aber aus einem anderen Grund:
-            # Was hinter einem Wert steckt, steht in keiner Norm,
-            # sondern in der Tabelle des jeweiligen Geraets. 42 heisst
-            # an einem Scheinwerfer "Sterne" und am naechsten "offen".
+            # Gobo und Farbrad ebenso, aus demselben Grund: Was hinter
+            # einem Wert steckt, steht in keiner Norm. 42 heisst an
+            # einem Scheinwerfer "Sterne" und am naechsten "offen".
             # Ohne ein Geraet zum Ausprobieren waere jede Ansteuerung
             # geraten - und niemand koennte pruefen, ob sie stimmt.
             #

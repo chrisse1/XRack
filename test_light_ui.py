@@ -253,6 +253,9 @@ def stand(enabled=True, service=True, adapter=True, overlaps=None,
             "effect_mode": "pulse",
             "pulse_seconds": 0.5,
             "pulse_base": 0.2,
+            "snare_strobe": False,
+            "snare_sense": 0.5,
+            "snare_power": 0.8,
             "sensitivity": 1.5,
             "fallback_scene": "s1",
             "silence_threshold": 0.03,
@@ -1367,6 +1370,105 @@ assert '"pulse_base":0.6' in ergebnis["koerper"].replace(" ", ""), (
 )
 
 print("OK: Ein verschobener Regler wird sofort gespeichert")
+
+
+# ====================================================================
+# 22. Der Blitz auf die Snare
+#
+# Aus als Vorgabe - und die zwei Regler stehen erst da, wenn er an
+# ist.
+# ====================================================================
+
+pruefung = """function () {
+    const schalter = document.getElementById('light-show-snare-strobe');
+    const block = document.getElementById('light-show-snare-options');
+
+    return {
+        an: schalter.checked,
+        sichtbar: !block.classList.contains('d-none'),
+        schwelle: document.getElementById('light-show-snare-sense').value,
+        staerke: document.getElementById('light-show-snare-power').value,
+        schwellentext: document.getElementById(
+            'light-show-snare-sense-value').textContent,
+        staerketext: document.getElementById(
+            'light-show-snare-power-value').textContent
+    };
+}"""
+
+ergebnis = ausfuehren(stand(), pruefung)
+
+assert ergebnis["an"] is False, "Der Blitz muss ausgeschaltet dastehen."
+assert not ergebnis["sichtbar"], "Ausgeschaltet gehören die Regler weg."
+
+print("OK: Der Blitz steht aus im Dialog, ohne Regler")
+
+
+mit_blitz = stand()
+mit_blitz["show"] = {**mit_blitz["show"], "snare_strobe": True,
+                     "snare_sense": 0.7, "snare_power": 0.6}
+
+ergebnis = ausfuehren(mit_blitz, pruefung)
+
+assert ergebnis["an"] is True, ergebnis
+assert ergebnis["sichtbar"], "Eingeschaltet müssen die Regler dastehen."
+assert float(ergebnis["schwelle"]) == 0.7, ergebnis
+assert float(ergebnis["staerke"]) == 0.6, ergebnis
+assert ergebnis["schwellentext"] == "70 %", ergebnis
+assert ergebnis["staerketext"] == "60 %", ergebnis
+
+print("OK: Eingeschaltet stehen Schwelle und Stärke mit ihrem Wert da")
+
+
+#
+# Umgelegt erscheinen die Regler sofort - gemessen unmittelbar nach
+# dem Klick, aus demselben Grund wie beim Puls-Modus.
+#
+ergebnis = ausfuehren(stand(), """function () {
+    return { sichtbar: window.__sofort, gesendet: window.__gesendet };
+}""", vorher="""
+    const schalter = document.getElementById('light-show-snare-strobe');
+    schalter.checked = true;
+    schalter.dispatchEvent(new Event('change'));
+
+    window.__sofort = !document.getElementById(
+        'light-show-snare-options').classList.contains('d-none');
+
+    window.__gesendet = window.aufrufe.filter(
+        a => a[0].indexOf('/api/lighting/show/settings') === 0
+    ).map(a => a[1]).join('|');
+""")
+
+assert ergebnis["sichtbar"], (
+    "Nach dem Einschalten müssen die Regler sofort erscheinen."
+)
+
+assert '"snare_strobe":true' in ergebnis["gesendet"].replace(" ", ""), (
+    ergebnis["gesendet"]
+)
+
+print("OK: Eingeschaltet erscheinen sie sofort und werden gespeichert")
+
+
+#
+# Und die beiden Regler darunter muessen ihren Wert mitschicken.
+#
+ergebnis = ausfuehren(mit_blitz, """function () {
+    const gesendet = window.aufrufe.filter(
+        a => a[0].indexOf('/api/lighting/show/settings') === 0
+    );
+
+    return { koerper: gesendet.length ? gesendet[gesendet.length - 1][1] : '' };
+}""", vorher="""
+    const regler = document.getElementById('light-show-snare-sense');
+    regler.value = '0.85';
+    regler.dispatchEvent(new Event('change'));
+""")
+
+koerper = ergebnis["koerper"].replace(" ", "")
+
+assert '"snare_sense":0.85' in koerper, koerper
+
+print("OK: Ein verschobener Empfindlichkeitsregler wird gespeichert")
 
 
 print("Alle Lichtkarten-Tests erfolgreich.")

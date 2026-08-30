@@ -1534,6 +1534,78 @@
                         </div>
                     </div>
 
+                    {#
+                        Der Blitz auf die Snare.
+
+                        Der Schalter steht immer da, die zwei Regler
+                        nur, wenn er an ist. Aus ist Vorgabe und
+                        bleibt es: Ein Blitzlicht, das von selbst
+                        angeht, will niemand.
+                    #}
+                    <div class="col-12">
+                        <div class="form-check form-switch">
+                            <input
+                                type="checkbox"
+                                role="switch"
+                                id="light-show-snare-strobe"
+                                class="form-check-input"
+                            >
+                            <label class="form-check-label small"
+                                   for="light-show-snare-strobe">
+                                {{ t.light_show_snare_strobe }}
+                            </label>
+                        </div>
+                        <div class="form-text">{{ t.light_show_snare_hint }}</div>
+                    </div>
+
+                    <div id="light-show-snare-options" class="col-12 d-none">
+                        <div class="row g-2">
+
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small mb-1"
+                                       for="light-show-snare-sense">
+                                    {{ t.light_show_snare_sense }}
+                                    <span id="light-show-snare-sense-value"
+                                          class="text-body-secondary"></span>
+                                </label>
+                                <input
+                                    id="light-show-snare-sense"
+                                    type="range"
+                                    class="form-range"
+                                    min="0"
+                                    max="1"
+                                    step="0.05"
+                                    value="0.5"
+                                >
+                            </div>
+
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small mb-1"
+                                       for="light-show-snare-power">
+                                    {{ t.light_show_snare_power }}
+                                    <span id="light-show-snare-power-value"
+                                          class="text-body-secondary"></span>
+                                </label>
+                                <input
+                                    id="light-show-snare-power"
+                                    type="range"
+                                    class="form-range"
+                                    min="0"
+                                    max="1"
+                                    step="0.05"
+                                    value="0.8"
+                                >
+                            </div>
+
+                            <div class="col-12">
+                                <div class="form-text">
+                                    {{ t.light_show_snare_options_hint }}
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
                     <div class="col-12 col-sm-6">
                         <label class="form-label small mb-1" for="light-show-channel">
                             {{ t.light_show_channel }}

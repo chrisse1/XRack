@@ -78,6 +78,120 @@ SCHLAG_MITTEL_S = 1.0
 SCHLAG_FAKTOR = 1.25
 
 #
+# Dasselbe noch einmal fuer die Snare, auf dem Mittenband.
+#
+# Was hier gemeldet wird, ist KEINE erkannte Snare - das waere eine
+# Instrumentenerkennung, und die ist mit drei Huellkurven nicht zu
+# haben. Es ist ein scharfer, lauter Einsatz im Mittenband, der aus
+# dem heraussticht, was gerade ueblich war. In den allermeisten
+# Stuecken ist das die Snare; es kann auch ein Clap sein oder ein
+# hart angeschlagener Akkord.
+#
+# Zwei Bedingungen, und sie sagen Verschiedenes:
+#
+#   AUSSCHLAG - es muss ein Einsatz sein und kein Dauerzustand,
+#               gemessen am eigenen gleitenden Mittel.
+#   SCHWELLE  - und er muss LAUT sein, gemessen an der laufenden
+#               Spitze.
+#
+# Beide haengen am selben Regler, der Empfindlichkeit. Das war
+# zuerst anders: Der Regler bewegte nur die Schwelle, der Ausschlag
+# stand fest bei 2,5. Am Geraet zeigte sich, dass genau der bremst -
+# es blitzte am Anfang eines Songs und wenn in einer ruhigen Stelle
+# etwas Lautes passierte, aber nicht im laufenden Groove. Der Grund
+# steckt in der Rechnung: Im Groove hebt die Snare ihr eigenes
+# Bezugsmittel mit an und kommt nicht mehr um das 2,5-fache
+# darueber. Nach einer leisen Stelle ist das Mittel niedrig, da
+# ragt sie heraus. Wer die Schwelle allein herunterdreht, kommt
+# daran nicht heran.
+#
+SNARE_EMPFINDLICHKEIT = 0.5
+
+#
+# Wo die beiden Zahlen bei genau dieser Empfindlichkeit stehen.
+#
+# Das ist der Stand, der am Geraet gefaellt: Der Regler sass dort am
+# unteren Anschlag (Schwelle 0,2) bei fest eingebautem Ausschlag
+# 2,5. Deshalb ist die Vorgabe die MITTE des neuen Reglers - nach
+# dem Update klingt es genau wie vorher, und es gibt Luft in beide
+# Richtungen.
+#
+SNARE_SCHWELLE = 0.2
+SNARE_AUSSCHLAG = 2.5
+
+#
+# Die Enden des Reglers.
+#
+# Der Ausschlag darf nach unten nicht beliebig weit: Gemessen an
+# einem gleichbleibenden Saegezahn - also an dem, was ein gehaltener
+# Ton eines verzerrten Instruments der Analyse zeigt - kamen bei 1,3
+# neun Fehlmeldungen in vier Sekunden durch, bei 2,5 fuenf, bei 3,5
+# zwei. 1,3 ist damit das aeusserste, was noch vertretbar ist, und
+# es steht am Anschlag "ganz empfindlich".
+#
+SNARE_SCHWELLE_MIN = 0.05
+SNARE_SCHWELLE_MAX = 0.65
+
+SNARE_AUSSCHLAG_MIN = 1.3
+SNARE_AUSSCHLAG_MAX = 6.1
+
+
+def snare_grenzen(empfindlichkeit: float) -> tuple[float, float]:
+    """
+    Schwelle und Ausschlag aus der Empfindlichkeit (0-1).
+
+    Quadratisch, nicht linear: Die feine Abstufung gehoert an das
+    empfindliche Ende, wo tatsaechlich eingestellt wird. Am strengen
+    Ende reicht grob - dort geht es nur noch darum, wie sehr man
+    zumacht.
+
+    Die Anker sind so gewaehlt, dass die Mitte des Reglers genau
+    SNARE_SCHWELLE und SNARE_AUSSCHLAG trifft.
+    """
+
+    streng = 1.0 - max(0.0, min(1.0, float(empfindlichkeit)))
+
+    return (
+        SNARE_SCHWELLE_MIN
+        + (SNARE_SCHWELLE_MAX - SNARE_SCHWELLE_MIN) * streng ** 2,
+        SNARE_AUSSCHLAG_MIN
+        + (SNARE_AUSSCHLAG_MAX - SNARE_AUSSCHLAG_MIN) * streng ** 2,
+    )
+
+#
+# Sperrzeit nach einer Snare. Laenger als beim Kick (0,12 s): Ein
+# Blitz, der zweimal kurz hintereinander kommt, sieht nach Fehler
+# aus, waehrend zwei Kicks nur zweimal Licht bedeuten.
+#
+SNARE_SPERRE_S = 0.15
+
+#
+# Wie viel von der laufenden Spitze in den Hoehen stehen muss, damit
+# ein Ausschlag als Snare durchgeht - der "Knack" des Teppichs.
+#
+# Das ist die Bedingung, die den Kick aussortiert. Gemessen an einem
+# Signal aus Kicks und Snares: Beim Kick lagen die Hoehen bei 0,04
+# der Spitze, bei der Snare bei 0,65. Dazwischen ist viel Platz, die
+# Schwelle muss nicht genau sitzen.
+#
+SNARE_HOEHEN_ANTEIL = 0.15
+
+#
+# Und wie viel Koerper dazugehoeren muss, gemessen an den Hoehen
+# desselben Ausschlags.
+#
+# Das ist die Bedingung, die die Hi-Hat aussortiert: Die ist fast nur
+# oben (Mitten zu Hoehen 0,3), eine Snare hat einen Rumpf (1,3).
+#
+# Bewusst die beiden Baender GEGENEINANDER und nicht gegen die
+# laufende Spitze: Unter einer dicken Basslinie setzt der Bass die
+# Spitze, und der Rumpf der Snare waere davon nur noch ein kleiner
+# Bruchteil - die Bedingung haette dann von der Musik abgehangen
+# statt von der Trommel.
+#
+SNARE_KOERPER_ANTEIL = 0.7
+
+#
 # S32_LE: ALSA liefert 24 Bit linksbündig in 32 Bit (siehe
 # audio/audio_backend.py). Der größte Betrag ist deshalb 2^31.
 #
@@ -122,7 +236,8 @@ class Bandanalyse:
     SPITZE_MIN = SPITZE_MIN
 
     def __init__(self, rate: int = 48000, channels: int = 2,
-                 links: int = 0, rechts: int = 1):
+                 links: int = 0, rechts: int = 1,
+                 snare_empfindlichkeit: float = SNARE_EMPFINDLICHKEIT):
 
         self.rate = max(1, int(rate))
         self.channels = max(1, int(channels))
@@ -154,6 +269,16 @@ class Bandanalyse:
         # Die flinke Huellkurve des Bassbandes, nur fuer Schlaege.
         #
         self.tief_schnell = 0.0
+
+        #
+        # Dieselben flinken Huellkurven auf Mitten und Hoehen, fuer
+        # die Snare. Sie benutzen dieselben Zeitkonstanten: Was einen
+        # Kick heraushebt, hebt auch einen Schlag auf das Fell heraus.
+        #
+        # Warum es BEIDE braucht, steht bei der Auswertung.
+        #
+        self.mitte_schnell = 0.0
+        self.hoch_schnell = 0.0
 
         #
         # Mitlaufende Spitzenwerte je Band.
@@ -188,10 +313,20 @@ class Bandanalyse:
         self.bass_mittel = 0.0
 
         #
+        # Und die Gegenstuecke fuer Mitten und Hoehen.
+        #
+        self.mitte_mittel = 0.0
+        self.hoch_mittel = 0.0
+        self.snare_schwelle, self.snare_ausschlag = snare_grenzen(
+            snare_empfindlichkeit
+        )
+
+        #
         # Sperrzeit nach einem Schlag, damit ein einzelner Kick nicht
         # dreimal gemeldet wird.
         #
         self.sperre_bis = 0.0
+        self.snare_sperre_bis = 0.0
         self.zeit = 0.0
 
     # ----------------------------------------------------------------
@@ -242,6 +377,7 @@ class Bandanalyse:
         summe = 0.0
         schlag = False
 
+
         for wert in mono:
 
             #
@@ -262,6 +398,16 @@ class Bandanalyse:
                       else self.schlag_abfall)
 
             self.tief_schnell = tief + faktor * (self.tief_schnell - tief)
+
+            faktor = (self.schlag_anstieg if mittel > self.mitte_schnell
+                      else self.schlag_abfall)
+
+            self.mitte_schnell = mittel + faktor * (self.mitte_schnell - mittel)
+
+            faktor = (self.schlag_anstieg if hoch > self.hoch_schnell
+                      else self.schlag_abfall)
+
+            self.hoch_schnell = hoch + faktor * (self.hoch_schnell - hoch)
 
             summe += wert * wert
 
@@ -288,11 +434,48 @@ class Bandanalyse:
 
         self.bass_mittel += anteil * (self.tief_schnell - self.bass_mittel)
 
+        #
+        # Und dasselbe fuer die Snare - aber auf ZWEI Baendern.
+        #
+        # Das Mittenband allein reicht nicht. Ein Kick hat eine
+        # steile Flanke, und die laesst auch die Mitten kurz
+        # ausschlagen: Beim Ausprobieren meldete ein Signal aus
+        # lauter Kicks OHNE jede Snare acht von acht Malen eine
+        # Snare. Das Blitzlicht haette also auf der Bassdrum gezuckt.
+        #
+        # Was die beiden trennt, sind die Hoehen. Gemessen an
+        # demselben Signal: Beim Kick standen sie bei 0,02, beim
+        # Schlag auf die Snare bei 0,30 - der Teppich rauscht weit
+        # oberhalb von 2 kHz, ein Kick hat dort nichts.
+        #
+        # Die vierte Bedingung sortiert die Hi-Hat aus: Die ist fast
+        # nur oben, eine Snare hat einen Rumpf. Gemessen wurden
+        # Mitten zu Hoehen 0,3 bei der Hi-Hat und 1,3 bei der Snare.
+        #
+        # In der Stille kann nichts durchkommen, ohne dass es dafuer
+        # eine eigene Bedingung braucht: Die laufende Spitze faellt
+        # nie unter SPITZE_MIN, und die Lautstaerke-Bedingung misst
+        # gegen sie.
+        #
+        snare = False
+
+        if (self.mitte_schnell > self.mitte_mittel * self.snare_ausschlag
+                and self.mitte_schnell > self.spitze * self.snare_schwelle
+                and self.hoch_schnell > self.spitze * SNARE_HOEHEN_ANTEIL
+                and self.mitte_schnell > self.hoch_schnell * SNARE_KOERPER_ANTEIL
+                and self.zeit >= self.snare_sperre_bis):
+
+            snare = True
+            self.snare_sperre_bis = self.zeit + SNARE_SPERRE_S
+
+        self.mitte_mittel += anteil * (self.mitte_schnell - self.mitte_mittel)
+        self.hoch_mittel += anteil * (self.hoch_schnell - self.hoch_mittel)
+
         self.pegel = math.sqrt(summe / len(mono))
 
         self.spitzen_nachfuehren()
 
-        return self.stand(schlag)
+        return self.stand(schlag, snare)
 
     def _huellkurve(self, bisher: float, jetzt: float) -> float:
         """Schnell anziehen, langsam abfallen."""
@@ -323,7 +506,7 @@ class Bandanalyse:
             SPITZE_MIN,
         )
 
-    def stand(self, schlag: bool = False) -> dict:
+    def stand(self, schlag: bool = False, snare: bool = False) -> dict:
         """Der aktuelle Stand als einfache Werte."""
 
         return {
@@ -337,6 +520,12 @@ class Bandanalyse:
             #
             "level": min(1.0, getattr(self, "pegel", 0.0)),
             "beat": schlag,
+
+            #
+            # Ein scharfer, lauter Einsatz im Mittenband - meist die
+            # Snare. Siehe SNARE_FAKTOR.
+            #
+            "snare": snare,
         }
 
 

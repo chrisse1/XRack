@@ -74,6 +74,33 @@ SHOW_VORGABE = {
     "pulse_base": 0.35,
 
     #
+    # Blitz auf die Snare.
+    #
+    # AUS als Vorgabe, und das bleibt auch so: Ein Blitzlicht, das
+    # nach einem Update von selbst angeht, will niemand - und wer es
+    # nicht ausdruecklich einschaltet, dem fasst die Show die
+    # Strobe-Kanaele weiterhin gar nicht an.
+    #
+    "snare_strobe": False,
+
+    #
+    # Wie empfindlich. Hoeher heisst mehr Blitze.
+    #
+    # Der Regler dreht zwei Zahlen zugleich (siehe snare_grenzen() in
+    # lighting/analysis.py). Die Mitte ist mit Absicht die Vorgabe:
+    # Sie trifft genau den Stand, der am Geraet gefaellt.
+    #
+    "snare_sense": 0.5,
+
+    #
+    # Was waehrend des Blitzes auf dem Strobe-Kanal steht (0-1 von
+    # 255). Was der Wert am Geraet bewirkt - Helligkeit oder
+    # Blitzgeschwindigkeit -, steht in keiner Norm, sondern in der
+    # Tabelle des jeweiligen Geraets. Deshalb ein Regler.
+    #
+    "snare_power": 0.8,
+
+    #
     # Welche Farbe welches Band bekommt.
     #
     # Vorgabe ist die uebliche Zuordnung von Sound-to-Light-Geraeten
@@ -596,6 +623,19 @@ class LightingStore:
         #
         if "pulse_base" in werte:
             show["pulse_base"] = max(0.0, min(0.9, float(werte["pulse_base"])))
+
+        if "snare_strobe" in werte:
+            show["snare_strobe"] = bool(werte["snare_strobe"])
+
+        if "snare_sense" in werte:
+            show["snare_sense"] = max(
+                0.0, min(1.0, float(werte["snare_sense"]))
+            )
+
+        if "snare_power" in werte:
+            show["snare_power"] = max(
+                0.0, min(1.0, float(werte["snare_power"]))
+            )
 
         if "background_seconds" in werte:
             show["background_seconds"] = max(

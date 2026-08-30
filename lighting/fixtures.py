@@ -205,9 +205,13 @@ EINGEBAUTE_VORLAGEN = (
         # Laser und die weissen/UV-Strobe-LEDs.
         #
         # Die Laser (Kanal 21/22) und die Drehung der beiden Derbys
-        # (5/20) und des Lasers (23) fährt die Show mit. Die
-        # Strobe-LEDs (24-28) nicht - ein Blitzlicht, das von selbst
-        # angeht, will niemand.
+        # (5/20) und des Lasers (23) fährt die Show mit.
+        #
+        # Die weißen LEDs und die UV-LED (24-28) tragen die Rolle
+        # "strobe", denn genau das sind sie: die Strobe-LEDs des
+        # Geräts. Angefasst werden sie trotzdem nur, wenn in den
+        # Einstellungen "Blitz auf die Snare" eingeschaltet ist -
+        # sonst lässt die Show alle Strobe-Kanäle in Ruhe.
         #
         "id": "eurolite-kls-laser-bar-pro-fx-28",
         "name": "Eurolite LED KLS Laser Bar PRO FX (28-Kanal-Modus)",
@@ -223,7 +227,7 @@ EINGEBAUTE_VORLAGEN = (
             # Laser
             "laser", "laser", "rotation",
             # Weisse LEDs 1-4 und UV
-            "shutter", "shutter", "shutter", "shutter", "shutter",
+            "strobe", "strobe", "strobe", "strobe", "strobe",
         ],
         "builtin": True,
     },

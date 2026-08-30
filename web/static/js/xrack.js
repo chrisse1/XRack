@@ -5748,6 +5748,16 @@ function renderLightShowSettings(stand) {
     setzen("light-show-effect-mode", show.effect_mode);
     setzen("light-show-pulse-seconds", show.pulse_seconds);
     setzen("light-show-pulse-base", show.pulse_base);
+    setzen("light-show-snare-sense", show.snare_sense);
+    setzen("light-show-snare-power", show.snare_power);
+
+    const blitz = document.getElementById("light-show-snare-strobe");
+
+    if (blitz && document.activeElement !== blitz) {
+        blitz.checked = !!show.snare_strobe;
+    }
+
+    lightBlitzAnzeigen();
 
     //
     // Direkt hier und nicht am Ende der Funktion: Die kehrt weiter
@@ -5842,6 +5852,23 @@ function lightTraegheitBeschriften() {
     }
 
     //
+    // Die beiden Blitz-Regler in Prozent: "ab wie laut" als Anteil
+    // an der lautesten Stelle, die Staerke als Anteil des vollen
+    // Kanalwerts.
+    //
+    for (const [regler, anzeige] of [
+        ["light-show-snare-sense", "light-show-snare-sense-value"],
+        ["light-show-snare-power", "light-show-snare-power-value"]
+    ]) {
+        const feld = document.getElementById(regler);
+        const text = document.getElementById(anzeige);
+
+        if (feld && text) {
+            text.textContent = Math.round(parseFloat(feld.value) * 100) + " %";
+        }
+    }
+
+    //
     // Warnen, wenn die Blende laenger dauert als die halbe Standzeit.
     //
     // Dann kommt keine Farbe mehr rein an, sondern es steht dauerhaft
@@ -5873,6 +5900,13 @@ function lightPulsAnzeigen() {
     if (modus && block) block.classList.toggle("d-none", modus.value !== "pulse");
 }
 
+function lightBlitzAnzeigen() {
+    const schalter = document.getElementById("light-show-snare-strobe");
+    const block = document.getElementById("light-show-snare-options");
+
+    if (schalter && block) block.classList.toggle("d-none", !schalter.checked);
+}
+
 function lightSchwelleBeschriften() {
     const regler = document.getElementById("light-show-silence-threshold");
     const anzeige = document.getElementById("light-show-silence-threshold-value");
@@ -5888,6 +5922,7 @@ async function saveLightShowSettings() {
 
     const auswahl = document.getElementById("light-show-fallback");
     const modus = document.getElementById("light-show-effect-mode");
+    const blitz = document.getElementById("light-show-snare-strobe");
 
     const farbe = (kennung) => {
         const element = document.getElementById(kennung);
@@ -5909,6 +5944,9 @@ async function saveLightShowSettings() {
         effect_mode: modus ? modus.value : null,
         pulse_seconds: zahl("light-show-pulse-seconds"),
         pulse_base: zahl("light-show-pulse-base"),
+        snare_strobe: blitz ? blitz.checked : null,
+        snare_sense: zahl("light-show-snare-sense"),
+        snare_power: zahl("light-show-snare-power"),
         background_seconds: zahl("light-show-background-seconds"),
         background_beats: zahl("light-show-background-beats"),
         fade_seconds: zahl("light-show-fade-seconds"),
@@ -5949,6 +5987,8 @@ function lightShowPulsSetzen(laeuft) {
         "light-show-background-seconds", "light-show-background-beats",
         "light-show-fade-seconds",
         "light-show-pulse-seconds", "light-show-pulse-base",
+        "light-show-snare-strobe", "light-show-snare-sense",
+        "light-show-snare-power",
         "light-show-color-low", "light-show-color-mid",
         "light-show-color-high",
         "light-show-color-low-1", "light-show-color-mid-1",
@@ -5967,7 +6007,9 @@ function lightShowPulsSetzen(laeuft) {
                           "light-show-background-beats",
                           "light-show-fade-seconds",
                           "light-show-pulse-seconds",
-                          "light-show-pulse-base"]) {
+                          "light-show-pulse-base",
+                          "light-show-snare-sense",
+                          "light-show-snare-power"]) {
         const element = document.getElementById(kennung);
         if (element) element.addEventListener("input", lightTraegheitBeschriften);
     }
@@ -5978,4 +6020,7 @@ function lightShowPulsSetzen(laeuft) {
     //
     const modus = document.getElementById("light-show-effect-mode");
     if (modus) modus.addEventListener("change", lightPulsAnzeigen);
+
+    const blitzschalter = document.getElementById("light-show-snare-strobe");
+    if (blitzschalter) blitzschalter.addEventListener("change", lightBlitzAnzeigen);
 })();

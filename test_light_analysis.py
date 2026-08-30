@@ -15,7 +15,14 @@ dass die Grundlage stimmt.
 import array
 import math
 
-from lighting.analysis import Bandanalyse, Stimmungserkennung
+from lighting.analysis import (
+    SNARE_AUSSCHLAG,
+    SNARE_EMPFINDLICHKEIT,
+    SNARE_SCHWELLE,
+    Bandanalyse,
+    Stimmungserkennung,
+    snare_grenzen,
+)
 
 RATE = 48000
 BLOCK = 1024
@@ -432,6 +439,289 @@ assert erkennung.zustand == "silence", erkennung.zustand
 
 print("OK: Sprache wird nur erkannt, wenn man es ausdrücklich einschaltet - "
       "Stille immer")
+
+
+# ====================================================================
+# 9. Die Snare
+#
+# Auch das ist keine Instrumentenerkennung, und es soll auch so
+# dastehen: Gemeldet wird ein scharfer, LAUTER Einsatz im
+# Mittenband, der Hoehen mitbringt. In den allermeisten Stuecken ist
+# das die Snare.
+#
+# Geprueft wird deshalb nicht "erkennt sie eine Snare", sondern:
+# Kommt bei einem Schlagzeugmuster ungefaehr die richtige Zahl an,
+# und - viel wichtiger - schweigt sie bei dem, was KEINE Snare ist?
+# ====================================================================
+
+def schlagzeug(kick=True, snare=True, hihat=False, bass=False,
+               bpm=120, takte=8, channels=2) -> list:
+    """
+    Ein einfaches Schlagzeugmuster.
+
+    Kick auf jeder Zaehlzeit, Snare auf jeder zweiten, Hi-Hat auf
+    jeder Achtel, dazu auf Wunsch eine durchgehende Basslinie. Die
+    Snare besteht aus Rumpf (200 Hz) und Teppich (3 kHz) - genau die
+    beiden Anteile, an denen die Erkennung sie festmacht.
+    """
+
+    periode = int(RATE * 60.0 / bpm)
+    kick_laenge = int(0.05 * RATE)
+    snare_laenge = int(0.04 * RATE)
+    achtel = periode // 2
+    hihat_laenge = int(0.02 * RATE)
+
+    daten = array.array("i")
+
+    for n in range(periode * takte):
+
+        stelle = n % periode
+        wert = 0.0
+
+        if kick and stelle < kick_laenge:
+            huelle = 1.0 - stelle / kick_laenge
+            wert += 0.9 * huelle * math.sin(2 * math.pi * 60 * n / RATE)
+
+        if snare and (n // periode) % 2 == 1 and stelle < snare_laenge:
+            huelle = 1.0 - stelle / snare_laenge
+            wert += 0.5 * huelle * math.sin(2 * math.pi * 200 * n / RATE)
+            wert += 0.5 * huelle * math.sin(2 * math.pi * 3000 * n / RATE)
+
+        if hihat:
+            stelle_achtel = n % achtel
+
+            if stelle_achtel < hihat_laenge:
+                huelle = 1.0 - stelle_achtel / hihat_laenge
+                wert += 0.35 * huelle * math.sin(2 * math.pi * 9000 * n / RATE)
+
+        if bass:
+            wert += 0.5 * math.sin(2 * math.pi * 80 * n / RATE)
+
+        roh_wert = int(max(-1.0, min(1.0, wert)) * (2 ** 31 - 1))
+
+        for _ in range(channels):
+            daten.append(roh_wert)
+
+    roh = daten.tobytes()
+    schritt = BLOCK * channels * 4
+
+    return [roh[i:i + schritt] for i in range(0, len(roh) - schritt + 1, schritt)]
+
+
+def snares(bloecke: list,
+           empfindlichkeit: float = SNARE_EMPFINDLICHKEIT) -> int:
+
+    analyse = Bandanalyse(
+        rate=RATE, channels=2, snare_empfindlichkeit=empfindlichkeit
+    )
+
+    return sum(1 for block in bloecke if analyse.verarbeite(block)["snare"])
+
+
+#
+# Die Abbildung Empfindlichkeit -> Schwelle/Ausschlag muss die
+# dokumentierten Anker treffen. Die Mitte des Reglers ist der Stand,
+# der am Geraet gefaellt; laufen die Zahlen davon weg, klingt eine
+# frische Einrichtung anders als die eingestellte.
+#
+schwelle, ausschlag = snare_grenzen(SNARE_EMPFINDLICHKEIT)
+
+assert abs(schwelle - SNARE_SCHWELLE) < 1e-9, (schwelle, SNARE_SCHWELLE)
+assert abs(ausschlag - SNARE_AUSSCHLAG) < 1e-9, (ausschlag, SNARE_AUSSCHLAG)
+
+#
+# Und die Richtung: mehr Empfindlichkeit heisst weniger streng.
+#
+assert snare_grenzen(1.0) < snare_grenzen(0.0), (
+    "Die Empfindlichkeit ist verkehrt herum: mehr muss lockerer heißen."
+)
+
+print("OK: Die Mitte des Reglers trifft die dokumentierten Zahlen")
+
+#
+# Vier Snares in acht Takten. Eine Meldung mehr ist der erste Block:
+# Dort ist die laufende Spitze noch der Anfangswert, und alles ragt
+# darueber hinaus. Das ist beim Kick genauso und fuer Licht
+# verkraftbar - ein Blitz beim Einsetzen der Musik.
+#
+gemeldet = snares(schlagzeug())
+
+assert 4 <= gemeldet <= 6, (
+    f"Bei vier Snares wurden {gemeldet} gemeldet."
+)
+
+print(f"OK: Snares werden erkannt ({gemeldet} Meldungen bei 4 Schlägen)")
+
+#
+# Mit Hi-Hats dazwischen muessen die Snares weiterhin durchkommen.
+#
+gemeldet = snares(schlagzeug(hihat=True))
+
+assert gemeldet >= 4, (
+    f"Mit Hi-Hats kommen nur noch {gemeldet} Snares durch."
+)
+
+print(f"OK: Auch mit Hi-Hats kommen die Snares durch ({gemeldet} Meldungen)")
+
+#
+# Und jetzt der Teil, auf den es ankommt: Was KEINE Snare ist, darf
+# auch keine sein.
+#
+# Ein Signal aus lauter Kicks hat beim ersten Anlauf acht von acht
+# Malen eine Snare gemeldet - die steile Flanke des Kicks laesst auch
+# die Mitten ausschlagen. Das Blitzlicht haette also auf der Bassdrum
+# gezuckt. Erst die Bedingung "es muessen Hoehen dabei sein" hat das
+# getrennt: Beim Kick lagen die bei 0,04 der Spitze, bei der Snare
+# bei 0,65.
+#
+gemeldet = snares(schlagzeug(snare=False))
+
+assert gemeldet <= 1, (
+    f"Ein Signal aus lauter Kicks OHNE Snare hat {gemeldet} Snares gemeldet."
+)
+
+print(f"OK: Der Kick allein löst keine Snare aus ({gemeldet} Meldungen)")
+
+#
+# Und die Hi-Hat auch nicht - die ist fast nur oben und hat keinen
+# Rumpf.
+#
+gemeldet = snares(schlagzeug(kick=False, snare=False, hihat=True))
+
+assert gemeldet <= 1, (
+    f"Hi-Hats allein haben {gemeldet} Snares gemeldet."
+)
+
+print(f"OK: Die Hi-Hat allein löst keine Snare aus ({gemeldet} Meldungen)")
+
+#
+# Auch bei voller Empfindlichkeit nicht - dann traegt die Lautstaerke
+# nichts mehr bei, und die Trennung vom Kick haengt allein an den
+# Hoehen. Ohne diese Bedingung meldete dasselbe Signal acht Snares
+# statt einer.
+#
+gemeldet = snares(schlagzeug(snare=False), 1.0)
+
+assert gemeldet <= 2, (
+    f"Der Kick allein hat bei voller Empfindlichkeit {gemeldet} Snares "
+    f"gemeldet - die Höhen sortieren ihn nicht mehr aus."
+)
+
+print(f"OK: Auch ganz aufgedreht bleibt der Kick draußen ({gemeldet})")
+
+#
+# Der schwierigste Fall, und er ist beim Messen aufgefallen: Kick und
+# Hi-Hat auf demselben Achtel. Der Kick liefert den Rumpf, die Hi-Hat
+# die Hoehen - zusammen sieht das aus wie eine Snare, und keine der
+# beiden festen Bedingungen greift.
+#
+# Das laesst sich mit drei Baendern nicht sauber trennen, und es soll
+# hier auch nicht behauptet werden. Was gilt: Wer die Empfindlichkeit
+# herunterdreht, wird es los - das ist genau die Aufgabe des Reglers.
+# An dem kuenstlichen Muster hier kommen bei voller Empfindlichkeit
+# alle acht Paare durch, ganz unten noch eines.
+#
+gemeldet = snares(schlagzeug(snare=False, hihat=True), 0.0)
+
+assert gemeldet <= 2, (
+    f"Kick und Hi-Hat zusammen haben auch bei kleinster Empfindlichkeit "
+    f"{gemeldet} Snares gemeldet - dann hilft der Regler nicht mehr."
+)
+
+assert snares(schlagzeug(snare=False, hihat=True), 1.0) > gemeldet, (
+    "Bei voller Empfindlichkeit muss mehr durchkommen - sonst tut der "
+    "Regler an dieser Stelle nichts."
+)
+
+print(f"OK: Kick und Hi-Hat lassen sich mit dem Regler aussperren ({gemeldet})")
+
+#
+# Und der Rumpf ist es, der die Hi-Hat aussortiert - auch ganz
+# aufgedreht, wo die Lautstaerke nichts mehr beitraegt und alles an
+# der Bedingung "Mitten gegen Hoehen" haengt.
+#
+gemeldet = snares(schlagzeug(kick=False, snare=False, hihat=True), 1.0)
+
+assert gemeldet <= 1, (
+    f"Hi-Hats allein haben bei voller Empfindlichkeit {gemeldet} Snares "
+    f"gemeldet - der fehlende Rumpf sortiert sie nicht mehr aus."
+)
+
+print(f"OK: Auch ganz aufgedreht bleibt die Hi-Hat draußen ({gemeldet})")
+
+#
+# Ein gehaltener Ton ist keine Snare, auch wenn er laut ist.
+#
+# Ein Saegezahn hat einen Grundton in den Mitten und Obertoene bis
+# weit nach oben - er erfuellt also alles ausser der einen
+# Bedingung, dass es ein AUSSCHLAG sein muss und kein Dauerzustand.
+# Ohne die meldete er 25 Snares in vier Sekunden; das Blitzlicht
+# haette durch ein gehaltenes Gitarrenbrett hindurchgeflackert.
+#
+def saegezahn(hz: float = 400.0, bloecke: int = 200,
+              amplitude: float = 0.7, channels: int = 2) -> list:
+
+    daten = array.array("i")
+
+    for n in range(BLOCK * bloecke):
+
+        wert = amplitude * (2.0 * ((n * hz / RATE) % 1.0) - 1.0)
+
+        roh_wert = int(wert * (2 ** 31 - 1))
+
+        for _ in range(channels):
+            daten.append(roh_wert)
+
+    roh = daten.tobytes()
+    schritt = BLOCK * channels * 4
+
+    return [roh[i:i + schritt] for i in range(0, len(roh) - schritt + 1, schritt)]
+
+
+gemeldet = snares(saegezahn())
+
+assert gemeldet <= 8, (
+    f"Ein gehaltener Ton hat {gemeldet} Snares gemeldet - damit blitzt es "
+    f"durch jede laute Fläche hindurch."
+)
+
+print(f"OK: Ein gehaltener Ton ist keine Snare ({gemeldet} Meldungen in 200 Blöcken)")
+
+#
+# In der Stille bleibt es still. Dafuer sorgt die laufende Spitze:
+# Sie faellt nie unter ihren Mindestwert, und gegen den wird
+# gemessen.
+#
+assert snares([bytes(BLOCK * 2 * 4)] * 200) == 0, (
+    "In der Stille darf keine Snare gemeldet werden."
+)
+
+print("OK: In der Stille gibt es keine Snare")
+
+#
+# Und der Regler muss wirklich reichen.
+#
+# Das war der Anlass fuer die Umstellung: Vorher bewegte er nur eine
+# von vier Bedingungen, und am Geraet blieb nur der unterste Anschlag
+# brauchbar. Jetzt dreht er Schwelle und Ausschlag zugleich - und
+# zwar so weit, dass zwischen den Enden Faktoren liegen und nicht
+# ein paar Prozent.
+#
+muster = schlagzeug(hihat=True, bass=True)
+
+streng = snares(muster, 0.0)
+mitte = snares(muster, SNARE_EMPFINDLICHKEIT)
+locker = snares(muster, 1.0)
+
+assert streng < mitte < locker, (
+    f"Der Regler reicht nicht: {streng} / {mitte} / {locker}"
+)
+
+assert locker >= streng * 3, (
+    f"Zwischen den Enden liegt zu wenig: {streng} gegen {locker}"
+)
+
+print(f"OK: Der Regler reicht von {streng} über {mitte} bis {locker} Meldungen")
 
 
 print("Alle Analyse-Tests erfolgreich.")
