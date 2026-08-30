@@ -37,7 +37,37 @@ class NetzwerkMixin:
         return self.wlan_control.get_status()
 
 
-    def set_home_wifi(self, ssid: str, password: str) -> tuple[bool, str]:
+    #
+    # Ohne Funkregion geht gar nichts.
+    #
+    # Auf Raspberry Pi OS bleibt das Funkgeraet per rfkill gesperrt,
+    # solange keine Region gesetzt ist. NetworkManager meldet dann
+    # "Connection 'XRack-Home' is not available on device wlan0
+    # because device is not available" - eine Meldung, die alles
+    # Moegliche bedeuten kann, nur nicht das, woran es liegt.
+    #
+    # Am Geraet ist genau das passiert: In der Auswahl STAND
+    # Deutschland, gespeichert war sie aber nie - die Funkregion hat
+    # ihren eigenen Knopf. Deshalb wird sie jetzt beim Speichern der
+    # WLAN-Daten mitgeschickt, und fehlt sie ganz, sagt die Meldung
+    # das auch.
+    #
+    OHNE_REGION = (
+        "Es ist keine Funkregion gesetzt - ohne sie bleibt das "
+        "Funkgerät gesperrt. Bitte oben die Funkregion wählen."
+    )
+
+    def _region_pruefen(self, country: str) -> str:
+        """Leer, wenn eine Region da ist - sonst die Meldung dazu."""
+
+        if (country or "").strip():
+            return ""
+
+        return "" if self.wlan_control.wifi_country() else self.OHNE_REGION
+
+    def set_home_wifi(
+        self, ssid: str, password: str, country: str = ""
+    ) -> tuple[bool, str]:
         """
         Setzt SSID/Passwort der Heimnetz-WLAN-Verbindung neu.
         """
@@ -48,10 +78,17 @@ class NetzwerkMixin:
         if not 8 <= len(password) <= 63:
             return False, "Passwort muss 8-63 Zeichen lang sein."
 
-        return self.wlan_control.set_home_wifi(ssid, password)
+        fehlt = self._region_pruefen(country)
+
+        if fehlt:
+            return False, fehlt
+
+        return self.wlan_control.set_home_wifi(ssid, password, country)
 
 
-    def set_ap_wifi(self, ssid: str, password: str) -> tuple[bool, str]:
+    def set_ap_wifi(
+        self, ssid: str, password: str, country: str = ""
+    ) -> tuple[bool, str]:
         """
         Setzt SSID/Passwort des Access Points neu.
         """
@@ -62,7 +99,12 @@ class NetzwerkMixin:
         if not 8 <= len(password) <= 63:
             return False, "Passwort muss 8-63 Zeichen lang sein."
 
-        return self.wlan_control.set_ap_wifi(ssid, password)
+        fehlt = self._region_pruefen(country)
+
+        if fehlt:
+            return False, fehlt
+
+        return self.wlan_control.set_ap_wifi(ssid, password, country)
 
 
     def set_wifi_country(self, code: str) -> tuple[bool, str]:

@@ -4150,10 +4150,26 @@ async function saveApWifi() {
 }
 
 async function submitWifiChange(url, ssid, password) {
+
+    //
+    // Die Funkregion faehrt mit.
+    //
+    // Sie hat ihren eigenen Speichern-Knopf, und genau das war die
+    // Falle: Am Geraet stand in der Auswahl Deutschland, gespeichert
+    // war sie nie - das Funkgeraet blieb gesperrt, und NetworkManager
+    // meldete kryptisch "device is not available". Wer das Land
+    // auswaehlt und dann die WLAN-Daten speichert, meint beides.
+    //
+    const land = document.getElementById("settings-wifi-country");
+
     const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ssid, password })
+        body: JSON.stringify({
+            ssid,
+            password,
+            country: land ? land.value : ""
+        })
     });
     const result = await response.json();
 

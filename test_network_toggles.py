@@ -1129,4 +1129,164 @@ assert "Bridge kaputt" in meldung, meldung
 
 print("OK: Ein fehlgeschlagenes Umschalten meldet einen Fehler")
 
+# ====================================================================
+# Die Funkregion fährt beim Speichern der WLAN-Daten mit
+#
+# Am Gerät gemeldet: Der Pi war ohne WLAN eingerichtet worden, in der
+# Oberfläche wurde WLAN nachgetragen - und es kam
+#
+#   Error: Connection activation failed: Connection 'XRack-Home' is
+#   not available on device wlan0 because device is not available
+#
+# In der Auswahl STAND Deutschland. Gespeichert war sie nie: Die
+# Funkregion hat ihren eigenen Knopf. Ohne gesetzte Region bleibt das
+# Funkgerät auf Raspberry Pi OS per rfkill gesperrt, und
+# NetworkManager meldet das mit einem Satz, der alles Mögliche
+# bedeuten kann, nur nicht das, woran es liegt.
+# ====================================================================
+
+def _wlan_attrappe(region: str | None):
+    """Anwendung mit protokollierendem WLAN-Teil."""
+
+    aufrufe = []
+
+    zeug = _types.SimpleNamespace(
+        wlan_control=_types.SimpleNamespace(
+            wifi_country=lambda: region,
+            set_home_wifi=lambda ssid, passwort, land="": (
+                aufrufe.append(("home", ssid, passwort, land)) or (True, "")
+            ),
+            set_ap_wifi=lambda ssid, passwort, land="": (
+                aufrufe.append(("ap", ssid, passwort, land)) or (True, "")
+            ),
+        ),
+        logger=_logging.getLogger("XRack-Test"),
+    )
+
+    #
+    # Dieselbe Machart wie bei der Bridge-Attrappe weiter oben: Was
+    # die geprueften Methoden von sich selbst brauchen, wird von der
+    # echten Klasse geborgt.
+    #
+    zeug.OHNE_REGION = Application.OHNE_REGION
+    zeug._region_pruefen = lambda land: Application._region_pruefen(zeug, land)
+
+    return zeug, aufrufe
+
+
+#
+# Region in der Auswahl, aber nicht gespeichert: Sie muss beim
+# Speichern der WLAN-Daten mitgehen.
+#
+app, aufrufe = _wlan_attrappe(region=None)
+
+erfolg, meldung = Application.set_home_wifi(app, "Bandbus", "geheim123", "DE")
+
+assert erfolg is True, meldung
+assert aufrufe == [("home", "Bandbus", "geheim123", "DE")], (
+    "Die Funkregion kommt beim Skript nicht an: " + str(aufrufe)
+)
+
+print("OK: Die gewählte Funkregion fährt beim WLAN-Speichern mit")
+
+
+#
+# Dasselbe für den Access Point.
+#
+app, aufrufe = _wlan_attrappe(region=None)
+
+erfolg, meldung = Application.set_ap_wifi(app, "XRack", "geheim123", "AT")
+
+assert erfolg is True, meldung
+assert aufrufe == [("ap", "XRack", "geheim123", "AT")], str(aufrufe)
+
+print("OK: Auch beim Access Point fährt sie mit")
+
+
+#
+# Gar keine Region - weder gewählt noch gesetzt: Dann muss die
+# Meldung sagen, woran es liegt, statt es NetworkManager zu
+# überlassen.
+#
+app, aufrufe = _wlan_attrappe(region=None)
+
+erfolg, meldung = Application.set_home_wifi(app, "Bandbus", "geheim123")
+
+assert erfolg is False, "Ohne Funkregion darf das nicht als Erfolg durchgehen."
+assert "Funkregion" in meldung, meldung
+assert aufrufe == [], (
+    "Ohne Region darf das Skript gar nicht erst laufen: " + str(aufrufe)
+)
+
+print("OK: Ohne Funkregion sagt die Meldung, woran es liegt")
+
+
+#
+# Ist am Gerät schon eine Region gesetzt, geht es ohne Auswahl
+# weiter - sonst könnte man vorhandene Zugangsdaten nicht mehr
+# ändern, ohne das Land noch einmal anzugeben.
+#
+app, aufrufe = _wlan_attrappe(region="DE")
+
+erfolg, meldung = Application.set_home_wifi(app, "Bandbus", "geheim123")
+
+assert erfolg is True, meldung
+assert aufrufe == [("home", "Bandbus", "geheim123", "")], str(aufrufe)
+
+print("OK: Mit gesetzter Region geht es auch ohne Auswahl weiter")
+
+
+#
+# Und die Strecke dazwischen: Die Route muss das Feld auch
+# weiterreichen.
+#
+# Sie ist nur eine Durchreiche - genau dort ist der Wert aber
+# verlorengegangen, und eine Durchreiche, die etwas fallenlaesst,
+# sieht man ihr nicht an. Geprueft wird ohne HTTP, indem die Funktion
+# direkt gerufen wird: Das Projekt hat kein httpx, und fuer zwei
+# Zeilen Durchreiche lohnt keine neue Abhaengigkeit.
+#
+from web.routes.settings import (  # noqa: E402
+    WifiCredentials,
+    set_ap_wifi as route_ap_wifi,
+    set_home_wifi as route_home_wifi,
+)
+
+
+def _anfrage(anwendung):
+    """Das Wenigste, was die Route von einer Anfrage liest."""
+
+    return _types.SimpleNamespace(
+        app=_types.SimpleNamespace(
+            state=_types.SimpleNamespace(application=anwendung)
+        )
+    )
+
+
+for route, name in ((route_home_wifi, "home"), (route_ap_wifi, "ap")):
+
+    gesehen = []
+
+    anwendung = _types.SimpleNamespace(
+        set_home_wifi=lambda s, p, land="": (
+            gesehen.append((s, p, land)) or (True, "")
+        ),
+        set_ap_wifi=lambda s, p, land="": (
+            gesehen.append((s, p, land)) or (True, "")
+        ),
+    )
+
+    antwort = route(
+        WifiCredentials(ssid="Bandbus", password="geheim123", country="DE"),
+        _anfrage(anwendung),
+    )
+
+    assert antwort["success"] is True, antwort
+    assert gesehen == [("Bandbus", "geheim123", "DE")], (
+        f"Die Route '{name}' laesst die Funkregion fallen: {gesehen}"
+    )
+
+print("OK: Die Routen reichen die Funkregion weiter")
+
+
 print("Alle Tests erfolgreich.")

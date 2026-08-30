@@ -29,6 +29,14 @@ class WifiCredentials(BaseModel):
     ssid: str
     password: str
 
+    #
+    # Die Funkregion faehrt mit. Sie hat zwar ihren eigenen Knopf,
+    # aber ohne sie bleibt das Funkgeraet gesperrt - und wer sie in
+    # der Auswahl stehen hat, ohne sie gespeichert zu haben, soll
+    # nicht an einer Meldung von NetworkManager scheitern.
+    #
+    country: str = ""
+
 
 class BridgeSelection(BaseModel):
     enabled: bool
@@ -200,6 +208,7 @@ def set_home_wifi(
     success, message = application.set_home_wifi(
         credentials.ssid,
         credentials.password,
+        credentials.country,
     )
 
     return {
@@ -219,6 +228,7 @@ def set_ap_wifi(
     success, message = application.set_ap_wifi(
         credentials.ssid,
         credentials.password,
+        credentials.country,
     )
 
     return {
