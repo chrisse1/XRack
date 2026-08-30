@@ -5013,6 +5013,7 @@ function renderLighting(stand) {
 
     if (!dmx.service_running) warnungen.push(I18N.light_service_missing);
     else if (!dmx.adapter_present) warnungen.push(I18N.light_adapter_missing);
+    else if (!dmx.patched) warnungen.push(I18N.light_unpatched);
 
     if (stand.overlaps && stand.overlaps.length > 0) {
         warnungen.push(I18N.light_overlap_warning);
@@ -5061,6 +5062,91 @@ async function lightRequest(url, koerper) {
     }
 
     return result.success;
+}
+
+// ------------------------------------------------------------
+// Der DMX-Ausgang
+//
+// Nach der Installation kennt der Lichtdienst das Kabel, schickt
+// aber noch nichts hinaus: Der Anschluss muss erst dem Universum
+// zugeordnet werden. Das ging bisher nur im Terminal.
+//
+// Die Auswahl wird bewusst NICHT aus renderLighting gefuellt. Die
+// Lichtkarte zeichnet sich zweimal je Sekunde neu; ein Auswahlfeld,
+// das dabei jedes Mal neu entsteht, klappt beim Anklicken sofort
+// wieder zu. Geladen wird deshalb nur beim Oeffnen der
+// Einstellungen und nach einer Zuordnung.
+// ------------------------------------------------------------
+
+let lightPorts = [];
+
+async function loadLightPorts() {
+    const auswahl = document.getElementById("settings-light-port");
+    if (!auswahl) return;
+
+    const knopf = document.getElementById("btn-light-port-patch");
+    const zustand = document.getElementById("settings-light-port-state");
+
+    let daten = {};
+
+    try {
+        const response = await fetch("/api/lighting/dmx/ports");
+        daten = await response.json();
+    } catch (error) {
+        console.error(error);
+    }
+
+    lightPorts = daten.ports || [];
+
+    //
+    // Eine schon getroffene Wahl ueberlebt das Neuaufbauen - sonst
+    // springt die Auswahl unter der Hand zurueck.
+    //
+    const vorher = auswahl.value;
+
+    auswahl.innerHTML = "";
+
+    for (const port of lightPorts) {
+        const eintrag = document.createElement("option");
+        eintrag.value = port.id;
+        eintrag.textContent = port.label;
+        auswahl.appendChild(eintrag);
+    }
+
+    const zugeordnet = lightPorts.find(port => port.patched);
+
+    if (lightPorts.some(port => port.id === vorher)) auswahl.value = vorher;
+    else if (zugeordnet) auswahl.value = zugeordnet.id;
+
+    auswahl.disabled = lightPorts.length === 0;
+    if (knopf) knopf.disabled = lightPorts.length === 0;
+
+    if (!zustand) return;
+
+    if (lightPorts.length === 0) {
+        zustand.textContent = I18N.light_output_none;
+        zustand.className = "small text-danger-emphasis";
+    } else if (zugeordnet) {
+        zustand.textContent =
+            I18N.light_output_patched.replace("{name}", zugeordnet.label);
+        zustand.className = "small text-success-emphasis";
+    } else {
+        zustand.textContent = I18N.light_output_unpatched;
+        zustand.className = "small text-danger-emphasis";
+    }
+}
+
+async function assignLightPort() {
+    const auswahl = document.getElementById("settings-light-port");
+    if (!auswahl || !auswahl.value) return;
+
+    const erfolg = await lightRequest(
+        "/api/lighting/dmx/patch", { port: auswahl.value }
+    );
+
+    await loadLightPorts();
+
+    if (erfolg) await refreshLighting();
 }
 
 async function setLightBrightness(fixtureId, brightness) {
@@ -5419,6 +5505,13 @@ async function toggleLighting(event) {
 
     await lightRequest("/api/lighting/enabled", { enabled: schalter.checked });
     await refreshLighting();
+
+    //
+    // Wer die Lichtsteuerung gerade erst einschaltet, hat den
+    // Ausgang noch nicht zugeordnet - dann soll die Auswahl darunter
+    // sofort etwas anzeigen und nicht erst beim naechsten Oeffnen.
+    //
+    if (schalter.checked) await loadLightPorts();
 }
 
 (function verdrahteLicht() {
@@ -5528,9 +5621,14 @@ async function toggleLighting(event) {
         });
     }
 
+    knopf("btn-light-port-patch", assignLightPort);
+
     const einstellungen = document.getElementById("settingsModal");
     if (einstellungen) {
-        einstellungen.addEventListener("show.bs.modal", refreshLighting);
+        einstellungen.addEventListener("show.bs.modal", () => {
+            refreshLighting();
+            loadLightPorts();
+        });
     }
 
     refreshLighting();

@@ -140,14 +140,11 @@ without DMX you never see it.
   automatically — they stay yours, and what you set by hand stays put
   while the show runs.
 
-After installing, the DMX output has to be assigned to universe 1 once:
-
-```bash
-ola_dev_info                              # find device and port
-ola_patch -d <device> -p <port> -u 1
-```
-
-OLA remembers that across restarts.
+After installing, the DMX output has to be assigned once — under
+*Settings → Lighting*, pick the port your cable is on and press
+*Assign*. Until then the fixtures stay dark even though service and
+cable are fine; XRack says so in the lighting card. The assignment
+survives restarts.
 
 #### Looking after it
 
@@ -333,15 +330,11 @@ Licht* — wer kein DMX hat, sieht es gar nicht erst.
   angesteuert — die gehören dir, und was du von Hand einstellst, bleibt
   auch während der Show stehen.
 
-Nach der Installation muss der DMX-Ausgang einmal dem Universum 1
-zugeordnet werden:
-
-```bash
-ola_dev_info                              # Gerät und Port herausfinden
-ola_patch -d <Gerät> -p <Port> -u 1
-```
-
-OLA merkt sich das über Neustarts hinweg.
+Nach der Installation muss der DMX-Ausgang einmal zugeordnet werden:
+in den *Einstellungen* unter *Licht* den Anschluss auswählen, an dem
+das Kabel hängt, und auf *Zuordnen* drücken. Bis dahin bleiben die
+Lampen dunkel, obwohl Dienst und Kabel in Ordnung sind — die
+Lichtkarte sagt das auch. Die Zuordnung übersteht Neustarts.
 
 #### Pflege
 

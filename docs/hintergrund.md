@@ -182,6 +182,33 @@ diesem Zeitpunkt gab. Bis zum nächsten Neustart lief alles, weil der alte
 Daemon noch lief — nach dem Hochfahren stand der Dienst auf `disabled`, und
 das Licht blieb aus.
 
+### Die Zuordnung zum Universum
+
+Ein eingerichtetes Plugin sendet noch nichts. Der Anschluss des
+Kabels muss erst einem Universum zugeordnet werden — auf der
+Kommandozeile `ola_patch -d <Gerät> -p <Port> -u 1`, nachdem
+`ola_dev_info` die beiden Nummern verraten hat.
+
+Das ist der Schritt, den man vergisst, weil von außen alles heil
+aussieht: Der Dienst läuft, das Kabel steckt, XRack meldet
+erfolgreich gesendete Bilder — und es bleibt dunkel. Deshalb steht
+die Zuordnung mit im Zustandsbericht, und die Lichtkarte benennt den
+Fall.
+
+Erledigen lässt er sich in den Einstellungen unter *Licht*. XRack
+spricht dafür dieselbe Web-Schnittstelle von olad an, über die auch
+die Kanalwerte gehen (`/json/get_ports`, `/new_universe`,
+`/modify_universe`) — kein Aufruf von `ola_patch`, kein sudo, kein
+Wrapper-Skript. Nach dem Auftrag wird nachgesehen, ob der Anschluss
+wirklich im Universum steht: olad antwortet auch dann mit „ok", wenn
+die Zuordnung im Hintergrund scheitert, etwa weil ein anderes Plugin
+das Kabel hält.
+
+XRack sendet in genau ein Universum, also gibt es genau einen
+Ausgang: Eine neue Zuordnung ersetzt die vorherige. Sonst bliebe ein
+einmal falsch gewählter Anschluss für immer drin, und man bräuchte
+doch wieder ein Terminal, um ihn loszuwerden.
+
 ### Kabel
 
 Angesteuert werden USB-DMX-Kabel mit FTDI-Chip (FT232R und Verwandte) —

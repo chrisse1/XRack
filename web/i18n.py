@@ -428,6 +428,20 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Steuert DMX-Lampen über ein USB-DMX-Kabel. Ohne Kabel "
             "nicht nötig."
         ),
+        "light_output_title": "DMX-Ausgang",
+        "light_output_hint": (
+            "Einmalig nach der Installation: Hier steht, an welchen "
+            "Anschluss XRack sendet. XRack nutzt genau einen - wird "
+            "ein anderer gewählt, ersetzt er den bisherigen."
+        ),
+        "light_output_assign": "Zuordnen",
+        "light_output_none": (
+            "Kein Ausgang gefunden. Läuft der Lichtdienst, und steckt "
+            "das DMX-Kabel?"
+        ),
+        "light_output_patched": "Zugeordnet: {name}",
+        "light_output_unpatched": "Noch kein Ausgang zugeordnet.",
+        "light_output_done": "Zugeordnet.",
         "light_setup": "Einrichten",
         "light_blackout": "Alles aus",
         "light_no_fixtures": (
@@ -437,6 +451,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Der Lichtdienst antwortet nicht. Läuft olad?"
         ),
         "light_adapter_missing": "Kein DMX-Kabel erkannt.",
+        "light_unpatched": (
+            "Es ist noch kein DMX-Ausgang zugeordnet - die Lampen "
+            "bleiben dunkel. In den Einstellungen unter \"Licht\"."
+        ),
         "light_overlap_warning": (
             "Achtung: Zwei Lampen belegen dieselben Kanäle. Das ist "
             "erlaubt, aber selten gewollt."
@@ -976,6 +994,20 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Controls DMX fixtures through a USB-to-DMX cable. Not "
             "needed without one."
         ),
+        "light_output_title": "DMX output",
+        "light_output_hint": (
+            "Once after installation: this is the port XRack sends "
+            "to. XRack uses exactly one - picking another replaces "
+            "the current one."
+        ),
+        "light_output_assign": "Assign",
+        "light_output_none": (
+            "No output found. Is the lighting service running and the "
+            "DMX cable plugged in?"
+        ),
+        "light_output_patched": "Assigned: {name}",
+        "light_output_unpatched": "No output assigned yet.",
+        "light_output_done": "Assigned.",
         "light_setup": "Set up",
         "light_blackout": "All off",
         "light_no_fixtures": (
@@ -985,6 +1017,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "The lighting service is not responding. Is olad running?"
         ),
         "light_adapter_missing": "No DMX cable detected.",
+        "light_unpatched": (
+            "No DMX output assigned yet - the fixtures stay dark. "
+            "Under \"Lighting\" in the settings."
+        ),
         "light_overlap_warning": (
             "Careful: two fixtures use the same channels. That is "
             "allowed, but rarely intended."

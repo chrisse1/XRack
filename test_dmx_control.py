@@ -13,6 +13,7 @@ tatsächlich auf das Kabel bringt und ob die Lampe angeht. Das
 entscheidet sich am Gerät.
 """
 
+import json
 import os
 import subprocess
 import tempfile
@@ -29,10 +30,87 @@ from core.dmx_control import DmxControl
 # ====================================================================
 
 class OladAttrappe(BaseHTTPRequestHandler):
-    """Nimmt POSTs auf /set_dmx entgegen und merkt sich den Inhalt."""
+    """
+    Nimmt POSTs entgegen, merkt sich den Inhalt - und fuehrt Buch
+    ueber Anschluesse und Universen.
+
+    Das Buchfuehren ist noetig, weil XRack nach einer Zuordnung
+    nachsieht, ob sie wirklich angekommen ist. Eine Attrappe, die
+    jeden Auftrag mit "ok" beantwortet und sonst nichts tut, koennte
+    genau diesen Teil nicht pruefen - und der ist der wichtigste:
+    olad antwortet auch dann mit 200, wenn die Zuordnung im
+    Hintergrund scheitert.
+    """
 
     empfangen = []
+    abfragen = []
     antwort_code = 200
+
+    #
+    # Der Anfangszustand nach der Installation: Anschluesse da,
+    # keiner einem Universum zugeordnet.
+    #
+    frei = []
+    universen = []
+    zugeordnet = []
+
+    #
+    # Damit sich der Fall nachstellen laesst, dass olad den Auftrag
+    # freundlich annimmt und trotzdem nichts patcht.
+    #
+    stur = False
+
+    @classmethod
+    def zuruecksetzen(cls, frei=None):
+
+        cls.empfangen = []
+        cls.abfragen = []
+        cls.antwort_code = 200
+        cls.stur = False
+        cls.universen = []
+        cls.zugeordnet = []
+        cls.frei = list(frei or [])
+
+    @classmethod
+    def _uebernehmen(cls, felder):
+        """Wie olad: add_ports zuordnen, remove_ports wieder freigeben."""
+
+        if cls.stur:
+            return
+
+        for kennung in felder.get("remove_ports", [""])[0].split(","):
+
+            port = next(
+                (p for p in cls.zugeordnet if p["id"] == kennung), None
+            )
+
+            if port is not None:
+                cls.zugeordnet.remove(port)
+                cls.frei.append(port)
+
+        for kennung in felder.get("add_ports", [""])[0].split(","):
+
+            port = next((p for p in cls.frei if p["id"] == kennung), None)
+
+            if port is not None:
+                cls.frei.remove(port)
+                cls.zugeordnet.append(port)
+
+        cls.universen = [{
+            "id": 1,
+            "name": felder.get("name", ["-"])[0],
+            "input_ports": 0,
+            "output_ports": len(
+                [p for p in cls.zugeordnet if p.get("is_output")]
+            ),
+        }]
+
+    def _antworten(self, inhalt, code=200):
+
+        self.send_response(code)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(inhalt.encode("utf-8"))
 
     def do_POST(self):
 
@@ -41,15 +119,55 @@ class OladAttrappe(BaseHTTPRequestHandler):
 
         OladAttrappe.empfangen.append((self.path, koerper))
 
+        if self.path in ("/new_universe", "/modify_universe"):
+            OladAttrappe._uebernehmen(urllib.parse.parse_qs(koerper))
+
         self.send_response(OladAttrappe.antwort_code)
         self.end_headers()
         self.wfile.write(b"ok")
 
     def do_GET(self):
 
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"OLA")
+        pfad = self.path.split("?", 1)[0]
+
+        OladAttrappe.abfragen.append(pfad)
+
+        if pfad == "/json/universe_plugin_list":
+            self._antworten(json.dumps({
+                "universes": OladAttrappe.universen,
+                "plugins": [],
+            }))
+            return
+
+        if pfad == "/json/get_ports":
+            self._antworten(json.dumps(OladAttrappe.frei))
+            return
+
+        if pfad == "/json/universe_info":
+
+            #
+            # Genau wie olad: Gibt es das Universum nicht, kommt ein
+            # Fehler zurueck - keine leere Liste.
+            #
+            if not OladAttrappe.universen:
+                self._antworten("Universe doesn't exist", 500)
+                return
+
+            self._antworten(json.dumps({
+                "id": 1,
+                "name": OladAttrappe.universen[0]["name"],
+                "merge_mode": "HTP",
+                "input_ports": [
+                    p for p in OladAttrappe.zugeordnet
+                    if not p.get("is_output")
+                ],
+                "output_ports": [
+                    p for p in OladAttrappe.zugeordnet if p.get("is_output")
+                ],
+            }))
+            return
+
+        self._antworten("OLA")
 
     def log_message(self, *args):
         """Stille - sonst rauscht der Testlauf voll."""
@@ -308,14 +426,264 @@ with tempfile.TemporaryDirectory() as tmp:
     assert stand["channels"] == 512, stand
     assert len(stand["adapters"]) == 1, stand
 
-    print("OK: Der Statusbericht nennt Dienst, Kabel und Universum")
+    #
+    # Ohne zugeordneten Ausgang sieht von aussen alles heil aus:
+    # Dienst laeuft, Kabel steckt, Senden meldet Erfolg - und es
+    # bleibt dunkel. Deshalb muss die Zuordnung mit im Bericht
+    # stehen, sonst kann die Oberflaeche den Fall nicht benennen.
+    #
+    assert stand["patched"] is False, stand
+
+    print("OK: Der Statusbericht nennt Dienst, Kabel, Universum und Zuordnung")
 
     server.shutdown()
     server.server_close()
 
 
 # ====================================================================
-# 8. Die Einrichtung in install.sh
+# 8. Den Ausgang dem Universum zuordnen
+#
+# Nach der Installation kennt olad das Kabel, schickt aber noch
+# nichts hinaus: Der Anschluss muss erst einem Universum zugeordnet
+# werden. Auf der Kommandozeile ist das "ola_patch -d .. -p .. -u 1";
+# XRack macht denselben Schritt ueber die Web-Schnittstelle, damit
+# niemand dafuer ein Terminal braucht.
+# ====================================================================
+
+ANSCHLUESSE = [
+    {"device": "FT232R USB UART", "description": "Serial: A50285BI",
+     "id": "2-O-0", "is_output": True},
+    {"device": "FT232R USB UART", "description": "Serial: A50285BI",
+     "id": "2-O-1", "is_output": True},
+    {"device": "Dummy Device", "description": "Dummy Port 0",
+     "id": "1-O-0", "is_output": True},
+    {"device": "E1.31 (DMX over ACN)", "description": "Universe 1",
+     "id": "3-I-0", "is_output": False},
+]
+
+
+def frische_attrappe() -> tuple:
+    """Ein Dienst im Zustand direkt nach der Installation."""
+
+    OladAttrappe.zuruecksetzen([dict(port) for port in ANSCHLUESSE])
+
+    return dienst_starten()
+
+
+server, adresse = frische_attrappe()
+
+dmx = DmxControl(base_url=adresse)
+
+anschluesse = dmx.ports()
+
+#
+# Eingaenge gehoeren nicht in die Auswahl: Dorthin kann XRack nichts
+# schicken.
+#
+assert [port["id"] for port in anschluesse] == ["2-O-0", "2-O-1", "1-O-0"], (
+    anschluesse
+)
+
+#
+# Der Anschluss des Dummy-Plugins fuehrt nirgendwohin. Verstecken
+# waere falsch - zum Ausprobieren ist er gedacht -, aber er darf
+# nicht obenan stehen, sonst zeigt der erste Vorschlag auf einen
+# Anschluss, an dem garantiert keine Lampe haengt.
+#
+assert anschluesse[-1]["device"] == "Dummy Device", anschluesse
+
+assert anschluesse[0]["label"] == (
+    "FT232R USB UART - Serial: A50285BI (Ausgang 0)"
+), anschluesse[0]
+
+assert not any(port["patched"] for port in anschluesse), anschluesse
+assert dmx.patched is False, "Ohne Universum darf nichts zugeordnet sein."
+
+print("OK: Die Auswahl nennt nur Ausgänge, Dummy zuletzt")
+
+
+# --------------------------------------------------------------------
+# Unsinn wird abgewiesen, bevor olad davon erfaehrt
+# --------------------------------------------------------------------
+
+OladAttrappe.empfangen = []
+
+for unsinn in ("3-I-0", "quatsch", "", "2-O"):
+
+    erfolg, meldung = dmx.patch(unsinn)
+
+    assert erfolg is False, f"'{unsinn}' wurde als Ausgang angenommen."
+    assert meldung, "Ein Fehlschlag ohne Begründung hilft niemandem."
+
+assert OladAttrappe.empfangen == [], (
+    "Für eine unsinnige Kennung darf gar kein Auftrag hinausgehen: "
+    f"{OladAttrappe.empfangen}"
+)
+
+print("OK: Eingänge und Unsinn werden abgewiesen, ohne olad zu behelligen")
+
+
+# --------------------------------------------------------------------
+# Die erste Zuordnung: Das Universum gibt es noch gar nicht
+# --------------------------------------------------------------------
+
+OladAttrappe.empfangen = []
+
+erfolg, meldung = dmx.patch("2-O-1")
+
+assert erfolg is True, meldung
+
+pfad, koerper = OladAttrappe.empfangen[-1]
+felder = urllib.parse.parse_qs(koerper)
+
+assert pfad == "/new_universe", (
+    "Gibt es noch kein Universum, muss es angelegt werden: " + pfad
+)
+assert felder["id"] == ["1"], felder
+assert felder["add_ports"] == ["2-O-1"], felder
+
+assert dmx.patched is True, "Nach der Zuordnung muss der Stand umspringen."
+
+anschluesse = dmx.ports()
+
+#
+# Der zugeordnete Anschluss taucht bei olad nicht mehr unter den
+# freien auf. Faende XRack ihn deshalb nicht mehr, verschwaende er
+# aus der Auswahl - und niemand koennte sehen, worauf gesendet wird.
+#
+zugeordnet = [port for port in anschluesse if port["patched"]]
+
+assert [port["id"] for port in zugeordnet] == ["2-O-1"], anschluesse
+assert len(anschluesse) == 3, anschluesse
+
+print("OK: Die erste Zuordnung legt das Universum an und bleibt sichtbar")
+
+
+# --------------------------------------------------------------------
+# Die zweite Zuordnung ersetzt die erste
+#
+# Genau der Fall, um den es geht: Beim ersten Mal wurde der falsche
+# Anschluss erwischt. Bliebe er drin, braeuchte man doch wieder ein
+# Terminal, um ihn loszuwerden.
+# --------------------------------------------------------------------
+
+OladAttrappe.universen[0]["name"] = "Bühne"
+OladAttrappe.empfangen = []
+
+erfolg, meldung = dmx.patch("2-O-0")
+
+assert erfolg is True, meldung
+
+pfad, koerper = OladAttrappe.empfangen[-1]
+felder = urllib.parse.parse_qs(koerper)
+
+assert pfad == "/modify_universe", (
+    "Ein vorhandenes Universum wird geändert, nicht neu angelegt: " + pfad
+)
+assert felder["add_ports"] == ["2-O-0"], felder
+assert felder["remove_ports"] == ["2-O-1"], felder
+
+#
+# modify_universe verlangt einen Namen. Waere hier stur "XRack"
+# eingesetzt, bekaeme ein von Hand vergebener Name bei jeder
+# Zuordnung einen Tritt.
+#
+assert felder["name"] == ["Bühne"], felder
+
+zugeordnet = [port["id"] for port in dmx.ports() if port["patched"]]
+
+assert zugeordnet == ["2-O-0"], zugeordnet
+
+print("OK: Ein neuer Ausgang ersetzt den alten und behält den Namen")
+
+
+# --------------------------------------------------------------------
+# Nachsehen statt glauben
+#
+# olad beantwortet den Auftrag auch dann mit 200, wenn die Zuordnung
+# im Hintergrund scheitert - etwa weil ein anderes Plugin das Kabel
+# haelt. Ein "hat geklappt" waere dann die schlechteste aller
+# Antworten: Man sucht den Fehler ueberall, nur nicht hier.
+# --------------------------------------------------------------------
+
+server.shutdown()
+server.server_close()
+
+server, adresse = frische_attrappe()
+
+OladAttrappe.stur = True
+
+dmx = DmxControl(base_url=adresse)
+
+erfolg, meldung = dmx.patch("2-O-0")
+
+assert erfolg is False, (
+    "Eine Zuordnung, die nicht ankommt, darf nicht als Erfolg gelten."
+)
+assert "Kabel" in meldung, meldung
+
+print("OK: Eine folgenlose Zuordnung wird als Fehlschlag gemeldet")
+
+server.shutdown()
+server.server_close()
+
+
+# --------------------------------------------------------------------
+# Der Merker: Die Lichtkarte fragt zweimal je Sekunde
+# --------------------------------------------------------------------
+
+server, adresse = frische_attrappe()
+
+dmx = DmxControl(base_url=adresse)
+
+OladAttrappe.abfragen = []
+
+for _ in range(5):
+    dmx.patched
+
+assert OladAttrappe.abfragen.count("/json/universe_plugin_list") == 1, (
+    "Die Zuordnung darf nicht bei jedem Statusabruf neu erfragt werden: "
+    + str(OladAttrappe.abfragen)
+)
+
+#
+# Nach einer Zuordnung muss der Merker aber weg sein, sonst zeigte
+# die Karte noch fuenf Sekunden lang den alten Stand - und der
+# Nutzer haelt die Zuordnung fuer misslungen.
+#
+dmx.patch("2-O-0")
+
+OladAttrappe.abfragen = []
+
+assert dmx.patched is True, "Nach dem Zuordnen muss neu nachgesehen werden."
+assert OladAttrappe.abfragen.count("/json/universe_plugin_list") == 1, (
+    OladAttrappe.abfragen
+)
+
+print("OK: Der Merker spart Abfragen, gilt aber nach einer Zuordnung nicht mehr")
+
+server.shutdown()
+server.server_close()
+
+
+# --------------------------------------------------------------------
+# Ohne Dienst darf nichts fliegen
+# --------------------------------------------------------------------
+
+tot = DmxControl(base_url=adresse)
+
+assert tot.ports() == [], "Ohne Dienst muss die Auswahl leer bleiben."
+assert tot.patched is False, "Ohne Dienst kann nichts zugeordnet sein."
+
+erfolg, meldung = tot.patch("2-O-0")
+
+assert erfolg is False and meldung, "Ohne Dienst muss die Zuordnung scheitern."
+
+print("OK: Ohne Lichtdienst bleibt die Auswahl leer, ohne Absturz")
+
+
+# ====================================================================
+# 9. Die Einrichtung in install.sh
 #
 # Zwei Hilfsfunktionen dort haben echte Logik, und beide scheitern
 # leise, wenn sie schiefgehen: Das Plugin bliebe stumm aus, oder
@@ -730,7 +1098,7 @@ print("OK: Alle Plugins, die sich um das Kabel streiten, werden abgeschaltet")
 
 
 # ====================================================================
-# 9. Die eigene Unit muss auch eingeschaltet werden
+# 10. Die eigene Unit muss auch eingeschaltet werden
 #
 # Am Geraet gefunden, nach einem Neustart des Raspberry:
 #
@@ -828,7 +1196,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
 
 # ====================================================================
-# 10. Die Paketpruefung darf nicht falsch anschlagen
+# 11. Die Paketpruefung darf nicht falsch anschlagen
 #
 # Am Geraet gemeldet, beim zweiten Lauf des Installers:
 #

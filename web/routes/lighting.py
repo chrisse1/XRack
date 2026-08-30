@@ -50,12 +50,43 @@ class LightingSceneSelection(BaseModel):
     id: str = ""
 
 
+class LightingPortSelection(BaseModel):
+    port: str
+
+
 @router.get("/api/lighting/status")
 def lighting_status(request: Request):
 
     application = request.app.state.application
 
     return application.get_lighting_status()
+
+
+#
+# Der DMX-Ausgang: einmalig nach der Installation zuzuordnen. Frueher
+# ein Gang ins Terminal (ola_dev_info / ola_patch), jetzt zwei Aufrufe
+# von den Einstellungen aus.
+#
+
+@router.get("/api/lighting/dmx/ports")
+def lighting_dmx_ports(request: Request):
+
+    application = request.app.state.application
+
+    return application.get_dmx_ports()
+
+
+@router.post("/api/lighting/dmx/patch")
+def lighting_dmx_patch(
+    selection: LightingPortSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.patch_dmx_port(selection.port)
+
+    return {"success": success, "message": message}
 
 
 @router.post("/api/lighting/enabled")

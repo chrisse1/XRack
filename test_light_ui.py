@@ -61,7 +61,24 @@ from web.i18n import get_translations  # noqa: E402
 TEXTE = get_translations("de")
 
 
-def seite_bauen(stand: dict, pruefung: str) -> str:
+#
+# Die Auswahl der DMX-Anschluesse, wie /api/lighting/dmx/ports sie
+# liefern wuerde.
+#
+ANSCHLUESSE = {
+    "patched": True,
+    "ports": [
+        {"id": "2-O-0", "device": "FT232R USB UART",
+         "description": "Serial: A5", "label": "FT232R USB UART (Ausgang 0)",
+         "patched": False},
+        {"id": "2-O-1", "device": "FT232R USB UART",
+         "description": "Serial: A5", "label": "FT232R USB UART (Ausgang 1)",
+         "patched": True},
+    ],
+}
+
+
+def seite_bauen(stand: dict, pruefung: str, ports: dict | None = None) -> str:
     """
     Baut die fertige Seite: echte Vorlage, echtes Bootstrap, echtes
     xrack.js - nur die Netzwerkaufrufe sind nachgestellt.
@@ -88,9 +105,20 @@ def seite_bauen(stand: dict, pruefung: str) -> str:
 
     vorspann = (
         "<script>window.I18N = " + json.dumps(TEXTE) + ";\n"
-        "window.fetch = async (url) => {\n"
+        #
+        # Mitgeschrieben wird jeder Aufruf: Nur so laesst sich
+        # pruefen, dass ein Knopf wirklich etwas losschickt - und
+        # nicht bloss huebsch aussieht.
+        #
+        "window.aufrufe = [];\n"
+        "window.fetch = async (url, optionen) => {\n"
+        "  window.aufrufe.push([String(url),\n"
+        "    optionen && optionen.body ? String(optionen.body) : '']);\n"
         "  if (String(url).indexOf('/api/lighting/status') === 0)\n"
         "    return { json: async () => (" + json.dumps(stand) + ") };\n"
+        "  if (String(url).indexOf('/api/lighting/dmx/ports') === 0)\n"
+        "    return { json: async () => ("
+        + json.dumps(ports if ports is not None else ANSCHLUESSE) + ") };\n"
         "  return { json: async () => ({ success: true, message: '' }) };\n"
         "};\n"
         "window.alert = () => {};\n"
@@ -110,7 +138,8 @@ def seite_bauen(stand: dict, pruefung: str) -> str:
     )
 
 
-def ausfuehren(stand: dict, pruefung: str, vorher: str = "") -> dict:
+def ausfuehren(stand: dict, pruefung: str, vorher: str = "",
+               ports: dict | None = None) -> dict:
     """
     Laedt die Seite im Browser und liefert, was das Pruefskript in
     #pruefergebnis geschrieben hat.
@@ -141,7 +170,7 @@ def ausfuehren(stand: dict, pruefung: str, vorher: str = "") -> dict:
     with tempfile.TemporaryDirectory() as tmp:
 
         datei = Path(tmp) / "seite.html"
-        datei.write_text(seite_bauen(stand, rahmen), encoding="utf-8")
+        datei.write_text(seite_bauen(stand, rahmen, ports), encoding="utf-8")
 
         lauf = subprocess.run(
             [
@@ -178,7 +207,7 @@ def ausfuehren(stand: dict, pruefung: str, vorher: str = "") -> dict:
 # --------------------------------------------------------------------
 
 def stand(enabled=True, service=True, adapter=True, overlaps=None,
-          show_running=False, show_state="music") -> dict:
+          show_running=False, show_state="music", patched=True) -> dict:
 
     return {
         "enabled": enabled,
@@ -206,7 +235,8 @@ def stand(enabled=True, service=True, adapter=True, overlaps=None,
         "overlaps": overlaps or [],
         "values": {"bar": [255, 0, 0] * 8},
         "brightness": {"bar": 64},
-        "dmx": {"service_running": service, "adapter_present": adapter},
+        "dmx": {"service_running": service, "adapter_present": adapter,
+                "patched": patched},
 
         #
         # Wie viele Kanaele das Interface hat - daraus baut die
@@ -1054,6 +1084,119 @@ assert TEXTE["light_show_level_hint"] in ergebnis["text"], (
 )
 
 print("OK: Unter den Pegelbalken steht, dass die Skala dBFS ist")
+
+
+# ====================================================================
+# 19. Der DMX-Ausgang laesst sich aus den Einstellungen zuordnen
+#
+# Ohne Zuordnung sieht von aussen alles heil aus: Dienst laeuft,
+# Kabel steckt, XRack meldet gesendete Bilder - und es bleibt dunkel.
+# Das muss in der Karte stehen, und der Schritt muss ohne Terminal
+# nachzuholen sein.
+# ====================================================================
+
+ergebnis = ausfuehren(stand(patched=False), """function () {
+    const box = document.getElementById('light-warning');
+    return { sichtbar: !box.classList.contains('d-none'), text: box.textContent };
+}""")
+
+assert ergebnis["sichtbar"], "Ein fehlender DMX-Ausgang muss in der Karte stehen."
+assert "DMX-Ausgang" in ergebnis["text"], ergebnis["text"]
+
+print("OK: Ist kein DMX-Ausgang zugeordnet, steht das in der Lichtkarte")
+
+
+#
+# Und jetzt der Weg dorthin: Einstellungen oeffnen, Auswahl fuellen.
+#
+ergebnis = ausfuehren(
+    stand(patched=False),
+    """function () {
+        const auswahl = document.getElementById('settings-light-port');
+        const zustand = document.getElementById('settings-light-port-state');
+
+        return {
+            anzahl: auswahl.options.length,
+            gewaehlt: auswahl.value,
+            erster: auswahl.options[0] ? auswahl.options[0].textContent : '',
+            zustand: zustand.textContent,
+            knopf_aus: document.getElementById('btn-light-port-patch').disabled
+        };
+    }""",
+    vorher=(
+        "bootstrap.Modal.getOrCreateInstance("
+        "document.getElementById('settingsModal')).show();"
+    ),
+)
+
+assert ergebnis["anzahl"] == 2, ergebnis
+assert ergebnis["erster"] == "FT232R USB UART (Ausgang 0)", ergebnis
+
+#
+# Vorgewaehlt gehoert der Anschluss, auf den XRack schon sendet -
+# sonst zeigt die Auswahl auf etwas anderes als die Wirklichkeit,
+# und ein unbedachter Klick auf "Zuordnen" legt das Kabel um.
+#
+assert ergebnis["gewaehlt"] == "2-O-1", ergebnis
+assert "Ausgang 1" in ergebnis["zustand"], ergebnis
+assert ergebnis["knopf_aus"] is False, ergebnis
+
+print("OK: Die Einstellungen zeigen die Anschlüsse und den zugeordneten")
+
+
+#
+# Der Knopf muss auch wirklich etwas losschicken.
+#
+ergebnis = ausfuehren(
+    stand(patched=False),
+    """function () {
+        const patch = window.aufrufe.filter(
+            a => a[0].indexOf('/api/lighting/dmx/patch') === 0
+        );
+
+        return { anzahl: patch.length, koerper: patch.length ? patch[0][1] : '' };
+    }""",
+    vorher=(
+        "bootstrap.Modal.getOrCreateInstance("
+        "document.getElementById('settingsModal')).show();"
+        "setTimeout(() => "
+        "document.getElementById('btn-light-port-patch').click(), 400);"
+    ),
+)
+
+assert ergebnis["anzahl"] >= 1, "Der Knopf hat nichts losgeschickt."
+assert '"port"' in ergebnis["koerper"], ergebnis
+assert "2-O-1" in ergebnis["koerper"], ergebnis
+
+print("OK: \"Zuordnen\" schickt den gewählten Anschluss zum Server")
+
+
+#
+# Bietet olad gar nichts an, darf der Knopf nicht klickbar sein -
+# sonst schickt man ins Leere und bekommt eine Fehlermeldung, die
+# nichts erklaert.
+#
+ergebnis = ausfuehren(
+    stand(patched=False),
+    """function () {
+        return {
+            anzahl: document.getElementById('settings-light-port').options.length,
+            knopf_aus: document.getElementById('btn-light-port-patch').disabled,
+            zustand: document.getElementById('settings-light-port-state').textContent
+        };
+    }""",
+    vorher=(
+        "bootstrap.Modal.getOrCreateInstance("
+        "document.getElementById('settingsModal')).show();"
+    ),
+    ports={"patched": False, "ports": []},
+)
+
+assert ergebnis["anzahl"] == 0, ergebnis
+assert ergebnis["knopf_aus"] is True, ergebnis
+assert ergebnis["zustand"] == TEXTE["light_output_none"], ergebnis
+
+print("OK: Ohne angebotene Anschlüsse bleibt der Knopf gesperrt")
 
 
 print("Alle Lichtkarten-Tests erfolgreich.")

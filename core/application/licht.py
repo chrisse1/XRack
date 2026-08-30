@@ -89,6 +89,40 @@ class LichtMixin:
         return True, ""
 
     # ----------------------------------------------------------------
+    # Der DMX-Ausgang
+    #
+    # Einmal nach der Installation muss der Anschluss des Kabels dem
+    # Universum zugeordnet werden. Das ging bisher nur im Terminal
+    # (ola_dev_info, ola_patch) - hier ist derselbe Schritt fuer die
+    # Einstellungen verpackt.
+    # ----------------------------------------------------------------
+
+    def get_dmx_ports(self) -> dict:
+        """Die Auswahl fuer die Einstellungen: was olad anbietet."""
+
+        return {
+            "ports": self.dmx_control.ports(),
+            "patched": self.dmx_control.patched,
+        }
+
+    def patch_dmx_port(self, port: str) -> tuple[bool, str]:
+        """Einen Ausgang zuordnen und gleich das aktuelle Bild senden."""
+
+        erfolg, meldung = self.dmx_control.patch(port)
+
+        if not erfolg:
+            return False, meldung
+
+        #
+        # Ohne das bliebe es nach der Zuordnung dunkel, bis jemand
+        # etwas anfasst: olad kennt den neuen Ausgang, hat aber noch
+        # kein Bild fuer ihn.
+        #
+        self._licht_senden()
+
+        return True, ""
+
+    # ----------------------------------------------------------------
     # Einrichtung
     # ----------------------------------------------------------------
 
