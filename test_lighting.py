@@ -1097,7 +1097,14 @@ for start in (0, 5, 10, 15):
 assert bar["channels"][4] == "rotation"
 assert bar["channels"][19] == "rotation"
 assert bar["channels"][20:23] == ["laser", "laser", "rotation"]
-assert bar["channels"][23:] == ["shutter"] * 5
+#
+# Die fuenf weissen/UV-LEDs tragen die Rolle "strobe" - genau das
+# sind sie. Vorher stand dort "shutter", damit die Show sie in Ruhe
+# laesst; seit es den Blitz auf die Snare gibt, ist der Unterschied
+# einer mit Wirkung: Angefasst werden sie nur, wenn er in den
+# Einstellungen eingeschaltet ist.
+#
+assert bar["channels"][23:] == ["strobe"] * 5
 
 #
 # Die KLS-180/6 hat sechs Spots statt vier und eigene Modi. Der
@@ -3054,6 +3061,262 @@ with tempfile.TemporaryDirectory() as tmp:
     )
 
     print("OK: Der Modus wird gespeichert und auf bekannte Werte geprüft")
+
+
+# ====================================================================
+# 21. Der Blitz auf die Snare
+#
+# Die Show hat die Strobe-Kanaele bis hierhin nie angefasst. Das
+# bleibt auch so - AUSSER jemand schaltet es ausdruecklich ein.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+    licht.vorlage_speichern({
+        "id": "spot", "name": "Spot mit Strobe",
+        "channels": ["red", "green", "blue", "strobe"],
+    })
+    licht.lampe_speichern({
+        "id": "s", "name": "Spot", "template": "spot", "address": 1,
+    })
+
+    app = LichtApp(licht, DmxAttrappe())
+    motor = app.light_engine
+
+    motor.stand = {"low": 1.0, "mid": 0.5, "high": 0.5, "level": 1.0,
+                   "beat": False, "snare": False}
+
+    grund = {
+        "sensitivity": 1.0,
+        "color_low": "#ff0000",
+        "color_mid": "#00ff00",
+        "color_high": "#0000ff",
+    }
+
+    #
+    # Ausgeschaltet: Ein von Hand gestellter Strobe-Wert bleibt
+    # stehen, auch mitten im Blitz. Das ist die Zusicherung, die es
+    # schon vorher gab.
+    #
+    motor.einstellungen = dict(grund)
+    app.light_values["s"] = [0, 0, 0, 111]
+    motor.blitz = motor.BLITZ_DAUER_S
+
+    assert motor.werte_je_lampe()["s"][3] == 111, (
+        "Ohne eingeschalteten Blitz darf die Show den Strobe-Kanal nicht "
+        f"anfassen: {motor.werte_je_lampe()['s']}"
+    )
+
+    print("OK: Ohne Blitz bleibt der Strobe-Kanal, wo er ist")
+
+    #
+    # Eingeschaltet: Waehrend des Blitzes steht der Wert da...
+    #
+    motor.einstellungen = {**grund, "snare_strobe": True, "snare_power": 0.8}
+
+    werte = motor.werte_je_lampe()["s"]
+
+    assert werte[3] == fixtures.begrenzen(255 * 0.8), (
+        f"Der Blitz kommt nicht an: {werte}"
+    )
+
+    #
+    # ... und danach wieder 0.
+    #
+    # Das ist die Stelle, an der es leicht schiefgeht: Jedes Bild
+    # beginnt bei dem, was zuletzt drin stand. Wuerde die Show den
+    # Kanal nach dem Blitz einfach "in Ruhe lassen", bliebe der
+    # Blitzwert stehen - und das Strobe liefe durch, bis jemand die
+    # Show anhaelt.
+    #
+    app.light_values["s"] = werte
+    motor.blitz = 0.0
+
+    assert motor.werte_je_lampe()["s"][3] == 0, (
+        "Nach dem Blitz muss der Strobe-Kanal wieder auf 0 - sonst läuft "
+        f"das Strobe durch: {motor.werte_je_lampe()['s']}"
+    )
+
+    print("OK: Der Blitz kommt und geht auch wieder")
+
+    #
+    # Die Staerke ist einstellbar, und 0 heisst 0 - kein stiller
+    # Rueckfall auf die Vorgabe.
+    #
+    motor.blitz = motor.BLITZ_DAUER_S
+
+    motor.einstellungen = {**grund, "snare_strobe": True, "snare_power": 0.4}
+    assert motor.werte_je_lampe()["s"][3] == fixtures.begrenzen(255 * 0.4)
+
+    motor.einstellungen = {**grund, "snare_strobe": True, "snare_power": 0.0}
+    assert motor.werte_je_lampe()["s"][3] == 0, (
+        "Stärke 0 muss 0 bedeuten und nicht die Vorgabe."
+    )
+
+    #
+    # Ohne Angabe die eingebaute Staerke.
+    #
+    motor.einstellungen = {**grund, "snare_strobe": True}
+    assert motor.werte_je_lampe()["s"][3] == fixtures.begrenzen(
+        255 * motor.BLITZ_STAERKE
+    )
+
+    print("OK: Die Stärke des Blitzes ist einstellbar, auch auf 0")
+
+    #
+    # Der Blitz laeuft ab, und ein neuer Schlag setzt ihn zurueck.
+    #
+    motor.blitz = 0.0
+    motor._blitz_weiterschalten(0.02, True)
+
+    assert motor.blitz == motor.BLITZ_DAUER_S, motor.blitz
+
+    for _ in range(int(motor.BLITZ_DAUER_S / 0.02) + 1):
+        motor._blitz_weiterschalten(0.02, False)
+
+    assert motor.blitz == 0.0, (
+        f"Der Blitz muss von selbst ablaufen: {motor.blitz}"
+    )
+
+    #
+    # Und er wird nie negativ - sonst waere die Bedingung "> 0"
+    # zwar noch richtig, aber die Zahl waeche ins Bodenlose.
+    #
+    for _ in range(100):
+        motor._blitz_weiterschalten(0.02, False)
+
+    assert motor.blitz == 0.0, motor.blitz
+
+    print("OK: Der Blitz läuft ab und ein neuer Schlag setzt ihn zurück")
+
+
+# --- Der Motor loest den Blitz auch wirklich aus --------------------
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    from lighting.analysis import Stimmungserkennung
+
+    class SnareAttrappe:
+        """Liefert einen festen Analysestand mit oder ohne Snare."""
+
+        rate = 48000
+        channels = 2
+
+        def __init__(self, snare: bool):
+            self.snare = snare
+
+        def verarbeite(self, block):
+            return {"low": 0.5, "mid": 0.5, "high": 0.5,
+                    "level": 0.5, "beat": False, "snare": self.snare}
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+
+    motor = LichtApp(licht, DmxAttrappe()).light_engine
+
+    motor.erkennung = Stimmungserkennung(
+        stille_schwelle=0.002, stille_sekunden=6.0, sprache_sekunden=0.0
+    )
+    motor.einstellungen = {"sensitivity": 1.0, "snare_strobe": True}
+
+    block = bytes(int(0.02 * 2 * 4 * 48000))
+
+    motor.blitz = 0.0
+    motor.analyse = SnareAttrappe(True)
+    motor._schritt(block)
+
+    assert motor.blitz == motor.BLITZ_DAUER_S, (
+        f"Eine Snare im Betrieb muss den Blitz auslösen: {motor.blitz}"
+    )
+
+    motor.analyse = SnareAttrappe(False)
+
+    for _ in range(10):
+        motor._schritt(block)
+
+    assert motor.blitz == 0.0, (
+        f"Ohne Snare muss der Blitz im Betrieb ablaufen: {motor.blitz}"
+    )
+
+    print("OK: Der Show-Thread löst den Blitz auf die Snare aus")
+
+
+# --- Das Hintergrundlicht blitzt nicht ------------------------------
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+    licht.vorlage_speichern({
+        "id": "spot2", "name": "Spot mit Strobe",
+        "channels": ["red", "green", "blue", "strobe"],
+    })
+    licht.lampe_speichern({
+        "id": "w", "name": "Wash", "template": "spot2", "address": 1,
+        "kind": "background",
+    })
+
+    app = LichtApp(licht, DmxAttrappe())
+    motor = app.light_engine
+
+    motor.stand = {"low": 1.0, "mid": 0.5, "high": 0.5, "level": 1.0,
+                   "beat": False, "snare": False}
+    motor.einstellungen = {
+        "sensitivity": 1.0, "snare_strobe": True,
+        "color_low_1": "#ff0000", "color_mid_1": "#00ff00",
+        "color_high_1": "#0000ff",
+    }
+
+    app.light_values["w"] = [0, 0, 0, 77]
+    motor.blitz = motor.BLITZ_DAUER_S
+
+    assert motor.werte_je_lampe()["w"][3] == 77, (
+        "Ein Wash, in den ein Blitz hineinfährt, ist kein Wash mehr: "
+        f"{motor.werte_je_lampe()['w']}"
+    )
+
+    print("OK: Das Hintergrundlicht blitzt nicht mit")
+
+
+# --- Die Ablage -----------------------------------------------------
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+
+    #
+    # Aus als Vorgabe, und das ist keine Geschmacksfrage: Ein
+    # Blitzlicht, das nach einem Update von selbst angeht, will
+    # niemand.
+    #
+    assert licht.show_einstellungen()["snare_strobe"] is False, (
+        "Der Blitz muss ausgeschaltet vorgegeben sein."
+    )
+
+    from lighting.light_engine import LightEngine
+    from lighting.analysis import SNARE_SCHWELLE
+
+    assert licht.show_einstellungen()["snare_threshold"] == SNARE_SCHWELLE
+    assert licht.show_einstellungen()["snare_power"] == LightEngine.BLITZ_STAERKE
+
+    ok, meldung = licht.set_show_einstellungen({"snare_strobe": True})
+
+    assert ok, meldung
+    assert licht.show_einstellungen()["snare_strobe"] is True
+
+    licht.set_show_einstellungen({"snare_threshold": 9.0, "snare_power": 9.0})
+
+    assert licht.show_einstellungen()["snare_threshold"] == 0.9
+    assert licht.show_einstellungen()["snare_power"] == 1.0
+
+    licht.set_show_einstellungen({"snare_threshold": 0.0, "snare_power": -1.0})
+
+    assert licht.show_einstellungen()["snare_threshold"] == 0.2
+    assert licht.show_einstellungen()["snare_power"] == 0.0
+
+    print("OK: Der Blitz ist aus als Vorgabe, seine Werte bleiben in Grenzen")
 
 
 print("Alle Licht-Tests erfolgreich.")

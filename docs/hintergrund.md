@@ -261,6 +261,49 @@ Wash, der im Takt zuckt, ist kein Wash mehr.
 
 ---
 
+### Was „Snare" hier heißt
+
+Der Blitz hängt an einer Erkennung, die keine ist: XRack erkennt
+keine Snare, sondern einen **scharfen, lauten Einsatz im Mittenband,
+der Höhen mitbringt**. In den allermeisten Stücken ist das die Snare;
+es kann auch ein Clap sein oder ein hart angeschlagener Akkord.
+
+Vier Bedingungen müssen zusammenkommen, und jede sortiert etwas
+Bestimmtes aus. Die Zahlen daneben sind an künstlichen Signalen
+gemessen:
+
+| Bedingung | Sortiert aus | Gemessen |
+| --- | --- | --- |
+| Ausschlag über dem eigenen Mittel | gehaltene Töne | ein Sägezahn meldete ohne sie 25 Blitze in vier Sekunden |
+| laut, gemessen an der laufenden Spitze | alles Beiläufige | das ist der Regler „ab wie laut" |
+| Höhen müssen da sein | den Kick | beim Kick lagen sie bei 0,04 der Spitze, bei der Snare bei 0,65 |
+| Mitten gegen Höhen | die Hi-Hat | Verhältnis 0,3 bei der Hi-Hat, 1,3 bei der Snare |
+
+Ohne die dritte Bedingung meldete ein Signal aus **lauter Kicks ohne
+jede Snare** acht von acht Malen eine Snare — die steile Flanke des
+Kicks lässt auch die Mitten ausschlagen. Das Blitzlicht hätte auf der
+Bassdrum gezuckt.
+
+Der schwierigste Fall bleibt Kick und Hi-Hat auf demselben Achtel:
+Der Kick liefert den Rumpf, die Hi-Hat die Höhen, zusammen sieht das
+aus wie eine Snare. Deshalb steht die Vorgabe von „ab wie laut" so
+hoch — bei 0,5 kamen sechs von acht solchen Paaren durch, bei 0,7
+noch eines.
+
+### Warum die Show den Strobe-Kanal dann besitzt
+
+Solange der Blitz aus ist, fasst die Show Strobe-Kanäle nicht an; ein
+von Hand gestellter Wert bleibt stehen. Ist er an, schreibt sie
+zwischen den Blitzen ausdrücklich 0 — und überschreibt damit, was von
+Hand dort stand.
+
+Das ist kein Versehen, sondern nötig: Jedes Lichtbild beginnt bei
+dem, was zuletzt drin stand. Würde die Show den Kanal nach dem Blitz
+einfach „in Ruhe lassen", bliebe der Blitzwert stehen, und das Strobe
+liefe durch, bis jemand die Show anhält.
+
+---
+
 ## Wave64 statt WAV
 
 Aufnahmen liegen als `.w64`. Das klassische WAV-Format kann wegen seiner

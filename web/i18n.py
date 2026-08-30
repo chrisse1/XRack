@@ -556,6 +556,20 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "zwischen zwei Schlägen bleibt. 0 % heißt: dazwischen "
             "ganz aus."
         ),
+        "light_show_snare_strobe": "Blitz auf die Snare",
+        "light_show_snare_hint": (
+            "Blitzt die Strobe-Kanäle der Effektlichter auf besonders "
+            "laute Schläge. Solange das aus ist, fasst die Show die "
+            "Strobe-Kanäle gar nicht an - ist es an, gehören sie ihr, "
+            "und ein von Hand eingestellter Wert wird überschrieben."
+        ),
+        "light_show_snare_threshold": "Blitz: ab wie laut",
+        "light_show_snare_power": "Blitz: Stärke",
+        "light_show_snare_options_hint": (
+            "Höher heißt: nur noch die größten Schläge. Was die Stärke "
+            "am Gerät bewirkt - Helligkeit oder Blitzgeschwindigkeit -, "
+            "steht in der Kanaltabelle des Geräts; ausprobieren."
+        ),
         "light_show_background_beats": "Hintergrund: Farbwechsel",
         "light_show_fade_seconds": "Ausblenden in die Szene",
         "light_show_beats_unit": "{n} Schläge",
@@ -1133,6 +1147,20 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_show_pulse_hint": (
             "How long a beat glows on, and how bright it stays "
             "between two beats. 0 % means: fully dark in between."
+        ),
+        "light_show_snare_strobe": "Flash on the snare",
+        "light_show_snare_hint": (
+            "Flashes the strobe channels of the effect lights on "
+            "particularly loud hits. While this is off the show does "
+            "not touch strobe channels at all - while it is on they "
+            "belong to the show, and a value set by hand is overwritten."
+        ),
+        "light_show_snare_threshold": "Flash: how loud",
+        "light_show_snare_power": "Flash: strength",
+        "light_show_snare_options_hint": (
+            "Higher means only the biggest hits get through. What the "
+            "strength does on your fixture - brightness or strobe speed "
+            "- is in its channel table; try it out."
         ),
         "light_show_background_beats": "Background: colour change",
         "light_show_fade_seconds": "Fade into the scene",

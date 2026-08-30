@@ -74,6 +74,30 @@ SHOW_VORGABE = {
     "pulse_base": 0.35,
 
     #
+    # Blitz auf die Snare.
+    #
+    # AUS als Vorgabe, und das bleibt auch so: Ein Blitzlicht, das
+    # nach einem Update von selbst angeht, will niemand - und wer es
+    # nicht ausdruecklich einschaltet, dem fasst die Show die
+    # Strobe-Kanaele weiterhin gar nicht an.
+    #
+    "snare_strobe": False,
+
+    #
+    # Ab wie laut. Anteil an der laufenden Spitze; hoeher heisst,
+    # dass nur noch die groessten Schlaege durchkommen.
+    #
+    "snare_threshold": 0.7,
+
+    #
+    # Was waehrend des Blitzes auf dem Strobe-Kanal steht (0-1 von
+    # 255). Was der Wert am Geraet bewirkt - Helligkeit oder
+    # Blitzgeschwindigkeit -, steht in keiner Norm, sondern in der
+    # Tabelle des jeweiligen Geraets. Deshalb ein Regler.
+    #
+    "snare_power": 0.8,
+
+    #
     # Welche Farbe welches Band bekommt.
     #
     # Vorgabe ist die uebliche Zuordnung von Sound-to-Light-Geraeten
@@ -596,6 +620,23 @@ class LightingStore:
         #
         if "pulse_base" in werte:
             show["pulse_base"] = max(0.0, min(0.9, float(werte["pulse_base"])))
+
+        if "snare_strobe" in werte:
+            show["snare_strobe"] = bool(werte["snare_strobe"])
+
+        #
+        # Unter 0,2 spraeche fast jeder Einsatz an, ueber 0,9 nur
+        # noch der eine lauteste Moment eines Stuecks.
+        #
+        if "snare_threshold" in werte:
+            show["snare_threshold"] = max(
+                0.2, min(0.9, float(werte["snare_threshold"]))
+            )
+
+        if "snare_power" in werte:
+            show["snare_power"] = max(
+                0.0, min(1.0, float(werte["snare_power"]))
+            )
 
         if "background_seconds" in werte:
             show["background_seconds"] = max(

@@ -146,9 +146,15 @@ without DMX you never see it.
 
   The background light is a wash in both cases.
 
-  Strobe, shutter, gobo and the white channel are never driven
-  automatically — they stay yours, and what you set by hand stays put
-  while the show runs.
+  On top of that the show can flash the strobe channels on
+  particularly loud hits — usually the snare. It is off until you
+  switch it on: nobody wants a strobe that starts by itself. How loud
+  a hit has to be and how hard the flash lands are two sliders.
+
+  Shutter, gobo and the white channel are never driven automatically —
+  they stay yours, and what you set by hand stays put while the show
+  runs. The same holds for the strobe channels as long as the flash is
+  off.
 
 After installing, the DMX output has to be assigned once — under
 *Settings → Lighting*, pick the port your cable is on and press
@@ -346,9 +352,16 @@ Licht* — wer kein DMX hat, sieht es gar nicht erst.
 
   Das Hintergrundlicht bleibt in beiden Fällen ein Wash.
 
-  Strobe, Shutter, Gobo und der Weiß-Kanal werden nie von selbst
-  angesteuert — die gehören dir, und was du von Hand einstellst, bleibt
-  auch während der Show stehen.
+  Dazu kann die Show auf besonders laute Schläge — meist die Snare —
+  die Strobe-Kanäle blitzen lassen. Das ist ausgeschaltet, bis du es
+  einschaltest: Ein Blitzlicht, das von selbst angeht, will niemand.
+  Wie laut ein Schlag dafür sein muss und wie kräftig der Blitz
+  ausfällt, sind zwei Regler.
+
+  Shutter, Gobo und der Weiß-Kanal werden nie von selbst angesteuert —
+  die gehören dir, und was du von Hand einstellst, bleibt auch während
+  der Show stehen. Für die Strobe-Kanäle gilt dasselbe, solange der
+  Blitz aus ist.
 
 Nach der Installation muss der DMX-Ausgang einmal zugeordnet werden:
 in den *Einstellungen* unter *Licht* den Anschluss auswählen, an dem

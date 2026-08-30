@@ -241,6 +241,9 @@ class LightingShowSettings(BaseModel):
     effect_mode: str | None = None
     pulse_seconds: float | None = None
     pulse_base: float | None = None
+    snare_strobe: bool | None = None
+    snare_threshold: float | None = None
+    snare_power: float | None = None
     color_low: str | None = None
     color_mid: str | None = None
     color_high: str | None = None
