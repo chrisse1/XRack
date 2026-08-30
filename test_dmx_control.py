@@ -695,7 +695,15 @@ print("OK: Ohne Lichtdienst bleibt die Auswahl leer, ohne Absturz")
 
 INSTALL = Path(__file__).resolve().parent / "install.sh"
 
-FAKE_SUDO = "#!/bin/sh\n# sudo wegdenken: ausfuehren, was dahinter steht.\nexec \"$@\"\n"
+FAKE_SUDO = (
+    "#!/bin/sh\n"
+    "# sudo wegdenken: ausfuehren, was dahinter steht.\n"
+    "#\n"
+    "# Ausser bei 'sudo -v': Das holt nur die Berechtigung und\n"
+    "# fuehrt gar nichts aus - 'exec -v' waere ein Fehler.\n"
+    '[ "$1" = "-v" ] && exit 0\n'
+    'exec "$@"\n'
+)
 
 #
 # Der Test laeuft nicht als root - Besitzer setzen geht nicht und ist
@@ -727,6 +735,14 @@ def werkzeuge(ordner: Path, unit_datei: Path) -> dict:
         f'    echo "{unit_datei}"\n'
         "    exit 0\n"
         "fi\n"
+        #
+        # configure_dmx sucht die Unit ueber "list-unit-files". Ohne
+        # eine Antwort darauf kaeme es nie ueber die Suche hinaus.
+        #
+        'if [ "$1" = "list-unit-files" ]; then\n'
+        '    echo "$2 enabled"\n'
+        "    exit 0\n"
+        "fi\n"
         "exit 0\n"
     )
 
@@ -736,10 +752,25 @@ def werkzeuge(ordner: Path, unit_datei: Path) -> dict:
     # eigene Unit geschrieben wird.
     #
     FAKE_OLAD = "#!/bin/sh\nexit 0\n"
+
+    #
+    # udevadm gibt es in dieser Umgebung nicht - configure_dmx ruft
+    # es aber auf. Ohne Attrappe kaeme der Test nicht ueber die
+    # udev-Regel hinaus.
+    #
+    FAKE_UDEVADM = "#!/bin/sh\nexit 0\n"
+    #
+    # Das Zuhause des Dienstbenutzers liegt im Testordner: Dort sucht
+    # configure_dmx die Plugin-Einstellungen (<home>/.ola), und dort
+    # darf ein Test auch schreiben.
+    #
+    olad_home = ordner / "olad-home"
+    (olad_home / ".ola").mkdir(parents=True, exist_ok=True)
+
     FAKE_GETENT = (
         "#!/bin/sh\n"
         'if [ "$1" = "passwd" ] && [ "$2" = "olad" ]; then\n'
-        "    echo 'olad:x:102:65534::/var/lib/ola:/usr/sbin/nologin'\n"
+        f"    echo 'olad:x:102:65534::{olad_home}:/usr/sbin/nologin'\n"
         "    exit 0\n"
         "fi\n"
         "exit 2\n"
@@ -789,6 +820,7 @@ def werkzeuge(ordner: Path, unit_datei: Path) -> dict:
         ("getent", FAKE_GETENT),
         ("dpkg-query", fake_dpkg),
         ("apt-get", fake_apt),
+        ("udevadm", FAKE_UDEVADM),
     ):
         datei = binordner / name
         datei.write_text(inhalt, encoding="utf-8")
@@ -800,6 +832,13 @@ def werkzeuge(ordner: Path, unit_datei: Path) -> dict:
     umgebung["XRACK_LANGUAGE"] = "de"
     umgebung["XRACK_SYSTEMCTL_LOG"] = str(protokoll)
     umgebung["XRACK_APT_LOG"] = str(apt_log)
+
+    #
+    # Damit configure_dmx als Ganzes laufen kann, ohne ins echte
+    # System zu schreiben.
+    #
+    umgebung["XRACK_UDEV_RULES"] = str(ordner / "99-xrack-dmx.rules")
+    umgebung["XRACK_OLA_LOG"] = str(ordner / "ola.log")
 
     return umgebung
 
@@ -1351,6 +1390,128 @@ for datei in [INSTALL] + sorted((INSTALL.parent / "scripts").glob("*.sh")):
         )
 
 print("OK: Nirgends mehr 'sudo VAR=wert' statt 'sudo env VAR=wert'")
+
+
+# ====================================================================
+# 12. Ein ausgefallenes Licht muss am Ende dastehen
+#
+# Am zweiten Geraet gemeldet: Der Installer lief, die Lichtsteuerung
+# fehlte danach - und im langen Protokoll war nicht zu finden, warum.
+# Die Meldung stand mittendrin, danach kam noch eine halbe Seite und
+# ein "Fertig.". Wer nicht zurueckscrollt, haelt die Installation fuer
+# vollstaendig.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    ordner = Path(tmp)
+    umgebung = werkzeuge(ordner, ordner / "olad.service")
+
+    #
+    # Paket fehlt und apt kann es nicht holen.
+    #
+    (ordner / "apt_bricht").touch()
+
+    ausgabe = install_funktion(ordner, umgebung, [
+        "configure_dmx", "licht_zusammenfassung",
+    ])
+
+    assert "NICHT eingerichtet" in ausgabe, (
+        "Die Zusammenfassung verschweigt, dass das Licht ausgefallen ist: "
+        + ausgabe
+    )
+
+    assert "ola" in ausgabe, ausgabe
+
+    assert "--dmx" in ausgabe, (
+        "Ohne den Hinweis muss man fuer einen einzigen Schritt den "
+        "ganzen Installer noch einmal durchlaufen: " + ausgabe
+    )
+
+    #
+    # Und der Grund muss die Meldung ueberleben - im Protokoll steht,
+    # was apt gesagt hat.
+    #
+    logdatei = Path(umgebung["XRACK_OLA_LOG"])
+
+    assert logdatei.exists(), "Die apt-Ausgabe wurde nicht aufgehoben."
+    assert logdatei.read_text(encoding="utf-8").strip(), logdatei
+
+    assert str(logdatei) in ausgabe, (
+        "Die Zusammenfassung nennt die Logdatei nicht: " + ausgabe
+    )
+
+    print("OK: Ein ausgefallenes Licht steht in der Zusammenfassung, mit Grund")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    ordner = Path(tmp)
+    umgebung = werkzeuge(ordner, ordner / "olad.service")
+
+    (ordner / "paket_da").touch()
+    ausgabe = install_funktion(ordner, umgebung, [
+        "configure_dmx", "licht_zusammenfassung",
+    ])
+
+    assert "NICHT" not in ausgabe, (
+        "Bei erfolgreicher Einrichtung darf da kein 'NICHT' stehen: " + ausgabe
+    )
+    assert "Zuordnen" in ausgabe, (
+        "Der noch fehlende Schritt - den Ausgang zuordnen - muss dastehen: "
+        + ausgabe
+    )
+
+    print("OK: Ist das Licht eingerichtet, nennt die Zusammenfassung den Rest")
+
+
+# ====================================================================
+# 13. "install.sh --dmx" holt nur das Licht nach
+#
+# Faellt die Lichteinrichtung aus, ist genau EIN Schritt nachzuholen.
+# Dafuer den ganzen Installer samt Netzwerkfragen noch einmal
+# durchzugehen ist so muehsam, dass man es lieber laesst - und dann
+# bleibt es eben dunkel.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    ordner = Path(tmp)
+    umgebung = werkzeuge(ordner, ordner / "olad.service")
+
+    (ordner / "paket_da").touch()
+    lauf = subprocess.run(
+        ["bash", str(INSTALL), "--dmx"],
+        capture_output=True, text=True, env=umgebung, timeout=120,
+        cwd=str(Path(INSTALL).parent),
+    )
+
+    assert lauf.returncode == 0, (lauf.returncode, lauf.stderr[-1500:])
+
+    #
+    # Die Einrichtung ist gelaufen ...
+    #
+    assert Path(umgebung["XRACK_UDEV_RULES"]).exists(), (
+        "Die udev-Regel wurde nicht geschrieben: " + lauf.stdout
+    )
+
+    assert any("enable" in zeile for zeile in systemctl_aufrufe(umgebung)), (
+        systemctl_aufrufe(umgebung)
+    )
+
+    assert "Licht" in lauf.stdout, lauf.stdout
+
+    #
+    # ... und sonst nichts. Keine Systempakete, keine Fragen.
+    #
+    assert apt_aufrufe(umgebung) == [], (
+        "'--dmx' hat Systempakete angefasst: " + str(apt_aufrufe(umgebung))
+    )
+
+    assert "Willkommen" not in lauf.stdout, lauf.stdout
+    assert "Netzwerkkonfiguration" not in lauf.stdout, lauf.stdout
+
+    print("OK: '--dmx' richtet nur das Licht ein und fasst sonst nichts an")
 
 
 print("Alle DMX-Tests erfolgreich.")

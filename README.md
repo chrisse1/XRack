@@ -53,6 +53,14 @@ by default `https://xrack.local:8080`. The certificate is self-signed, so
 the browser shows a warning once ("Advanced" → "Proceed"); it remembers
 the exception afterwards.
 
+At the end the installer says whether lighting could be set up. If it
+failed, the reason is right there — and it can be caught up on its own,
+without the whole installer:
+
+```bash
+./install.sh --dmx
+```
+
 **Three ways to wire it up**, switchable in the settings:
 
 1. XRack and console both on a router, over cable
@@ -258,6 +266,14 @@ Danach ist die Weboberfläche unter `https://<hostname>.local:<port>`
 erreichbar, standardmäßig `https://xrack.local:8080`. Das Zertifikat ist
 selbstsigniert, der Browser zeigt deshalb einmalig eine Warnung
 ("Erweitert" → "Trotzdem fortfahren") und merkt sich die Ausnahme.
+
+Am Ende sagt der Installer, ob die Lichtsteuerung eingerichtet werden
+konnte. Ist sie ausgefallen, steht der Grund dabei — nachholen lässt
+sie sich einzeln, ohne den ganzen Installer:
+
+```bash
+./install.sh --dmx
+```
 
 **Drei Betriebsarten**, umschaltbar in den Einstellungen:
 
