@@ -563,12 +563,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Strobe-Kanäle gar nicht an - ist es an, gehören sie ihr, "
             "und ein von Hand eingestellter Wert wird überschrieben."
         ),
-        "light_show_snare_threshold": "Blitz: ab wie laut",
+        "light_show_snare_sense": "Blitz: Empfindlichkeit",
         "light_show_snare_power": "Blitz: Stärke",
         "light_show_snare_options_hint": (
-            "Höher heißt: nur noch die größten Schläge. Was die Stärke "
-            "am Gerät bewirkt - Helligkeit oder Blitzgeschwindigkeit -, "
-            "steht in der Kanaltabelle des Geräts; ausprobieren."
+            "Höher heißt MEHR Blitze - bei 50 % kommen die kräftigen "
+            "Schläge durch, weiter oben auch der laufende Takt. Was "
+            "die Stärke am Gerät bewirkt - Helligkeit oder "
+            "Blitzgeschwindigkeit -, steht in der Kanaltabelle des "
+            "Geräts; ausprobieren."
         ),
         "light_show_background_beats": "Hintergrund: Farbwechsel",
         "light_show_fade_seconds": "Ausblenden in die Szene",
@@ -1155,10 +1157,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "not touch strobe channels at all - while it is on they "
             "belong to the show, and a value set by hand is overwritten."
         ),
-        "light_show_snare_threshold": "Flash: how loud",
+        "light_show_snare_sense": "Flash: sensitivity",
         "light_show_snare_power": "Flash: strength",
         "light_show_snare_options_hint": (
-            "Higher means only the biggest hits get through. What the "
+            "Higher means MORE flashes - at 50 % the strong hits come "
+            "through, further up the running beat does too. What the "
             "strength does on your fixture - brightness or strobe speed "
             "- is in its channel table; try it out."
         ),

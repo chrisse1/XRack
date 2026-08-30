@@ -275,9 +275,28 @@ gemessen:
 | Bedingung | Sortiert aus | Gemessen |
 | --- | --- | --- |
 | Ausschlag über dem eigenen Mittel | gehaltene Töne | ein Sägezahn meldete ohne sie 25 Blitze in vier Sekunden |
-| laut, gemessen an der laufenden Spitze | alles Beiläufige | das ist der Regler „ab wie laut" |
+| laut, gemessen an der laufenden Spitze | alles Beiläufige | — |
 | Höhen müssen da sein | den Kick | beim Kick lagen sie bei 0,04 der Spitze, bei der Snare bei 0,65 |
 | Mitten gegen Höhen | die Hi-Hat | Verhältnis 0,3 bei der Hi-Hat, 1,3 bei der Snare |
+
+Die ersten beiden hängen am Regler *Empfindlichkeit*, die letzten
+beiden stehen fest: Die sagen „ist das überhaupt eine Snare" und
+nicht „wie viel davon".
+
+**Dass beide am selben Regler hängen, ist eine Korrektur.** Zuerst
+bewegte er nur die Schwelle, der Ausschlag stand fest bei 2,5. Am
+Gerät zeigte sich, dass genau der bremst: Es blitzte am Anfang eines
+Songs und wenn in einer ruhigen Stelle etwas Lautes passierte, aber
+nicht im laufenden Groove. Der Grund steckt in der Rechnung — im
+Groove hebt die Snare ihr eigenes Bezugsmittel mit an und kommt nicht
+mehr um das 2,5-fache darüber; nach einer leisen Stelle ist das
+Mittel niedrig, da ragt sie heraus. Wer nur die Schwelle
+herunterdreht, kommt daran nicht heran.
+
+Der Verlauf ist quadratisch, und die Mitte des Reglers trifft genau
+die beiden Zahlen, die am Gerät gefallen haben (Schwelle 0,2,
+Ausschlag 2,5). Die feine Abstufung liegt damit dort, wo tatsächlich
+eingestellt wird.
 
 Ohne die dritte Bedingung meldete ein Signal aus **lauter Kicks ohne
 jede Snare** acht von acht Malen eine Snare — die steile Flanke des
@@ -286,9 +305,9 @@ Bassdrum gezuckt.
 
 Der schwierigste Fall bleibt Kick und Hi-Hat auf demselben Achtel:
 Der Kick liefert den Rumpf, die Hi-Hat die Höhen, zusammen sieht das
-aus wie eine Snare. Deshalb steht die Vorgabe von „ab wie laut" so
-hoch — bei 0,5 kamen sechs von acht solchen Paaren durch, bei 0,7
-noch eines.
+aus wie eine Snare, und keine der beiden festen Bedingungen greift.
+Mit drei Bändern lässt sich das nicht sauber trennen — dagegen hilft
+nur, die Empfindlichkeit herunterzudrehen.
 
 ### Warum die Show den Strobe-Kanal dann besitzt
 

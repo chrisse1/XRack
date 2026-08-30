@@ -149,7 +149,10 @@ without DMX you never see it.
   On top of that the show can flash the strobe channels on
   particularly loud hits — usually the snare. It is off until you
   switch it on: nobody wants a strobe that starts by itself. How loud
-  a hit has to be and how hard the flash lands are two sliders.
+  much gets through and how hard the flash lands are two sliders. The
+  middle of the sensitivity is set so the strong hits flash; further
+  up the running beat comes through too, further down only the
+  biggest accents.
 
   Shutter, gobo and the white channel are never driven automatically —
   they stay yours, and what you set by hand stays put while the show
@@ -355,8 +358,10 @@ Licht* — wer kein DMX hat, sieht es gar nicht erst.
   Dazu kann die Show auf besonders laute Schläge — meist die Snare —
   die Strobe-Kanäle blitzen lassen. Das ist ausgeschaltet, bis du es
   einschaltest: Ein Blitzlicht, das von selbst angeht, will niemand.
-  Wie laut ein Schlag dafür sein muss und wie kräftig der Blitz
-  ausfällt, sind zwei Regler.
+  Wie viel durchkommt und wie kräftig der Blitz ausfällt, sind zwei
+  Regler. Die Mitte der Empfindlichkeit ist so gelegt, dass die
+  kräftigen Schläge blitzen; weiter oben kommt auch der laufende Takt
+  durch, weiter unten nur noch die dicksten Einsätze.
 
   Shutter, Gobo und der Weiß-Kanal werden nie von selbst angesteuert —
   die gehören dir, und was du von Hand einstellst, bleibt auch während

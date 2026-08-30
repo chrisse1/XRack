@@ -254,7 +254,7 @@ def stand(enabled=True, service=True, adapter=True, overlaps=None,
             "pulse_seconds": 0.5,
             "pulse_base": 0.2,
             "snare_strobe": False,
-            "snare_threshold": 0.5,
+            "snare_sense": 0.5,
             "snare_power": 0.8,
             "sensitivity": 1.5,
             "fallback_scene": "s1",
@@ -1386,10 +1386,10 @@ pruefung = """function () {
     return {
         an: schalter.checked,
         sichtbar: !block.classList.contains('d-none'),
-        schwelle: document.getElementById('light-show-snare-threshold').value,
+        schwelle: document.getElementById('light-show-snare-sense').value,
         staerke: document.getElementById('light-show-snare-power').value,
         schwellentext: document.getElementById(
-            'light-show-snare-threshold-value').textContent,
+            'light-show-snare-sense-value').textContent,
         staerketext: document.getElementById(
             'light-show-snare-power-value').textContent
     };
@@ -1405,7 +1405,7 @@ print("OK: Der Blitz steht aus im Dialog, ohne Regler")
 
 mit_blitz = stand()
 mit_blitz["show"] = {**mit_blitz["show"], "snare_strobe": True,
-                     "snare_threshold": 0.7, "snare_power": 0.6}
+                     "snare_sense": 0.7, "snare_power": 0.6}
 
 ergebnis = ausfuehren(mit_blitz, pruefung)
 
@@ -1447,6 +1447,28 @@ assert '"snare_strobe":true' in ergebnis["gesendet"].replace(" ", ""), (
 )
 
 print("OK: Eingeschaltet erscheinen sie sofort und werden gespeichert")
+
+
+#
+# Und die beiden Regler darunter muessen ihren Wert mitschicken.
+#
+ergebnis = ausfuehren(mit_blitz, """function () {
+    const gesendet = window.aufrufe.filter(
+        a => a[0].indexOf('/api/lighting/show/settings') === 0
+    );
+
+    return { koerper: gesendet.length ? gesendet[gesendet.length - 1][1] : '' };
+}""", vorher="""
+    const regler = document.getElementById('light-show-snare-sense');
+    regler.value = '0.85';
+    regler.dispatchEvent(new Event('change'));
+""")
+
+koerper = ergebnis["koerper"].replace(" ", "")
+
+assert '"snare_sense":0.85' in koerper, koerper
+
+print("OK: Ein verschobener Empfindlichkeitsregler wird gespeichert")
 
 
 print("Alle Lichtkarten-Tests erfolgreich.")

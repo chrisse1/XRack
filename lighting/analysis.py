@@ -90,25 +90,73 @@ SCHLAG_FAKTOR = 1.25
 # Zwei Bedingungen, und sie sagen Verschiedenes:
 #
 #   AUSSCHLAG - es muss ein Einsatz sein und kein Dauerzustand,
-#               gemessen am eigenen gleitenden Mittel. Fest.
+#               gemessen am eigenen gleitenden Mittel.
 #   SCHWELLE  - und er muss LAUT sein, gemessen an der laufenden
-#               Spitze. Das ist die Schraube fuer "besonders laute
-#               Schlaege": hochdrehen, bis nur noch die groessten
-#               durchkommen. Einstellbar, weil das von Musik und
-#               Mischung abhaengt.
+#               Spitze.
 #
-# Der Ausschlag ist mit Absicht gross. Gemessen an einem
-# gleichbleibenden Saegezahn - also an dem, was ein gehaltener Ton
-# eines verzerrten Instruments der Analyse zeigt - kamen bei 1,3
-# neun Fehlmeldungen in vier Sekunden durch, bei 2,5 nur noch fuenf
-# und bei 3,5 zwei; die echten Snares blieben dabei alle erhalten.
-# 2,5 ist der Mittelweg: An kuenstlichen Signalen laesst sich nicht
-# entscheiden, ab wann in dichter Musik echte Schlaege verlorengehen.
-# Wenn am Geraet zu wenig durchkommt, ist das hier die erste
-# Schraube.
+# Beide haengen am selben Regler, der Empfindlichkeit. Das war
+# zuerst anders: Der Regler bewegte nur die Schwelle, der Ausschlag
+# stand fest bei 2,5. Am Geraet zeigte sich, dass genau der bremst -
+# es blitzte am Anfang eines Songs und wenn in einer ruhigen Stelle
+# etwas Lautes passierte, aber nicht im laufenden Groove. Der Grund
+# steckt in der Rechnung: Im Groove hebt die Snare ihr eigenes
+# Bezugsmittel mit an und kommt nicht mehr um das 2,5-fache
+# darueber. Nach einer leisen Stelle ist das Mittel niedrig, da
+# ragt sie heraus. Wer die Schwelle allein herunterdreht, kommt
+# daran nicht heran.
 #
+SNARE_EMPFINDLICHKEIT = 0.5
+
+#
+# Wo die beiden Zahlen bei genau dieser Empfindlichkeit stehen.
+#
+# Das ist der Stand, der am Geraet gefaellt: Der Regler sass dort am
+# unteren Anschlag (Schwelle 0,2) bei fest eingebautem Ausschlag
+# 2,5. Deshalb ist die Vorgabe die MITTE des neuen Reglers - nach
+# dem Update klingt es genau wie vorher, und es gibt Luft in beide
+# Richtungen.
+#
+SNARE_SCHWELLE = 0.2
 SNARE_AUSSCHLAG = 2.5
-SNARE_SCHWELLE = 0.7
+
+#
+# Die Enden des Reglers.
+#
+# Der Ausschlag darf nach unten nicht beliebig weit: Gemessen an
+# einem gleichbleibenden Saegezahn - also an dem, was ein gehaltener
+# Ton eines verzerrten Instruments der Analyse zeigt - kamen bei 1,3
+# neun Fehlmeldungen in vier Sekunden durch, bei 2,5 fuenf, bei 3,5
+# zwei. 1,3 ist damit das aeusserste, was noch vertretbar ist, und
+# es steht am Anschlag "ganz empfindlich".
+#
+SNARE_SCHWELLE_MIN = 0.05
+SNARE_SCHWELLE_MAX = 0.65
+
+SNARE_AUSSCHLAG_MIN = 1.3
+SNARE_AUSSCHLAG_MAX = 6.1
+
+
+def snare_grenzen(empfindlichkeit: float) -> tuple[float, float]:
+    """
+    Schwelle und Ausschlag aus der Empfindlichkeit (0-1).
+
+    Quadratisch, nicht linear: Die feine Abstufung gehoert an das
+    empfindliche Ende, wo tatsaechlich eingestellt wird. Am strengen
+    Ende reicht grob - dort geht es nur noch darum, wie sehr man
+    zumacht.
+
+    Die Anker sind so gewaehlt, dass die Mitte des Reglers genau
+    SNARE_SCHWELLE und SNARE_AUSSCHLAG trifft.
+    """
+
+    streng = 1.0 - max(0.0, min(1.0, float(empfindlichkeit)))
+
+    return (
+        SNARE_SCHWELLE_MIN
+        + (SNARE_SCHWELLE_MAX - SNARE_SCHWELLE_MIN) * streng ** 2,
+        SNARE_AUSSCHLAG_MIN
+        + (SNARE_AUSSCHLAG_MAX - SNARE_AUSSCHLAG_MIN) * streng ** 2,
+    )
 
 #
 # Sperrzeit nach einer Snare. Laenger als beim Kick (0,12 s): Ein
@@ -189,7 +237,7 @@ class Bandanalyse:
 
     def __init__(self, rate: int = 48000, channels: int = 2,
                  links: int = 0, rechts: int = 1,
-                 snare_schwelle: float = SNARE_SCHWELLE):
+                 snare_empfindlichkeit: float = SNARE_EMPFINDLICHKEIT):
 
         self.rate = max(1, int(rate))
         self.channels = max(1, int(channels))
@@ -269,7 +317,9 @@ class Bandanalyse:
         #
         self.mitte_mittel = 0.0
         self.hoch_mittel = 0.0
-        self.snare_schwelle = max(0.05, min(1.0, float(snare_schwelle)))
+        self.snare_schwelle, self.snare_ausschlag = snare_grenzen(
+            snare_empfindlichkeit
+        )
 
         #
         # Sperrzeit nach einem Schlag, damit ein einzelner Kick nicht
@@ -409,7 +459,7 @@ class Bandanalyse:
         #
         snare = False
 
-        if (self.mitte_schnell > self.mitte_mittel * SNARE_AUSSCHLAG
+        if (self.mitte_schnell > self.mitte_mittel * self.snare_ausschlag
                 and self.mitte_schnell > self.spitze * self.snare_schwelle
                 and self.hoch_schnell > self.spitze * SNARE_HOEHEN_ANTEIL
                 and self.mitte_schnell > self.hoch_schnell * SNARE_KOERPER_ANTEIL

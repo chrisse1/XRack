@@ -31,7 +31,7 @@ import time
 
 from lighting import fixtures
 from lighting.analysis import (
-    SNARE_SCHWELLE,
+    SNARE_EMPFINDLICHKEIT,
     Bandanalyse,
     Stimmungserkennung,
 )
@@ -351,10 +351,17 @@ class LightEngine:
         if self._laeuft:
             return
 
+        #
+        # Kein "or": 0 ist eine gueltige Empfindlichkeit (die
+        # strengste) und wuerde davon still in die Vorgabe verwandelt.
+        #
+        empfindlichkeit = einstellungen.get("snare_sense")
+
         self.analyse = Bandanalyse(
             rate=rate, channels=channels, links=links, rechts=rechts,
-            snare_schwelle=float(
-                einstellungen.get("snare_threshold") or SNARE_SCHWELLE
+            snare_empfindlichkeit=(
+                SNARE_EMPFINDLICHKEIT if empfindlichkeit is None
+                else float(empfindlichkeit)
             ),
         )
 

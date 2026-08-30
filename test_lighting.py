@@ -3243,6 +3243,65 @@ with tempfile.TemporaryDirectory() as tmp:
     print("OK: Der Show-Thread löst den Blitz auf die Snare aus")
 
 
+# --- Die Empfindlichkeit kommt in der Analyse an --------------------
+#
+# Zwischen dem Regler und der Erkennung liegt start(): Dort wird die
+# Bandanalyse gebaut. Kommt der Wert dort nicht an, steht der Regler
+# in der Oberflaeche und tut nichts - der Fehler, den man am
+# schwersten sieht, weil alles andere stimmt.
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    from lighting.analysis import SNARE_EMPFINDLICHKEIT, snare_grenzen
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+
+    motor = LichtApp(licht, DmxAttrappe()).light_engine
+
+    for empfindlichkeit in (0.0, 0.25, 1.0):
+
+        motor.start(48000, 2, 0, 1, {"snare_sense": empfindlichkeit})
+
+        schwelle, ausschlag = snare_grenzen(empfindlichkeit)
+
+        assert motor.analyse.snare_schwelle == schwelle, (
+            f"Empfindlichkeit {empfindlichkeit} kommt nicht an: "
+            f"{motor.analyse.snare_schwelle} statt {schwelle}"
+        )
+        assert motor.analyse.snare_ausschlag == ausschlag, (
+            motor.analyse.snare_ausschlag, ausschlag
+        )
+
+        motor.stop()
+
+    #
+    # Die 0 ist dabei der heikle Fall: Sie ist eine gueltige
+    # Einstellung (die strengste) und wuerde von einem "or" still in
+    # die Vorgabe verwandelt.
+    #
+    motor.start(48000, 2, 0, 1, {"snare_sense": 0.0})
+
+    assert motor.analyse.snare_schwelle != snare_grenzen(
+        SNARE_EMPFINDLICHKEIT
+    )[0], "Empfindlichkeit 0 wurde still zur Vorgabe."
+
+    motor.stop()
+
+    #
+    # Ohne Angabe die Vorgabe.
+    #
+    motor.start(48000, 2, 0, 1, {})
+
+    assert motor.analyse.snare_schwelle == snare_grenzen(
+        SNARE_EMPFINDLICHKEIT
+    )[0], motor.analyse.snare_schwelle
+
+    motor.stop()
+
+    print("OK: Die Empfindlichkeit kommt in der Analyse an, auch die 0")
+
+
 # --- Das Hintergrundlicht blitzt nicht ------------------------------
 
 with tempfile.TemporaryDirectory() as tmp:
@@ -3296,9 +3355,9 @@ with tempfile.TemporaryDirectory() as tmp:
     )
 
     from lighting.light_engine import LightEngine
-    from lighting.analysis import SNARE_SCHWELLE
+    from lighting.analysis import SNARE_EMPFINDLICHKEIT
 
-    assert licht.show_einstellungen()["snare_threshold"] == SNARE_SCHWELLE
+    assert licht.show_einstellungen()["snare_sense"] == SNARE_EMPFINDLICHKEIT
     assert licht.show_einstellungen()["snare_power"] == LightEngine.BLITZ_STAERKE
 
     ok, meldung = licht.set_show_einstellungen({"snare_strobe": True})
@@ -3306,14 +3365,14 @@ with tempfile.TemporaryDirectory() as tmp:
     assert ok, meldung
     assert licht.show_einstellungen()["snare_strobe"] is True
 
-    licht.set_show_einstellungen({"snare_threshold": 9.0, "snare_power": 9.0})
+    licht.set_show_einstellungen({"snare_sense": 9.0, "snare_power": 9.0})
 
-    assert licht.show_einstellungen()["snare_threshold"] == 0.9
+    assert licht.show_einstellungen()["snare_sense"] == 1.0
     assert licht.show_einstellungen()["snare_power"] == 1.0
 
-    licht.set_show_einstellungen({"snare_threshold": 0.0, "snare_power": -1.0})
+    licht.set_show_einstellungen({"snare_sense": -1.0, "snare_power": -1.0})
 
-    assert licht.show_einstellungen()["snare_threshold"] == 0.2
+    assert licht.show_einstellungen()["snare_sense"] == 0.0
     assert licht.show_einstellungen()["snare_power"] == 0.0
 
     print("OK: Der Blitz ist aus als Vorgabe, seine Werte bleiben in Grenzen")

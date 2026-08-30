@@ -84,10 +84,13 @@ SHOW_VORGABE = {
     "snare_strobe": False,
 
     #
-    # Ab wie laut. Anteil an der laufenden Spitze; hoeher heisst,
-    # dass nur noch die groessten Schlaege durchkommen.
+    # Wie empfindlich. Hoeher heisst mehr Blitze.
     #
-    "snare_threshold": 0.7,
+    # Der Regler dreht zwei Zahlen zugleich (siehe snare_grenzen() in
+    # lighting/analysis.py). Die Mitte ist mit Absicht die Vorgabe:
+    # Sie trifft genau den Stand, der am Geraet gefaellt.
+    #
+    "snare_sense": 0.5,
 
     #
     # Was waehrend des Blitzes auf dem Strobe-Kanal steht (0-1 von
@@ -624,13 +627,9 @@ class LightingStore:
         if "snare_strobe" in werte:
             show["snare_strobe"] = bool(werte["snare_strobe"])
 
-        #
-        # Unter 0,2 spraeche fast jeder Einsatz an, ueber 0,9 nur
-        # noch der eine lauteste Moment eines Stuecks.
-        #
-        if "snare_threshold" in werte:
-            show["snare_threshold"] = max(
-                0.2, min(0.9, float(werte["snare_threshold"]))
+        if "snare_sense" in werte:
+            show["snare_sense"] = max(
+                0.0, min(1.0, float(werte["snare_sense"]))
             )
 
         if "snare_power" in werte:

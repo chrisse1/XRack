@@ -5748,7 +5748,7 @@ function renderLightShowSettings(stand) {
     setzen("light-show-effect-mode", show.effect_mode);
     setzen("light-show-pulse-seconds", show.pulse_seconds);
     setzen("light-show-pulse-base", show.pulse_base);
-    setzen("light-show-snare-threshold", show.snare_threshold);
+    setzen("light-show-snare-sense", show.snare_sense);
     setzen("light-show-snare-power", show.snare_power);
 
     const blitz = document.getElementById("light-show-snare-strobe");
@@ -5857,7 +5857,7 @@ function lightTraegheitBeschriften() {
     // Kanalwerts.
     //
     for (const [regler, anzeige] of [
-        ["light-show-snare-threshold", "light-show-snare-threshold-value"],
+        ["light-show-snare-sense", "light-show-snare-sense-value"],
         ["light-show-snare-power", "light-show-snare-power-value"]
     ]) {
         const feld = document.getElementById(regler);
@@ -5945,7 +5945,7 @@ async function saveLightShowSettings() {
         pulse_seconds: zahl("light-show-pulse-seconds"),
         pulse_base: zahl("light-show-pulse-base"),
         snare_strobe: blitz ? blitz.checked : null,
-        snare_threshold: zahl("light-show-snare-threshold"),
+        snare_sense: zahl("light-show-snare-sense"),
         snare_power: zahl("light-show-snare-power"),
         background_seconds: zahl("light-show-background-seconds"),
         background_beats: zahl("light-show-background-beats"),
@@ -5987,7 +5987,7 @@ function lightShowPulsSetzen(laeuft) {
         "light-show-background-seconds", "light-show-background-beats",
         "light-show-fade-seconds",
         "light-show-pulse-seconds", "light-show-pulse-base",
-        "light-show-snare-strobe", "light-show-snare-threshold",
+        "light-show-snare-strobe", "light-show-snare-sense",
         "light-show-snare-power",
         "light-show-color-low", "light-show-color-mid",
         "light-show-color-high",
@@ -6008,7 +6008,7 @@ function lightShowPulsSetzen(laeuft) {
                           "light-show-fade-seconds",
                           "light-show-pulse-seconds",
                           "light-show-pulse-base",
-                          "light-show-snare-threshold",
+                          "light-show-snare-sense",
                           "light-show-snare-power"]) {
         const element = document.getElementById(kennung);
         if (element) element.addEventListener("input", lightTraegheitBeschriften);
