@@ -122,12 +122,25 @@ SNARE_AUSSCHLAG = 2.5
 #
 # Die Enden des Reglers.
 #
-# Der Ausschlag darf nach unten nicht beliebig weit: Gemessen an
-# einem gleichbleibenden Saegezahn - also an dem, was ein gehaltener
-# Ton eines verzerrten Instruments der Analyse zeigt - kamen bei 1,3
-# neun Fehlmeldungen in vier Sekunden durch, bei 2,5 fuenf, bei 3,5
-# zwei. 1,3 ist damit das aeusserste, was noch vertretbar ist, und
-# es steht am Anschlag "ganz empfindlich".
+# Zur Herkunft von 2,5 in der Mitte gehoert eine Korrektur: Die Zahl
+# wurde an einem gleichbleibenden Saegezahn gewaehlt - also an dem,
+# was ein gehaltener Ton eines verzerrten Instruments der Analyse
+# zeigt -, und dort kamen bei 1,3 neun Fehlmeldungen in vier
+# Sekunden durch, bei 2,5 fuenf, bei 3,5 zwei.
+#
+# Diese Messung war unbrauchbar: Sie stammt von VOR der Anlaufzeit,
+# und die Fehlmeldungen lagen praktisch alle in den ersten
+# Augenblicken, in denen ohnehin alles ansprach. Nachgemessen mit
+# Anlaufzeit meldet derselbe Saegezahn bei 1,3 wie bei 2,5 gar
+# nichts mehr - ohne die Bedingung dagegen zwanzig Mal.
+#
+# Die Bedingung traegt also weiterhin, ihr WERT ist an dieser Stelle
+# aber nicht mehr belegt. 2,5 bleibt trotzdem stehen: Genau darauf
+# ist die Show am Geraet eingestellt worden, und eine Zahl hinter
+# dem Ruecken des Nutzers zu aendern waere schlimmer als eine, die
+# vielleicht strenger ist als noetig. Wem in dichter Musik zu wenig
+# durchkommt, der dreht den Regler auf - und wenn das nicht reicht,
+# ist hier die Stelle.
 #
 SNARE_SCHWELLE_MIN = 0.05
 SNARE_SCHWELLE_MAX = 0.65
@@ -164,6 +177,27 @@ def snare_grenzen(empfindlichkeit: float) -> tuple[float, float]:
 # aus, waehrend zwei Kicks nur zweimal Licht bedeuten.
 #
 SNARE_SPERRE_S = 0.15
+
+#
+# So lange nach dem Start wird keine Snare gemeldet.
+#
+# Der gleitende Mittelwert startet bei Null und die laufende Spitze
+# an ihrem Mindestwert - in den ersten Augenblicken ist deshalb JEDER
+# Wert ein Vielfaches von fast nichts, und alle vier Bedingungen sind
+# nebenbei erfuellt. Nachgemessen an einem voellig gleichbleibenden
+# Ton ohne eine einzige Transiente: Snare gemeldet bei 0,000 s,
+# 0,171 s und 0,341 s.
+#
+# Das ist nicht bloss ein Schoenheitsfehler. Jede Aenderung in den
+# Einstellungen startet die Show neu - wer am Regler dreht, bekaeme
+# also bei jedem Schritt eine Salve Blitze und haelt sie fuer die
+# Wirkung seiner Einstellung.
+#
+# Nachgemessen: Bei 0,5 s kam genau eine Meldung durch, sobald die
+# Sperre fiel - der Mittelwert war noch nicht weit genug. Eine ganze
+# Zeitkonstante spaeter ist nichts mehr da, deshalb genau die.
+#
+SNARE_ANLAUF_S = SCHLAG_MITTEL_S
 
 #
 # Wie viel von der laufenden Spitze in den Hoehen stehen muss, damit
@@ -313,10 +347,9 @@ class Bandanalyse:
         self.bass_mittel = 0.0
 
         #
-        # Und die Gegenstuecke fuer Mitten und Hoehen.
+        # Und das Gegenstueck fuer die Mitten.
         #
         self.mitte_mittel = 0.0
-        self.hoch_mittel = 0.0
         self.snare_schwelle, self.snare_ausschlag = snare_grenzen(
             snare_empfindlichkeit
         )
@@ -459,7 +492,8 @@ class Bandanalyse:
         #
         snare = False
 
-        if (self.mitte_schnell > self.mitte_mittel * self.snare_ausschlag
+        if (self.zeit >= SNARE_ANLAUF_S
+                and self.mitte_schnell > self.mitte_mittel * self.snare_ausschlag
                 and self.mitte_schnell > self.spitze * self.snare_schwelle
                 and self.hoch_schnell > self.spitze * SNARE_HOEHEN_ANTEIL
                 and self.mitte_schnell > self.hoch_schnell * SNARE_KOERPER_ANTEIL
@@ -469,7 +503,6 @@ class Bandanalyse:
             self.snare_sperre_bis = self.zeit + SNARE_SPERRE_S
 
         self.mitte_mittel += anteil * (self.mitte_schnell - self.mitte_mittel)
-        self.hoch_mittel += anteil * (self.hoch_schnell - self.hoch_mittel)
 
         self.pegel = math.sqrt(summe / len(mono))
 

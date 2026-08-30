@@ -455,7 +455,7 @@ print("OK: Sprache wird nur erkannt, wenn man es ausdrücklich einschaltet - "
 # ====================================================================
 
 def schlagzeug(kick=True, snare=True, hihat=False, bass=False,
-               bpm=120, takte=8, channels=2) -> list:
+               bpm=120, takte=16, channels=2) -> list:
     """
     Ein einfaches Schlagzeugmuster.
 
@@ -463,6 +463,10 @@ def schlagzeug(kick=True, snare=True, hihat=False, bass=False,
     jeder Achtel, dazu auf Wunsch eine durchgehende Basslinie. Die
     Snare besteht aus Rumpf (200 Hz) und Teppich (3 kHz) - genau die
     beiden Anteile, an denen die Erkennung sie festmacht.
+
+    16 Takte sind acht Sekunden und acht Snares. Kuerzer waere
+    unguenstig: Die erste Snare faellt in die Anlaufzeit, und bei
+    vier Schlaegen waere das ein Viertel der Messung.
     """
 
     periode = int(RATE * 60.0 / bpm)
@@ -539,25 +543,23 @@ assert snare_grenzen(1.0) < snare_grenzen(0.0), (
 print("OK: Die Mitte des Reglers trifft die dokumentierten Zahlen")
 
 #
-# Vier Snares in acht Takten. Eine Meldung mehr ist der erste Block:
-# Dort ist die laufende Spitze noch der Anfangswert, und alles ragt
-# darueber hinaus. Das ist beim Kick genauso und fuer Licht
-# verkraftbar - ein Blitz beim Einsetzen der Musik.
+# Acht Snares in sechzehn Takten - davon faellt die erste in die
+# Anlaufzeit (siehe SNARE_ANLAUF_S), sieben bleiben.
 #
 gemeldet = snares(schlagzeug())
 
-assert 4 <= gemeldet <= 6, (
-    f"Bei vier Snares wurden {gemeldet} gemeldet."
+assert 6 <= gemeldet <= 9, (
+    f"Bei acht Snares wurden {gemeldet} gemeldet."
 )
 
-print(f"OK: Snares werden erkannt ({gemeldet} Meldungen bei 4 Schlägen)")
+print(f"OK: Snares werden erkannt ({gemeldet} Meldungen bei 8 Schlägen)")
 
 #
 # Mit Hi-Hats dazwischen muessen die Snares weiterhin durchkommen.
 #
 gemeldet = snares(schlagzeug(hihat=True))
 
-assert gemeldet >= 4, (
+assert gemeldet >= 7, (
     f"Mit Hi-Hats kommen nur noch {gemeldet} Snares durch."
 )
 
@@ -650,6 +652,49 @@ assert gemeldet <= 1, (
 print(f"OK: Auch ganz aufgedreht bleibt die Hi-Hat draußen ({gemeldet})")
 
 #
+# Die Anlaufzeit.
+#
+# Das war ein echter Fehler, gefunden im Code-Review: Der gleitende
+# Mittelwert startet bei Null und die Spitze an ihrem Mindestwert -
+# in den ersten Augenblicken ist deshalb JEDER Wert ein Vielfaches
+# von fast nichts. An einem voellig gleichbleibenden Ton ohne eine
+# einzige Transiente meldete die Erkennung Snares bei 0,000 s,
+# 0,171 s und 0,341 s.
+#
+# Und weil jede Aenderung in den Einstellungen die Show neu startet,
+# bekam man beim Drehen am Regler jedes Mal eine Salve Blitze - und
+# haette sie fuer die Wirkung der Einstellung gehalten.
+#
+def dauerton(bloecke: int = 120, channels: int = 2) -> list:
+
+    daten = array.array("i")
+
+    for n in range(BLOCK * bloecke):
+
+        wert = (0.5 * math.sin(2 * math.pi * 440 * n / RATE)
+                + 0.3 * math.sin(2 * math.pi * 5000 * n / RATE))
+
+        roh_wert = int(wert * (2 ** 31 - 1))
+
+        for _ in range(channels):
+            daten.append(roh_wert)
+
+    roh = daten.tobytes()
+    schritt = BLOCK * channels * 4
+
+    return [roh[i:i + schritt] for i in range(0, len(roh) - schritt + 1, schritt)]
+
+
+gemeldet = snares(dauerton())
+
+assert gemeldet == 0, (
+    f"Ein gleichbleibender Ton hat {gemeldet} Snares gemeldet - das ist "
+    f"der Anlauf, in dem noch alles ein Vielfaches von fast nichts ist."
+)
+
+print("OK: Im Anlauf wird nichts gemeldet")
+
+#
 # Ein gehaltener Ton ist keine Snare, auch wenn er laut ist.
 #
 # Ein Saegezahn hat einen Grundton in den Mitten und Obertoene bis
@@ -680,7 +725,7 @@ def saegezahn(hz: float = 400.0, bloecke: int = 200,
 
 gemeldet = snares(saegezahn())
 
-assert gemeldet <= 8, (
+assert gemeldet <= 1, (
     f"Ein gehaltener Ton hat {gemeldet} Snares gemeldet - damit blitzt es "
     f"durch jede laute Fläche hindurch."
 )
@@ -707,21 +752,31 @@ print("OK: In der Stille gibt es keine Snare")
 # zwar so weit, dass zwischen den Enden Faktoren liegen und nicht
 # ein paar Prozent.
 #
+#
+# Gemessen am dichtesten Muster: Kick, Snare, Hi-Hat und eine
+# durchgehende Basslinie. Genau dort kommt es darauf an - in duenner
+# Musik kommen die Schlaege ohnehin durch.
+#
 muster = schlagzeug(hihat=True, bass=True)
 
-streng = snares(muster, 0.0)
-mitte = snares(muster, SNARE_EMPFINDLICHKEIT)
-locker = snares(muster, 1.0)
+reihe = [snares(muster, e) for e in (0.0, 0.25, 0.5, 0.75, 1.0)]
 
-assert streng < mitte < locker, (
-    f"Der Regler reicht nicht: {streng} / {mitte} / {locker}"
+#
+# Mehr Empfindlichkeit darf nie WENIGER Meldungen ergeben. Ein
+# Vorzeichenfehler in der Abbildung waere sonst nur an einer Zahl zu
+# erkennen und nicht am Verlauf.
+#
+assert reihe == sorted(reihe), f"Der Verlauf ist nicht monoton: {reihe}"
+
+assert reihe[0] == 0, (
+    f"Ganz zugedreht darf nichts durchkommen: {reihe}"
 )
 
-assert locker >= streng * 3, (
-    f"Zwischen den Enden liegt zu wenig: {streng} gegen {locker}"
+assert reihe[-1] >= 8, (
+    f"Ganz aufgedreht müssen die Schläge durchkommen: {reihe}"
 )
 
-print(f"OK: Der Regler reicht von {streng} über {mitte} bis {locker} Meldungen")
+print(f"OK: Der Regler reicht über den ganzen Weg: {reihe}")
 
 
 print("Alle Analyse-Tests erfolgreich.")

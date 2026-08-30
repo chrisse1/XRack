@@ -443,6 +443,17 @@ class RecorderAttrappe:
 
     backend = Backend()
 
+    #
+    # Das Anhalten der Show meldet den Verbraucher ab und stoppt die
+    # Analyse. Beides tut hier nichts - gebraucht wird nur, dass es
+    # die Methoden gibt.
+    #
+    def remove_consumer(self, verbraucher):
+        pass
+
+    def stop_analysis(self):
+        pass
+
 
 class LichtApp(LichtMixin):
     """Nur die Teile von Application, die die Lichtsteuerung anfasst."""
@@ -3190,6 +3201,99 @@ with tempfile.TemporaryDirectory() as tmp:
     assert motor.blitz == 0.0, motor.blitz
 
     print("OK: Der Blitz läuft ab und ein neuer Schlag setzt ihn zurück")
+
+
+# --- Die Show gibt die Strobe-Kanaele zurueck -----------------------
+#
+# Gefunden im Code-Review. Waehrend der Blitz laeuft, schreibt die
+# Show zwischen zwei Blitzen ausdruecklich 0 - hoert sie mittendrin
+# auf, tut sie das nicht mehr. Und weil jedes Bild bei dem beginnt,
+# was zuletzt drin stand, bliebe der Blitzwert stehen: Die Lampe
+# blitzt weiter, obwohl die Show aus ist.
+#
+# Ein Blitz dauert 80 ms und kommt mehrmals je Sekunde. Beim Anhalten
+# in einem zu landen ist also kein Sonderfall.
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+    licht.vorlage_speichern({
+        "id": "spot3", "name": "Spot mit Strobe",
+        "channels": ["red", "green", "blue", "strobe"],
+    })
+    licht.lampe_speichern({
+        "id": "s", "name": "Spot", "template": "spot3", "address": 1,
+    })
+    licht.lampe_speichern({
+        "id": "w", "name": "Wash", "template": "spot3", "address": 10,
+        "kind": "background",
+    })
+
+    dmx = DmxAttrappe()
+    app = LichtApp(licht, dmx)
+    motor = app.light_engine
+
+    #
+    # Der Zustand mitten im Blitz, wie ihn die Show hinterlassen
+    # haette - und daneben eine Hintergrundlampe, an der jemand den
+    # Strobe von Hand gestellt hat.
+    #
+    app.light_values["s"] = [255, 127, 127, 204]
+    app.light_values["w"] = [10, 10, 10, 88]
+
+    motor.einstellungen = {"snare_strobe": True}
+    motor._laeuft = True
+
+    app.stop_light_show()
+
+    assert app.light_values["s"][3] == 0, (
+        "Nach dem Anhalten muss der Strobe-Kanal zurückgegeben werden - "
+        f"sonst blitzt die Lampe weiter: {app.light_values['s']}"
+    )
+
+    #
+    # Die Farben bleiben stehen: Zurueckgegeben wird der Strobe, nicht
+    # das ganze Bild.
+    #
+    assert app.light_values["s"][:3] == [255, 127, 127], app.light_values["s"]
+
+    #
+    # Und die Hintergrundlampe wird nicht angefasst. Die hat die Show
+    # nie gefahren, ihr Wert gehoert dem Nutzer.
+    #
+    assert app.light_values["w"][3] == 88, (
+        "Ein von Hand gestellter Strobe am Hintergrundlicht darf nicht "
+        f"gelöscht werden: {app.light_values['w']}"
+    )
+
+    #
+    # Und das Ganze muss auch hinausgegangen sein, nicht nur im
+    # Speicher stehen.
+    #
+    assert dmx.gesendet and dmx.gesendet[-1][3] == 0, (
+        "Die Rückgabe muss auch gesendet werden."
+    )
+
+    print("OK: Beim Anhalten gibt die Show die Strobe-Kanäle zurück")
+
+    #
+    # War der Blitz gar nicht an, gehoerte der Kanal die ganze Zeit
+    # dem Nutzer - dann bleibt er stehen.
+    #
+    app.light_values["s"] = [255, 127, 127, 150]
+
+    motor.einstellungen = {"snare_strobe": False}
+    motor._laeuft = True
+
+    app.stop_light_show()
+
+    assert app.light_values["s"][3] == 150, (
+        "Ohne eingeschalteten Blitz darf beim Anhalten nichts gelöscht "
+        f"werden: {app.light_values['s']}"
+    )
+
+    print("OK: Ohne Blitz bleibt ein von Hand gestellter Strobe stehen")
 
 
 # --- Der Motor loest den Blitz auch wirklich aus --------------------
