@@ -5748,6 +5748,7 @@ function renderLightShowSettings(stand) {
     setzen("light-show-effect-mode", show.effect_mode);
     setzen("light-show-pulse-seconds", show.pulse_seconds);
     setzen("light-show-pulse-base", show.pulse_base);
+    setzen("light-show-invert-beats", show.invert_beats);
     setzen("light-show-snare-sense", show.snare_sense);
     setzen("light-show-snare-power", show.snare_power);
 
@@ -5757,7 +5758,14 @@ function renderLightShowSettings(stand) {
         blitz.checked = !!show.snare_strobe;
     }
 
+    const umkehr = document.getElementById("light-show-color-invert");
+
+    if (umkehr && document.activeElement !== umkehr) {
+        umkehr.checked = !!show.color_invert;
+    }
+
     lightBlitzAnzeigen();
+    lightUmkehrAnzeigen();
 
     //
     // Direkt hier und nicht am Ende der Funktion: Die kehrt weiter
@@ -5830,12 +5838,17 @@ function lightTraegheitBeschriften() {
 
     if (blende && blendetext) blendetext.textContent = blende.value + " s";
 
-    const takte = document.getElementById("light-show-background-beats");
-    const takttext = document.getElementById("light-show-background-beats-value");
+    for (const [regler, anzeige] of [
+        ["light-show-background-beats", "light-show-background-beats-value"],
+        ["light-show-invert-beats", "light-show-invert-beats-value"]
+    ]) {
+        const takte = document.getElementById(regler);
+        const takttext = document.getElementById(anzeige);
 
-    if (takte && takttext) {
-        takttext.textContent =
-            I18N.light_show_beats_unit.replace("{n}", takte.value);
+        if (takte && takttext) {
+            takttext.textContent =
+                I18N.light_show_beats_unit.replace("{n}", takte.value);
+        }
     }
 
     const nachleuchten = document.getElementById("light-show-pulse-seconds");
@@ -5878,6 +5891,7 @@ function lightTraegheitBeschriften() {
     // und es ist ein Hinweis, keine Sperre.
     //
     const hinweis = document.getElementById("light-show-background-warning");
+    const takte = document.getElementById("light-show-background-beats");
 
     if (hinweis && regler && takte) {
         const standzeit = parseFloat(takte.value) * 0.5;
@@ -5898,6 +5912,13 @@ function lightPulsAnzeigen() {
     // an ihnen dreht, sucht den Fehler danach bei den Lampen.
     //
     if (modus && block) block.classList.toggle("d-none", modus.value !== "pulse");
+}
+
+function lightUmkehrAnzeigen() {
+    const schalter = document.getElementById("light-show-color-invert");
+    const block = document.getElementById("light-show-invert-options");
+
+    if (schalter && block) block.classList.toggle("d-none", !schalter.checked);
 }
 
 function lightBlitzAnzeigen() {
@@ -5923,6 +5944,7 @@ async function saveLightShowSettings() {
     const auswahl = document.getElementById("light-show-fallback");
     const modus = document.getElementById("light-show-effect-mode");
     const blitz = document.getElementById("light-show-snare-strobe");
+    const umkehr = document.getElementById("light-show-color-invert");
 
     const farbe = (kennung) => {
         const element = document.getElementById(kennung);
@@ -5949,6 +5971,8 @@ async function saveLightShowSettings() {
         snare_power: zahl("light-show-snare-power"),
         background_seconds: zahl("light-show-background-seconds"),
         background_beats: zahl("light-show-background-beats"),
+        color_invert: umkehr ? umkehr.checked : null,
+        invert_beats: zahl("light-show-invert-beats"),
         fade_seconds: zahl("light-show-fade-seconds"),
         silence_threshold: lightDbZuLinear(zahl("light-show-silence-threshold")),
         silence_seconds: zahl("light-show-silence-seconds"),
@@ -5987,6 +6011,7 @@ function lightShowPulsSetzen(laeuft) {
         "light-show-background-seconds", "light-show-background-beats",
         "light-show-fade-seconds",
         "light-show-pulse-seconds", "light-show-pulse-base",
+        "light-show-color-invert", "light-show-invert-beats",
         "light-show-snare-strobe", "light-show-snare-sense",
         "light-show-snare-power",
         "light-show-color-low", "light-show-color-mid",
@@ -6006,6 +6031,7 @@ function lightShowPulsSetzen(laeuft) {
     for (const kennung of ["light-show-background-seconds",
                           "light-show-background-beats",
                           "light-show-fade-seconds",
+                          "light-show-invert-beats",
                           "light-show-pulse-seconds",
                           "light-show-pulse-base",
                           "light-show-snare-sense",
@@ -6023,4 +6049,9 @@ function lightShowPulsSetzen(laeuft) {
 
     const blitzschalter = document.getElementById("light-show-snare-strobe");
     if (blitzschalter) blitzschalter.addEventListener("change", lightBlitzAnzeigen);
+
+    const umkehrschalter = document.getElementById("light-show-color-invert");
+    if (umkehrschalter) {
+        umkehrschalter.addEventListener("change", lightUmkehrAnzeigen);
+    }
 })();

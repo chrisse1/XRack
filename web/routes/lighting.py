@@ -259,6 +259,8 @@ class LightingShowSettings(BaseModel):
     speech_seconds: float | None = None
     background_seconds: float | None = None
     background_beats: int | None = None
+    color_invert: bool | None = None
+    invert_beats: int | None = None
     fade_seconds: float | None = None
 
 

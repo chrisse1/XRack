@@ -3482,4 +3482,304 @@ with tempfile.TemporaryDirectory() as tmp:
     print("OK: Der Blitz ist aus als Vorgabe, seine Werte bleiben in Grenzen")
 
 
+# ====================================================================
+# 22. Die Farbreihenfolge umkehren
+#
+# Die Zuordnung Band -> Segment stand bisher das ganze Stueck still.
+# Zugeschaltet kippt sie alle paar Schlaege: Aus Rot-Gruen-Blau wird
+# Blau-Gruen-Rot und wieder zurueck.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+    licht.lampe_speichern({
+        "id": "bar", "name": "LED-Bar", "template": "bar-8-rgb", "address": 1,
+    })
+    licht.lampe_speichern({
+        "id": "par", "name": "Par", "template": "rgb", "address": 100,
+    })
+
+    app = LichtApp(licht, DmxAttrappe())
+    motor = app.light_engine
+
+    #
+    # Alle drei Baender gleich laut: Dann haengt die Farbe eines
+    # Segments allein an der Zuordnung und nicht am Signal.
+    #
+    motor.stand = {"low": 1.0, "mid": 1.0, "high": 1.0, "level": 1.0,
+                   "beat": False, "snare": False}
+
+    grund = {
+        "sensitivity": 1.0,
+        "color_low": "#ff0000",
+        "color_mid": "#00ff00",
+        "color_high": "#0000ff",
+    }
+
+    #
+    # In BEIDEN Show-Bildern: Lauflicht und Puls laufen durch
+    # dieselbe Stelle und unterscheiden sich nur in der Helligkeit.
+    #
+    for modus in ("runner", "pulse"):
+
+        motor.einstellungen = {**grund, "effect_mode": modus,
+                               "color_invert": True, "pulse_base": 1.0}
+        motor.puls = 1.0
+        motor.position = 0
+
+        motor.umkehr = False
+        normal = motor.werte_je_lampe()["bar"]
+
+        motor.umkehr = True
+        gedreht = motor.werte_je_lampe()["bar"]
+
+        #
+        # Gefragt ist, WELCHE Farbe auf einem Segment liegt, nicht wie
+        # hell sie ist: Im Lauflicht leuchtet nur das Segment voll,
+        # das gerade dran ist, die uebrigen mit Grundhelligkeit.
+        #
+        def farbe(werte, segment):
+
+            block = werte[segment * 3:segment * 3 + 3]
+
+            if not any(block):
+                return None
+
+            return max(range(3), key=lambda i: block[i])
+
+        # 0 = rot, 1 = gruen, 2 = blau
+        assert [farbe(normal, i) for i in range(3)] == [0, 1, 2], (
+            modus, normal[:9]
+        )
+
+        assert [farbe(gedreht, i) for i in range(3)] == [2, 1, 0], (
+            modus, gedreht[:9]
+        )
+
+        #
+        # Die Helligkeit bleibt dabei, wie sie war - umgekehrt wird
+        # die Zuordnung, nicht das Bild.
+        #
+        assert sorted(normal[:9]) == sorted(gedreht[:9]), (
+            modus, normal[:9], gedreht[:9]
+        )
+
+    print("OK: Die Farbreihenfolge kehrt sich um, in beiden Show-Bildern")
+
+    #
+    # Aus heisst aus - auch wenn der Merker gesetzt ist. Das ist die
+    # Zusicherung, die den Schalter erst zu einem Schalter macht.
+    #
+    motor.einstellungen = {**grund, "color_invert": False}
+    motor.position = 0
+
+    motor.umkehr = False
+    aus_normal = motor.werte_je_lampe()["bar"]
+
+    motor.umkehr = True
+    aus_gedreht = motor.werte_je_lampe()["bar"]
+
+    assert aus_normal == aus_gedreht, (
+        "Ausgeschaltet darf sich nichts umkehren: "
+        f"{aus_normal[:9]} gegen {aus_gedreht[:9]}"
+    )
+
+    print("OK: Ausgeschaltet bleibt die Reihenfolge stehen")
+
+    #
+    # Eine Lampe mit nur EINER Farbgruppe bekommt die Mischung aller
+    # drei Baender, und die ist symmetrisch - da gibt es nichts
+    # umzukehren.
+    #
+    motor.einstellungen = {**grund, "color_invert": True}
+
+    motor.umkehr = False
+    eins_normal = motor.werte_je_lampe()["par"]
+
+    motor.umkehr = True
+
+    assert motor.werte_je_lampe()["par"] == eins_normal, (
+        "Ein einzelner Strahler hat keine Reihenfolge, die man umkehren "
+        f"könnte: {eins_normal}"
+    )
+
+    print("OK: Eine Lampe ohne Segmente bleibt unberührt")
+
+
+# --- Das Hintergrundlicht hat keine Reihenfolge ---------------------
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+    licht.lampe_speichern({
+        "id": "wash", "name": "Wash", "template": "bar-8-rgb", "address": 1,
+        "kind": "background",
+    })
+
+    motor = LichtApp(licht, DmxAttrappe()).light_engine
+
+    motor.stand = {"low": 1.0, "mid": 0.5, "high": 0.2, "level": 1.0,
+                   "beat": False, "snare": False}
+
+    grund = {
+        "sensitivity": 1.0,
+        "color_low_1": "#ff0000",
+        "color_mid_1": "#00ff00",
+        "color_high_1": "#0000ff",
+        "background_seconds": 4.0,
+        "color_invert": True,
+    }
+
+    motor.einstellungen = dict(grund)
+    motor._hintergrund.clear()
+    motor.umkehr = False
+    normal = motor.werte_je_lampe()["wash"]
+
+    motor._hintergrund.clear()
+    motor.umkehr = True
+
+    assert motor.werte_je_lampe()["wash"] == normal, (
+        "Das Hintergrundlicht zeigt eine Farbe aus einem gemeinsamen "
+        "Zähler - dort gibt es keine Reihenfolge über die Segmente."
+    )
+
+    print("OK: Das Hintergrundlicht bleibt von der Umkehr unberührt")
+
+
+# --- Der Zaehler ----------------------------------------------------
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+
+    motor = LichtApp(licht, DmxAttrappe()).light_engine
+
+    motor.einstellungen = {"invert_beats": 4}
+    motor.umkehr = False
+    motor.umkehr_schlaege = 0
+    motor.umkehr_zeit = 0.0
+
+    for _ in range(3):
+        motor._umkehr_weiterschalten(0.02, True)
+
+    assert motor.umkehr is False, (
+        f"Nach drei von vier Schlägen darf noch nichts kippen: {motor.umkehr}"
+    )
+
+    motor._umkehr_weiterschalten(0.02, True)
+
+    assert motor.umkehr is True, "Nach vier Schlägen muss es kippen."
+
+    #
+    # Und wieder zurueck - es ist ein Hin und Her, kein einmaliges
+    # Umlegen.
+    #
+    for _ in range(4):
+        motor._umkehr_weiterschalten(0.02, True)
+
+    assert motor.umkehr is False, "Nach vier weiteren Schlägen zurück."
+
+    print("OK: Die Umkehr kippt alle X Schläge und wieder zurück")
+
+    #
+    # Ohne Takt uebernimmt die Uhr. Sonst stuende die Umkehr in einer
+    # ruhigen Passage still, und das sieht aus wie ein Fehler.
+    #
+    motor.umkehr = False
+    motor.umkehr_schlaege = 0
+    motor.umkehr_zeit = 0.0
+
+    schritte = int(4 * motor.HINTERGRUND_ERSATZ_S / 0.02) + 1
+
+    for _ in range(schritte):
+        motor._umkehr_weiterschalten(0.02, False)
+
+    assert motor.umkehr is True, (
+        "Ohne erkannten Takt muss die Uhr übernehmen."
+    )
+
+    print("OK: Ohne Takt übernimmt die Uhr")
+
+
+# --- Der Motor zaehlt die Umkehr auch wirklich weiter ---------------
+#
+# Der Zaehler fuer sich ist geprueft. Er nuetzt nichts, wenn ihn im
+# Betrieb niemand dreht: Die Umkehr stuende dann stumm auf "nein",
+# und der Schalter taete nichts.
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    from lighting.analysis import Stimmungserkennung
+
+    class TaktAttrappe:
+        """Meldet bei jedem Block einen Schlag."""
+
+        rate = 48000
+        channels = 2
+
+        def verarbeite(self, block):
+            return {"low": 0.5, "mid": 0.5, "high": 0.5,
+                    "level": 0.5, "beat": True, "snare": False}
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+
+    motor = LichtApp(licht, DmxAttrappe()).light_engine
+
+    motor.analyse = TaktAttrappe()
+    motor.erkennung = Stimmungserkennung(
+        stille_schwelle=0.002, stille_sekunden=6.0, sprache_sekunden=0.0
+    )
+    motor.einstellungen = {"sensitivity": 1.0, "invert_beats": 4}
+
+    block = bytes(int(0.02 * 2 * 4 * 48000))
+
+    motor.umkehr = False
+    motor.umkehr_schlaege = 0
+    motor.umkehr_zeit = 0.0
+
+    for _ in range(4):
+        motor._schritt(block)
+
+    assert motor.umkehr is True, (
+        f"Vier Schläge im Betrieb müssen die Umkehr kippen: {motor.umkehr}"
+    )
+
+    print("OK: Der Show-Thread dreht die Umkehr mit")
+
+
+# --- Die Ablage -----------------------------------------------------
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    from lighting.light_engine import LightEngine
+
+    licht = ablage(Path(tmp))
+
+    assert licht.show_einstellungen()["color_invert"] is False, (
+        "Die Umkehr muss ausgeschaltet vorgegeben sein."
+    )
+    assert licht.show_einstellungen()["invert_beats"] == (
+        LightEngine.UMKEHR_VORGABE_SCHLAEGE
+    ), licht.show_einstellungen()["invert_beats"]
+
+    ok, meldung = licht.set_show_einstellungen({
+        "color_invert": True, "invert_beats": 999,
+    })
+
+    assert ok, meldung
+    assert licht.show_einstellungen()["color_invert"] is True
+    assert licht.show_einstellungen()["invert_beats"] == 64
+
+    licht.set_show_einstellungen({"invert_beats": 0})
+
+    assert licht.show_einstellungen()["invert_beats"] == 1
+
+    print("OK: Die Umkehr ist aus als Vorgabe, ihre Schläge bleiben in Grenzen")
+
+
 print("Alle Licht-Tests erfolgreich.")

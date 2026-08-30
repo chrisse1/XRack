@@ -261,6 +261,30 @@ Wash, der im Takt zuckt, ist kein Wash mehr.
 
 ---
 
+### Die Farbumkehr
+
+Welches Segment welches Frequenzband bekommt, steht sonst über das
+ganze Stück still: Segment 1 der Bass, Segment 2 die Mitten, Segment 3
+die Höhen, dann von vorn. Die Bewegung kommt allein vom wandernden
+Punkt oder vom Puls.
+
+Zugeschaltet kippt diese Zuordnung alle paar Schläge — gezählt wie der
+Farbwechsel des Hintergrundlichts, mit demselben Notnagel über die
+Uhr, falls die Erkennung keinen Takt findet. Umgekehrt heißt dabei
+wörtlich das: `stelle = len(BAENDER) - 1 - stelle`. Aus Rot-Grün-Blau
+wird Blau-Grün-Rot.
+
+Zwei Dinge fallen dabei von selbst richtig aus. Es wirkt in **beiden**
+Show-Bildern, weil Lauflicht und Puls durch dieselbe Stelle laufen und
+sich nur in der Helligkeit unterscheiden. Und eine Lampe mit nur einer
+Farbgruppe bleibt unberührt — sie bekommt die Mischung aller drei
+Bänder, und die ist symmetrisch.
+
+Das Hintergrundlicht hat gar keine Reihenfolge über die Segmente: Es
+zeigt eine Farbe nach der anderen aus einem gemeinsamen Zähler.
+
+---
+
 ### Was „Snare" hier heißt
 
 Der Blitz hängt an einer Erkennung, die keine ist: XRack erkennt

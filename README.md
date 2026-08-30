@@ -146,6 +146,11 @@ without DMX you never see it.
 
   The background light is a wash in both cases.
 
+  On top of that the **colour order can reverse**: every few beats it
+  runs the other way across the segments — red-green-blue becomes
+  blue-green-red and back. Brightness and movement stay as they are;
+  only the mapping flips.
+
   On top of that the show can flash the strobe channels on
   particularly loud hits — usually the snare. It is off until you
   switch it on: nobody wants a strobe that starts by itself. How loud
@@ -354,6 +359,11 @@ Licht* — wer kein DMX hat, sieht es gar nicht erst.
   | Puls im Takt | alle Segmente atmen gemeinsam: bei jedem Schlag gehen sie auf voll und fallen bis zum nächsten zurück. Jedes behält seine Farbe, man sieht also weiter, welches Band was macht — und es wirkt auch auf einem einzelnen RGB-Strahler, den der wandernde Punkt nicht erreicht. Nachleuchten und Grundhelligkeit lassen sich einstellen |
 
   Das Hintergrundlicht bleibt in beiden Fällen ein Wash.
+
+  Dazu lässt sich die **Farbreihenfolge umkehren**: Alle paar Schläge
+  läuft sie andersherum über die Segmente — aus Rot-Grün-Blau wird
+  Blau-Grün-Rot und wieder zurück. Helligkeit und Bewegung bleiben,
+  wie sie sind; es kippt allein die Zuordnung.
 
   Dazu kann die Show auf besonders laute Schläge — meist die Snare —
   die Strobe-Kanäle blitzen lassen. Das ist ausgeschaltet, bis du es

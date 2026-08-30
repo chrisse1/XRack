@@ -182,6 +182,16 @@ SHOW_VORGABE = {
     "background_beats": 16,
 
     #
+    # Kehrt die Farbreihenfolge des Effektlichts alle paar Schlaege
+    # um: Aus Rot-Gruen-Blau wird Blau-Gruen-Rot und zurueck.
+    #
+    # Aus als Vorgabe - wer nichts umstellt, sieht das Bild von
+    # vorher.
+    #
+    "color_invert": False,
+    "invert_beats": 8,
+
+    #
     # Wie lange das Ausblenden in die Rueckfallszene dauert.
     #
     # 0 ist mit Absicht erlaubt und bedeutet hartes Umschalten - so
@@ -650,6 +660,14 @@ class LightingStore:
         if "background_beats" in werte:
             show["background_beats"] = max(
                 1, min(64, int(werte["background_beats"]))
+            )
+
+        if "color_invert" in werte:
+            show["color_invert"] = bool(werte["color_invert"])
+
+        if "invert_beats" in werte:
+            show["invert_beats"] = max(
+                1, min(64, int(werte["invert_beats"]))
             )
 
         if "fallback_scene" in werte:
