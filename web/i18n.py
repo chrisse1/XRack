@@ -556,7 +556,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "zwischen zwei Schlägen bleibt. 0 % heißt: dazwischen "
             "ganz aus."
         ),
-        "light_show_snare_strobe": "Blitz auf die Snare",
+        "light_show_snare_strobe": "Blitz",
         "light_show_snare_hint": (
             "Blitzt die Strobe-Kanäle der Effektlichter auf besonders "
             "laute Schläge. Solange das aus ist, fasst die Show die "
@@ -1150,7 +1150,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "How long a beat glows on, and how bright it stays "
             "between two beats. 0 % means: fully dark in between."
         ),
-        "light_show_snare_strobe": "Flash on the snare",
+        "light_show_snare_strobe": "Flash",
         "light_show_snare_hint": (
             "Flashes the strobe channels of the effect lights on "
             "particularly loud hits. While this is off the show does "
