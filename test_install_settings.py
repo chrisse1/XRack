@@ -369,4 +369,146 @@ with tempfile.TemporaryDirectory() as tmp:
     print("OK: Auch eine SSID mit Sonderzeichen kommt vollständig an")
 
 
+# ====================================================================
+# Ein fehlendes WLAN-Profil darf den Installer nicht umbringen
+#
+# Am Gerät gemeldet: Update von 1.7.x auf 2.3.0, danach install.sh von
+# Hand - und die Lichtsteuerung war nicht eingerichtet. Das Protokoll
+# endete mitten in der Netzwerkkonfiguration, direkt nach dem
+# !ACHTUNG!-Block, und die Eingabeaufforderung kam kommentarlos
+# zurück.
+#
+# Die Ursache steht in einer einzigen Zeile:
+#
+#     XRACK_HOME_VORHANDEN="$(aktuelle_home_ssid)"
+#
+# Gibt es das Profil "XRack-Home" nicht - und auf einem reinen
+# Kabelgerät gibt es das nicht -, endet nmcli mit Fehlercode 10. Bei
+# einer Zuweisung aus einer Kommandosubstitution wird dieser Code zum
+# Ergebnis der ganzen Anweisung, und "set -e" beendet daraufhin den
+# GANZEN Installer. Alles danach - Bluetooth, USB-Automount, DMX,
+# sudo-Regeln, systemd-Dienst, Zusammenfassung - lief nie.
+#
+# Geprüft wird genau diese Stelle: mit einem nmcli, das sich verhält
+# wie auf so einem Gerät.
+# ====================================================================
+
+def home_ssid(ordner: Path, ausgabe: str, code: int) -> tuple[int, str, str]:
+    """
+    Ruft aktuelle_home_ssid in einer Zuweisung auf - so, wie
+    configure_wifi es tut, und unter demselben "set -e".
+    """
+
+    binordner = ordner / "bin"
+    binordner.mkdir(exist_ok=True)
+
+    fake_nmcli = binordner / "nmcli"
+    fake_nmcli.write_text(
+        "#!/bin/sh\n"
+        f'[ -n "{ausgabe}" ] && echo "{ausgabe}"\n'
+        f"exit {code}\n",
+        encoding="utf-8",
+    )
+    fake_nmcli.chmod(0o755)
+
+    skript = ordner / "home.sh"
+    skript.write_text(
+        "export XRACK_INSTALL_SOURCE_ONLY=1\n"
+        f"source {INSTALL}\n"
+        'XRACK_HOME_VORHANDEN="$(aktuelle_home_ssid)"\n'
+        'echo "WEITER:${XRACK_HOME_VORHANDEN}"\n',
+        encoding="utf-8",
+    )
+
+    umgebung = dict(os.environ)
+    umgebung["PATH"] = f"{binordner}:{os.environ['PATH']}"
+
+    lauf = subprocess.run(
+        ["bash", str(skript)], capture_output=True, text=True,
+        env=umgebung, timeout=60,
+    )
+
+    return lauf.returncode, lauf.stdout, lauf.stderr
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    #
+    # Kein Profil vorhanden: nmcli meldet Fehler 10. Der Lauf muss
+    # weitergehen, und die Antwort ist die leere.
+    #
+    code, ausgabe, _ = home_ssid(Path(tmp), "", 10)
+
+    assert "WEITER:" in ausgabe, (
+        "Ein fehlendes WLAN-Profil beendet den Installer - alles danach "
+        "(Bluetooth, USB, DMX, sudo, Dienst) fällt aus."
+    )
+    assert code == 0, f"Rückgabewert {code} statt 0."
+    assert ausgabe.strip() == "WEITER:", ausgabe
+
+    print("OK: Ohne WLAN-Profil läuft der Installer weiter")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    #
+    # Und die Auskunft selbst muss erhalten bleiben: Ist ein Profil
+    # da, steht sein Name als Vorgabe in der Frage.
+    #
+    code, ausgabe, _ = home_ssid(Path(tmp), "Bandbus", 0)
+
+    assert ausgabe.strip() == "WEITER:Bandbus", ausgabe
+    assert code == 0
+
+    print("OK: Ein vorhandenes WLAN-Profil wird weiterhin gelesen")
+
+
+# ====================================================================
+# Ein Abbruch darf nicht stumm sein
+#
+# Der Fehler oben war nur deshalb so teuer, weil nichts davon zu sehen
+# war: Die Eingabeaufforderung kam zurück, und der Lauf sah aus wie
+# beendet.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    #
+    # Der Fehler steckt in einer Kommandosubstitution - genau wie der
+    # echte. Das ist wichtig: Dabei laeuft der Fang zweimal, einmal
+    # in der Unterschale und einmal oben. Ein Test mit einem
+    # schlichten "false" wuerde nicht auffallen lassen, wenn die
+    # Meldung doppelt kaeme.
+    #
+    skript = Path(tmp) / "kaputt.sh"
+    skript.write_text(
+        "export XRACK_INSTALL_SOURCE_ONLY=1\n"
+        f"source {INSTALL}\n"
+        'ERGEBNIS="$(false)"\n'
+        'echo "DAS DARF NICHT KOMMEN"\n',
+        encoding="utf-8",
+    )
+
+    lauf = subprocess.run(
+        ["bash", str(skript)], capture_output=True, text=True, timeout=60,
+    )
+
+    assert "DAS DARF NICHT KOMMEN" not in lauf.stdout, lauf.stdout
+
+    assert "abgebrochen" in lauf.stderr, (
+        "Ein Abbruch muss gemeldet werden, sonst hält man den Lauf für "
+        f"beendet: {lauf.stderr!r}"
+    )
+
+    assert "NICHT vollstaendig" in lauf.stderr, lauf.stderr
+
+    #
+    # Und genau einmal: Der Fehler laeuft ueber mehrere Ebenen nach
+    # oben, zweimal dieselbe Meldung sieht nach zwei Fehlern aus.
+    #
+    assert lauf.stderr.count("abgebrochen") == 1, lauf.stderr
+
+    print("OK: Ein Abbruch wird gemeldet, und zwar genau einmal")
+
+
 print("Alle Installer-Einstellungstests erfolgreich.")

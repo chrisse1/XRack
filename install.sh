@@ -11,7 +11,11 @@
 # über den Helper L() in der gewählten Sprache (Deutsch/Englisch).
 #
 
-set -e
+#
+# -E, damit der ERR-Fang unten auch INNERHALB von Funktionen greift.
+#
+set -eE
+
 
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -25,6 +29,18 @@ INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # ist in dem Fall aber gesetzt und wird deshalb bevorzugt ausgewertet.
 #
 XRACK_TARGET_USER="${SUDO_USER:-$(whoami)}"
+
+#
+# Ueberschreibbar, damit die Tests die Lichteinrichtung als Ganzes
+# durchlaufen lassen koennen, ohne ins echte System zu schreiben -
+# dieselbe Machart wie XRACK_SYSTEMD_DIR und XRACK_HOSTAPD_CONF.
+#
+XRACK_UDEV_RULES="${XRACK_UDEV_RULES:-/etc/udev/rules.d/99-xrack-dmx.rules}"
+
+#
+# Wohin die Ausgabe von apt wandert, wenn das ola-Paket nicht kommt.
+#
+XRACK_OLA_LOG="${XRACK_OLA_LOG:-/tmp/xrack-ola.log}"
 
 lower() {
     printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
@@ -43,6 +59,53 @@ L() {
         printf '%s' "$1"
     fi
 }
+
+#
+# Ein Abbruch darf nicht stumm sein.
+#
+# Vorher endete der Installer bei einem Fehler kommentarlos: Die
+# Eingabeaufforderung kam zurueck, und man hielt den Lauf fuer
+# beendet - waehrend die Haelfte der Einrichtung nie gelaufen war.
+# Genau so ist eine fehlende Lichtsteuerung durchgerutscht.
+#
+# Die Meldung nennt die Zeile. Das ist keine Schoenheit, aber es ist
+# der Unterschied zwischen "es ging etwas schief, hier" und gar
+# nichts.
+#
+abbruch_melden() {
+
+    local status=$1
+    local zeile=$2
+
+    [ "${status}" -eq 0 ] && return 0
+
+    #
+    # Nur aus der Hauptschale melden.
+    #
+    # Scheitert etwas in einer Kommandosubstitution - VAR="$(...)" -,
+    # laeuft der Fang zuerst in DEREN Unterschale und gleich darauf
+    # noch einmal oben. Zweimal dieselbe Meldung sieht nach zwei
+    # Fehlern aus, und die brauchbare Zeilennummer ist ohnehin die
+    # obere: die der Zuweisung.
+    #
+    [ "${BASHPID}" = "$$" ] || return 0
+
+    #
+    # Und auch dort nur einmal, falls der Fehler ueber mehrere Ebenen
+    # nach oben laeuft.
+    #
+    [ -n "${XRACK_ABBRUCH_GEMELDET}" ] && return 0
+
+    XRACK_ABBRUCH_GEMELDET="ja"
+
+    echo "" >&2
+    echo "$(L "XRack: Der Installer ist abgebrochen (Zeile ${zeile}, Fehlercode ${status})." "XRack: the installer stopped (line ${zeile}, exit code ${status}).")" >&2
+    echo "$(L "Die Einrichtung ist damit NICHT vollstaendig - alle Schritte nach" "Setup is therefore NOT complete - every step after this point was")" >&2
+    echo "$(L "dieser Stelle sind ausgefallen. XRack laeuft mit dem bisherigen" "skipped. XRack keeps running with what was set up before; running")" >&2
+    echo "$(L "Stand weiter; ein erneuter Lauf holt alles nach." "the installer again picks it all up.")" >&2
+}
+
+trap 'abbruch_melden $? ${LINENO}' ERR
 
 #
 # Prüft, ob eine Ja/Nein-Antwort eine Zustimmung ist - deutsch "j",
@@ -749,7 +812,25 @@ disable_foreign_wifi_profiles() {
 # bequemsten Weg nicht der gefaehrlichste sein.
 #
 aktuelle_home_ssid() {
-    nmcli -g 802-11-wireless.ssid connection show "XRack-Home" 2>/dev/null
+
+    #
+    # Das "|| true" ist kein Schoenheitsfehler, sondern die
+    # Reparatur eines Totalausfalls.
+    #
+    # Gibt es das Profil "XRack-Home" nicht, endet nmcli mit einem
+    # Fehlercode. Der wurde zum Rueckgabewert dieser Funktion, und
+    # weil der Aufrufer sie in einer Zuweisung benutzt
+    # (VAR="$(aktuelle_home_ssid)"), riss das unter "set -e" den
+    # GANZEN Installer mit - stumm, mitten in der
+    # Netzwerkkonfiguration. Alles danach (Bluetooth, USB, Licht,
+    # sudo-Regeln, Dienst) lief nie, und die Eingabeaufforderung kam
+    # kommentarlos zurueck. Genau so ist an einem Geraet ohne
+    # eingerichtetes WLAN die Lichtsteuerung ausgefallen.
+    #
+    # "Kein Profil vorhanden" ist hier eine ANTWORT (naemlich die
+    # leere), kein Fehler.
+    #
+    nmcli -g 802-11-wireless.ssid connection show "XRack-Home" 2>/dev/null || true
 }
 
 aktuelle_ap_ssid() {
@@ -762,7 +843,13 @@ aktuelle_ap_ssid() {
     #
     sudo test -f "${conf}" 2>/dev/null || return 0
 
-    sudo grep -m1 '^ssid=' "${conf}" 2>/dev/null | cut -d= -f2-
+    #
+    # Auch hier ausdruecklich: Findet grep nichts, ist die Antwort
+    # leer und nicht "Fehler". Heute rettet zwar cut am Ende der
+    # Pipeline den Rueckgabewert, aber darauf soll sich niemand
+    # verlassen muessen, der hier einmal etwas umstellt.
+    #
+    sudo grep -m1 '^ssid=' "${conf}" 2>/dev/null | cut -d= -f2- || true
 }
 
 #
@@ -917,7 +1004,7 @@ configure_wifi_client() {
     echo ""
     echo "$(L "WLAN-Einrichtung" "Wi-Fi setup")"
 
-    CLIENT_IFACE="$("${INSTALL_DIR}/scripts/xrack-wifi-iface.sh" client)"
+    CLIENT_IFACE="$("${INSTALL_DIR}/scripts/xrack-wifi-iface.sh" client || true)"
 
     if [ -z "${CLIENT_IFACE}" ]; then
         echo "$(L "Kein WLAN-Gerät gefunden - dieser Schritt wird übersprungen." "No Wi-Fi device found - skipping this step.")"
@@ -1029,7 +1116,7 @@ frage_wlan_land() {
 #
 configure_access_point() {
 
-    AP_IFACE="$("${INSTALL_DIR}/scripts/xrack-wifi-iface.sh" ap)"
+    AP_IFACE="$("${INSTALL_DIR}/scripts/xrack-wifi-iface.sh" ap || true)"
 
     if [ -z "${AP_IFACE}" ]; then
         echo ""
@@ -1336,6 +1423,18 @@ dmx_paket_sicherstellen() {
         apt-get install -y -qq ola 2>&1)" || true
 
     #
+    # Die Ausgabe zusaetzlich in eine Datei.
+    #
+    # Fuenf Zeilen auf dem Bildschirm sind gut - aber sie sind weg,
+    # sobald das Fenster zu ist. Genau das ist am zweiten Geraet
+    # passiert: Der Installer lief durch, das Licht fehlte, und der
+    # Grund war nicht mehr zu bekommen.
+    #
+    if [ -n "${ausgabe}" ]; then
+        printf '%s\n' "${ausgabe}" > "${XRACK_OLA_LOG}" 2>/dev/null || true
+    fi
+
+    #
     # Entscheidend ist, ob das Paket jetzt da ist - nicht, was apt
     # zurückgegeben hat. Ein Aufruf, der aus einem Nebengrund meckert,
     # darf nicht die ganze DMX-Einrichtung überspringen.
@@ -1343,6 +1442,8 @@ dmx_paket_sicherstellen() {
     if paket_da ola; then
         return 0
     fi
+
+    XRACK_DMX_GRUND="$(L "Paket 'ola' ließ sich nicht installieren (Einzelheiten: ${XRACK_OLA_LOG})" "package 'ola' could not be installed (details: ${XRACK_OLA_LOG})")"
 
     echo "$(L "Hinweis: Paket 'ola' nicht installierbar - Lichtsteuerung nicht verfügbar." "Note: package 'ola' could not be installed - lighting control unavailable.")"
 
@@ -1362,6 +1463,7 @@ configure_dmx() {
     echo "$(L "XRack: Lichtsteuerung (DMX über OLA) wird eingerichtet..." "XRack: Setting up lighting control (DMX via OLA)...")"
 
     XRACK_DMX_BEREIT=""
+    XRACK_DMX_GRUND=""
 
     if ! dmx_paket_sicherstellen; then
         return 0
@@ -1376,7 +1478,7 @@ configure_dmx() {
     # dialout und plugdev; diese Regel hier ist die Rückversicherung
     # für Nachbauten, die dort nicht aufgeführt sind.
     #
-    sudo tee /etc/udev/rules.d/99-xrack-dmx.rules > /dev/null <<'EOF'
+    sudo tee "${XRACK_UDEV_RULES}" > /dev/null <<'EOF'
 SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", GROUP="plugdev", MODE="0660"
 SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", GROUP="plugdev", MODE="0660"
 SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6015", GROUP="plugdev", MODE="0660"
@@ -1402,6 +1504,7 @@ EOF
     done
 
     if [ -z "${DMX_UNIT}" ]; then
+        XRACK_DMX_GRUND="$(L "der OLA-Dienst wurde nicht gefunden" "the OLA service was not found")"
         echo "$(L "Hinweis: OLA-Dienst nicht gefunden - Licht bleibt aus, XRack läuft normal weiter." "Note: OLA service not found - lighting stays off, XRack runs normally.")"
         return 0
     fi
@@ -1432,6 +1535,7 @@ EOF
     done
 
     if [ -z "${DMX_CONF_DIR}" ]; then
+        XRACK_DMX_GRUND="$(L "die OLA-Konfiguration wurde nicht gefunden" "the OLA configuration was not found")"
         echo "$(L "Hinweis: OLA-Konfiguration nicht gefunden - das DMX-Plugin muss von Hand aktiviert werden." "Note: OLA configuration not found - the DMX plugin has to be enabled manually.")"
         return 0
     fi
@@ -1567,7 +1671,7 @@ restrict_ola_to_loopback() {
 
         */generator*|/etc/init.d/*)
 
-            olad_pfad="$(command -v olad 2>/dev/null)"
+            olad_pfad="$(command -v olad 2>/dev/null || true)"
 
             if [ -z "${olad_pfad}" ]; then
                 echo "$(L "Hinweis: olad nicht gefunden - die OLA-Weboberfläche (Port 9090) bleibt im Netzwerk erreichbar." "Note: olad not found - the OLA web interface (port 9090) stays reachable on the network.")"
@@ -1769,6 +1873,58 @@ EOF
 #
 # Abschließende Zusammenfassung ausgeben.
 #
+licht_zusammenfassung() {
+
+    #
+    # Das Licht kommt IMMER zur Sprache, auch (und gerade) wenn es
+    # nicht eingerichtet werden konnte.
+    #
+    # Vorher stand hier nur im Erfolgsfall etwas. Fiel die
+    # Einrichtung aus, gab es zwar mittendrin eine Meldung - aber der
+    # Lauf ging danach weiter, endete mit "Fertig.", und wer nicht
+    # zurueckscrollte, hielt die Installation fuer vollstaendig.
+    # Genau so ist am zweiten Geraet eine fehlende Lichtsteuerung
+    # durchgerutscht.
+    #
+
+    echo ""
+
+    if [ "${XRACK_DMX_BEREIT}" = "ja" ]; then
+        echo "$(L "Licht: eingerichtet. Der DMX-Ausgang muss noch einmal zugeordnet" "Lighting: set up. The DMX output still has to be assigned once -")"
+        echo "$(L "werden - im Einstellungen-Menü unter 'Licht' den Anschluss" "in the settings menu under 'Lighting', pick the port and press")"
+        echo "$(L "auswählen und auf 'Zuordnen' drücken. Ohne das bleibt es dunkel." "'Assign'. Without that it stays dark.")"
+        return 0
+    fi
+
+    echo "$(L "Licht: NICHT eingerichtet${XRACK_DMX_GRUND:+ - ${XRACK_DMX_GRUND}}." "Lighting: NOT set up${XRACK_DMX_GRUND:+ - ${XRACK_DMX_GRUND}}.")"
+    echo "$(L "XRack läuft normal weiter, es bleibt nur dunkel." "XRack runs normally, it just stays dark.")"
+    echo "$(L "Nachholen: ./install.sh --dmx" "To catch up: ./install.sh --dmx")"
+}
+
+nur_licht() {
+
+    #
+    # Nur die Lichteinrichtung nachholen - ohne den ganzen Installer
+    # samt Netzwerkfragen.
+    #
+    # Faellt sie aus, ist genau EIN Schritt nachzuholen. Dafuer alles
+    # noch einmal durchzugehen ist so muehsam, dass man es lieber
+    # laesst - und dann bleibt es eben dunkel.
+    #
+    vorhandene_einstellungen_lesen
+
+    XRACK_LANGUAGE="${XRACK_ALT_SPRACHE:-de}"
+
+    #
+    # Die sudo-Berechtigung im Vordergrund holen, damit die
+    # Passwortabfrage sichtbar ist.
+    #
+    sudo -v
+
+    configure_dmx
+    licht_zusammenfassung
+}
+
 print_summary() {
 
     echo ""
@@ -1829,12 +1985,7 @@ print_summary() {
         echo "$(L "install.sh muss dafür nicht noch einmal laufen." "install.sh does not need to run again for that.")"
     fi
 
-    if [ "${XRACK_DMX_BEREIT}" = "ja" ]; then
-        echo ""
-        echo "$(L "Licht: Der DMX-Ausgang muss einmal zugeordnet werden - im" "Lighting: the DMX output has to be assigned once - in the")"
-        echo "$(L "Einstellungen-Menü unter 'Licht' den Anschluss auswählen und" "settings menu under 'Lighting', pick the port and press")"
-        echo "$(L "auf 'Zuordnen' drücken. Ohne das bleiben die Lampen dunkel." "'Assign'. Without that the fixtures stay dark.")"
-    fi
+    licht_zusammenfassung
 
     if [ -n "${XRACK_WLAN_CLIENT_SSID}" ] || [ -n "${XRACK_WLAN_AP_SSID}" ]; then
         echo "$(L "WLAN-Status pruefen:      nmcli connection show" "Check Wi-Fi status:       nmcli connection show")"
@@ -1883,6 +2034,14 @@ offer_reboot_for_bridge() {
 #
 if [ -n "${XRACK_INSTALL_SOURCE_ONLY}" ]; then
     return 0 2>/dev/null || exit 0
+fi
+
+#
+# Nur das Licht nachholen? Dann hier vorbei an der ganzen Liste.
+#
+if [ "${1:-}" = "--dmx" ] || [ "${1:-}" = "--licht" ]; then
+    nur_licht
+    exit 0
 fi
 
 confirm_start
