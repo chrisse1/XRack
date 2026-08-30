@@ -209,6 +209,16 @@ class LightEngine:
     HINTERGRUND_VORGABE_SCHLAEGE = 16
 
     #
+    # Nach wie vielen Schlaegen die Farbreihenfolge des Effektlichts
+    # kippt, falls in den Einstellungen nichts steht.
+    #
+    # Acht sind im Viervierteltakt zwei Takte - halb so lang wie der
+    # Farbwechsel des Hintergrunds, damit die beiden Ebenen nicht im
+    # Gleichschritt laufen.
+    #
+    UMKEHR_VORGABE_SCHLAEGE = 8
+
+    #
     # Wie lange ein Schlag hoechstens dauern darf, bevor der Wechsel
     # stattdessen nach der Uhr geht.
     #
@@ -310,6 +320,16 @@ class LightEngine:
         self.hintergrund_zeit = 0.0
 
         #
+        # Laeuft die Farbreihenfolge des Effektlichts gerade
+        # andersherum? Wie beim Hintergrund EIN Merker fuer alle
+        # Lampen: Zwei Bars, bei denen die Farben verschieden herum
+        # laufen, sind kein Bild, sondern ein Durcheinander.
+        #
+        self.umkehr = False
+        self.umkehr_schlaege = 0
+        self.umkehr_zeit = 0.0
+
+        #
         # Die Dauer des zuletzt verarbeiteten Blocks. Die Glaettung
         # braucht sie, und nur _schritt() kennt sie.
         #
@@ -387,6 +407,9 @@ class LightEngine:
         self.hintergrund_farbe = 0
         self.hintergrund_schlaege = 0
         self.hintergrund_zeit = 0.0
+        self.umkehr = False
+        self.umkehr_schlaege = 0
+        self.umkehr_zeit = 0.0
         self.puls = 0.0
         self.blitz = 0.0
         self.letzte_dauer = self.BLOCK_VORGABE_S
@@ -513,6 +536,7 @@ class LightEngine:
             self.position += 1
 
         self._farbe_weiterschalten(dauer, bool(self.stand["beat"]))
+        self._umkehr_weiterschalten(dauer, bool(self.stand["beat"]))
         self._puls_weiterschalten(dauer, bool(self.stand["beat"]))
         self._blitz_weiterschalten(dauer, bool(self.stand.get("snare")))
 
@@ -619,6 +643,34 @@ class LightEngine:
             self.hintergrund_farbe = (self.hintergrund_farbe + 1) % len(BAENDER)
             self.hintergrund_schlaege = 0
             self.hintergrund_zeit = 0.0
+
+    def _umkehr_weiterschalten(self, dauer: float, schlag: bool) -> None:
+        """
+        Die Farbreihenfolge des Effektlichts kippen, wenn es soweit
+        ist.
+
+        Dieselbe Zaehlweise wie beim Farbwechsel des Hintergrunds,
+        einschliesslich des Notnagels ueber die Uhr: Findet die
+        Erkennung keinen Takt, stuende die Umkehr sonst still, und
+        das sieht aus wie ein Fehler.
+        """
+
+        schlaege = max(1, int(
+            self.einstellungen.get("invert_beats")
+            or self.UMKEHR_VORGABE_SCHLAEGE
+        ))
+
+        if schlag:
+            self.umkehr_schlaege += 1
+
+        self.umkehr_zeit += dauer
+
+        if (self.umkehr_schlaege >= schlaege
+                or self.umkehr_zeit >= schlaege * self.HINTERGRUND_ERSATZ_S):
+
+            self.umkehr = not self.umkehr
+            self.umkehr_schlaege = 0
+            self.umkehr_zeit = 0.0
 
     def _puls_weiterschalten(self, dauer: float, schlag: bool) -> None:
         """
@@ -734,6 +786,21 @@ class LightEngine:
         boden = (
             self.GRUNDHELLIGKEIT if boden is None
             else max(0.0, min(1.0, float(boden)))
+        )
+
+        #
+        # Laeuft die Farbreihenfolge gerade andersherum?
+        #
+        # Ohne "not hintergrund": Gelesen wird das nur im Zweig fuer
+        # Effektlicht mit mehreren Segmenten, und dorthin kommt eine
+        # Hintergrundlampe gar nicht - die hat weiter oben ihren
+        # eigenen Zweig. Eine Bedingung, die an ihrer Stelle nie
+        # falsch sein kann, sagt dem naechsten Leser etwas Falsches:
+        # naemlich dass es hier einen Fall gaebe, den sie abfaengt.
+        #
+        umkehren = (
+            bool(self.einstellungen.get("color_invert"))
+            and self.umkehr
         )
 
         #
@@ -940,6 +1007,16 @@ class LightEngine:
                 # willkuerlich aus.
                 #
                 stelle = farbig.index(nummer) % len(BAENDER)
+
+                #
+                # Umgekehrt laeuft die Reihenfolge andersherum ueber
+                # die Segmente: Aus Rot-Gruen-Blau wird
+                # Blau-Gruen-Rot. Helligkeit und Bewegung bleiben
+                # unberuehrt - es kippt allein die Zuordnung Band ->
+                # Segment, und zwar fuer alle Lampen gleichzeitig.
+                #
+                if umkehren:
+                    stelle = len(BAENDER) - 1 - stelle
 
                 band = BAENDER[stelle][0]
 

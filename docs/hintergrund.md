@@ -261,6 +261,30 @@ Wash, der im Takt zuckt, ist kein Wash mehr.
 
 ---
 
+### Die Farbumkehr
+
+Welches Segment welches Frequenzband bekommt, steht sonst über das
+ganze Stück still: Segment 1 der Bass, Segment 2 die Mitten, Segment 3
+die Höhen, dann von vorn. Die Bewegung kommt allein vom wandernden
+Punkt oder vom Puls.
+
+Zugeschaltet kippt diese Zuordnung alle paar Schläge — gezählt wie der
+Farbwechsel des Hintergrundlichts, mit demselben Notnagel über die
+Uhr, falls die Erkennung keinen Takt findet. Umgekehrt heißt dabei
+wörtlich das: `stelle = len(BAENDER) - 1 - stelle`. Aus Rot-Grün-Blau
+wird Blau-Grün-Rot.
+
+Zwei Dinge fallen dabei von selbst richtig aus. Es wirkt in **beiden**
+Show-Bildern, weil Lauflicht und Puls durch dieselbe Stelle laufen und
+sich nur in der Helligkeit unterscheiden. Und eine Lampe mit nur einer
+Farbgruppe bleibt unberührt — sie bekommt die Mischung aller drei
+Bänder, und die ist symmetrisch.
+
+Das Hintergrundlicht hat gar keine Reihenfolge über die Segmente: Es
+zeigt eine Farbe nach der anderen aus einem gemeinsamen Zähler.
+
+---
+
 ### Was „Snare" hier heißt
 
 Der Blitz hängt an einer Erkennung, die keine ist: XRack erkennt
@@ -274,10 +298,21 @@ gemessen:
 
 | Bedingung | Sortiert aus | Gemessen |
 | --- | --- | --- |
-| Ausschlag über dem eigenen Mittel | gehaltene Töne | ein Sägezahn meldete ohne sie 25 Blitze in vier Sekunden |
+| Ausschlag über dem eigenen Mittel | gehaltene Töne | ein Sägezahn meldet ohne sie zwanzig Blitze in vier Sekunden, mit ihr keinen |
 | laut, gemessen an der laufenden Spitze | alles Beiläufige | — |
 | Höhen müssen da sein | den Kick | beim Kick lagen sie bei 0,04 der Spitze, bei der Snare bei 0,65 |
 | Mitten gegen Höhen | die Hi-Hat | Verhältnis 0,3 bei der Hi-Hat, 1,3 bei der Snare |
+
+Dazu eine **Anlaufzeit** von einer Sekunde, in der gar nichts
+gemeldet wird. Der gleitende Mittelwert startet bei null und die
+laufende Spitze an ihrem Mindestwert — in den ersten Augenblicken ist
+deshalb jeder Wert ein Vielfaches von fast nichts, und alle vier
+Bedingungen sind nebenbei erfüllt. An einem völlig gleichbleibenden
+Ton ohne eine einzige Transiente meldete die Erkennung Snares bei
+0,000 s, 0,171 s und 0,341 s. Weil jede Änderung in den Einstellungen
+die Show neu startet, bekam man beim Drehen am Regler jedes Mal eine
+Salve Blitze — und hätte sie für die Wirkung der Einstellung
+gehalten.
 
 Die ersten beiden hängen am Regler *Empfindlichkeit*, die letzten
 beiden stehen fest: Die sagen „ist das überhaupt eine Snare" und
@@ -320,6 +355,14 @@ Das ist kein Versehen, sondern nötig: Jedes Lichtbild beginnt bei
 dem, was zuletzt drin stand. Würde die Show den Kanal nach dem Blitz
 einfach „in Ruhe lassen", bliebe der Blitzwert stehen, und das Strobe
 liefe durch, bis jemand die Show anhält.
+
+Genau deshalb **gibt die Show die Kanäle beim Anhalten auch wieder
+zurück** und setzt sie einmal auf 0. Hört sie mitten in einem Blitz
+auf — und ein Blitz dauert 80 ms bei mehreren je Sekunde, das ist
+kein Sonderfall —, bliebe der Wert sonst stehen und die Lampe würde
+weiterblitzen, obwohl die Show längst aus ist. Angefasst wird dabei
+nur, was die Show auch gefahren hat: Hintergrundlicht und
+ausgenommene Lampen behalten ihren Wert.
 
 ---
 

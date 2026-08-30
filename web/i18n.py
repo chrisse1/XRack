@@ -556,6 +556,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "zwischen zwei Schlägen bleibt. 0 % heißt: dazwischen "
             "ganz aus."
         ),
+        "light_show_color_invert": "Farben umkehren",
+        "light_show_color_invert_hint": (
+            "Kehrt die Reihenfolge der Bandfarben auf den "
+            "Effektlichtern um: Aus Rot-Grün-Blau wird Blau-Grün-Rot "
+            "und nach denselben Schlägen wieder zurück. Helligkeit "
+            "und Bewegung bleiben, wie sie sind; das Hintergrundlicht "
+            "ist nicht betroffen."
+        ),
+        "light_show_invert_beats": "Farben umkehren: alle",
         "light_show_snare_strobe": "Blitz",
         "light_show_snare_hint": (
             "Blitzt die Strobe-Kanäle der Effektlichter auf besonders "
@@ -1150,6 +1159,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "How long a beat glows on, and how bright it stays "
             "between two beats. 0 % means: fully dark in between."
         ),
+        "light_show_color_invert": "Reverse colours",
+        "light_show_color_invert_hint": (
+            "Reverses the order of the band colours across the effect "
+            "lights: red-green-blue becomes blue-green-red, and back "
+            "again after the same number of beats. Brightness and "
+            "movement stay as they are; the background light is not "
+            "affected."
+        ),
+        "light_show_invert_beats": "Reverse colours: every",
         "light_show_snare_strobe": "Flash",
         "light_show_snare_hint": (
             "Flashes the strobe channels of the effect lights on "

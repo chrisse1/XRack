@@ -1535,6 +1535,49 @@
                     </div>
 
                     {#
+                        Die Farbreihenfolge umkehren.
+
+                        Schalter immer da, der Regler nur, wenn er an
+                        ist - dasselbe Muster wie beim Puls und beim
+                        Blitz.
+                    #}
+                    <div class="col-12">
+                        <div class="form-check form-switch">
+                            <input
+                                type="checkbox"
+                                role="switch"
+                                id="light-show-color-invert"
+                                class="form-check-input"
+                            >
+                            <label class="form-check-label small"
+                                   for="light-show-color-invert">
+                                {{ t.light_show_color_invert }}
+                            </label>
+                        </div>
+                        <div class="form-text">{{ t.light_show_color_invert_hint }}</div>
+                    </div>
+
+                    <div id="light-show-invert-options" class="col-12 d-none">
+                        <div class="col-12 col-sm-6">
+                            <label class="form-label small mb-1"
+                                   for="light-show-invert-beats">
+                                {{ t.light_show_invert_beats }}
+                                <span id="light-show-invert-beats-value"
+                                      class="text-body-secondary"></span>
+                            </label>
+                            <input
+                                id="light-show-invert-beats"
+                                type="range"
+                                class="form-range"
+                                min="1"
+                                max="64"
+                                step="1"
+                                value="8"
+                            >
+                        </div>
+                    </div>
+
+                    {#
                         Der Blitz auf die Snare.
 
                         Der Schalter steht immer da, die zwei Regler

@@ -118,7 +118,20 @@ class LichtMixin:
         # etwas anfasst: olad kennt den neuen Ausgang, hat aber noch
         # kein Bild fuer ihn.
         #
-        self._licht_senden()
+        gesendet, grund = self._licht_senden()
+
+        if not gesendet:
+
+            #
+            # Die Zuordnung selbst hat geklappt - das ist nachgesehen
+            # worden. Nur das erste Bild kam nicht durch, was
+            # bedeutet, dass olad zwischen den beiden Aufrufen weg
+            # ist. Als Fehlschlag zu melden waere falsch (man wuerde
+            # ein zweites Mal zuordnen), stillschweigen aber auch:
+            # Deshalb ins Protokoll. In der Lichtkarte steht dann
+            # ohnehin, dass der Dienst nicht antwortet.
+            #
+            self.logger.warning("DMX: Zuordnung stand, Bild nicht: %s", grund)
 
         return True, ""
 
@@ -392,12 +405,75 @@ class LichtMixin:
         if not self.light_engine.running:
             return True, ""
 
+        #
+        # Hatte die Show die Strobe-Kanaele? Dann muss sie sie
+        # zurueckgeben - siehe _strobe_freigeben().
+        #
+        blitz = bool(self.light_engine.einstellungen.get("snare_strobe"))
+
         self.light_engine.stop()
 
         self.recorder.remove_consumer(self.light_engine.block_empfangen)
         self.recorder.stop_analysis()
 
+        if blitz:
+            self._strobe_freigeben()
+
         return True, ""
+
+    def _strobe_freigeben(self) -> None:
+        """
+        Die Strobe-Kanaele auf 0 setzen, die die Show gefahren hat.
+
+        Waehrend der Blitz laeuft, schreibt die Show zwischen zwei
+        Blitzen ausdruecklich 0 - hoert sie mittendrin auf, tut sie
+        das nicht mehr. Und weil jedes Lichtbild bei dem beginnt, was
+        zuletzt drin stand, bliebe der Blitzwert dann fuer immer
+        stehen: Die Lampe blitzt weiter, obwohl die Show laengst aus
+        ist.
+
+        Ein Blitz dauert 80 ms und kommt mehrmals je Sekunde - beim
+        Anhalten mitten in einem zu landen ist also kein Sonderfall,
+        sondern passiert regelmaessig.
+
+        Angefasst wird nur, was die Show auch gefahren hat: Lampen,
+        die vom Blitz ausgenommen sind (Hintergrund und die
+        ausgenommenen), koennen einen von Hand gestellten Strobe-Wert
+        tragen, und der geht niemanden etwas an.
+        """
+
+        vorlagen = self.lighting_store.vorlagen()
+
+        with self._light_lock:
+
+            geaendert = False
+
+            for lampe in self.lighting_store.lampen():
+
+                art = lampe.get("kind", fixtures.ART_VORGABE)
+
+                if art == "static" or art in fixtures.HINTERGRUND_ARTEN:
+                    continue
+
+                vorlage = vorlagen.get(lampe.get("template"))
+                werte = self.light_values.get(lampe["id"])
+
+                if vorlage is None or not werte:
+                    continue
+
+                for index, rolle in enumerate(vorlage["channels"]):
+
+                    if rolle == "strobe" and index < len(werte) and werte[index]:
+                        werte[index] = 0
+                        geaendert = True
+
+        #
+        # Gesendet wird ausserhalb der Sperre: _licht_senden() nimmt
+        # sie an anderer Stelle selbst, und die Sperre ist nicht
+        # wiedereintrittsfaehig.
+        #
+        if geaendert:
+            self._licht_senden()
 
     # ----------------------------------------------------------------
     # Die Blende in die Rueckfallszene

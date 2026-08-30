@@ -253,6 +253,8 @@ def stand(enabled=True, service=True, adapter=True, overlaps=None,
             "effect_mode": "pulse",
             "pulse_seconds": 0.5,
             "pulse_base": 0.2,
+            "color_invert": False,
+            "invert_beats": 8,
             "snare_strobe": False,
             "snare_sense": 0.5,
             "snare_power": 0.8,
@@ -1469,6 +1471,84 @@ koerper = ergebnis["koerper"].replace(" ", "")
 assert '"snare_sense":0.85' in koerper, koerper
 
 print("OK: Ein verschobener Empfindlichkeitsregler wird gespeichert")
+
+
+# ====================================================================
+# 23. Die Farbumkehr
+#
+# Aus als Vorgabe, und der Regler fuer die Schlaege steht erst da,
+# wenn sie an ist.
+# ====================================================================
+
+pruefung = """function () {
+    const schalter = document.getElementById('light-show-color-invert');
+    const block = document.getElementById('light-show-invert-options');
+
+    return {
+        an: schalter.checked,
+        sichtbar: !block.classList.contains('d-none'),
+        schlaege: document.getElementById('light-show-invert-beats').value,
+        text: document.getElementById('light-show-invert-beats-value').textContent
+    };
+}"""
+
+ergebnis = ausfuehren(stand(), pruefung)
+
+assert ergebnis["an"] is False, "Die Umkehr muss ausgeschaltet dastehen."
+assert not ergebnis["sichtbar"], "Ausgeschaltet gehört der Regler weg."
+
+print("OK: Die Farbumkehr steht aus im Dialog, ohne Regler")
+
+
+mit_umkehr = stand()
+mit_umkehr["show"] = {**mit_umkehr["show"], "color_invert": True,
+                      "invert_beats": 12}
+
+ergebnis = ausfuehren(mit_umkehr, pruefung)
+
+assert ergebnis["an"] is True, ergebnis
+assert ergebnis["sichtbar"], "Eingeschaltet muss der Regler dastehen."
+assert ergebnis["schlaege"] == "12", ergebnis
+
+assert ergebnis["text"] == TEXTE["light_show_beats_unit"].replace("{n}", "12"), (
+    ergebnis["text"]
+)
+
+print("OK: Eingeschaltet steht der Regler mit seinem Wert da")
+
+
+#
+# Umgelegt erscheint der Regler sofort, und beides wird gespeichert.
+#
+ergebnis = ausfuehren(stand(), """function () {
+    return { sichtbar: window.__sofort, gesendet: window.__gesendet };
+}""", vorher="""
+    const schalter = document.getElementById('light-show-color-invert');
+    schalter.checked = true;
+    schalter.dispatchEvent(new Event('change'));
+
+    window.__sofort = !document.getElementById(
+        'light-show-invert-options').classList.contains('d-none');
+
+    const regler = document.getElementById('light-show-invert-beats');
+    regler.value = '24';
+    regler.dispatchEvent(new Event('change'));
+
+    window.__gesendet = window.aufrufe.filter(
+        a => a[0].indexOf('/api/lighting/show/settings') === 0
+    ).map(a => a[1]).join('|');
+""")
+
+assert ergebnis["sichtbar"], (
+    "Nach dem Einschalten muss der Regler sofort erscheinen."
+)
+
+gesendet = ergebnis["gesendet"].replace(" ", "")
+
+assert '"color_invert":true' in gesendet, gesendet
+assert '"invert_beats":24' in gesendet, gesendet
+
+print("OK: Umkehr und Schlagzahl werden sofort gespeichert")
 
 
 print("Alle Lichtkarten-Tests erfolgreich.")
