@@ -142,7 +142,7 @@ without DMX you never see it.
   | Look | What it does |
   | --- | --- |
   | Moving point | one segment lights up fully and moves on with every bass hit, the others stay at a base level |
-  | Pulse on the beat | all segments breathe together: on every beat they go to full and fall back until the next one. Each keeps its own colour, so you still see which band is doing what — and it works on a single RGB par, which the moving point cannot |
+  | Pulse on the beat | all segments breathe together: on every beat they go to full and fall back until the next one. Each keeps its own colour, so you still see which band is doing what — and it works on a single RGB par, which the moving point cannot. How long a beat glows on and how bright it stays in between are both sliders |
 
   The background light is a wash in both cases.
 
@@ -342,7 +342,7 @@ Licht* — wer kein DMX hat, sieht es gar nicht erst.
   | Bild | Was es tut |
   | --- | --- |
   | Wandernder Punkt | ein Segment leuchtet voll und rückt bei jedem Bassschlag weiter, die übrigen bleiben auf Grundhelligkeit |
-  | Puls im Takt | alle Segmente atmen gemeinsam: bei jedem Schlag gehen sie auf voll und fallen bis zum nächsten zurück. Jedes behält seine Farbe, man sieht also weiter, welches Band was macht — und es wirkt auch auf einem einzelnen RGB-Strahler, den der wandernde Punkt nicht erreicht |
+  | Puls im Takt | alle Segmente atmen gemeinsam: bei jedem Schlag gehen sie auf voll und fallen bis zum nächsten zurück. Jedes behält seine Farbe, man sieht also weiter, welches Band was macht — und es wirkt auch auf einem einzelnen RGB-Strahler, den der wandernde Punkt nicht erreicht. Nachleuchten und Grundhelligkeit lassen sich einstellen |
 
   Das Hintergrundlicht bleibt in beiden Fällen ein Wash.
 

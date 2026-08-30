@@ -5746,6 +5746,15 @@ function renderLightShowSettings(stand) {
         setzen("light-show-channel", show.channel);
     }
     setzen("light-show-effect-mode", show.effect_mode);
+    setzen("light-show-pulse-seconds", show.pulse_seconds);
+    setzen("light-show-pulse-base", show.pulse_base);
+
+    //
+    // Direkt hier und nicht am Ende der Funktion: Die kehrt weiter
+    // unten vorzeitig zurueck, wenn es die Szenenauswahl nicht gibt.
+    //
+    lightPulsAnzeigen();
+
     setzen("light-show-color-low", show.color_low);
     setzen("light-show-color-mid", show.color_mid);
     setzen("light-show-color-high", show.color_high);
@@ -5819,6 +5828,19 @@ function lightTraegheitBeschriften() {
             I18N.light_show_beats_unit.replace("{n}", takte.value);
     }
 
+    const nachleuchten = document.getElementById("light-show-pulse-seconds");
+    const nachtext = document.getElementById("light-show-pulse-seconds-value");
+
+    if (nachleuchten && nachtext) nachtext.textContent = nachleuchten.value + " s";
+
+    const boden = document.getElementById("light-show-pulse-base");
+    const bodentext = document.getElementById("light-show-pulse-base-value");
+
+    if (boden && bodentext) {
+        bodentext.textContent =
+            Math.round(parseFloat(boden.value) * 100) + " %";
+    }
+
     //
     // Warnen, wenn die Blende laenger dauert als die halbe Standzeit.
     //
@@ -5837,6 +5859,18 @@ function lightTraegheitBeschriften() {
             "d-none", parseFloat(regler.value) <= standzeit / 2
         );
     }
+}
+
+function lightPulsAnzeigen() {
+    const modus = document.getElementById("light-show-effect-mode");
+    const block = document.getElementById("light-show-pulse-options");
+
+    //
+    // Nachleuchten und Grundhelligkeit gehoeren zum Puls. Im
+    // Lauflicht stuenden dort zwei Regler, die nichts tun - und wer
+    // an ihnen dreht, sucht den Fehler danach bei den Lampen.
+    //
+    if (modus && block) block.classList.toggle("d-none", modus.value !== "pulse");
 }
 
 function lightSchwelleBeschriften() {
@@ -5873,6 +5907,8 @@ async function saveLightShowSettings() {
         color_high_2: farbe("light-show-color-high-2"),
         sensitivity: zahl("light-show-sensitivity"),
         effect_mode: modus ? modus.value : null,
+        pulse_seconds: zahl("light-show-pulse-seconds"),
+        pulse_base: zahl("light-show-pulse-base"),
         background_seconds: zahl("light-show-background-seconds"),
         background_beats: zahl("light-show-background-beats"),
         fade_seconds: zahl("light-show-fade-seconds"),
@@ -5912,6 +5948,7 @@ function lightShowPulsSetzen(laeuft) {
         "light-show-speech-seconds", "light-show-fallback",
         "light-show-background-seconds", "light-show-background-beats",
         "light-show-fade-seconds",
+        "light-show-pulse-seconds", "light-show-pulse-base",
         "light-show-color-low", "light-show-color-mid",
         "light-show-color-high",
         "light-show-color-low-1", "light-show-color-mid-1",
@@ -5928,8 +5965,17 @@ function lightShowPulsSetzen(laeuft) {
 
     for (const kennung of ["light-show-background-seconds",
                           "light-show-background-beats",
-                          "light-show-fade-seconds"]) {
+                          "light-show-fade-seconds",
+                          "light-show-pulse-seconds",
+                          "light-show-pulse-base"]) {
         const element = document.getElementById(kennung);
         if (element) element.addEventListener("input", lightTraegheitBeschriften);
     }
+
+    //
+    // Der Block mit den Puls-Reglern muss sofort erscheinen, nicht
+    // erst, wenn der gespeicherte Stand zurueckkommt.
+    //
+    const modus = document.getElementById("light-show-effect-mode");
+    if (modus) modus.addEventListener("change", lightPulsAnzeigen);
 })();

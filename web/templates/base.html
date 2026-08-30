@@ -1482,6 +1482,58 @@
                         <div class="form-text">{{ t.light_show_effect_mode_hint }}</div>
                     </div>
 
+                    {#
+                        Die zwei Schrauben am Puls. Sichtbar nur, wenn
+                        er auch gewaehlt ist - im Lauflicht stuenden
+                        hier zwei Regler ohne jede Wirkung. Ein- und
+                        ausgeblendet wird in xrack.js.
+                    #}
+                    <div id="light-show-pulse-options" class="col-12 d-none">
+                        <div class="row g-2">
+
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small mb-1"
+                                       for="light-show-pulse-seconds">
+                                    {{ t.light_show_pulse_seconds }}
+                                    <span id="light-show-pulse-seconds-value"
+                                          class="text-body-secondary"></span>
+                                </label>
+                                <input
+                                    id="light-show-pulse-seconds"
+                                    type="range"
+                                    class="form-range"
+                                    min="0.05"
+                                    max="2"
+                                    step="0.05"
+                                    value="0.25"
+                                >
+                            </div>
+
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small mb-1"
+                                       for="light-show-pulse-base">
+                                    {{ t.light_show_pulse_base }}
+                                    <span id="light-show-pulse-base-value"
+                                          class="text-body-secondary"></span>
+                                </label>
+                                <input
+                                    id="light-show-pulse-base"
+                                    type="range"
+                                    class="form-range"
+                                    min="0"
+                                    max="0.9"
+                                    step="0.05"
+                                    value="0.35"
+                                >
+                            </div>
+
+                            <div class="col-12">
+                                <div class="form-text">{{ t.light_show_pulse_hint }}</div>
+                            </div>
+
+                        </div>
+                    </div>
+
                     <div class="col-12 col-sm-6">
                         <label class="form-label small mb-1" for="light-show-channel">
                             {{ t.light_show_channel }}

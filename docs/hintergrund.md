@@ -238,12 +238,22 @@ zurückgehen (0,25 s). Hart hoch ist Absicht — ein Puls, der erst
 anschwillt, kommt hinter dem Schlag her, und dann sieht das Licht aus,
 als hinke es der Musik hinterher.
 
-Unten bleibt derselbe Boden stehen wie beim wandernden Punkt
-(`GRUNDHELLIGKEIT`). Dort heißt er „wie hell ist ein Segment, das
-gerade nicht dran ist", hier „wie hell zwischen zwei Schlägen" — es
-ist dieselbe Frage. Der Boden multipliziert dabei den Bandpegel und
-addiert nichts dazu: Bei Stille bleibt es deshalb dunkel, statt ein
-Grundleuchten stehen zu lassen, das man nicht mehr los wird.
+Unten bleibt ein Boden stehen, vorgegeben mit demselben Wert wie beim
+wandernden Punkt (`GRUNDHELLIGKEIT`). Dort heißt er „wie hell ist ein
+Segment, das gerade nicht dran ist", hier „wie hell zwischen zwei
+Schlägen" — es ist dieselbe Frage. Der Boden multipliziert dabei den
+Bandpegel und addiert nichts dazu: Bei Stille bleibt es deshalb
+dunkel, statt ein Grundleuchten stehen zu lassen, das man nicht mehr
+los wird.
+
+Beide Zahlen sind Vorgaben, keine Festlegungen: Nachleuchten und
+Grundhelligkeit stehen als Regler in den Einstellungen, sobald der
+Puls gewählt ist. Ob 0,25 s und 35 % passen, entscheidet sich an den
+Lampen und am Musikgeschmack — auf einer Bar zu hartem Techno will man
+etwas anderes als bei ruhiger Musik. Der Boden darf dabei bis auf 0
+(zwischen den Schlägen ganz aus), aber nicht bis 1: Dort gäbe es
+überhaupt keinen Puls mehr, und ein Regler, der genau den Effekt
+abschaltet, den er einstellen soll, hört vorher auf.
 
 Das Hintergrundlicht bekommt vom Puls nichts mit. Es hat sein eigenes
 Bild — eine Farbe, über mehrere Schläge weich übergeblendet —, und ein

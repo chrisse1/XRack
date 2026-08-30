@@ -602,7 +602,11 @@ class LightEngine:
             self.puls = 1.0
             return
 
-        anteil = min(1.0, dauer / self.PULS_ABFALL_S)
+        nachleuchten = max(0.02, float(
+            self.einstellungen.get("pulse_seconds") or self.PULS_ABFALL_S
+        ))
+
+        anteil = min(1.0, dauer / nachleuchten)
 
         self.puls += anteil * (0.0 - self.puls)
 
@@ -662,6 +666,22 @@ class LightEngine:
         pulsieren = (
             not hintergrund
             and self.einstellungen.get("effect_mode") == "pulse"
+        )
+
+        #
+        # Wie hell es zwischen zwei Schlaegen bleibt.
+        #
+        # Hier steht bewusst kein "or": 0 ist an dieser Stelle ein
+        # gueltiger Wert ("dazwischen ganz aus") und wuerde von "or"
+        # still in die Vorgabe verwandelt. Der Regler haette am
+        # linken Anschlag einfach keine Wirkung, und niemand saehe,
+        # warum.
+        #
+        boden = self.einstellungen.get("pulse_base")
+
+        boden = (
+            self.GRUNDHELLIGKEIT if boden is None
+            else max(0.0, min(1.0, float(boden)))
         )
 
         #
@@ -730,11 +750,13 @@ class LightEngine:
                 # man sieht also weiter, welches Band was macht, aber
                 # die ganze Lampe atmet.
                 #
-                # Der Boden ist derselbe wie beim wandernden Punkt:
-                # GRUNDHELLIGKEIT heisst dort "wie hell ist ein
-                # Segment, das gerade nicht dran ist", hier "wie hell
-                # zwischen zwei Schlaegen". Ohne Boden waere es kein
-                # Atmen, sondern ein Blitzen.
+                # Der Boden kommt aus den Einstellungen; ohne
+                # Angabe ist es GRUNDHELLIGKEIT, also derselbe Wert
+                # wie beim wandernden Punkt. Dort heisst er "wie hell
+                # ist ein Segment, das gerade nicht dran ist", hier
+                # "wie hell zwischen zwei Schlaegen" - dieselbe
+                # Frage. Wer ihn auf 0 stellt, bekommt statt des
+                # Atmens ein Blitzen; das ist seine Sache.
                 #
                 # Das gilt auch fuer Lampen mit nur EINER farbigen
                 # Gruppe. Der wandernde Punkt laesst die aus - er
@@ -743,10 +765,7 @@ class LightEngine:
                 # deshalb bisher nicht viel. Der Puls wirkt auf ihm
                 # genauso wie auf einer achtsegmentigen Bar.
                 #
-                staerke = (
-                    self.GRUNDHELLIGKEIT
-                    + (1.0 - self.GRUNDHELLIGKEIT) * self.puls
-                )
+                staerke = boden + (1.0 - boden) * self.puls
 
             #
             # Der wandernde Punkt: das Segment, das gerade "dran" ist,

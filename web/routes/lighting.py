@@ -239,6 +239,8 @@ class LightingShowSettings(BaseModel):
     channel: int | None = None
     sensitivity: float | None = None
     effect_mode: str | None = None
+    pulse_seconds: float | None = None
+    pulse_base: float | None = None
     color_low: str | None = None
     color_mid: str | None = None
     color_high: str | None = None

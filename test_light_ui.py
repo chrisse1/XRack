@@ -251,6 +251,8 @@ def stand(enabled=True, service=True, adapter=True, overlaps=None,
         "show": {
             "channel": 3,
             "effect_mode": "pulse",
+            "pulse_seconds": 0.5,
+            "pulse_base": 0.2,
             "sensitivity": 1.5,
             "fallback_scene": "s1",
             "silence_threshold": 0.03,
@@ -1258,6 +1260,113 @@ assert '"effect_mode":"runner"' in ergebnis["koerper"].replace(" ", ""), (
 )
 
 print("OK: Ein umgestelltes Bild wird sofort gespeichert")
+
+
+# ====================================================================
+# 21. Die zwei Schrauben am Puls
+#
+# Sie stehen nur da, wenn der Puls auch gewaehlt ist - im Lauflicht
+# waeren es zwei Regler ohne Wirkung, und wer an ihnen dreht, sucht
+# den Fehler danach bei den Lampen.
+# ====================================================================
+
+pulsstand = stand()
+lauflichtstand = stand()
+lauflichtstand["show"] = {**lauflichtstand["show"], "effect_mode": "runner"}
+
+pruefung = """function () {
+    const block = document.getElementById('light-show-pulse-options');
+
+    return {
+        sichtbar: !block.classList.contains('d-none'),
+        nachleuchten: document.getElementById('light-show-pulse-seconds').value,
+        boden: document.getElementById('light-show-pulse-base').value,
+        nachtext: document.getElementById(
+            'light-show-pulse-seconds-value').textContent,
+        bodentext: document.getElementById(
+            'light-show-pulse-base-value').textContent
+    };
+}"""
+
+ergebnis = ausfuehren(pulsstand, pruefung)
+
+assert ergebnis["sichtbar"], "Beim Puls müssen die beiden Regler dastehen."
+
+#
+# Und sie muessen den gespeicherten Stand zeigen. Stuenden sie stumm
+# auf ihrem Anfangswert, glaubte man, es sei etwas anderes
+# eingestellt, als die Show faehrt.
+#
+assert float(ergebnis["nachleuchten"]) == 0.5, ergebnis
+assert float(ergebnis["boden"]) == 0.2, ergebnis
+
+assert ergebnis["nachtext"] == "0.5 s", ergebnis
+assert ergebnis["bodentext"] == "20 %", ergebnis
+
+print("OK: Beim Puls stehen Nachleuchten und Grundhelligkeit im Dialog")
+
+
+ergebnis = ausfuehren(lauflichtstand, pruefung)
+
+assert not ergebnis["sichtbar"], (
+    "Im Lauflicht dürfen die Puls-Regler nicht dastehen."
+)
+
+print("OK: Im Lauflicht sind sie weg")
+
+
+#
+# Umgestellt wird der Block sofort sichtbar - nicht erst, wenn der
+# gespeicherte Stand vom Server zurueckkommt.
+#
+# Gemessen wird UNMITTELBAR nach dem Umstellen und in einem Merker
+# abgelegt. Spaeter nachzusehen ginge daneben: Das Umstellen stoesst
+# ein Speichern an, darauf folgt ein Statusabruf, und der bringt hier
+# den nachgestellten - also unveraenderten - Stand zurueck.
+#
+ergebnis = ausfuehren(lauflichtstand, """function () {
+    return { sichtbar: window.__sofort };
+}""", vorher="""
+    const feld = document.getElementById('light-show-effect-mode');
+    feld.value = 'pulse';
+    feld.dispatchEvent(new Event('change'));
+
+    window.__sofort = !document.getElementById(
+        'light-show-pulse-options').classList.contains('d-none');
+""")
+
+assert ergebnis["sichtbar"], (
+    "Nach dem Umstellen auf Puls müssen die Regler sofort erscheinen."
+)
+
+print("OK: Beim Umstellen erscheinen sie sofort")
+
+
+#
+# Und ein verschobener Regler muss ankommen.
+#
+ergebnis = ausfuehren(pulsstand, """function () {
+    const gesendet = window.aufrufe.filter(
+        a => a[0].indexOf('/api/lighting/show/settings') === 0
+    );
+
+    return {
+        anzahl: gesendet.length,
+        koerper: gesendet.length ? gesendet[gesendet.length - 1][1] : ''
+    };
+}""", vorher="""
+    const boden = document.getElementById('light-show-pulse-base');
+    boden.value = '0.6';
+    boden.dispatchEvent(new Event('change'));
+""")
+
+assert ergebnis["anzahl"] >= 1, "Der Regler hat nichts losgeschickt."
+
+assert '"pulse_base":0.6' in ergebnis["koerper"].replace(" ", ""), (
+    ergebnis["koerper"]
+)
+
+print("OK: Ein verschobener Regler wird sofort gespeichert")
 
 
 print("Alle Lichtkarten-Tests erfolgreich.")

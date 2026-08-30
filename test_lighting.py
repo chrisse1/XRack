@@ -2859,11 +2859,177 @@ with tempfile.TemporaryDirectory() as tmp:
     print("OK: Der Puls lässt das Hintergrundlicht in Ruhe")
 
 
+# --- Nachleuchten und Boden sind einstellbar ------------------------
+#
+# Beide Zahlen waren geraten. Ob sie stimmen, entscheidet sich an den
+# Lampen und am Musikgeschmack - also gehoeren sie in die
+# Einstellungen.
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+    licht.set_enabled(True)
+    licht.lampe_speichern({
+        "id": "par", "name": "Par", "template": "rgb", "address": 1,
+    })
+
+    motor = LichtApp(licht, DmxAttrappe()).light_engine
+
+    #
+    # Nachleuchten: Nach derselben Zeit ohne Schlag muss vom langen
+    # Puls mehr uebrig sein als vom kurzen.
+    #
+    def nach_fuenf_bloecken(sekunden=None) -> float:
+
+        motor.einstellungen = {"effect_mode": "pulse"}
+
+        if sekunden is not None:
+            motor.einstellungen["pulse_seconds"] = sekunden
+
+        motor.puls = 1.0
+
+        for _ in range(5):
+            motor._puls_weiterschalten(0.02, False)
+
+        return motor.puls
+
+    kurz = nach_fuenf_bloecken(0.05)
+    lang = nach_fuenf_bloecken(1.0)
+
+    assert lang > kurz * 2, (
+        f"Das Nachleuchten wirkt nicht: kurz {kurz:.3f}, lang {lang:.3f}"
+    )
+
+    #
+    # Ohne Angabe bleibt es bei der Zahl, mit der der Puls gebaut
+    # wurde - eine alte Einrichtung sieht genau wie vorher aus.
+    #
+    ohne = nach_fuenf_bloecken()
+
+    erwartet = (1.0 - 0.02 / motor.PULS_ABFALL_S) ** 5
+
+    assert abs(ohne - erwartet) < 0.001, (
+        f"Ohne Einstellung muss PULS_ABFALL_S gelten: {ohne:.3f} statt "
+        f"{erwartet:.3f}"
+    )
+
+    print("OK: Das Nachleuchten des Pulses ist einstellbar")
+
+    #
+    # Der Boden: was zwischen zwei Schlaegen stehen bleibt.
+    #
+    motor.stand = {"low": 1.0, "mid": 0.0, "high": 0.0, "level": 1.0, "beat": False}
+
+    grund = {
+        "sensitivity": 1.0,
+        "color_low": "#ff0000",
+        "color_mid": "#00ff00",
+        "color_high": "#0000ff",
+        "effect_mode": "pulse",
+    }
+
+    def rot(boden=None, puls=0.0) -> int:
+
+        motor.einstellungen = dict(grund)
+
+        if boden is not None:
+            motor.einstellungen["pulse_base"] = boden
+
+        motor.puls = puls
+
+        return motor.werte_je_lampe()["par"][0]
+
+    assert rot(0.8) > rot(), f"Ein hoher Boden muss heller sein: {rot(0.8)}"
+
+    #
+    # Und der linke Anschlag: 0 heisst "zwischen den Schlaegen ganz
+    # aus". Genau der Wert faellt durch, wenn ihn jemand mit "or"
+    # abfragt - dann waere er still die Vorgabe, und der Regler taete
+    # am Anschlag nichts.
+    #
+    assert rot(0.0) == 0, (
+        f"Boden 0 muss die Lampe zwischen den Schlägen ausmachen: {rot(0.0)}"
+    )
+
+    assert rot(0.0, puls=1.0) == 255, (
+        "Auf dem Schlag muss auch mit Boden 0 voll aufgedreht werden: "
+        f"{rot(0.0, puls=1.0)}"
+    )
+
+    #
+    # Ohne Angabe die alte Zahl.
+    #
+    assert rot() == fixtures.begrenzen(255 * motor.GRUNDHELLIGKEIT), rot()
+
+    print("OK: Die Grundhelligkeit des Pulses ist einstellbar, auch auf 0")
+
+    #
+    # Der wandernde Punkt bleibt davon unberuehrt. Er hat seine
+    # eigene, feste Grundhelligkeit - sonst verstellte ein Regler,
+    # der nur beim Puls dasteht, heimlich auch das andere Bild.
+    #
+    # Geprueft an einer Bar: Beim einzelnen Strahler leuchtet im
+    # Lauflicht ohnehin alles voll, ein durchgeschlagener Boden waere
+    # dort gar nicht zu sehen. Es braucht ein Segment, das gerade
+    # NICHT dran ist.
+    #
+    licht.lampe_speichern({
+        "id": "bar", "name": "Bar", "template": "bar-8-rgb", "address": 10,
+    })
+
+    motor.stand = {"low": 1.0, "mid": 1.0, "high": 1.0, "level": 1.0, "beat": False}
+
+    motor.einstellungen = {
+        **grund, "effect_mode": "runner", "pulse_base": 0.0,
+        "pulse_seconds": 2.0,
+    }
+    motor.puls = 0.0
+    motor.position = 0
+
+    werte = motor.werte_je_lampe()["bar"]
+
+    assert werte[0] == 255, f"Das Segment, das dran ist, muss voll sein: {werte[:9]}"
+
+    assert werte[4] == fixtures.begrenzen(255 * motor.GRUNDHELLIGKEIT), (
+        "Im Lauflicht dürfen die Puls-Regler nichts ändern: "
+        f"{werte[3:6]}"
+    )
+
+    print("OK: Die Puls-Regler lassen den wandernden Punkt in Ruhe")
+
+
 # --- Die Ablage -----------------------------------------------------
 
 with tempfile.TemporaryDirectory() as tmp:
 
     licht = ablage(Path(tmp))
+
+    #
+    # Die Vorgaben muessen zu den Zahlen im Motor passen. Laufen sie
+    # auseinander, sieht eine frische Einrichtung anders aus als eine
+    # alte ohne die Schluessel - und niemand kaeme darauf, warum.
+    #
+    from lighting.light_engine import LightEngine
+
+    assert licht.show_einstellungen()["pulse_seconds"] == LightEngine.PULS_ABFALL_S
+    assert licht.show_einstellungen()["pulse_base"] == LightEngine.GRUNDHELLIGKEIT
+
+    #
+    # Unsinnige Werte werden gekappt, nicht abgewiesen: Ein Regler
+    # kann gar nichts anderes liefern als eine Zahl, und wer per Hand
+    # etwas schickt, soll dabei nicht die ganze Show anhalten.
+    #
+    licht.set_show_einstellungen({"pulse_seconds": 99.0, "pulse_base": 5.0})
+
+    assert licht.show_einstellungen()["pulse_seconds"] == 2.0
+    assert licht.show_einstellungen()["pulse_base"] == 0.9
+
+    licht.set_show_einstellungen({"pulse_seconds": 0.0, "pulse_base": -1.0})
+
+    assert licht.show_einstellungen()["pulse_seconds"] == 0.05
+    assert licht.show_einstellungen()["pulse_base"] == 0.0
+
+    print("OK: Nachleuchten und Boden werden in Grenzen gehalten")
 
     assert licht.show_einstellungen()["effect_mode"] == "runner", (
         "Vorgabe muss das bisherige Bild sein - wer nichts umstellt, "

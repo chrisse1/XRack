@@ -549,6 +549,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "auf. Puls: alle Segmente atmen gemeinsam im Takt. Das "
             "Hintergrundlicht bleibt in beiden Fällen ein Wash."
         ),
+        "light_show_pulse_seconds": "Puls: Nachleuchten",
+        "light_show_pulse_base": "Puls: Grundhelligkeit",
+        "light_show_pulse_hint": (
+            "Wie lange ein Schlag nachleuchtet und wie hell es "
+            "zwischen zwei Schlägen bleibt. 0 % heißt: dazwischen "
+            "ganz aus."
+        ),
         "light_show_background_beats": "Hintergrund: Farbwechsel",
         "light_show_fade_seconds": "Ausblenden in die Szene",
         "light_show_beats_unit": "{n} Schläge",
@@ -1120,6 +1127,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Moving point: one segment after another lights up. "
             "Pulse: all segments breathe together on the beat. The "
             "background light stays a wash either way."
+        ),
+        "light_show_pulse_seconds": "Pulse: afterglow",
+        "light_show_pulse_base": "Pulse: base brightness",
+        "light_show_pulse_hint": (
+            "How long a beat glows on, and how bright it stays "
+            "between two beats. 0 % means: fully dark in between."
         ),
         "light_show_background_beats": "Background: colour change",
         "light_show_fade_seconds": "Fade into the scene",

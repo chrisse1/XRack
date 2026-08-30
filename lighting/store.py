@@ -57,6 +57,23 @@ SHOW_VORGABE = {
     "effect_mode": "runner",
 
     #
+    # Die beiden Schrauben am Puls. Vorgaben sind genau die Zahlen,
+    # mit denen er gebaut wurde - wer nichts anfasst, sieht das Bild
+    # von vorher.
+    #
+    # Wie lange ein Schlag nachleuchtet, in Sekunden: die
+    # Zeitkonstante, mit der die Huellkurve zurueckfaellt.
+    #
+    "pulse_seconds": 0.25,
+
+    #
+    # Wie hell es zwischen zwei Schlaegen bleibt (0-1). 0 heisst
+    # "dazwischen ganz aus" - ein hartes Bild, aber eines, das jemand
+    # wollen kann.
+    #
+    "pulse_base": 0.35,
+
+    #
     # Welche Farbe welches Band bekommt.
     #
     # Vorgabe ist die uebliche Zuordnung von Sound-to-Light-Geraeten
@@ -560,6 +577,25 @@ class LightingStore:
 
         if "sensitivity" in werte:
             show["sensitivity"] = max(0.1, min(4.0, float(werte["sensitivity"])))
+
+        #
+        # Unter 0,05 s waere der Puls kuerzer als der Abstand zweier
+        # Bloecke (rund 20 ms) und damit gar nicht mehr darstellbar;
+        # ueber zwei Sekunden stuende er bei jedem Tempo dauerhaft
+        # oben.
+        #
+        if "pulse_seconds" in werte:
+            show["pulse_seconds"] = max(
+                0.05, min(2.0, float(werte["pulse_seconds"]))
+            )
+
+        #
+        # Nach oben bei 0,9 Schluss: Bei 1,0 gaebe es ueberhaupt
+        # keinen Puls mehr. Ein Regler, der genau den Effekt
+        # abschaltet, den er einstellen soll, hoert vorher auf.
+        #
+        if "pulse_base" in werte:
+            show["pulse_base"] = max(0.0, min(0.9, float(werte["pulse_base"])))
 
         if "background_seconds" in werte:
             show["background_seconds"] = max(
