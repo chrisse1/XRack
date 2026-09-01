@@ -444,10 +444,16 @@ class RecorderAttrappe:
     backend = Backend()
 
     #
-    # Das Anhalten der Show meldet den Verbraucher ab und stoppt die
-    # Analyse. Beides tut hier nichts - gebraucht wird nur, dass es
-    # die Methoden gibt.
+    # Starten und Anhalten der Show melden einen Verbraucher an und
+    # ab und schalten die Analyse. Das alles tut hier nichts -
+    # gebraucht wird nur, dass es die Methoden gibt.
     #
+    def add_consumer(self, verbraucher):
+        pass
+
+    def start_analysis(self):
+        pass
+
     def remove_consumer(self, verbraucher):
         pass
 
@@ -463,6 +469,12 @@ class LichtApp(LichtMixin):
         self.lighting_store = store
         self.dmx_control = dmx
         self.recorder = RecorderAttrappe()
+
+        #
+        # Ohne gewaehltes Eingabegeraet weist start_light_show() ab -
+        # zu Recht, aber hier soll die Show ja starten koennen.
+        #
+        self.selected_audio_device = "hw:1,0"
         self.light_values = {}
         self.light_brightness = {}
 
@@ -3780,6 +3792,126 @@ with tempfile.TemporaryDirectory() as tmp:
     assert licht.show_einstellungen()["invert_beats"] == 1
 
     print("OK: Die Umkehr ist aus als Vorgabe, ihre Schläge bleiben in Grenzen")
+
+
+# ====================================================================
+# 23. Die Quelle der Show: ein Kanalpaar oder ein einzelner Kanal
+#
+# Der Gewinn ist ein handfester: Auf einem AUX-Bus laesst sich ein
+# eigener Mix nur fuer das Licht bauen - und der kostet dann EINEN
+# USB-Kanal statt zweier. Der gesparte steht fuer Aufnahmen bereit.
+#
+# Zwischen der Einstellung und der Analyse liegt start_light_show():
+# Dort wird aus "Kanal 3, mono" das Paar (2, None). Kommt das nicht
+# an, hoert die Show weiter auf den Nachbarkanal mit - und niemand
+# sieht es, weil alles andere stimmt.
+# ====================================================================
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    app, _ = aufbau(Path(tmp))
+
+    #
+    # Vorgabe ist das Paar: Eine bestehende Einrichtung darf sich
+    # durch das Update nicht anders verhalten.
+    #
+    app.lighting_store.set_show_einstellungen({"channel": 3})
+
+    ok, meldung = app.start_light_show()
+
+    assert ok, meldung
+    assert app.light_engine.analyse.links == 2, app.light_engine.analyse.links
+    assert app.light_engine.analyse.rechts == 3, (
+        "Ohne Mono muss die Show das Paar 3+4 lesen: "
+        f"{app.light_engine.analyse.rechts}"
+    )
+
+    app.stop_light_show()
+
+    #
+    # Mono: derselbe erste Kanal, aber kein zweiter.
+    #
+    app.lighting_store.set_show_einstellungen({"channel_mono": True})
+
+    ok, meldung = app.start_light_show()
+
+    assert ok, meldung
+    assert app.light_engine.analyse.links == 2, app.light_engine.analyse.links
+    assert app.light_engine.analyse.rechts is None, (
+        "Mono muss genau einen Kanal lesen, nicht ein Paar: "
+        f"{app.light_engine.analyse.rechts}"
+    )
+
+    app.stop_light_show()
+
+    print("OK: Mono und Paar kommen so in der Analyse an, wie eingestellt")
+
+    #
+    # Die Grenzen: Das Interface der Attrappe hat acht Kanaele. Der
+    # einzelne Kanal 8 ist gueltig, das Paar 8+9 nicht - und die
+    # Meldung muss den Fall nennen, der wirklich vorliegt. "Das Paar
+    # 8+9 gibt es nicht" waere bei Mono schlicht gelogen.
+    #
+    app.lighting_store.set_show_einstellungen({
+        "channel": 8, "channel_mono": True,
+    })
+
+    ok, meldung = app.start_light_show()
+
+    assert ok, "Bei acht Kanälen muss der einzelne Kanal 8 gehen: " + meldung
+
+    app.stop_light_show()
+
+    app.lighting_store.set_show_einstellungen({"channel_mono": False})
+
+    ok, meldung = app.start_light_show()
+
+    assert not ok, "Das Paar 8+9 gibt es bei acht Kanälen nicht."
+    assert "8+9" in meldung, meldung
+
+    app.lighting_store.set_show_einstellungen({
+        "channel": 9, "channel_mono": True,
+    })
+
+    ok, meldung = app.start_light_show()
+
+    assert not ok, "Kanal 9 gibt es bei acht Kanälen nicht."
+    assert "Kanal 9" in meldung and "+" not in meldung, (
+        "Die Meldung nennt bei Mono den falschen Fall: " + meldung
+    )
+
+    print("OK: Die Grenzen gelten für beide Fälle, und die Meldung stimmt")
+
+
+# --- Die Ablage -----------------------------------------------------
+
+with tempfile.TemporaryDirectory() as tmp:
+
+    licht = ablage(Path(tmp))
+
+    #
+    # Ohne Angabe das Paar - eine alte Einrichtung, in der der
+    # Schluessel noch gar nicht steht, verhaelt sich damit genau wie
+    # bisher.
+    #
+    assert licht.show_einstellungen()["channel_mono"] is False, (
+        "Vorgabe muss das Kanalpaar sein."
+    )
+
+    ok, meldung = licht.set_show_einstellungen({"channel_mono": True})
+
+    assert ok, meldung
+    assert licht.show_einstellungen()["channel_mono"] is True
+
+    #
+    # Und wieder zurueck: Ein False darf nicht als "nichts gesagt"
+    # durchrutschen und den alten Stand stehen lassen.
+    #
+    licht.set_show_einstellungen({"channel_mono": False})
+
+    assert licht.show_einstellungen()["channel_mono"] is False
+
+    print("OK: Die Quelle wird als Ja/Nein abgelegt, Vorgabe ist das Paar")
 
 
 print("Alle Licht-Tests erfolgreich.")

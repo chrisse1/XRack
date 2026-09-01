@@ -61,6 +61,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "status_playing": "Wiedergabe läuft",
         "status_paused": "pausiert",
         "channel_option": "Kanal {a}+{b}",
+        "channel_option_mono": "Kanal {n}",
 
         # Recorder-Zustände (core/status.py RecorderState)
         "state_idle": "bereit",
@@ -533,12 +534,17 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_show_start": "Show starten",
         "light_show_stop": "Show anhalten",
         "light_show_settings": "Show-Einstellungen",
-        "light_show_channel": "Kanalpaar zum Mithören",
+        "light_show_channel": "Quelle der Lichtshow",
         "light_show_channel_hint": (
-            "Auf dieses Kanalpaar hört die Lichtshow. Am besten ein "
-            "Ausspielweg, auf dem die Musik liegt - nicht ein einzelnes "
-            "Instrument."
+            "Worauf die Lichtshow hört. Ein Kanalpaar ist der einfache "
+            "Weg; ein einzelner Kanal spart einen USB-Kanal und erlaubt "
+            "einen eigenen Mix nur fürs Licht - etwa ein AUX-Bus mit "
+            "betonter Bassdrum und ohne Gesang. Achtung: Derselbe Kanal "
+            "ist einzeln doppelt so laut wie als Hälfte eines Paares - "
+            "die Stille-Schwelle darunter gehört dann nachgeprüft."
         ),
+        "light_show_channel_pairs": "Kanalpaar",
+        "light_show_channel_single": "Einzelner Kanal",
         "light_show_sensitivity": "Empfindlichkeit",
         "light_show_background_seconds": "Hintergrund: Trägheit",
         "light_show_effect_mode": "Effektlicht: Bild",
@@ -682,6 +688,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "status_playing": "Playing",
         "status_paused": "paused",
         "channel_option": "Channel {a}+{b}",
+        "channel_option_mono": "Channel {n}",
 
         # Recorder states (core/status.py RecorderState)
         "state_idle": "ready",
@@ -1138,11 +1145,17 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "light_show_start": "Start show",
         "light_show_stop": "Stop show",
         "light_show_settings": "Show settings",
-        "light_show_channel": "Channel pair to listen on",
+        "light_show_channel": "Light show source",
         "light_show_channel_hint": (
-            "The light show listens to this channel pair. Best a send "
-            "carrying the music - not a single instrument."
+            "What the light show listens to. A channel pair is the "
+            "simple way; a single channel saves a USB channel and "
+            "allows a mix just for the lighting - an aux bus with the "
+            "kick up front and no vocals, say. Careful: the same "
+            "channel on its own is twice as loud as one half of a pair "
+            "- check the silence threshold below afterwards."
         ),
+        "light_show_channel_pairs": "Channel pair",
+        "light_show_channel_single": "Single channel",
         "light_show_sensitivity": "Sensitivity",
         "light_show_background_seconds": "Background: inertia",
         "light_show_effect_mode": "Effect light: look",

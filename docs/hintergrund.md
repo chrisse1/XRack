@@ -225,6 +225,41 @@ bei DMX (RS-485, bis 1000 m) selten das Problem ist.
 
 ## Die Lichtshow
 
+### Ein Kanal oder zwei — und warum das kein Sparzwang ist
+
+Die Show hört auf eine Quelle, und die ist wählbar: ein Kanalpaar
+(beide Kanäle gemittelt) oder ein einzelner Kanal. Technisch ist das
+ein kleiner Unterschied — `_mono()` in `lighting/analysis.py` mittelt
+dann nicht, sondern liest nur. Praktisch ist es der Grund, warum es
+die Wahl überhaupt gibt.
+
+Ein Kanalpaar ist normalerweise die Summe, also das, was auch aus den
+Boxen kommt. Für eine Lichtshow ist das nicht unbedingt das beste
+Signal: Die Stimme steht dort vorn, und die Show tanzt dann auf dem
+Gesang statt auf dem Schlagzeug. Am Pult lässt sich stattdessen ein
+**AUX-Bus** mit einem eigenen Mix fürs Licht bauen — Bassdrum und
+Snare betont, die Stimme heraus. Ein AUX-Weg ist mono, und ein
+zweiter Kanal dafür wäre reine Verschwendung: Er trüge dasselbe
+Signal noch einmal. Der gesparte USB-Kanal steht für eine Spur mehr
+in der Aufnahme bereit.
+
+Ein Punkt gehört mitgedacht: Derselbe Kanal kommt als Mono doppelt so
+laut an wie als Hälfte eines Paares, dessen Nachbar still ist — 6 dB,
+der Mittelwert von *x* und 0 ist *x*/2. Den Bändern ist das egal, sie
+messen sich an der laufenden Spitze. Die **Stille-Schwelle** aber
+arbeitet auf dem absoluten Pegel; wer von einem halb belegten Paar auf
+Mono umstellt, muss sie unter Umständen nachziehen.
+
+In der Oberfläche ist das **eine** Auswahl mit zwei Gruppen, nicht
+eine Auswahl plus ein Schalter daneben. Der Grund steht in der
+jüngeren Vergangenheit: Die WLAN-Funkregion hatte ihren eigenen
+Speicherknopf neben dem Formular, stand sichtbar richtig da und war
+nie gespeichert — mit einer Fehlermeldung am Ende, die alles Mögliche
+bedeuten konnte. Eine Entscheidung, ein Bedienelement, ein
+Speicherweg.
+
+---
+
 ### Warum der Puls eine Hüllkurve ist und kein An/Aus
 
 Im zweiten Show-Modus atmen alle Segmente gemeinsam im Takt. Der

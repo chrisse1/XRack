@@ -237,6 +237,7 @@ def lighting_scene_delete(
 
 class LightingShowSettings(BaseModel):
     channel: int | None = None
+    channel_mono: bool | None = None
     sensitivity: float | None = None
     effect_mode: str | None = None
     pulse_seconds: float | None = None

@@ -779,4 +779,77 @@ assert reihe[-1] >= 8, (
 print(f"OK: Der Regler reicht über den ganzen Weg: {reihe}")
 
 
+# ====================================================================
+# 10. Einzelkanal statt Kanalpaar
+#
+# Die Show kann auf ein Kanalpaar hoeren oder auf einen einzelnen
+# Kanal. Der einzelne ist nicht bloss die halbe Arbeit, sondern der
+# Weg zu einem eigenen Lichtmix auf einem AUX-Bus - und er spart
+# einen USB-Kanal.
+#
+# Geprueft wird an einem Signal, das NUR auf Kanal 3 liegt, waehrend
+# Kanal 4 still ist. Damit laesst sich unterscheiden, was wirklich
+# gelesen wird.
+# ====================================================================
+
+BLOECKE = sinus_bloecke(440, bloecke=60, amplitude=0.8, channels=8, auf=(2,))
+
+
+def pegel(links: int, rechts: int | None) -> float:
+    """Der Gesamtpegel, den die Analyse aus der Quelle zieht."""
+
+    analyse = Bandanalyse(rate=RATE, channels=8, links=links, rechts=rechts)
+
+    stand = analyse.stand()
+
+    for block in BLOECKE:
+        stand = analyse.verarbeite(block)
+
+    return stand["level"]
+
+
+#
+# Mono auf Kanal 3 (Index 2): voller Pegel.
+#
+mono_drei = pegel(2, None)
+
+assert mono_drei > 0.3, (
+    f"Mono auf Kanal 3 hört den Ton nicht: {mono_drei:.3f}"
+)
+
+#
+# Dasselbe Signal als Paar 3+4: Der stille Nachbar zieht es auf die
+# Haelfte herunter.
+#
+paar = pegel(2, 3)
+
+assert abs(paar - mono_drei / 2) < 0.02, (
+    f"Das Paar müsste halb so laut sein wie der Einzelkanal: "
+    f"{paar:.3f} gegen {mono_drei:.3f}"
+)
+
+#
+# Und Mono auf Kanal 4: dort liegt nichts.
+#
+mono_vier = pegel(3, None)
+
+assert mono_vier < 0.01, (
+    f"Mono auf Kanal 4 dürfte nichts hören: {mono_vier:.3f}"
+)
+
+print(f"OK: Mono liest genau einen Kanal (Kanal 3: {mono_drei:.2f}, "
+      f"Paar 3+4: {paar:.2f}, Kanal 4: {mono_vier:.2f})")
+
+#
+# Der Unterschied ist kein Schoenheitsfehler, sondern gehoert in den
+# Hinweistext: Derselbe Kanal ist als Mono doppelt so laut wie als
+# Haelfte eines Paares mit stillem Nachbarn. Die Baender stoert das
+# nicht (sie sind auf die laufende Spitze bezogen), die
+# Stille-Schwelle aber schon - die arbeitet auf dem absoluten Pegel.
+#
+assert mono_drei > paar * 1.8, (mono_drei, paar)
+
+print("OK: Der Pegelunterschied zwischen Mono und Paar ist messbar")
+
+
 print("Alle Analyse-Tests erfolgreich.")

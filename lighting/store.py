@@ -45,9 +45,20 @@ EFFEKT_MODI = ("runner", "pulse")
 
 SHOW_VORGABE = {
     #
-    # 1-basierter linker Kanal des Paares, das die Show hoert.
+    # 1-basierter erster Kanal der Quelle: beim Paar der linke, beim
+    # Einzelkanal der einzige.
     #
     "channel": 1,
+
+    #
+    # Hoert die Show auf EINEN Kanal oder auf ein Paar?
+    #
+    # Vorgabe ist das Paar - so war es bisher, und eine vorhandene
+    # Einrichtung soll sich nicht aendern. Der einzelne Kanal ist der
+    # Weg zu einem eigenen Lichtmix auf einem AUX-Bus, und er spart
+    # einen USB-Kanal.
+    #
+    "channel_mono": False,
     "sensitivity": 1.0,
 
     #
@@ -573,6 +584,9 @@ class LightingStore:
                 return False, "Der Kanal muss mindestens 1 sein."
 
             show["channel"] = kanal
+
+        if "channel_mono" in werte:
+            show["channel_mono"] = bool(werte["channel_mono"])
 
         farbnamen = tuple(
             f"color_{band}{satz}"

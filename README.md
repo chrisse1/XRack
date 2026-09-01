@@ -131,8 +131,12 @@ without DMX you never see it.
 - **Scenes** — save what is currently lit and recall it with one button.
   Scenes are stored relative to the fixture, so moving a fixture to a
   different start address does not invalidate them.
-- **Music-driven light show** — XRack listens to a channel pair from the
-  desk and makes light out of it. Each fixture has a *kind*:
+- **Music-driven light show** — XRack listens to the desk and makes
+  light out of it. The source is either a channel pair or a **single
+  channel**, and the single channel is the interesting one: on an AUX
+  bus you can build a mix just for the light — bass drum and snare up
+  front, the vocal out — and it costs one USB channel instead of two.
+  The one you save is free for recording. Each fixture has a *kind*:
 
   | Kind | What it does |
   | --- | --- |
@@ -166,6 +170,12 @@ without DMX you never see it.
   middle of the sensitivity is set so the strong hits flash; further
   up the running beat comes through too, further down only the
   biggest accents.
+
+  One thing to keep in mind when switching to a single channel: the
+  same signal comes in twice as loud as it would as one half of a pair
+  whose neighbour is silent (6 dB). The bands do not care — they are
+  measured against the running peak — but the silence threshold works
+  on the absolute level, so it may need a nudge.
 
   Shutter, gobo and the white channel are never driven automatically —
   they stay yours, and what you set by hand stays put while the show
@@ -353,8 +363,13 @@ Licht* — wer kein DMX hat, sieht es gar nicht erst.
 - **Szenen** — den aktuellen Stand speichern und per Knopfdruck wieder
   aufrufen. Szenen liegen relativ zur Lampe: Wer eine Lampe später auf
   eine andere Startadresse zieht, muss seine Szenen nicht neu bauen.
-- **Musikgesteuerte Lichtshow** — XRack hört auf ein Kanalpaar vom Pult
-  und macht daraus Licht. Jede Lampe hat dabei eine *Art*:
+- **Musikgesteuerte Lichtshow** — XRack hört auf das Pult und macht
+  daraus Licht. Als Quelle lässt sich ein Kanalpaar wählen oder ein
+  **einzelner Kanal** — und der einzelne ist der spannende Fall: Auf
+  einem AUX-Bus kann man einen eigenen Mix nur fürs Licht bauen,
+  Bassdrum und Snare vorn, die Stimme heraus. Das kostet dann einen
+  USB-Kanal statt zweier, und der gesparte steht für Aufnahmen bereit.
+  Jede Lampe hat dabei eine *Art*:
 
   | Art | Was sie tut |
   | --- | --- |
@@ -388,6 +403,13 @@ Licht* — wer kein DMX hat, sieht es gar nicht erst.
   Regler. Die Mitte der Empfindlichkeit ist so gelegt, dass die
   kräftigen Schläge blitzen; weiter oben kommt auch der laufende Takt
   durch, weiter unten nur noch die dicksten Einsätze.
+
+  Eins gehört beim Umstellen auf einen einzelnen Kanal mitgedacht:
+  Dasselbe Signal kommt dort doppelt so laut an wie als Hälfte eines
+  Paares, dessen Nachbar still ist (6 dB). Den Bändern macht das
+  nichts — sie messen sich an der laufenden Spitze —, die
+  Stille-Schwelle arbeitet aber auf dem absoluten Pegel und will
+  vielleicht nachgezogen werden.
 
   Shutter, Gobo und der Weiß-Kanal werden nie von selbst angesteuert —
   die gehören dir, und was du von Hand einstellst, bleibt auch während

@@ -2388,6 +2388,66 @@ function buildChannelOptions(select, channels, preferred) {
     return true;
 }
 
+//
+// Die Lichtshow hat eine eigene Auswahl: Sie darf auch auf einen
+// einzelnen Kanal hoeren. Das ist der Sinn der Sache - auf einem
+// AUX-Bus laesst sich ein eigener Mix nur fuer das Licht bauen, und
+// der kostet dann einen USB-Kanal statt zweier.
+//
+// Der Wert kodiert beides und ist das, was auch dransteht: "3+4" fuer
+// das Paar, "3" fuer den einzelnen Kanal. Zerlegt wird er beim
+// Speichern in saveLightShowSettings().
+//
+// Der Musikspieler und die Aufnahme benutzen weiter
+// buildChannelOptions() - die sind zu Recht auf Paare festgelegt.
+// Uebernommen ist von dort die Sperre gegen das Neuaufbauen: Ein
+// Auswahlfeld, das sich zweimal je Sekunde neu aufbaut, klappt beim
+// Anklicken zu.
+//
+function buildLightChannelOptions(select, channels) {
+    if (select.dataset.built === String(channels)) return false;
+
+    select.innerHTML = "";
+
+    const paare = document.createElement("optgroup");
+    paare.label = I18N.light_show_channel_pairs;
+
+    for (let start = 1; start + 1 <= channels; start += 2) {
+        const option = document.createElement("option");
+        option.value = String(start) + "+" + String(start + 1);
+        option.textContent = I18N.channel_option
+            .replace("{a}", start)
+            .replace("{b}", start + 1);
+        paare.appendChild(option);
+    }
+
+    const einzeln = document.createElement("optgroup");
+    einzeln.label = I18N.light_show_channel_single;
+
+    for (let kanal = 1; kanal <= channels; kanal += 1) {
+        const option = document.createElement("option");
+        option.value = String(kanal);
+        option.textContent = I18N.channel_option_mono.replace("{n}", kanal);
+        einzeln.appendChild(option);
+    }
+
+    select.appendChild(paare);
+    select.appendChild(einzeln);
+
+    select.dataset.built = String(channels);
+
+    return true;
+}
+
+//
+// Aus Ablage-Werten den Wert der Auswahl bauen. Ein Einzelkanal
+// steht fuer sich, ein Paar nennt beide Nummern.
+//
+function lightChannelWert(kanal, mono) {
+    const start = parseInt(kanal, 10) || 1;
+    return mono ? String(start) : String(start) + "+" + String(start + 1);
+}
+
 function updateMusicChannels(data) {
     const select = document.getElementById("music-channels");
     if (!select) return;
@@ -5750,16 +5810,19 @@ function renderLightShowSettings(stand) {
     };
 
     //
-    // Das Kanalpaar aus der Kanalzahl des Interfaces aufbauen -
-    // derselbe Helfer wie beim Musikspieler und bei der Aufnahme.
-    // Er zeichnet nur neu, wenn sich die Kanalzahl geaendert hat,
-    // die Auswahl springt also nicht bei jedem Statusabruf zurueck.
+    // Die Quelle aus der Kanalzahl des Interfaces aufbauen: Paare und
+    // Einzelkanaele in zwei Gruppen. Neu gezeichnet wird nur, wenn
+    // sich die Kanalzahl geaendert hat, die Auswahl springt also
+    // nicht bei jedem Statusabruf zurueck.
     //
     const kanal = document.getElementById("light-show-channel");
 
     if (kanal) {
-        buildChannelOptions(kanal, stand.input_channels || 2, show.channel);
-        setzen("light-show-channel", show.channel);
+        buildLightChannelOptions(kanal, stand.input_channels || 2);
+        setzen(
+            "light-show-channel",
+            lightChannelWert(show.channel, show.channel_mono)
+        );
     }
     setzen("light-show-effect-mode", show.effect_mode);
     setzen("light-show-pulse-seconds", show.pulse_seconds);
@@ -5967,8 +6030,17 @@ async function saveLightShowSettings() {
         return element ? element.value : null;
     };
 
+    //
+    // "3+4" ist das Paar ab Kanal 3, "3" der einzelne Kanal 3. Das
+    // Pluszeichen entscheidet, die Zahl davor ist in beiden Faellen
+    // die des ersten Kanals.
+    //
+    const quelle = document.getElementById("light-show-channel");
+    const quellwert = quelle ? String(quelle.value) : "";
+
     await lightRequest("/api/lighting/show/settings", {
-        channel: zahl("light-show-channel"),
+        channel: quelle ? parseInt(quellwert, 10) || 1 : null,
+        channel_mono: quelle ? quellwert.indexOf("+") === -1 : null,
         color_low: farbe("light-show-color-low"),
         color_mid: farbe("light-show-color-mid"),
         color_high: farbe("light-show-color-high"),

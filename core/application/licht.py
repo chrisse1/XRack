@@ -367,17 +367,30 @@ class LichtMixin:
         kanaele = self.recorder.backend.channels
 
         #
-        # Der Nutzer gibt den linken Kanal 1-basiert an; der rechte
-        # ist der daneben. Liegt das Paar ausserhalb dessen, was das
-        # Interface hat, wird abgewiesen statt still danebenzugreifen.
+        # Der Nutzer gibt den ersten Kanal 1-basiert an. Beim Paar
+        # kommt der daneben dazu, beim Einzelkanal bleibt es bei
+        # diesem einen (rechts = None, siehe lighting/analysis.py).
         #
-        links = int(einstellungen.get("channel", 1)) - 1
-        rechts = links + 1
+        # Liegt die Quelle ausserhalb dessen, was das Interface hat,
+        # wird abgewiesen statt still danebenzugreifen - und die
+        # Meldung nennt den Fall, der wirklich vorliegt.
+        #
+        mono = bool(einstellungen.get("channel_mono"))
 
-        if links < 0 or rechts >= kanaele:
+        links = int(einstellungen.get("channel", 1)) - 1
+        rechts = None if mono else links + 1
+
+        if links < 0 or (rechts is not None and rechts >= kanaele) \
+                or links >= kanaele:
+
+            if mono:
+                fehlt = f"Kanal {links + 1}"
+            else:
+                fehlt = f"das Paar {links + 1}+{links + 2}"
+
             return False, (
-                f"Das Interface hat {kanaele} Kanäle - das Paar "
-                f"{links + 1}+{rechts + 1} gibt es dort nicht."
+                f"Das Interface hat {kanaele} Kanäle - {fehlt} gibt es "
+                f"dort nicht."
             )
 
         #
