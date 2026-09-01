@@ -2,18 +2,24 @@
 Prüft core/console_control.py - OSC-Kodierung, die Fader-Kennlinie der
 X-Serie und den kompletten Austausch mit dem Pult.
 
-Für den Austausch läuft ein "Attrappen-Pult": ein UDP-Socket auf
-localhost, der wie eine Konsole antwortet. Damit lassen sich
-Familienerkennung, Auslesen und Setzen vollständig ohne Hardware
-durchspielen - nur die Frage, ob die Kennlinie und die Kanaladressen
-zur echten X-Serie passen, bleibt dem Test am Pult vorbehalten.
+Für den Austausch läuft der Emulator: scripts/xair-emulator.py,
+dasselbe Programm, das man von Hand startet, um XRack ohne Hardware
+auszuprobieren. Damit lassen sich Familienerkennung, Auslesen und
+Setzen vollständig durchspielen - nur die Frage, ob die Kennlinie und
+die Kanaladressen zur echten X-Serie passen, bleibt dem Test am Pult
+vorbehalten.
+
+Das ist Absicht in beide Richtungen: Der Emulator wird von dieser
+Testreihe gedeckt, statt still zu veralten, und diese Testreihe prüft
+ein Programm, das es wirklich gibt.
 """
 
+import importlib.util
 import logging
 import socket
 import struct
-import threading
 import time
+from pathlib import Path
 
 from core.console_control import (
     FAMILY_X32,
@@ -307,132 +313,38 @@ assert x32_paired[-2] == ("/ch/31", "31+32", False), x32_paired[-2]
 print("OK: Kopplung funktioniert auch beim X32 und läuft nicht über den letzten Kanal hinaus")
 
 # ----------------------------------------------------------------
-# 5. Attrappen-Pult: kompletter Austausch ohne Hardware
+# 5. Der Emulator: kompletter Austausch ohne Hardware
 # ----------------------------------------------------------------
 
 
-class FakeConsole:
-    """
-    Antwortet wie ein Mischpult der X-Serie: auf Anfragen ohne
-    Argumente mit dem gemerkten Wert, auf Anfragen mit Argument durch
-    Übernehmen des Werts.
-    """
+#
+# Das Pult ist kein Testgerüst mehr, sondern der Emulator selbst:
+# scripts/xair-emulator.py, dasselbe Programm, das man von Hand
+# startet, um XRack ohne Hardware auszuprobieren.
+#
+# Das ist der eigentliche Gewinn dieser Umstellung. Ein Emulator, der
+# nur nebenher mitläuft, veraltet still; einer, gegen den die
+# vollständige Testreihe für den Pultverkehr läuft, kann das nicht.
+# Und umgekehrt prüft diese Testreihe damit ein Programm, das es
+# wirklich gibt, statt einer Attrappe, die nur hier lebt.
+#
+# Der Umweg über importlib ist nötig, weil Skripte in scripts/ einen
+# Bindestrich im Namen tragen - test_updater.py macht es genauso.
+#
+_spezifikation = importlib.util.spec_from_file_location(
+    "xair_emulator",
+    Path(__file__).resolve().parent / "scripts" / "xair-emulator.py",
+)
 
-    def __init__(self):
+_emulator = importlib.util.module_from_spec(_spezifikation)
+_spezifikation.loader.exec_module(_emulator)
 
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.bind(("127.0.0.1", 0))
-        self.port = self.socket.getsockname()[1]
-
-        self.faders: dict[str, float] = {}
-        self.names: dict[str, str] = {}
-        self.on: dict[str, int] = {}
-        self.received: list[tuple[str, list]] = []
-
-        #
-        # Gekoppelte Paare, Schluessel wie "1-2". Was hier nicht steht,
-        # beantwortet die Attrappe je nach answer_chlink entweder mit 0
-        # oder gar nicht - so laesst sich auch ein Pult nachstellen, das
-        # die Abfrage ueberhaupt nicht kennt.
-        #
-        self.chlink: dict[str, int] = {}
-        self.answer_chlink = True
-        self.fdrmute: int | None = None
-
-        #
-        # Snapshots: Nummer -> Name. Was hier nicht steht, beantwortet
-        # die Attrappe mit leerem Namen - so wie ein Pult einen
-        # unbenutzten Platz meldet.
-        #
-        self.snapshots: dict[int, str] = {}
-        self.snapshot_index = 0
-
-        #
-        # Manche Pulte kennen die Namensadresse womoeglich gar nicht.
-        # Damit laesst sich genau das nachstellen.
-        #
-        self.answer_snapshot_names = True
-
-        self._running = True
-        self._thread = threading.Thread(target=self._serve, daemon=True)
-        self._thread.start()
-
-    def _serve(self):
-
-        self.socket.settimeout(0.1)
-
-        while self._running:
-
-            try:
-                data, sender = self.socket.recvfrom(4096)
-            except (socket.timeout, OSError):
-                continue
-
-            address, arguments = decode(data)
-            self.received.append((address, arguments))
-
-            if arguments:
-                #
-                # Setzen
-                #
-                if address.endswith("/mix/fader"):
-                    self.faders[address] = arguments[0]
-                elif address.endswith("/mix/on"):
-                    self.on[address] = arguments[0]
-                elif address.startswith("/config/chlink/"):
-                    self.chlink[address[len("/config/chlink/"):]] = arguments[0]
-                continue
-
-            #
-            # Abfragen
-            #
-            if address == "/info":
-                reply = encode("/info", "V2.07", "XR18", "1.17")
-
-            elif address.endswith("/mix/fader"):
-                reply = encode(address, self.faders.get(address, 0.75))
-
-            elif address.endswith("/mix/on"):
-                reply = encode(address, self.on.get(address, 1))
-
-            elif address.endswith("/config/name"):
-                reply = encode(address, self.names.get(address, ""))
-
-            elif address.startswith("/config/chlink/"):
-
-                if not self.answer_chlink:
-                    continue
-
-                pair = address[len("/config/chlink/"):]
-                reply = encode(address, self.chlink.get(pair, 0))
-
-            elif address == "/-snap/index":
-                reply = encode(address, self.snapshot_index)
-
-            elif address.startswith("/-snap/") and address.endswith("/name"):
-
-                if not self.answer_snapshot_names:
-                    continue
-
-                nummer = int(address[len("/-snap/"):-len("/name")])
-                reply = encode(address, self.snapshots.get(nummer, ""))
-
-            elif address == "/config/linkcfg/fdrmute":
-
-                if self.fdrmute is None:
-                    continue
-
-                reply = encode(address, self.fdrmute)
-
-            else:
-                continue
-
-            self.socket.sendto(reply, sender)
-
-    def stop(self):
-        self._running = False
-        self._thread.join(timeout=1.0)
-        self.socket.close()
+#
+# Ohne Vorbelegung: Die Tests hier setzen sich ihren Zustand selbst
+# zusammen und prüfen zum Teil, dass eine Adresse NICHT angesprochen
+# wurde. Ein vorbelegtes Pult hätte dort schon Werte stehen.
+#
+FakeConsole = _emulator.Pult
 
 
 class FakeStoreKanaele:
