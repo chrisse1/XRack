@@ -529,7 +529,7 @@ ergebnis = ausfuehren(stand(), """function () {
     };
 }""")
 
-assert ergebnis["kanal"] == "3", ergebnis
+assert ergebnis["kanal"] == "3+4", ergebnis
 assert ergebnis["empfindlichkeit"] == "1.5", ergebnis
 assert ergebnis["stille"] == "8", ergebnis
 assert ergebnis["sprache"] == "15", ergebnis
@@ -999,7 +999,8 @@ print("OK: Eine geänderte Art wird sofort im Feld angezeigt")
 
 
 # ====================================================================
-# 17. Kanalpaar als Auswahl, Überschriften, drei Farbblöcke
+# 17. Die Quelle der Lichtshow als Auswahl, Überschriften, drei
+#     Farbblöcke
 # ====================================================================
 
 ergebnis = ausfuehren(stand(), """function () {
@@ -1007,7 +1008,14 @@ ergebnis = ausfuehren(stand(), """function () {
 
     return {
         art: kanal.tagName,
-        werte: Array.from(kanal.options).map((o) => o.value),
+        gruppen: Array.from(kanal.querySelectorAll('optgroup')).map(
+            (g) => g.label),
+        paare: Array.from(
+            kanal.querySelectorAll('optgroup:nth-of-type(1) option')
+        ).map((o) => o.value),
+        einzeln: Array.from(
+            kanal.querySelectorAll('optgroup:nth-of-type(2) option')
+        ).map((o) => o.value),
         texte: Array.from(kanal.options).map((o) => o.textContent),
         gewaehlt: kanal.value,
         text: document.getElementById('lightSetupModal').textContent,
@@ -1018,29 +1026,137 @@ ergebnis = ausfuehren(stand(), """function () {
 
 #
 # Acht Kanaele ergeben genau vier Paare - keine krummen Reste, und
-# der letzte ist 7+8.
+# der letzte ist 7+8 - und acht einzelne Kanaele.
 #
 assert ergebnis["art"] == "SELECT", (
-    "Das Kanalpaar ist noch ein Eingabefeld: " + ergebnis["art"]
+    "Die Quelle ist noch ein Eingabefeld: " + ergebnis["art"]
 )
-assert ergebnis["werte"] == ["1", "3", "5", "7"], ergebnis["werte"]
+
+assert ergebnis["gruppen"] == [
+    TEXTE["light_show_channel_pairs"],
+    TEXTE["light_show_channel_single"],
+], ergebnis["gruppen"]
+
+assert ergebnis["paare"] == ["1+2", "3+4", "5+6", "7+8"], ergebnis["paare"]
+
+assert ergebnis["einzeln"] == ["1", "2", "3", "4", "5", "6", "7", "8"], (
+    ergebnis["einzeln"]
+)
+
 assert ergebnis["texte"][0] == TEXTE["channel_option"].replace(
     "{a}", "1").replace("{b}", "2"), ergebnis["texte"]
-assert ergebnis["texte"][-1] == TEXTE["channel_option"].replace(
+assert ergebnis["texte"][3] == TEXTE["channel_option"].replace(
     "{a}", "7").replace("{b}", "8"), ergebnis["texte"]
+assert ergebnis["texte"][-1] == TEXTE["channel_option_mono"].replace(
+    "{n}", "8"), ergebnis["texte"]
+
 #
 # Und der gespeicherte Wert ist vorgewaehlt - im Attrappenzustand
-# steht Kanal 3, also das Paar 3+4.
+# steht Kanal 3 ohne Mono, also das Paar 3+4.
 #
-assert ergebnis["gewaehlt"] == "3", ergebnis["gewaehlt"]
+assert ergebnis["gewaehlt"] == "3+4", ergebnis["gewaehlt"]
 
-print("OK: Das Kanalpaar wird ausgewählt statt eingetippt")
+print("OK: Die Quelle wird ausgewählt statt eingetippt - Paare und Einzelkanäle")
+
+#
+# Aus demselben Durchlauf geholt und weiter unten geprueft: Der
+# Dialog wird hier nur einmal geladen.
+#
+dialog = ergebnis
+
+
+#
+# Steht in der Ablage ein einzelner Kanal, zeigt die Auswahl genau
+# den an - und nicht das Paar, das zufaellig dieselbe Zahl traegt.
+#
+mono_stand = stand()
+mono_stand["show"]["channel_mono"] = True
+
+ergebnis = ausfuehren(mono_stand, """function () {
+    const kanal = document.getElementById('light-show-channel');
+    return { gewaehlt: kanal.value, text: kanal.selectedOptions[0].textContent };
+}""")
+
+assert ergebnis["gewaehlt"] == "3", (
+    "Ein gespeicherter Einzelkanal wird nicht angezeigt: " + str(ergebnis)
+)
+
+assert ergebnis["text"] == TEXTE["channel_option_mono"].replace("{n}", "3"), (
+    ergebnis["text"]
+)
+
+print("OK: Ein gespeicherter Einzelkanal steht auch in der Auswahl")
+
+
+#
+# Und beim Speichern wird die Kodierung wieder zerlegt: "5" ist der
+# einzelne Kanal 5, "5+6" das Paar ab 5. Beide Angaben muessen
+# zusammen passen - eine allein reicht nicht.
+#
+for wert, kanal, mono in (("5", 5, True), ("5+6", 5, False)):
+
+    ergebnis = ausfuehren(stand(), """function () {
+        const gesendet = window.aufrufe.filter(
+            a => a[0].indexOf('/api/lighting/show/settings') === 0
+        );
+
+        return {
+            anzahl: gesendet.length,
+            koerper: gesendet.length ? gesendet[gesendet.length - 1][1] : ''
+        };
+    }""", vorher="""
+        document.getElementById('light-show-channel').value = '""" + wert + """';
+        saveLightShowSettings();
+    """)
+
+    assert ergebnis["anzahl"] >= 1, ergebnis
+
+    koerper = ergebnis["koerper"].replace(" ", "")
+
+    assert f'"channel":{kanal}' in koerper, (
+        f"Aus '{wert}' wird nicht Kanal {kanal}: {koerper}"
+    )
+
+    assert f'"channel_mono":{str(mono).lower()}' in koerper, (
+        f"Aus '{wert}' wird nicht channel_mono={mono}: {koerper}"
+    )
+
+print("OK: Die Auswahl wird beim Speichern richtig herum zerlegt")
+
+
+#
+# Die Sperre gegen das Neuaufbauen: Ein Auswahlfeld, das sich
+# zweimal je Sekunde neu aufbaut, klappt beim Anklicken zu - und
+# spraenge nebenbei auf den gespeicherten Wert zurueck, waehrend man
+# gerade einen anderen sucht.
+#
+ergebnis = ausfuehren(stand(), """function () {
+    return { wert: document.getElementById('light-show-channel').value };
+}""", vorher="""
+    //
+    // Mit dem Finger drauf: Ein Feld, in dem gerade jemand waehlt,
+    // laesst renderLighting() in Ruhe. Was es dann noch umwerfen
+    // koennte, ist einzig ein Neuaufbau der Liste - und genau der
+    // wird hier geprueft.
+    //
+    const feld = document.getElementById('light-show-channel');
+    feld.focus();
+    feld.value = '6';
+    renderLighting(lightState);
+""")
+
+assert ergebnis["wert"] == "6", (
+    "Die Auswahl wird bei jedem Statusabruf neu aufgebaut und springt "
+    "zurück: " + str(ergebnis)
+)
+
+print("OK: Die Auswahl baut sich nicht bei jedem Statusabruf neu auf")
 
 #
 # Die beiden Ueberschriften ueber den Anlege-Feldern.
 #
 for schluessel in ("light_fixture_new", "light_template_new"):
-    assert TEXTE[schluessel] in ergebnis["text"], (
+    assert TEXTE[schluessel] in dialog["text"], (
         f"Die Überschrift '{TEXTE[schluessel]}' fehlt im Dialog."
     )
 
@@ -1049,8 +1165,8 @@ print("OK: Über den Anlege-Feldern stehen Überschriften")
 #
 # Drei Farbsaetze zu je drei Waehlern.
 #
-assert ergebnis["farben"] == 9, (
-    f"Es sind nicht neun Farbwähler, sondern {ergebnis['farben']}."
+assert dialog["farben"] == 9, (
+    f"Es sind nicht neun Farbwähler, sondern {dialog['farben']}."
 )
 
 print("OK: Es gibt neun Farbwähler in drei Blöcken")

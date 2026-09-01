@@ -131,8 +131,12 @@ without DMX you never see it.
 - **Scenes** — save what is currently lit and recall it with one button.
   Scenes are stored relative to the fixture, so moving a fixture to a
   different start address does not invalidate them.
-- **Music-driven light show** — XRack listens to a channel pair from the
-  desk and makes light out of it. Each fixture has a *kind*:
+- **Music-driven light show** — XRack listens to the desk and makes
+  light out of it. The source is either a channel pair or a **single
+  channel**, and the single channel is the interesting one: on an AUX
+  bus you can build a mix just for the light — bass drum and snare up
+  front, the vocal out — and it costs one USB channel instead of two.
+  The one you save is free for recording. Each fixture has a *kind*:
 
   | Kind | What it does |
   | --- | --- |
@@ -167,6 +171,12 @@ without DMX you never see it.
   up the running beat comes through too, further down only the
   biggest accents.
 
+  One thing to keep in mind when switching to a single channel: the
+  same signal comes in twice as loud as it would as one half of a pair
+  whose neighbour is silent (6 dB). The bands do not care — they are
+  measured against the running peak — but the silence threshold works
+  on the absolute level, so it may need a nudge.
+
   Shutter, gobo and the white channel are never driven automatically —
   they stay yours, and what you set by hand stays put while the show
   runs. The same holds for the strobe channels as long as the flash is
@@ -192,6 +202,35 @@ survives restarts.
 - **Diagnostic recording** — a switch that logs in the background how XRack
   and the network are doing, for faults that only show up now and then. It
   survives a restart and the log downloads straight from the settings.
+
+### Trying it without hardware
+
+There is an emulator for the mixer: `scripts/xair-emulator.py` answers
+on port 10024 like an XR18 — faders, mutes, channel names, links,
+snapshots. Started by hand, on the Pi or on any computer with Python:
+
+```bash
+python3 scripts/xair-emulator.py
+```
+
+Then enter `127.0.0.1` as the console address in the settings (or
+press the magnifier in the channel-strip card — the broadcast reaches
+a program on the same machine too). Everything you change in XRack
+shows up in the emulator's terminal.
+
+With `--audio` it also plays 18 channels of test signal into an ALSA
+loopback, which XRack then records like an interface — kick, snare,
+hi-hat, bass, guitar, voice, and the light mix on 17+18. The kernel
+module has to be loaded once:
+
+```bash
+sudo modprobe snd-aloop
+python3 scripts/xair-emulator.py --audio
+```
+
+The same program stands in for the console in the test suite, so it
+cannot quietly drift away from what XRack expects. `--x32` makes it
+answer as an X32 instead.
 
 ### When something is stuck
 
@@ -353,8 +392,13 @@ Licht* — wer kein DMX hat, sieht es gar nicht erst.
 - **Szenen** — den aktuellen Stand speichern und per Knopfdruck wieder
   aufrufen. Szenen liegen relativ zur Lampe: Wer eine Lampe später auf
   eine andere Startadresse zieht, muss seine Szenen nicht neu bauen.
-- **Musikgesteuerte Lichtshow** — XRack hört auf ein Kanalpaar vom Pult
-  und macht daraus Licht. Jede Lampe hat dabei eine *Art*:
+- **Musikgesteuerte Lichtshow** — XRack hört auf das Pult und macht
+  daraus Licht. Als Quelle lässt sich ein Kanalpaar wählen oder ein
+  **einzelner Kanal** — und der einzelne ist der spannende Fall: Auf
+  einem AUX-Bus kann man einen eigenen Mix nur fürs Licht bauen,
+  Bassdrum und Snare vorn, die Stimme heraus. Das kostet dann einen
+  USB-Kanal statt zweier, und der gesparte steht für Aufnahmen bereit.
+  Jede Lampe hat dabei eine *Art*:
 
   | Art | Was sie tut |
   | --- | --- |
@@ -389,6 +433,13 @@ Licht* — wer kein DMX hat, sieht es gar nicht erst.
   kräftigen Schläge blitzen; weiter oben kommt auch der laufende Takt
   durch, weiter unten nur noch die dicksten Einsätze.
 
+  Eins gehört beim Umstellen auf einen einzelnen Kanal mitgedacht:
+  Dasselbe Signal kommt dort doppelt so laut an wie als Hälfte eines
+  Paares, dessen Nachbar still ist (6 dB). Den Bändern macht das
+  nichts — sie messen sich an der laufenden Spitze —, die
+  Stille-Schwelle arbeitet aber auf dem absoluten Pegel und will
+  vielleicht nachgezogen werden.
+
   Shutter, Gobo und der Weiß-Kanal werden nie von selbst angesteuert —
   die gehören dir, und was du von Hand einstellst, bleibt auch während
   der Show stehen. Für die Strobe-Kanäle gilt dasselbe, solange der
@@ -417,6 +468,37 @@ Lichtkarte sagt das auch. Die Zuordnung übersteht Neustarts.
   mitschreibt, wie es XRack und dem Netzwerk geht. Gedacht für Fehler,
   die nur sporadisch auftreten: Der Schalter übersteht einen Neustart,
   und die Aufzeichnung lädt man direkt aus den Einstellungen herunter.
+
+### Ohne Hardware ausprobieren
+
+Für das Pult gibt es einen Emulator: `scripts/xair-emulator.py`
+antwortet auf Port 10024 wie ein XR18 — Fader, Stummschaltungen,
+Kanalnamen, Kopplungen, Snapshots. Von Hand gestartet, auf dem Pi oder
+auf jedem Rechner mit Python:
+
+```bash
+python3 scripts/xair-emulator.py
+```
+
+Danach in den Einstellungen `127.0.0.1` als Pult-Adresse eintragen
+(oder in der Kanalzug-Karte die Lupe drücken — der Rundruf erreicht
+auch ein Programm auf demselben Rechner). Was man in XRack ändert,
+steht im Terminal des Emulators.
+
+Mit `--audio` spielt er zusätzlich 18 Kanäle Testsignal in ein
+ALSA-Loopback, das XRack wie ein Interface aufnimmt: Bassdrum, Snare,
+HiHat, Bass, Gitarre, Gesang — und auf 17+18 den Lichtmix, mit dem
+sich die Lichtshow samt Blitz auf die Snare ohne Band prüfen lässt.
+Das Kernelmodul muss einmalig geladen sein:
+
+```bash
+sudo modprobe snd-aloop
+python3 scripts/xair-emulator.py --audio
+```
+
+Dasselbe Programm steht in der Testreihe an der Stelle des Pults — es
+kann also nicht still von dem abweichen, was XRack erwartet. Mit
+`--x32` antwortet es als X32.
 
 ### Wenn etwas klemmt
 

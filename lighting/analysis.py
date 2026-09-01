@@ -270,12 +270,23 @@ class Bandanalyse:
     SPITZE_MIN = SPITZE_MIN
 
     def __init__(self, rate: int = 48000, channels: int = 2,
-                 links: int = 0, rechts: int = 1,
+                 links: int = 0, rechts: int | None = 1,
                  snare_empfindlichkeit: float = SNARE_EMPFINDLICHKEIT):
 
         self.rate = max(1, int(rate))
         self.channels = max(1, int(channels))
         self.links = links
+
+        #
+        # None heisst: nur EIN Kanal.
+        #
+        # Bewusst nicht ueber "rechts = links". Das ergaebe hier
+        # rechnerisch dasselbe - der Mittelwert eines Kanals mit sich
+        # selbst ist er selbst -, sagt dem naechsten Leser aber etwas
+        # anderes. Und es ginge still kaputt, sobald jemand die
+        # Mischung aendert, etwa auf eine Summe statt eines
+        # Mittelwerts.
+        #
         self.rechts = rechts
 
         #
@@ -366,10 +377,16 @@ class Bandanalyse:
 
     def _mono(self, block: bytes) -> array.array:
         """
-        Das gewählte Kanalpaar zu Mono zusammenfassen.
+        Die gewählte Quelle zu einem Signal zusammenfassen.
 
         Der Block enthält alle Kanäle des Interfaces verschachtelt;
-        herausgeschnitten wird nur, was die Show hören soll.
+        herausgeschnitten wird nur, was die Show hören soll: ein
+        Kanalpaar (dann gemittelt) oder ein einzelner Kanal.
+
+        Der einzelne Kanal ist nicht bloss die halbe Arbeit, sondern
+        der Weg zu einem eigenen Mix fuers Licht: ein AUX-Bus am
+        Pult, auf dem Bassdrum und Snare vorn stehen und die Stimme
+        heraus ist. Das kostet dann einen USB-Kanal statt zweier.
         """
 
         werte = array.array("i")
@@ -388,6 +405,11 @@ class Bandanalyse:
         for rahmen in range(0, len(werte) - schritt + 1, schritt):
 
             l = werte[rahmen + links] if links < schritt else 0
+
+            if rechts is None:
+                mono.append(l / VOLLAUSSCHLAG)
+                continue
+
             r = werte[rahmen + rechts] if rechts < schritt else l
 
             mono.append((l + r) * 0.5 / VOLLAUSSCHLAG)

@@ -108,6 +108,75 @@ und nach einem geladenen Snapshot.
 
 ---
 
+## Der Emulator
+
+`scripts/xair-emulator.py` stellt ein XR18 nach: Es antwortet auf Port
+10024 wie ein Pult und spielt mit `--audio` 18 Kanäle Testsignal in ein
+ALSA-Loopback. Zwei Entscheidungen daran sind erklärungsbedürftig.
+
+### Warum er seinen eigenen OSC-Kodierer hat
+
+Naheliegend wäre, `encode()` und `decode()` aus
+`core/console_control.py` zu benutzen — dieselben zwanzig Zeilen noch
+einmal zu schreiben, sieht nach vergeudeter Mühe aus.
+
+Es ist das Gegenteil. Ein Emulator, der den Kodierer der Gegenseite
+benutzt, kann dessen Fehler nicht finden: Beide wären sich immer
+einig, auch wenn beide falsch lägen. Genau so ein Fehler steckte
+schon einmal drin — die Auffüllung hängte vier überzählige Nullen an
+jede Adresse, deren Länge beim Teilen durch vier den Rest 3 lässt.
+Das Typ-Tag stand dann vier Byte zu spät, und der Empfänger las eine
+Nachricht *ohne Argumente*. Aufgefallen ist es nur, weil zufällig
+keine der benutzten Adressen diese Länge hatte.
+
+Mit zwei getrennten Implementierungen ist daraus eine Prüfung
+geworden: Jede Seite dekodiert, was die andere gebaut hat, für jede
+Adresslänge von 1 bis 40 (`test_xair_emulator.py`). Das kostet
+sechzig Zeilen und ersetzt die Gegenprobe, die es vorher nicht geben
+konnte.
+
+Nebenbei läuft das Programm dadurch auf jedem Rechner mit Python,
+auch ohne installiertes XRack.
+
+### Warum die Testreihe gegen ihn läuft
+
+Ein Emulator, der nur nebenherliegt, veraltet still: XRack fragt
+irgendwann etwas Neues, der Emulator antwortet nicht mehr richtig,
+und gemerkt wird es erst, wenn jemand ihm vertraut hat.
+
+Deshalb steht er in `test_console_control.py` an der Stelle, an der
+vorher eine eigene Attrappe stand — die vollständige Testreihe für
+den Pultverkehr, knapp anderthalbtausend Zeilen, läuft gegen dieses
+Programm. Bleibt sie grün, verhält er sich in allem, was XRack von
+einem Pult erwartet, wie das Pult. Und was nur als importierte Klasse
+funktionierte, fiele auf: Der Emulator wird zusätzlich als
+Unterprozess gestartet und über einen echten `ConsoleControl`
+angesprochen.
+
+Der X32-Modus (`--x32`) ist derselbe Gedanke, einen Schritt weiter:
+Diese Zweige hat vorher *nichts* geprüft, weil es kein X32 zum
+Nachsehen gibt.
+
+### Warum das Audio über snd-aloop läuft
+
+XRack findet seine Interfaces über `arecord -l` und öffnet
+`hw:Karte,Gerät` — ein Testinterface muss also eine echte Soundkarte
+sein, kein Umweg innerhalb von XRack. Das liefert das Kernelmodul
+`snd-aloop`: Was hineingespielt wird, kommt auf der anderen Seite als
+Aufnahme heraus. XRack merkt keinen Unterschied, und an XRack musste
+dafür nichts geändert werden — der Emulator ist Werkzeug daneben,
+nicht Teil des Programms.
+
+Die Belegung der Kanäle ist kein Zufall: Kanal 1 bis 7 tragen
+Schlagzeug, Bass, Gitarre und Gesang, die Kanäle 8 bis 16 je so viele
+kurze Pieptöne, wie ihre Nummer sagt (so lässt sich in einer Aufnahme
+nachsehen, ob jede Spur dort gelandet ist, wo sie hingehört), und
+17+18 den Lichtmix — Schlagzeug vorn, keine Stimme. Das ist der
+AUX-Weg, für den es die Einzelkanal-Quelle der Lichtshow gibt, und
+damit lässt sich die Show samt Blitz auf die Snare ohne Band prüfen.
+
+---
+
 ## Update und Rückfall
 
 Beide Wege — aus dem Internet und vom USB-Stick — laufen durch denselben
@@ -224,6 +293,41 @@ bei DMX (RS-485, bis 1000 m) selten das Problem ist.
 ---
 
 ## Die Lichtshow
+
+### Ein Kanal oder zwei — und warum das kein Sparzwang ist
+
+Die Show hört auf eine Quelle, und die ist wählbar: ein Kanalpaar
+(beide Kanäle gemittelt) oder ein einzelner Kanal. Technisch ist das
+ein kleiner Unterschied — `_mono()` in `lighting/analysis.py` mittelt
+dann nicht, sondern liest nur. Praktisch ist es der Grund, warum es
+die Wahl überhaupt gibt.
+
+Ein Kanalpaar ist normalerweise die Summe, also das, was auch aus den
+Boxen kommt. Für eine Lichtshow ist das nicht unbedingt das beste
+Signal: Die Stimme steht dort vorn, und die Show tanzt dann auf dem
+Gesang statt auf dem Schlagzeug. Am Pult lässt sich stattdessen ein
+**AUX-Bus** mit einem eigenen Mix fürs Licht bauen — Bassdrum und
+Snare betont, die Stimme heraus. Ein AUX-Weg ist mono, und ein
+zweiter Kanal dafür wäre reine Verschwendung: Er trüge dasselbe
+Signal noch einmal. Der gesparte USB-Kanal steht für eine Spur mehr
+in der Aufnahme bereit.
+
+Ein Punkt gehört mitgedacht: Derselbe Kanal kommt als Mono doppelt so
+laut an wie als Hälfte eines Paares, dessen Nachbar still ist — 6 dB,
+der Mittelwert von *x* und 0 ist *x*/2. Den Bändern ist das egal, sie
+messen sich an der laufenden Spitze. Die **Stille-Schwelle** aber
+arbeitet auf dem absoluten Pegel; wer von einem halb belegten Paar auf
+Mono umstellt, muss sie unter Umständen nachziehen.
+
+In der Oberfläche ist das **eine** Auswahl mit zwei Gruppen, nicht
+eine Auswahl plus ein Schalter daneben. Der Grund steht in der
+jüngeren Vergangenheit: Die WLAN-Funkregion hatte ihren eigenen
+Speicherknopf neben dem Formular, stand sichtbar richtig da und war
+nie gespeichert — mit einer Fehlermeldung am Ende, die alles Mögliche
+bedeuten konnte. Eine Entscheidung, ein Bedienelement, ein
+Speicherweg.
+
+---
 
 ### Warum der Puls eine Hüllkurve ist und kein An/Aus
 
