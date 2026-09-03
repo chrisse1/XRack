@@ -956,8 +956,15 @@ configure_wifi() {
         #
         read -r -p "$(L "WLAN-Verbindung neu einrichten? Eingerichtet ist '${XRACK_HOME_VORHANDEN}'. [j/N]: " "Set up the Wi-Fi connection again? '${XRACK_HOME_VORHANDEN}' is configured. [y/N]: ")" XRACK_WLAN_SETUP || true
 
-        [ "$(lower "${XRACK_WLAN_SETUP}")" = "j" ] || [ "$(lower "${XRACK_WLAN_SETUP}")" = "y" ] \
-            && configure_wifi_client
+        #
+        # Ausdruecklich ein "if" und keine Kette "[ ] || [ ] && ..." -
+        # warum, steht bei der gleichen Frage zum Access Point weiter
+        # unten.
+        #
+        if [ "$(lower "${XRACK_WLAN_SETUP}")" = "j" ] \
+           || [ "$(lower "${XRACK_WLAN_SETUP}")" = "y" ]; then
+            configure_wifi_client
+        fi
 
     else
 
@@ -980,8 +987,32 @@ configure_wifi() {
 
         read -r -p "$(L "Access Point neu einrichten? Eingerichtet ist '${XRACK_AP_VORHANDEN}'. [j/N]: " "Set up the access point again? '${XRACK_AP_VORHANDEN}' is configured. [y/N]: ")" XRACK_AP_SETUP || true
 
-        [ "$(lower "${XRACK_AP_SETUP}")" = "j" ] || [ "$(lower "${XRACK_AP_SETUP}")" = "y" ] \
-            && configure_access_point
+        #
+        # Hier stand eine Kette, und die hat den Installer umgebracht:
+        #
+        #     [ ... = "j" ] || [ ... = "y" ] && configure_access_point
+        #
+        # Bei "nein" (Enter) sind beide Pruefungen falsch, der Befehl
+        # dahinter laeuft nicht - und die Kette endet mit Code 1. Sie
+        # war die letzte Anweisung dieses Zweigs, ein "if" liefert
+        # den Rueckgabewert seines ausgefuehrten Zweigs, und dieses
+        # "if" war die letzte Anweisung der Funktion: configure_wifi
+        # kam also mit 1 zurueck, und "set -eE" beendete daran den
+        # ganzen Lauf. Alles danach fiel aus: Bluetooth, USB, DMX,
+        # sudo-Regeln, der Dienst, die Zusammenfassung.
+        #
+        # Die Kette selbst nimmt "set -e" noch aus (die
+        # fehlschlagenden Pruefungen stehen nicht hinter dem letzten
+        # "&&"). Den Rueckgabewert der Funktion nimmt es nicht aus -
+        # genau diese Feinheit macht die Bauart so tueckisch.
+        #
+        # Ein "if" mit falscher Bedingung liefert dagegen 0: "nein"
+        # ist eine Antwort, keine Stoerung.
+        #
+        if [ "$(lower "${XRACK_AP_SETUP}")" = "j" ] \
+           || [ "$(lower "${XRACK_AP_SETUP}")" = "y" ]; then
+            configure_access_point
+        fi
 
     else
 
@@ -991,6 +1022,15 @@ configure_wifi() {
             configure_access_point
         fi
     fi
+
+    #
+    # Diese Funktion besteht aus Fragen, und keine Antwort darauf ist
+    # ein Fehler - der Rueckgabewert soll deshalb nicht davon
+    # abhaengen, was der letzte Vergleich hier zufaellig ergibt. Was
+    # wirklich schiefgehen kann (Bridge, Freigabeprofil, Kabelprofil),
+    # meldet oben jeder Helfer selbst mit einer Warnung.
+    #
+    return 0
 }
 
 #

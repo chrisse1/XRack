@@ -553,15 +553,22 @@ try:
     # ================================================================
 
     def wlan_einrichten(ordner: Path, geraete: list[str],
-                        antworten: list[str]) -> tuple[str, dict]:
+                        antworten: list[str],
+                        home_ssid: str = "",
+                        ap_ssid: str = "") -> tuple[str, dict, int]:
         """
         Spielt configure_wifi mit `antworten` durch und liefert
-        (Ausgabe, erzeugte Dateien).
+        (Ausgabe, erzeugte Dateien, Rückgabewert).
 
         Gestartet wird über "script", weil configure_wifi nur bei
         einem echten Terminal überhaupt loslegt ("[ -t 0 ]") und die
         Passwortabfragen mit "read -s" arbeiten. "script" stellt eine
         Pseudo-Konsole bereit und reicht die Antworten hinein.
+
+        `home_ssid` und `ap_ssid` stellen ein Gerät nach, auf dem
+        schon etwas eingerichtet IST - dann fragt der Installer
+        anders ("neu einrichten?" statt "einrichten?"), und das ist
+        der Zweig, der beim zweiten Lauf zuschlägt.
         """
 
         ordner.mkdir(parents=True, exist_ok=True)
@@ -623,8 +630,22 @@ try:
             "preconfigured:802-11-wireless\n", encoding="utf-8"
         )
         (ordner / "autoconnect").write_text(
-            "preconfigured=yes\n", encoding="utf-8"
+            "preconfigured=yes\n"
+            + (f"XRack-Home={home_ssid}\n" if home_ssid else ""),
+            encoding="utf-8",
         )
+
+        #
+        # Eine schon vorhandene Access-Point-Konfiguration. Daraus
+        # liest aktuelle_ap_ssid den eingerichteten Namen - und daran
+        # laesst sich hinterher nachsehen, ob sie unberuehrt blieb.
+        #
+        if ap_ssid:
+            (ordner / "xrack.conf").write_text(
+                f"interface=wlan1\nssid={ap_ssid}\nhw_mode=a\n"
+                "country_code=DE\nwpa_passphrase=altgeheim\n",
+                encoding="utf-8",
+            )
 
         skript = ordner / "lauf.sh"
         skript.write_text(
@@ -636,6 +657,15 @@ try:
                 'echo "ERGEBNIS-CLIENT=${XRACK_WLAN_CLIENT_SSID}"',
                 'echo "ERGEBNIS-AP=${XRACK_WLAN_AP_SSID}"',
                 'echo "ERGEBNIS-BRIDGE=${XRACK_WLAN_BRIDGE}"',
+
+                #
+                # Die Markierung steht hinter configure_wifi. Kommt
+                # die Funktion mit einem Fehlercode zurueck, beendet
+                # "set -eE" den Lauf vorher - dann fehlt sie, und
+                # genau so sieht der Ausfall am Geraet aus: Alles
+                # nach der Netzwerkkonfiguration passiert nicht mehr.
+                #
+                'echo "DURCHGELAUFEN"',
             ]),
             encoding="utf-8",
         )
@@ -659,13 +689,13 @@ try:
         return ergebnis.stdout.decode(errors="replace"), {
             "conf": ordner / "xrack.conf",
             "nmcli": ordner / "nmcli",
-        }
+        }, ergebnis.returncode
 
     # ----------------------------------------------------------------
     # 10. Zwei Funkgeraete: Heimnetz UND Access Point
     # ----------------------------------------------------------------
 
-    ausgabe, dateien = wlan_einrichten(
+    ausgabe, dateien, code = wlan_einrichten(
         scratch / "ablauf-zwei",
         ["wlan0", "wlan1"],
         [
@@ -712,7 +742,7 @@ try:
     # nachholen, obwohl der Installer sie haette machen koennen.
     # ----------------------------------------------------------------
 
-    ausgabe, dateien = wlan_einrichten(
+    ausgabe, dateien, code = wlan_einrichten(
         scratch / "ablauf-eins",
         ["wlan0"],
         [
@@ -811,7 +841,7 @@ try:
     # will, soll trotzdem einen Access Point bekommen koennen.
     # ----------------------------------------------------------------
 
-    ausgabe, dateien = wlan_einrichten(
+    ausgabe, dateien, code = wlan_einrichten(
         scratch / "nur-ap",
         ["wlan0", "wlan1"],
         [
@@ -850,7 +880,7 @@ try:
     # koennen, ohne install.sh erneut laufen zu lassen.
     # ----------------------------------------------------------------
 
-    ausgabe, dateien = wlan_einrichten(
+    ausgabe, dateien, code = wlan_einrichten(
         scratch / "nichts", ["wlan0", "wlan1"], ["n", "n"],
     )
 
@@ -960,6 +990,91 @@ try:
     assert "interface=wlan1" in conf, "Auch beim Nachruesten der USB-Stick."
 
     print("OK: Ein Access Point laesst sich ohne install.sh nachruesten")
+
+    # ----------------------------------------------------------------
+    # 16. Zweiter Lauf, beide Fragen mit "nein"
+    #
+    # Am Geraet gemeldet: Update auf 2.5.0, danach install.sh von
+    # Hand - wie der Updater es verlangt. Beide WLAN-Fragen mit Enter
+    # beantwortet (also "nein", die Vorgabe), und der Installer war
+    # weg:
+    #
+    #     Access Point neu einrichten? Eingerichtet ist 'x18rack'. [j/N]:
+    #     XRack: Der Installer ist abgebrochen (Zeile 2054, Fehlercode 1).
+    #
+    # Zeile 2054 war der Aufruf von configure_wifi. Alles danach fiel
+    # aus: Bluetooth, USB-Automount, DMX, sudo-Regeln, der Dienst.
+    #
+    # Die Ursache war die letzte Anweisung der Funktion:
+    #
+    #     [ ... = "j" ] || [ ... = "y" ] && configure_access_point
+    #
+    # Bei "nein" sind beide Pruefungen falsch, der Befehl dahinter
+    # laeuft nicht, die Kette endet mit 1 - und weil sie am Ende der
+    # Funktion stand, kam configure_wifi mit 1 zurueck. "set -eE"
+    # beendete daran den ganzen Lauf.
+    #
+    # Dieser Zweig gibt es nur, wenn schon etwas eingerichtet IST -
+    # deshalb traf es genau den Fall, fuer den der Updater den Lauf
+    # verlangt: den zweiten.
+    # ----------------------------------------------------------------
+
+    ausgabe, dateien, code = wlan_einrichten(
+        scratch / "zweiter-lauf",
+        ["wlan0", "wlan1"],
+        ["", ""],                   # zweimal Enter = zweimal "nein"
+        home_ssid="WaxWeazle",
+        ap_ssid="x18rack",
+    )
+
+    #
+    # Erst nachsehen, dass ueberhaupt der richtige Zweig lief: Die
+    # Fragen muessen die eingerichteten Namen nennen. Sonst pruefte
+    # der Durchlauf den else-Zweig, in dem der Fehler nie steckte.
+    #
+    assert "Eingerichtet ist 'WaxWeazle'" in ausgabe, ausgabe[-2000:]
+    assert "Eingerichtet ist 'x18rack'" in ausgabe, ausgabe[-2000:]
+
+    #
+    # Und das ist der Fehler selbst.
+    #
+    assert "DURCHGELAUFEN" in ausgabe, (
+        "configure_wifi ist mit einem Fehlercode zurueckgekommen - der "
+        "Installer bricht damit mitten in der Netzwerkkonfiguration ab, "
+        "und Bluetooth, USB, DMX, sudo-Regeln und der Dienst fallen "
+        "aus:\n" + ausgabe[-2000:]
+    )
+
+    assert code == 0, f"Rueckgabewert {code} statt 0.\n{ausgabe[-2000:]}"
+
+    #
+    # "Nein" heisst nein: Es darf nichts eingerichtet worden sein.
+    #
+    assert "ERGEBNIS-CLIENT=\r\n" in ausgabe or "ERGEBNIS-CLIENT=\n" in ausgabe, (
+        "Trotz 'nein' wurde eine WLAN-Verbindung eingerichtet: "
+        + ausgabe[-2000:]
+    )
+    assert "ERGEBNIS-AP=\r\n" in ausgabe or "ERGEBNIS-AP=\n" in ausgabe, (
+        "Trotz 'nein' wurde ein Access Point eingerichtet: " + ausgabe[-2000:]
+    )
+
+    #
+    # Die vorhandene Access-Point-Konfiguration bleibt, wie sie war -
+    # sonst muesste man Namen und Passwort neu eintippen, nur weil man
+    # den Installer wegen einer ganz anderen Aenderung gestartet hat.
+    #
+    conf = dateien["conf"].read_text(encoding="utf-8")
+
+    assert "ssid=x18rack" in conf, conf
+    assert "wpa_passphrase=altgeheim" in conf, conf
+
+    #
+    # Das Geruest wird trotzdem angelegt - das ist der Nachruestfall
+    # von oben, und er gilt auch beim zweiten Lauf.
+    #
+    assert "ERGEBNIS-BRIDGE=ja" in ausgabe, ausgabe[-2000:]
+
+    print("OK: Beim zweiten Lauf beendet 'nein' den Installer nicht mehr")
 
     
 finally:
