@@ -511,4 +511,102 @@ with tempfile.TemporaryDirectory() as tmp:
     print("OK: Ein Abbruch wird gemeldet, und zwar genau einmal")
 
 
+# ====================================================================
+# Eine Prüfung mit && darf keinen Befehl starten
+#
+# Zweiter Ausfall derselben Bauart, wieder in configure_wifi. Diesmal
+# stand er in der letzten Anweisung eines Zweigs:
+#
+#     [ ... = "j" ] || [ ... = "y" ] && configure_access_point
+#
+# Sagt der Nutzer "nein", sind beide Prüfungen falsch, der Befehl
+# dahinter läuft nicht - und die Kette endet mit Code 1. Ein "if"
+# liefert den Rückgabewert seines ausgeführten Zweigs, die Funktion
+# also auch, und "set -eE" beendet daran den ganzen Installer. Am
+# Gerät fielen so Bluetooth, USB-Automount, DMX, sudo-Regeln und der
+# Dienst aus.
+#
+# Die Feinheit, die das so tückisch macht: Die Kette FÜR SICH bricht
+# nicht ab - "set -e" nimmt fehlschlagende Glieder einer AND-OR-Liste
+# ausdrücklich aus. Nur der Rückgabewert der Funktion ist nicht
+# ausgenommen. Dieselbe Zeile ist mitten in einer Funktion also
+# harmlos und am Ende eines Zweigs tödlich. Ob sie am Ende steht,
+# sieht man ihr nicht an - schon deshalb gehört sie nicht dorthin.
+#
+# Geprüft wird deshalb die Bauart, nicht diese eine Stelle: Eine
+# Prüfung mit && darf den Ablauf steuern (return, continue, break,
+# exit) oder eine weitere Prüfung sein. Soll ein BEFEHL laufen,
+# gehört er in ein if - dessen Bedingung darf gefahrlos falsch sein.
+# ====================================================================
+
+zeilen = INSTALL.read_text(encoding="utf-8").splitlines()
+
+#
+# Erlaubt hinter && oder ||: Ablaufsteuerung, eine weitere Prüfung
+# und Befehle, die immer gelingen (das ausdrückliche "melden und
+# weitermachen", siehe configure_wifi_client).
+#
+HARMLOS = (
+    "return", "continue", "break", "exit",
+    "[", "!", "echo", "true", ":", "printf",
+)
+
+verdacht = []
+
+for nummer, zeile in enumerate(zeilen, 1):
+
+    geputzt = zeile.strip()
+
+    if geputzt.startswith("#"):
+        continue
+
+    #
+    # In einer Bedingung ist eine falsche Prüfung genau der Sinn der
+    # Sache - dafür gibt es if, elif, while und until.
+    #
+    if geputzt.startswith(("if ", "elif ", "while ", "until ")):
+        continue
+
+    #
+    # Nur Ketten, die an einer Prüfung hängen - "command -v x && y"
+    # ist etwas anderes: Dort ist das Scheitern der Bedingung eine
+    # normale Auskunft, und der Befehl dahinter steht meist in einem
+    # if.
+    #
+    for trenner in ("] && ", "]] && "):
+
+        if trenner not in geputzt:
+            continue
+
+        rest = geputzt.rsplit(trenner, 1)[1].strip()
+
+        if not rest.startswith(HARMLOS):
+            verdacht.append((nummer, geputzt))
+
+    #
+    # Und die Fortsetzungszeile, in der der Befehl in der nächsten
+    # Zeile steht - so sah der Fehler am Gerät aus.
+    #
+    if geputzt.startswith("&&"):
+
+        rest = geputzt[2:].strip()
+
+        vorherige = zeilen[nummer - 2].strip() if nummer >= 2 else ""
+
+        if vorherige.endswith("\\") and (
+            "]" in vorherige
+        ) and not rest.startswith(HARMLOS):
+            verdacht.append((nummer, vorherige + " " + geputzt))
+
+assert not verdacht, (
+    "Hier startet eine Prüfung per && einen Befehl. Trifft die Prüfung "
+    "nicht zu, endet die Kette mit Code 1 - steht sie am Ende einer "
+    "Funktion oder eines Zweigs, beendet 'set -eE' damit den "
+    "Installer mitten im Lauf. Ein if tut dasselbe gefahrlos:\n"
+    + "\n".join(f"  Zeile {nummer}: {inhalt}" for nummer, inhalt in verdacht)
+)
+
+print("OK: Keine Prüfung in install.sh startet per && einen Befehl")
+
+
 print("Alle Installer-Einstellungstests erfolgreich.")

@@ -177,6 +177,80 @@ damit lässt sich die Show samt Blitz auf die Snare ohne Band prüfen.
 
 ---
 
+## Der Installer und `set -eE`
+
+`install.sh` läuft unter `set -eE` mit einer ERR-Falle: Bricht ein
+Schritt ab, endet der Lauf mit einer Meldung, statt weiterzumachen und
+am Ende ein halb eingerichtetes Gerät zu hinterlassen. Das ist richtig
+so — es hat aber zwei Fallen, und beide haben schon zugeschlagen.
+Beide sahen von außen gleich aus: Der Lauf endete mitten in der
+Netzwerkkonfiguration, und alles danach (Bluetooth, USB-Automount,
+DMX, sudo-Regeln, der Dienst) fiel aus.
+
+**Falle 1: die Zuweisung aus einer Kommandosubstitution.**
+
+```bash
+XRACK_HOME_VORHANDEN="$(aktuelle_home_ssid)"
+```
+
+Der Rückgabewert der Substitution wird der der ganzen Anweisung. Gibt
+es das Profil `XRack-Home` nicht, endet `nmcli` mit Code 10 — und
+`set -e` beendet den Installer. „Kein Profil vorhanden" ist aber eine
+*Antwort*, keine Störung. Deshalb endet jeder solche Helfer heute auf
+`|| true` (`aktuelle_home_ssid`, `aktuelle_ap_ssid`), mit einem
+Kommentar, der genau das sagt.
+
+**Falle 2: die Prüfkette, die einen Befehl startet.**
+
+```bash
+[ "$(lower "${ANTWORT}")" = "j" ] || [ "$(lower "${ANTWORT}")" = "y" ] \
+    && configure_access_point
+```
+
+Sagt der Nutzer „nein", sind beide Prüfungen falsch, der Befehl läuft
+nicht — und die Kette endet mit Code 1. Hier ist die Feinheit, die das
+so tückisch macht: **Die Kette für sich bricht nicht ab.** `set -e`
+nimmt fehlschlagende Glieder einer AND-OR-Liste ausdrücklich aus:
+
+```
+$ bash -c 'set -e; [ x = j ] || [ x = y ] && echo ja; echo weiter'
+weiter
+```
+
+Der Rückgabewert einer *Funktion* ist nicht ausgenommen — und ein `if`
+liefert den seines ausgeführten Zweigs. Steht die Kette also am Ende
+einer Funktion oder eines Zweigs, wird ihre 1 zum Rückgabewert der
+Funktion, und der Aufruf in der Hauptfolge bringt den Lauf um:
+
+```
+$ bash -c 'set -eE; trap "echo TRAP" ERR
+           f() { [ x = j ] || [ x = y ] && echo ja; }; f; echo "nach f"'
+TRAP
+```
+
+Ob eine solche Zeile am Ende steht, sieht man ihr nicht an — sie kann
+durch eine spätere Änderung dorthin geraten. Deshalb steht die Regel
+heute als Zusicherung in `test_install_settings.py`: Eine Prüfung mit
+`&&` darf den Ablauf steuern (`return`, `continue`, `break`, `exit`)
+oder eine weitere Prüfung sein. Soll ein **Befehl** laufen, gehört er
+in ein `if` — dessen Bedingung darf gefahrlos falsch sein.
+
+Dazu gehört die dritte Regel, die aus beiden folgt: `configure_wifi`
+endet auf einem ausdrücklichen `return 0`. Die Funktion besteht aus
+Fragen, und keine Antwort darauf ist ein Fehler. Was dort wirklich
+schiefgehen kann — Bridge, Freigabeprofil, Kabelprofil —, meldet jeder
+Helfer selbst mit einer Warnung.
+
+**Warum das erst beim zweiten Lauf auffiel:** Der Zweig mit der Kette
+gibt es nur, wenn schon ein Access Point eingerichtet *ist*; beim
+Erstlauf läuft der andere Zweig mit einem sauberen `if`. Getroffen hat
+es damit genau den Fall, für den der Updater den Lauf verlangt — den
+zweiten. Geprüft wird er heute in einer Pseudo-Konsole
+(`test_wlan_setup.py`), weil der Fehler nur im interaktiven Zweig
+steckt: `configure_wifi` legt ohne Terminal gar nicht los.
+
+---
+
 ## Update und Rückfall
 
 Beide Wege — aus dem Internet und vom USB-Stick — laufen durch denselben
