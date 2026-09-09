@@ -1550,6 +1550,8 @@ function renderFaders(channels) {
 
     faderChannels = channels;
 
+    faderZeilenAusgleichen();
+
     channels.forEach((channel, index) => {
         if (faderDragging === channel.channel) return;
 
@@ -1566,6 +1568,80 @@ function renderFaders(channels) {
         renderMuteButton(mute, channel.muted);
     });
 }
+
+//
+// Die Kanalzuege gleichmaessig auf die Zeilen verteilen.
+//
+// Das CSS packt so viele in eine Zeile, wie hineinpassen
+// (grid-template-columns: repeat(auto-fit, ...)). Beim XR18 sind das
+// alle siebzehn - eine Zeile, genau richtig. Am X32 sind es
+// dreiunddreissig: Die erste Zeile ist dann randvoll, die zweite
+// halb leer. Siebzehn und sechzehn sehen nicht nur aufgeraeumter
+// aus, sie geben auch jedem Regler mehr Breite.
+//
+// Wie viele ueberhaupt in eine Zeile passen, weiss nur der Browser -
+// er haengt an Fensterbreite, Schriftgroesse und Zoom. Deshalb wird
+// er gefragt, statt zu rechnen: erst die Vorgabe aus dem CSS wirken
+// lassen, dann die daraus entstandenen Spalten zaehlen.
+//
+function faderZeilenAusgleichen() {
+
+    const grid = document.getElementById("faders-grid");
+
+    if (!grid) return;
+
+    //
+    // Zurueck auf die CSS-Vorgabe: Sonst zaehlt gleich die eigene
+    // Aufteilung von vorhin statt der moeglichen.
+    //
+    grid.style.gridTemplateColumns = "";
+
+    const anzahl = grid.children.length;
+
+    if (!anzahl) return;
+
+    const stil = window.getComputedStyle(grid);
+
+    //
+    // Auf schmalen Geraeten stapelt das CSS die Zuege als Zeilen
+    // untereinander - dort gibt es keine Spalten zu verteilen. Das
+    // steht bewusst nicht als Breite in Pixeln hier, sondern wird am
+    // tatsaechlichen Zustand abgelesen: Die Umschaltbreite gehoert
+    // ins CSS und soll nur dort stehen.
+    //
+    if (stil.display !== "grid") return;
+
+    const passen = stil.gridTemplateColumns
+        .split(" ")
+        .filter((eintrag) => eintrag).length;
+
+    //
+    // Passt alles in eine Zeile, bleibt es dabei.
+    //
+    if (passen < 1 || anzahl <= passen) return;
+
+    const zeilen = Math.ceil(anzahl / passen);
+    const spalten = Math.ceil(anzahl / zeilen);
+
+    grid.style.gridTemplateColumns = `repeat(${spalten}, minmax(0, 1fr))`;
+}
+
+//
+// Beim Drehen oder Groessenaendern passt die Aufteilung nicht mehr -
+// dann neu rechnen. Gebremst, damit das Ziehen am Fensterrand nicht
+// bei jedem Pixel eine Neuberechnung ausloest.
+//
+let faderAusgleichTimer = null;
+
+window.addEventListener("resize", () => {
+
+    if (faderAusgleichTimer !== null) clearTimeout(faderAusgleichTimer);
+
+    faderAusgleichTimer = setTimeout(() => {
+        faderAusgleichTimer = null;
+        faderZeilenAusgleichen();
+    }, 150);
+});
 
 async function toggleMute(channel) {
     const cell = document.querySelector(
