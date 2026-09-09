@@ -393,6 +393,16 @@ messen sich an der laufenden Spitze. Die **Stille-Schwelle** aber
 arbeitet auf dem absoluten Pegel; wer von einem halb belegten Paar auf
 Mono umstellt, muss sie unter Umständen nachziehen.
 
+Damit das überhaupt geht, hört die Show am **ungeschnittenen** Strom
+mit. Der Recorder liest das Interface immer mit allen Kanälen (anders
+geht es bei der X-Serie ohnehin nicht) und schneidet erst für Datei
+und Pegelanzeige auf die eingestellte Aufnahmebreite. Vorher fiel der
+Schnitt schon beim Lesen — und die Lichtshow hing als Mithörer daran:
+Am X32 standen ihr 18 Kanäle zur Auswahl statt der 32, die das Pult
+liefert. 18 ist die Vorgabe für die *Aufnahme* und hat mit der
+Lichtquelle nichts zu tun. Wer nur acht Spuren aufnimmt, soll das
+Licht trotzdem von Kanal 12 holen dürfen — genau das ist der AUX-Fall.
+
 In der Oberfläche ist das **eine** Auswahl mit zwei Gruppen, nicht
 eine Auswahl plus ein Schalter daneben. Der Grund steht in der
 jüngeren Vergangenheit: Die WLAN-Funkregion hatte ihren eigenen

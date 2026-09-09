@@ -372,8 +372,23 @@ class Recorder:
 
                 continue
 
+            #
+            # Zwei Sichten auf denselben Block:
+            #
+            #   data          alle Kanaele, die das Interface liefert
+            #   aufnahme      nur die, die aufgenommen werden sollen
+            #
+            # Datei und Pegelanzeige bekommen den Schnitt - dort ist
+            # er die Absicht des Nutzers. Die Mithoerer bekommen den
+            # vollen Strom: Die Lichtshow soll auf einen Kanal hoeren
+            # duerfen, den niemand aufnimmt (ein AUX-Weg fuers Licht
+            # etwa), und auf einem X32 sind das die Kanaele jenseits
+            # der 18, die XRack als Vorgabe aufnimmt.
+            #
+            aufnahme = self.backend.aufnahmebreite(data)
+
             if self.meter is not None:
-                self.meter.update(data)
+                self.meter.update(aufnahme)
 
             #
             # Mithoerer bedienen. Wirft einer, wird er abgemeldet
@@ -396,7 +411,7 @@ class Recorder:
             if not self._write_to_file:
                 continue
 
-            self.writer.write(data)
+            self.writer.write(aufnahme)
 
             self._buffer_count += 1
 

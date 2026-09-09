@@ -136,7 +136,10 @@ without DMX you never see it.
   channel**, and the single channel is the interesting one: on an AUX
   bus you can build a mix just for the light — bass drum and snare up
   front, the vocal out — and it costs one USB channel instead of two.
-  The one you save is free for recording. Each fixture has a *kind*:
+  The one you save is free for recording. Every channel the interface
+  offers can be picked, including ones that are not being recorded:
+  the show listens to the full stream, and how many channels go into
+  the file is a separate question. Each fixture has a *kind*:
 
   | Kind | What it does |
   | --- | --- |
@@ -398,7 +401,10 @@ Licht* — wer kein DMX hat, sieht es gar nicht erst.
   einem AUX-Bus kann man einen eigenen Mix nur fürs Licht bauen,
   Bassdrum und Snare vorn, die Stimme heraus. Das kostet dann einen
   USB-Kanal statt zweier, und der gesparte steht für Aufnahmen bereit.
-  Jede Lampe hat dabei eine *Art*:
+  Zur Wahl stehen dabei alle Kanäle, die das Interface liefert — auch
+  solche, die gar nicht aufgenommen werden. Die Show hört am vollen
+  Strom mit; wie viele Kanäle in die Datei gehen, ist eine andere
+  Frage. Jede Lampe hat dabei eine *Art*:
 
   | Art | Was sie tut |
   | --- | --- |

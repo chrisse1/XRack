@@ -45,7 +45,20 @@ class AudioBackend:
 
     @property
     def channels(self) -> int:
+        """Wie viele Kanäle in die Aufnahme gehen."""
         return self._channels
+
+    @property
+    def native_channels(self) -> int:
+        """
+        Wie viele Kanäle das Interface wirklich liefert.
+
+        Das ist nicht dasselbe wie `channels`: Aufgenommen wird
+        vielleicht weniger (siehe open()), gelesen wird immer alles.
+        Wer den vollen Strom auswertet - die Lichtshow etwa -, muss
+        sich an dieser Zahl orientieren.
+        """
+        return self._native_channels
 
     @property
     def period_size(self) -> int:
@@ -204,7 +217,17 @@ class AudioBackend:
 
     def read(self) -> bytes | None:
         """
-        Liest einen Audiobuffer.
+        Liest einen Audiobuffer - mit ALLEN Kanälen des Interfaces.
+
+        Hier wurde frueher schon auf die Aufnahmebreite geschnitten.
+        Das kostete die Lichtshow ihre Quellen: Sie haengt als
+        Mithoerer am selben Strom, sah damit nur die ersten
+        `channels` Kanaele und konnte auf einem X32 (32 Kanaele) nur
+        aus 18 waehlen - so viele nimmt XRack in seiner Vorgabe auf.
+
+        Geschnitten wird deshalb erst dort, wo es hingehoert: fuer
+        die Datei und die Pegelanzeige, siehe aufnahmebreite() und
+        recorder/recorder.py.
         """
 
         if self._pcm is None:
@@ -214,6 +237,20 @@ class AudioBackend:
 
         if length <= 0:
             return None
+
+        return data
+
+    def aufnahmebreite(self, data: bytes) -> bytes:
+        """
+        Aus dem vollen Strom die Kanäle schneiden, die aufgenommen
+        werden sollen.
+
+        Sind es alle, kommt der Block unveraendert zurueck - der
+        Schnitt kostet dann nichts.
+        """
+
+        if self._extractor is None:
+            return data
 
         return self._extractor.extract(data)
 
