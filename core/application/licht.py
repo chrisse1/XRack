@@ -67,6 +67,38 @@ class LichtMixin:
 
         return stand
 
+    # ----------------------------------------------------------------
+    # Sichern und Einspielen
+    # ----------------------------------------------------------------
+
+    def export_lighting(self) -> dict:
+        """Die Lichteinrichtung als Abbild - zum Mitnehmen."""
+
+        return self.lighting_store.exportieren()
+
+    def import_lighting(self, daten: dict) -> tuple[bool, str]:
+        """
+        Eine gesicherte Lichteinrichtung einspielen.
+
+        Danach ist das Licht aus: Die Lampen des anderen Geräts
+        stehen woanders, und was gerade leuchtet, gehörte zur alten
+        Einrichtung. Ein Blackout ist hier die ehrliche Antwort.
+        """
+
+        erfolg, meldung = self.lighting_store.importieren(daten)
+
+        if not erfolg:
+            return False, meldung
+
+        self.stop_light_show()
+
+        self.light_values = {}
+        self.light_brightness = {}
+
+        self.dmx_control.blackout()
+
+        return True, ""
+
     def set_lighting_enabled(self, enabled: bool) -> tuple[bool, str]:
         """
         Die Lichtsteuerung ein- oder ausschalten.

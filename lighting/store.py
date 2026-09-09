@@ -723,6 +723,184 @@ class LightingStore:
     # Übersicht
     # ----------------------------------------------------------------
 
+    # ----------------------------------------------------------------
+    # Sichern und Einspielen
+    # ----------------------------------------------------------------
+    #
+    # Wer zwei XRacks betreibt, baut die Lichteinrichtung sonst
+    # zweimal von Hand - und beim naechsten Umbau wieder.
+    #
+    # Mitgenommen wird nur, was zwischen Geraeten wandern DARF:
+    # Vorlagen, Lampen, Szenen und die Show-Einstellungen. WLAN-Daten,
+    # PIN, Hostname, Pult-IP und der Zweitname bleiben, wo sie sind -
+    # das ist geraetegebunden, und ein Import, der so etwas
+    # mitbraechte, waere ein Fehler mit Ansage.
+    #
+
+    EXPORT_FASSUNG = 1
+
+    def exportieren(self) -> dict:
+        """Die Lichteinrichtung als schlichtes Abbild."""
+
+        daten = self._laden()
+
+        return {
+            "kind": "xrack-lighting",
+            "version": self.EXPORT_FASSUNG,
+            "templates": [
+                vorlage for vorlage in daten["templates"]
+                if not vorlage.get("builtin")
+            ],
+            "fixtures": list(daten["fixtures"]),
+            "scenes": list(daten["scenes"]),
+            "show": dict(daten["show"]),
+        }
+
+    def importieren(self, daten: dict) -> tuple[bool, str]:
+        """
+        Eine gesicherte Lichteinrichtung einspielen.
+
+        Geprueft wird alles auf demselben Weg wie beim Anlegen von
+        Hand - fremdes JSON geht nicht ungesehen in die Ablage. Und
+        erst wenn ALLES durchgekommen ist, wird geschrieben: Ein
+        Import, der auf halber Strecke scheitert, haette sonst eine
+        halbe Einrichtung hinterlassen, und die vorhandene waere weg.
+        """
+
+        if not isinstance(daten, dict):
+            return False, "Die Datei enthält keine Einrichtung."
+
+        if daten.get("kind") != "xrack-lighting":
+            return False, (
+                "Das ist keine gesicherte Lichteinrichtung von XRack."
+            )
+
+        if int(daten.get("version") or 0) > self.EXPORT_FASSUNG:
+            return False, (
+                "Die Datei stammt aus einer neueren XRack-Fassung. Bitte "
+                "erst das Update einspielen."
+            )
+
+        vorlagen = list(daten.get("templates") or [])
+        lampen = list(daten.get("fixtures") or [])
+        szenen = list(daten.get("scenes") or [])
+
+        #
+        # Erst pruefen, dann uebernehmen. Geprueft wird gegen die
+        # eingebauten Vorlagen PLUS die mitgebrachten - eine Lampe
+        # darf sich auf eine Vorlage aus derselben Datei beziehen.
+        #
+        bekannt = {
+            vorlage["id"]: vorlage
+            for vorlage in fixtures.eingebaute_vorlagen()
+        }
+
+        for vorlage in vorlagen:
+
+            geputzt = {
+                "id": str(vorlage.get("id") or self._kennung()),
+                "name": str(vorlage.get("name", "")).strip(),
+                "channels": list(vorlage.get("channels") or []),
+                "builtin": False,
+            }
+
+            fehler = fixtures.pruefe_vorlage(geputzt)
+
+            if fehler:
+                return False, f"Vorlage '{geputzt['name']}': {fehler}"
+
+            bekannt[geputzt["id"]] = geputzt
+
+        geprueft_lampen = []
+
+        for lampe in lampen:
+
+            geputzt = {
+                "id": str(lampe.get("id") or self._kennung()),
+                "name": str(lampe.get("name", "")).strip(),
+                "template": str(lampe.get("template", "")),
+                "address": lampe.get("address"),
+                "kind": str(lampe.get("kind") or fixtures.ART_VORGABE),
+            }
+
+            fehler = fixtures.pruefe_lampe(geputzt, bekannt)
+
+            if fehler:
+                return False, f"Lampe '{geputzt['name']}': {fehler}"
+
+            geprueft_lampen.append(geputzt)
+
+        #
+        # Szenen: Nur Werte zu Lampen, die es in dieser Datei auch
+        # gibt. Eine Szene, die auf eine fehlende Lampe zeigt, wuerde
+        # spaeter ins Leere greifen.
+        #
+        kennungen = {lampe["id"] for lampe in geprueft_lampen}
+
+        geprueft_szenen = []
+
+        for szene in szenen:
+
+            name = str(szene.get("name", "")).strip()
+
+            if not name:
+                return False, "Eine Szene ohne Namen lässt sich nicht einspielen."
+
+            werte = {
+                kennung: list(liste)
+                for kennung, liste in (szene.get("values") or {}).items()
+                if kennung in kennungen
+            }
+
+            helligkeiten = {
+                kennung: int(wert)
+                for kennung, wert in (szene.get("brightness") or {}).items()
+                if kennung in kennungen
+            }
+
+            geprueft_szenen.append({
+                "id": str(szene.get("id") or self._kennung()),
+                "name": name,
+                "values": werte,
+                "brightness": helligkeiten,
+            })
+
+        #
+        # Jetzt erst schreiben. Der Ein-/Ausschalter bleibt, wie er
+        # ist: Ob an DIESEM Geraet Licht haengt, weiss die Datei nicht.
+        #
+        stand = self._laden()
+
+        stand["templates"] = [
+            vorlage for vorlage in bekannt.values()
+            if not vorlage.get("builtin")
+        ]
+        stand["fixtures"] = geprueft_lampen
+        stand["scenes"] = geprueft_szenen
+
+        erfolg, meldung = True, ""
+
+        self._sichern(stand)
+
+        #
+        # Die Show-Einstellungen laufen durch ihre eigene Pruefung -
+        # sie kennt jeden Regler und seine Grenzen.
+        #
+        if isinstance(daten.get("show"), dict):
+            erfolg, meldung = self.set_show_einstellungen(daten["show"])
+
+        if not erfolg:
+            return False, f"Show-Einstellungen: {meldung}"
+
+        self.logger.info(
+            "Lichteinrichtung eingespielt: %d Vorlagen, %d Lampen, %d Szenen.",
+            len(stand["templates"]),
+            len(geprueft_lampen),
+            len(geprueft_szenen),
+        )
+
+        return True, ""
+
     def uebersicht(self) -> dict:
         """Alles, was die Oberfläche zum Anzeigen braucht."""
 
