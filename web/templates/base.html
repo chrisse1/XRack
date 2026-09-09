@@ -1341,6 +1341,49 @@
 
             <div class="modal-body">
 
+                {#
+                    Sichern und Einspielen.
+
+                    Wer zwei XRacks betreibt, baut die Einrichtung
+                    sonst zweimal von Hand. Mitgenommen wird nur, was
+                    zwischen Geraeten wandern darf - nichts
+                    Geraetegebundenes (siehe LightingStore.exportieren).
+                #}
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+
+                    <a
+                        id="btn-light-export"
+                        class="btn btn-outline-light btn-sm"
+                        href="/api/lighting/export"
+                        download="xrack-licht.json"
+                    >
+                        <i class="bi bi-download"></i>
+                        {{ t.light_export }}
+                    </a>
+
+                    <button
+                        type="button"
+                        class="btn btn-outline-light btn-sm"
+                        onclick="document.getElementById('light-import-file').click()"
+                    >
+                        <i class="bi bi-upload"></i>
+                        {{ t.light_import }}
+                    </button>
+
+                    <input
+                        id="light-import-file"
+                        type="file"
+                        accept="application/json,.json"
+                        class="d-none"
+                        onchange="importLighting(this)"
+                    >
+
+                    <span class="form-text m-0">{{ t.light_transfer_hint }}</span>
+
+                </div>
+
+                <hr>
+
                 <h6 class="fw-semibold">{{ t.light_fixtures_title }}</h6>
 
                 <div id="light-fixture-list" class="list-group mb-3"></div>

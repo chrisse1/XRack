@@ -163,6 +163,7 @@ function updateRecorder(data) {
     updateRecorderStatus(data);
     updateRecordingInfo(data);
     updateRecordChannels(data);
+    updateRecordWarnings(data);
     updateRecordingList(data.recordings);
     updateSoundcheckButton(data);
     updateLevelCheckButton(data);
@@ -351,6 +352,90 @@ function updateRecordChannels(data) {
     };
 
     select.disabled = isAudioBusy(data);
+}
+
+//
+// Zwei Warnungen, die eine Aufnahme retten koennen - und die
+// Restzeit, die man VOR dem Druck auf Aufnahme sehen will.
+//
+// Am X32 schreibt XRack rund 22 GB je Stunde. Und die Samplerate
+// kann XRack nicht erkennen (die X-Serie meldet ueber USB immer den
+// ganzen Bereich), sie wird deshalb gemessen: Rahmen je Sekunde
+// gegen die Uhr.
+//
+function updateRecordWarnings(data) {
+
+    //
+    // Wie viele Kanaele das Interface ueberhaupt hergibt.
+    //
+    const verfuegbar = document.getElementById("record-channels-available");
+
+    if (verfuegbar) {
+        verfuegbar.textContent = data.audio_channels
+            ? I18N.record_channels_available.replace("{n}", data.audio_channels)
+            : "";
+    }
+
+    //
+    // Die Restzeit.
+    //
+    const platz = document.getElementById("record-space");
+    const platzWarnung = document.getElementById("record-space-warning");
+
+    const rest = data.disk_seconds_left || 0;
+
+    //
+    // Datenrate in GB je Stunde - dieselbe Rechnung wie im Recorder.
+    //
+    const gb = data.audio_sample_rate && data.record_channels
+        ? (data.record_channels * 4 * data.audio_sample_rate * 3600
+            / 1000 / 1000 / 1000).toFixed(1)
+        : "0";
+
+    if (platz) {
+        platz.textContent = rest > 0
+            ? I18N.record_space_left.replace("{time}", formatDuration(rest))
+            : "";
+    }
+
+    if (platzWarnung) {
+
+        if (data.disk_stopped) {
+            platzWarnung.textContent = I18N.record_space_stopped;
+            platzWarnung.classList.remove("d-none");
+        } else if (rest > 0 && rest < 15 * 60) {
+            platzWarnung.textContent = I18N.record_space_warning
+                .replace("{time}", formatDuration(rest))
+                .replace("{gb}", gb);
+            platzWarnung.classList.remove("d-none");
+        } else {
+            platzWarnung.classList.add("d-none");
+        }
+    }
+
+    //
+    // Die Samplerate. Solange es kein Urteil gibt (null), steht dort
+    // nichts - lieber nichts sagen als etwas Falsches.
+    //
+    const rateWarnung = document.getElementById("record-rate-warning");
+
+    if (!rateWarnung) return;
+
+    if (data.rate_plausible === false) {
+
+        rateWarnung.textContent = data.rate_likely
+            ? I18N.record_rate_warning
+                .replace("{expected}", data.audio_sample_rate)
+                .replace("{likely}", data.rate_likely)
+            : I18N.record_rate_dropouts
+                .replace("{measured}", Math.round(data.rate_measured))
+                .replace("{expected}", data.audio_sample_rate);
+
+        rateWarnung.classList.remove("d-none");
+
+    } else {
+        rateWarnung.classList.add("d-none");
+    }
 }
 
 async function setRecordChannels(channels) {
@@ -5291,6 +5376,44 @@ async function lightRequest(url, koerper) {
     }
 
     return result.success;
+}
+
+//
+// Eine gesicherte Einrichtung einspielen.
+//
+// Gefragt wird vorher: Es ersetzt die vorhandene Einrichtung, und
+// hinterher ist das Licht aus - die Lampen der anderen Anlage stehen
+// woanders.
+//
+async function importLighting(feld) {
+
+    const datei = feld.files && feld.files[0];
+
+    //
+    // Das Feld gleich leeren: Sonst laesst sich dieselbe Datei nicht
+    // ein zweites Mal waehlen (der Browser meldet keine Aenderung).
+    //
+    feld.value = "";
+
+    if (!datei) return;
+
+    if (!confirm(I18N.light_import_confirm)) return;
+
+    const daten = new FormData();
+    daten.append("file", datei);
+
+    const response = await fetch("/api/lighting/import", {
+        method: "POST",
+        body: daten
+    });
+
+    const ergebnis = await response.json();
+
+    if (!ergebnis.success) {
+        alert(ergebnis.message || I18N.light_import_failed);
+    }
+
+    await refreshLighting();
 }
 
 // ------------------------------------------------------------

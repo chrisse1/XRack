@@ -177,6 +177,48 @@ damit lässt sich die Show samt Blitz auf die Snare ohne Band prüfen.
 
 ---
 
+## Warum die Samplerate gemessen und nicht geglaubt wird
+
+XRack kann die Samplerate nicht erkennen. Mischpulte der X-Serie melden
+über USB immer den ganzen unterstützten Bereich, nicht ihre laufende
+Clock — deshalb stellt man sie von Hand ein. Steht sie falsch, läuft
+trotzdem alles: Pegel, Aufnahme, Lichtshow. Auffallen tut es beim
+Abhören, wenn die Aufnahme zu schnell oder zu langsam ist, und dann ist
+der Abend vorbei.
+
+Messen lässt es sich aber. Die Blöcke kommen im Takt der
+*tatsächlichen* Clock — Rahmen je Sekunde Wanduhr ist die wahre Rate,
+ganz gleich, was eingestellt ist. Drei Dinge machen daraus eine
+brauchbare Auskunft statt eines Fehlalarms:
+
+- **Der erste Block zählt nicht mit.** In ihm steckt der Rückstau aus
+  dem ALSA-Puffer seit dem Öffnen. Er würde die Messung gerade am
+  Anfang nach oben ziehen — dort, wo noch nichts mittelt.
+- **Unter drei Sekunden gibt es kein Urteil**, sondern `None`. Ein
+  „stimmt nicht" nach einer halben Sekunde wäre schlimmer als
+  Schweigen: Man würde eine richtige Einstellung ändern.
+- **Passt die Messung zu keiner üblichen Rate**, wird keine geraten.
+  47000 Hz sind kein Einstellungsfehler, sondern Aussetzer beim Lesen —
+  und dann ist „stell auf 48000" der falsche Rat.
+
+Gemessen wird nur, umgestellt wird nichts. Die Rate ist eine Angabe
+über die Hardware, und die gehört dem Nutzer; XRack sagt ihm, dass
+etwas nicht zusammenpasst.
+
+Beim Speicherplatz ist die Überlegung dieselbe, nur mit Eingriff: Läuft
+die Karte mitten in einer Aufnahme voll, bricht das Schreiben ab, und
+der Wave64-Kopf bekommt seine Größen nicht mehr nachgetragen — die
+Datei ist unlesbar. Deshalb hört XRack vorher auf und schließt die
+Datei ordentlich. Eine beendete Aufnahme ist zu retten, eine
+abgebrochene nicht.
+
+Der Lesethread hält sich dabei **nicht selbst an**: Er würde auf sich
+selbst warten (`Thread.join()` auf den eigenen Faden). Er beendet nur
+das Schreiben, schließt die Datei und setzt eine Marke; abgemeldet wird
+im Statuslauf der Anwendung, also im Hauptfaden.
+
+---
+
 ## Der gemeinsame Name im Netz
 
 Wer die Oberfläche auf dem Tablet als App speichert, speichert damit

@@ -140,6 +140,10 @@ without DMX you never see it.
 - **Scenes** — save what is currently lit and recall it with one button.
   Scenes are stored relative to the fixture, so moving a fixture to a
   different start address does not invalidate them.
+- **Save and load the setup** — templates, fixtures, scenes and show
+  settings as a file, for moving to a second XRack. Wi-Fi, PIN, device
+  name and console address stay where they are; a faulty file is
+  refused with a reason instead of wrecking the setup you have.
 - **Music-driven light show** — XRack listens to the desk and makes
   light out of it. The source is either a channel pair or a **single
   channel**, and the single channel is the interesting one: on an AUX
@@ -338,6 +342,14 @@ sie sich einzeln, ohne den ganzen Installer:
 
 #### Aufnehmen und abspielen
 
+- **Zwei Wächter für die Aufnahme** — XRack misst die tatsächlich
+  ankommende Samplerate und meldet sich, wenn sie nicht zur Einstellung
+  passt (sonst wäre die Aufnahme hinterher zu schnell oder zu langsam;
+  erkennen lässt sie sich nicht, die X-Serie meldet über USB immer den
+  ganzen Bereich). Und der freie Platz steht als Restzeit in der Karte:
+  32 Kanäle bei 48 kHz sind rund 22 GB je Stunde. Wird es knapp, wird
+  die Aufnahme rechtzeitig **beendet** statt abgebrochen — eine
+  geschlossene Datei ist lesbar, eine abgebrochene nicht.
 - **Virtueller Soundcheck** — alle Kanäle direkt vom Pult aufnehmen und
   danach auf genau denselben Kanälen wieder abspielen. Die Band kann
   soundchecken, ohne zu spielen.
@@ -415,6 +427,11 @@ Licht* — wer kein DMX hat, sieht es gar nicht erst.
 - **Szenen** — den aktuellen Stand speichern und per Knopfdruck wieder
   aufrufen. Szenen liegen relativ zur Lampe: Wer eine Lampe später auf
   eine andere Startadresse zieht, muss seine Szenen nicht neu bauen.
+- **Einrichtung sichern und einspielen** — Vorlagen, Lampen, Szenen und
+  Show-Einstellungen als Datei, zum Übertragen auf ein zweites XRack.
+  WLAN, PIN, Gerätename und Pult-Adresse bleiben, wo sie sind; eine
+  fehlerhafte Datei wird begründet abgelehnt, statt die vorhandene
+  Einrichtung zu zerlegen.
 - **Musikgesteuerte Lichtshow** — XRack hört auf das Pult und macht
   daraus Licht. Als Quelle lässt sich ein Kanalpaar wählen oder ein
   **einzelner Kanal** — und der einzelne ist der spannende Fall: Auf

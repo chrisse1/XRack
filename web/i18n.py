@@ -26,6 +26,28 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "soundcheck_title": "Soundcheck & Üben",
         "status_label": "Status:",
         "record_channels_label": "Aufnahmekanäle:",
+        "record_channels_available": "von {n} des Interfaces",
+        "record_space_left": "Platz für {time}",
+        "record_space_warning": (
+            "Der Speicher reicht nur noch für {time}. Bei {gb} GB je Stunde "
+            "ist die Karte bald voll - XRack beendet eine laufende Aufnahme "
+            "rechtzeitig, damit die Datei lesbar bleibt."
+        ),
+        "record_space_stopped": (
+            "Die Aufnahme wurde beendet, weil der Speicher fast voll war. "
+            "Die Datei ist vollständig geschlossen und lesbar."
+        ),
+        "record_rate_warning": (
+            "Die eingestellte Samplerate stimmt vermutlich nicht: "
+            "eingestellt {expected} Hz, am Interface gemessen etwa "
+            "{likely} Hz. Aufnahmen wären in dieser Einstellung zu schnell "
+            "oder zu langsam - bitte in den Einstellungen ändern."
+        ),
+        "record_rate_dropouts": (
+            "Es kommen etwa {measured} Hz an, eingestellt sind {expected} Hz. "
+            "Das passt zu keiner üblichen Samplerate und deutet auf "
+            "Aussetzer beim Lesen hin (Kabel, USB-Anschluss, Last)."
+        ),
         "btn_recording_start": "Aufnahme starten",
         "btn_recording_stop": "Aufnahme stoppen",
         "btn_soundcheck": "Soundcheck",
@@ -483,6 +505,20 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
 
         # Licht: Einrichten
         "light_setup_title": "Licht einrichten",
+        "light_export": "Einrichtung sichern",
+        "light_import_confirm": (
+            "Die gesicherte Einrichtung einspielen? Vorlagen, Lampen und "
+            "Szenen dieses Geräts werden dabei ersetzt, und das Licht geht "
+            "aus."
+        ),
+        "light_import_failed": "Die Einrichtung ließ sich nicht einspielen.",
+        "light_import": "Einrichtung einspielen",
+        "light_transfer_hint": (
+            "Nimmt Vorlagen, Lampen, Szenen und Show-Einstellungen mit - "
+            "zum Übertragen auf ein zweites XRack. WLAN, PIN, Gerätename "
+            "und Pult-Adresse bleiben, wo sie sind. Einspielen ersetzt die "
+            "vorhandene Einrichtung."
+        ),
         "light_fixtures_title": "Lampen",
         "light_fixture_new": "Lampe aus Vorlage erstellen",
         "light_templates_title": "Gerätevorlagen",
@@ -671,6 +707,28 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "soundcheck_title": "Soundcheck & Practice",
         "status_label": "Status:",
         "record_channels_label": "Recording channels:",
+        "record_channels_available": "of {n} on the interface",
+        "record_space_left": "Room for {time}",
+        "record_space_warning": (
+            "Only {time} of recording space left. At {gb} GB per hour the "
+            "card fills up quickly - XRack ends a running recording in time "
+            "so the file stays readable."
+        ),
+        "record_space_stopped": (
+            "The recording was ended because the card was nearly full. The "
+            "file is properly closed and readable."
+        ),
+        "record_rate_warning": (
+            "The sample rate setting is probably wrong: set to {expected} Hz, "
+            "measured about {likely} Hz at the interface. Recordings would "
+            "come out too fast or too slow - please change it in the "
+            "settings."
+        ),
+        "record_rate_dropouts": (
+            "About {measured} Hz are coming in, {expected} Hz are set. That "
+            "matches no usual sample rate and points to dropouts while "
+            "reading (cable, USB port, load)."
+        ),
         "btn_recording_start": "Start recording",
         "btn_recording_stop": "Stop recording",
         "btn_soundcheck": "Soundcheck",
@@ -1112,6 +1170,19 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
 
         # Lighting: setup
         "light_setup_title": "Set up lighting",
+        "light_export": "Save setup",
+        "light_import_confirm": (
+            "Load the saved setup? Templates, fixtures and scenes on this "
+            "unit will be replaced, and the lights go out."
+        ),
+        "light_import_failed": "The setup could not be loaded.",
+        "light_import": "Load setup",
+        "light_transfer_hint": (
+            "Takes templates, fixtures, scenes and show settings with it - "
+            "for moving to a second XRack. Wi-Fi, PIN, device name and "
+            "console address stay where they are. Loading replaces the "
+            "current setup."
+        ),
         "light_fixtures_title": "Fixtures",
         "light_fixture_new": "Create a fixture from a template",
         "light_templates_title": "Fixture types",
