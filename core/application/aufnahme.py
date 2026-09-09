@@ -19,12 +19,21 @@ class AufnahmeMixin:
     def set_record_channels(
         self,
         channels: int,
+        manuell: bool = False,
     ) -> bool:
         """
         Setzt die Anzahl der Aufnahmekanäle.
+
+        `manuell` unterscheidet die Wahl des Nutzers von der
+        Nachführung beim Gerätewechsel. Nur eine Wahl von Hand wird
+        als solche gemerkt - danach fasst XRack die Zahl nicht mehr
+        von sich aus an (siehe select_audio_device).
         """
 
         self.record_channels = channels
+
+        if manuell:
+            self.state_store.set("record_channels_manual", True)
 
         if self.selected_audio_device is None:
             return False

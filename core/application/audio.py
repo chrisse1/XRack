@@ -100,13 +100,27 @@ class AudioMixin:
         )
 
         #
-        # Kanalzahl auf das neue Gerät begrenzen
+        # Die Kanalzahl dem neuen Gerät anpassen.
         #
+        # Wer sie nie von Hand gewählt hat, bekommt die volle Breite
+        # des Interfaces. Vorher wurde nur nach UNTEN begrenzt: Am
+        # X32 (32 Kanäle) nahm XRack dadurch stillschweigend 18 auf -
+        # die Vorgabe stammt vom XR18, und aufgefallen ist es erst im
+        # Proberaum.
+        #
+        # Eine Wahl von Hand bleibt dagegen stehen und wird nur
+        # begrenzt: Wer acht Spuren will, will auch am großen Pult
+        # acht.
+        #
+        if self.state_store.get("record_channels_manual", False):
 
-        self.record_channels = min(
-            self.record_channels,
-            device.channels,
-        )
+            self.record_channels = min(
+                self.record_channels,
+                device.channels,
+            )
+
+        else:
+            self.record_channels = device.channels
 
         self.set_record_channels(
             self.record_channels,
