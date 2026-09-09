@@ -52,6 +52,21 @@ class SystemStatus(BaseModel):
     recorder_monitoring: bool = False
     recorder_levels: list[float] = []
 
+    #
+    # Stimmt die eingestellte Samplerate mit der gemessenen ueberein?
+    # None heisst "noch kein Urteil" - siehe recorder/rate_check.py.
+    #
+    rate_plausible: bool | None = None
+    rate_measured: float = 0.0
+    rate_likely: int = 0
+
+    #
+    # Wie lange der freie Platz noch reicht (Sekunden) und ob eine
+    # Aufnahme deswegen beendet wurde.
+    #
+    disk_seconds_left: float = 0.0
+    disk_stopped: bool = False
+
     playback_active: bool = False
     playback_filename: str = ""
     playback_duration: float = 0.0

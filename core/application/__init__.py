@@ -426,6 +426,58 @@ class Application(
             self.recorder.recording
         )
 
+        #
+        # Die Samplerate: gemessen, nicht geglaubt. Ohne laufenden
+        # Lesethread gibt es nichts zu melden - dann bleibt das
+        # Urteil offen.
+        #
+        pruefung = self.recorder.rate_check
+
+        if pruefung is not None:
+
+            stand = pruefung.status()
+
+            self.status.rate_plausible = stand["plausible"]
+            self.status.rate_measured = stand["measured"]
+            self.status.rate_likely = stand["likely"]
+
+        else:
+            self.status.rate_plausible = None
+            self.status.rate_measured = 0.0
+            self.status.rate_likely = 0
+
+        #
+        # Speicherplatz: Wie lange reicht er noch? Waehrend einer
+        # Aufnahme schreibt der Lesethread den Wert fort, sonst wird
+        # er hier gerechnet - wer 22 GB je Stunde schreibt, will das
+        # VORHER wissen.
+        #
+        if self.recorder.recording:
+            self.status.disk_seconds_left = round(self.recorder.restzeit, 1)
+        else:
+            self.status.disk_seconds_left = round(
+                self.recorder.platz_restzeit(), 1
+            )
+
+        #
+        # Der Lesethread darf sich nicht selbst anhalten - er wuerde
+        # auf sich selbst warten. Hat er wegen Speichermangels
+        # aufgehoert zu schreiben, wird hier ordentlich abgemeldet.
+        #
+        if self.recorder.platz_stopp and not self.status.disk_stopped:
+
+            self.logger.warning(
+                "Aufnahme wegen Speichermangels beendet: %s",
+                self.recorder.current_filename,
+            )
+
+            self.status.disk_stopped = True
+
+            self.recorder.platz_aufraeumen()
+
+        elif not self.recorder.platz_stopp:
+            self.status.disk_stopped = False
+
         self.status.recorder_monitoring = (
             self.recorder.monitoring
         )

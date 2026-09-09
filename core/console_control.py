@@ -87,8 +87,10 @@ MIN_DB = -90.0
 #
 # Fuer die Namen der einzelnen Plaetze gab es keine Quelle - dort
 # steht der ueblicherweise verwendete Aufbau. Am XR18 hat er sich
-# inzwischen im Betrieb bestaetigt (die Namen erscheinen), fuer den
-# X32 ist er weiterhin ungeprueft.
+# im Betrieb bestaetigt, am X32 inzwischen ebenfalls: Der Name der
+# geladenen Szene steht dort in der Auswahl. Ungeprueft ist am X32
+# nur noch das AUFRUFEN einer anderen Szene ueber
+# /-action/goscene.
 #
 # Das Auslesen der Namen bleibt deshalb so gebaut, dass es folgenlos
 # scheitern darf: Antwortet ein Pult darauf nicht, zeigt die
