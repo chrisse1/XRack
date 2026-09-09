@@ -119,6 +119,34 @@ class NetzwerkMixin:
         return self.wlan_control.set_wifi_country(code)
 
 
+    # ----------------------------------------------------------------
+    # Der gemeinsame Zweitname (Web-App)
+    # ----------------------------------------------------------------
+
+    def get_mdns_alias(self) -> dict:
+        """Was die Oberfläche über den Zweitnamen wissen muss."""
+
+        return self.mdns_alias.status()
+
+    def set_mdns_alias(self, name: str) -> tuple[bool, str]:
+        """
+        Den gemeinsamen Zweitnamen setzen (leer = keiner).
+
+        Gemerkt wird er erst, wenn das Melden geklappt hat - sonst
+        stünde nach einem Neustart ein Name in den Einstellungen, den
+        das Gerät nie im Netz hatte.
+        """
+
+        erfolg, meldung = self.mdns_alias.setzen(name)
+
+        if not erfolg:
+            return False, meldung
+
+        self.state_store.set("mdns_alias", self.mdns_alias.name)
+
+        return True, ""
+
+
     def search_console(self) -> dict:
         """
         Sucht das Mischpult neu - alles, was XRack dafür tun kann, in

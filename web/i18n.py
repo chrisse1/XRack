@@ -215,6 +215,24 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Konsole aus dem Heimnetz erreichbar machen"
         ),
         "settings_console_access_hint": "Das Pult an der Netzwerkbuchse wird aus dem Heimnetz erreichbar - für X32-Edit, X-AIR-Edit und Mixing Station.",
+        "settings_mdns_alias_title": "Gemeinsamer Name für die Web-App",
+        "settings_mdns_alias_placeholder": "z.B. xrack",
+        "settings_mdns_alias_save": "Speichern",
+        "settings_mdns_alias_hint": (
+            "Zusätzlich zum eigenen Namen meldet sich dieses XRack unter "
+            "dem gemeinsamen Namen im Netz. Trägt man ihn auf jedem Gerät "
+            "gleich ein, findet dieselbe gespeicherte Web-App in jedem "
+            "Raum das XRack, das dort steht. Leer lassen schaltet es ab. "
+            "Zwei XRacks mit demselben Namen dürfen nicht gleichzeitig im "
+            "selben Netz stehen."
+        ),
+        "settings_mdns_alias_own": "Eigener Name: {host}.local",
+        "settings_mdns_alias_published": "Im Netz gemeldet als {name} ({addresses})",
+        "settings_mdns_alias_off": "Kein gemeinsamer Name gesetzt.",
+        "settings_mdns_alias_missing": (
+            "avahi-publish fehlt (Paket avahi-utils) - install.sh erneut "
+            "laufen lassen."
+        ),
         "faders_snapshot_label": "Snapshot",
         "faders_snapshot_load": "Laden",
         "faders_snapshot_unnamed": "Snapshot {n}",
@@ -841,6 +859,23 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Make console reachable from home network"
         ),
         "settings_console_access_hint": "The console on the Ethernet port becomes reachable from the home network - for X32-Edit, X-AIR-Edit and Mixing Station.",
+        "settings_mdns_alias_title": "Shared name for the web app",
+        "settings_mdns_alias_placeholder": "e.g. xrack",
+        "settings_mdns_alias_save": "Save",
+        "settings_mdns_alias_hint": (
+            "On top of its own name, this XRack announces itself under the "
+            "shared name. Set the same name on every unit and one saved "
+            "web app finds whichever XRack is in the room. Leave empty to "
+            "switch it off. Two XRacks with the same name must not be on "
+            "the same network at once."
+        ),
+        "settings_mdns_alias_own": "Own name: {host}.local",
+        "settings_mdns_alias_published": "Announced as {name} ({addresses})",
+        "settings_mdns_alias_off": "No shared name set.",
+        "settings_mdns_alias_missing": (
+            "avahi-publish is missing (package avahi-utils) - run install.sh "
+            "again."
+        ),
         "faders_snapshot_label": "Snapshot",
         "faders_snapshot_load": "Load",
         "faders_snapshot_unnamed": "Snapshot {n}",

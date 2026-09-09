@@ -3125,6 +3125,7 @@ async function loadSettings() {
         applyWlanSettings(data.wlan);
         applyConsoleHost(data);
         applyFadersAutolock(data.faders_autolock);
+        applyMdnsAlias(data.mdns_alias);
     } catch (error) {
         console.error("Fehler beim Laden der Einstellungen:", error);
     }
@@ -3832,6 +3833,82 @@ async function saveConsoleHost() {
 // ------------------------------------------------------------
 // Automatische Sperre der Kanalzuege
 // ------------------------------------------------------------
+
+//
+// Der gemeinsame Zweitname im Netz.
+//
+// Eine gespeicherte Web-App startet immer genau die Adresse, unter der
+// sie gespeichert wurde. Wer mehrere XRacks hat, traegt deshalb
+// ueberall denselben Zweitnamen ein - dann findet dasselbe Symbol in
+// jedem Raum das Geraet, das dort steht.
+//
+function applyMdnsAlias(stand) {
+
+    const feld = document.getElementById("settings-mdns-alias");
+    const anzeige = document.getElementById("settings-mdns-alias-state");
+
+    if (!feld || !anzeige || !stand) return;
+
+    //
+    // Nicht ueberschreiben, waehrend jemand tippt.
+    //
+    if (document.activeElement !== feld) feld.value = stand.name || "";
+
+    const zeilen = [];
+
+    //
+    // Der eigene Name gehoert daneben: Er bleibt, was er ist, und
+    // unter ihm ist das Geraet auch weiterhin erreichbar.
+    //
+    zeilen.push(
+        '<span class="text-body-secondary">'
+        + I18N.settings_mdns_alias_own.replace("{host}", stand.hostname || "?")
+        + "</span>"
+    );
+
+    if (!stand.available) {
+        zeilen.push('<span class="text-warning">'
+            + I18N.settings_mdns_alias_missing + "</span>");
+    } else if (stand.error) {
+        zeilen.push('<span class="text-warning">' + stand.error + "</span>");
+    } else if (stand.published) {
+        zeilen.push('<span class="text-success">'
+            + I18N.settings_mdns_alias_published
+                .replace("{name}", (stand.name || "") + ".local")
+                .replace("{addresses}", (stand.addresses || []).join(", "))
+            + "</span>");
+    } else {
+        zeilen.push('<span class="text-body-secondary">'
+            + I18N.settings_mdns_alias_off + "</span>");
+    }
+
+    anzeige.innerHTML = zeilen.join("<br>");
+}
+
+async function saveMdnsAlias() {
+
+    const feld = document.getElementById("settings-mdns-alias");
+
+    if (!feld) return;
+
+    const response = await fetch("/api/settings/mdns-alias", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: feld.value.trim() })
+    });
+
+    const ergebnis = await response.json();
+
+    if (!ergebnis.success) {
+        alert(ergebnis.message);
+    }
+
+    //
+    // Den Stand vom Server holen, statt ihn zu raten: Ob der Name
+    // wirklich im Netz steht, weiss nur das Geraet.
+    //
+    await loadSettings();
+}
 
 function applyFadersAutolock(einstellung) {
     if (!einstellung) return;

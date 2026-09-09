@@ -177,6 +177,63 @@ damit lässt sich die Show samt Blitz auf die Snare ohne Band prüfen.
 
 ---
 
+## Der gemeinsame Name im Netz
+
+Wer die Oberfläche auf dem Tablet als App speichert, speichert damit
+auch die Adresse: `https://x18rack.local:8080`. Im nächsten Proberaum
+steht ein anderes XRack, das Symbol führt ins Leere — und eine
+gespeicherte Web-App hat keine Adresszeile, in der man das ändern
+könnte.
+
+### Warum das nicht im Browser abgefangen wird
+
+Das Naheliegende wäre eine Rückfrage in der App: „Nicht erreichbar —
+andere Adresse?" Nur läuft dafür kein einziger Befehl. Antwortet der
+Rechner nicht, kommt die Seite gar nicht erst an; was der Nutzer
+sieht, ist die Fehlerseite des Browsers, nicht XRack.
+
+Der einzige Weg, im Fehlerfall trotzdem eigenen Code auszuführen, ist
+ein **Service Worker** mit einer zwischengespeicherten
+Ausweichseite. Der ist hier gesperrt: Ein Service Worker verlangt
+einen „sicheren Kontext", und dazu zählt eine HTTPS-Verbindung mit
+einem Zertifikat, dem der Browser nicht traut, ausdrücklich nicht —
+auch dann nicht, wenn man die Warnung einmal weggeklickt hat. XRack
+liefert ein selbstsigniertes Zertifikat aus (siehe
+`generate_tls_certificate` in `install.sh`), und das soll so bleiben.
+
+### Der Weg über den Namen
+
+Also andersherum: Nicht die App lernt mehrere Adressen, sondern die
+Geräte teilen sich einen Namen. Jedes XRack meldet über avahi
+zusätzlich zu seinem Hostnamen einen **gemeinsamen Zweitnamen**
+(`core/mdns_alias.py`). Trägt man auf jedem Gerät `xrack` ein, findet
+dieselbe gespeicherte App in jedem Raum das Gerät, das dort steht.
+
+Gemacht wird das mit `avahi-publish -a`, einem Kindprozess **je
+Adresse**: Solange er läuft, steht der Name im Netz. Mehrere Adressen
+sind der Normalfall — der Pi hängt am Kabel und spannt gleichzeitig
+einen Access Point auf, und je nach Raum erreicht ihn das Tablet über
+den einen oder den anderen Weg. Ein einzelner Eintrag zeigte im
+falschen Netz ins Leere.
+
+Zwei Dinge hält eine Wache im Auge: Wechselt die Adresse (Kabel raus,
+Access Point an), wird der Name neu gemeldet — ein Eintrag auf eine
+Adresse, die es nicht mehr gibt, ist schlimmer als gar keiner. Und
+endet ein Kindprozess, war es ein **Namenskonflikt**: Dann stehen zwei
+XRacks mit demselben Zweitnamen im selben Netz. Das erscheint in den
+Einstellungen, und danach ist erst einmal eine Minute Ruhe — zwei
+Geräte, die sich im Sekundentakt um denselben Namen streiten, fluten
+nur das Netz.
+
+Was avahi im echten Netz daraus macht, kann nur ein Versuch am Gerät
+zeigen. Die Testreihe (`test_mdns_alias.py`) prüft die Seite, die XRack
+gehört: dass für jede Adresse gemeldet wird, dass ein Adresswechsel
+nachgezogen wird, dass ein Konflikt gemeldet statt verschwiegen wird
+und dass ein fehlendes `avahi-publish` (Paket `avahi-utils`) als
+solches dasteht.
+
+---
+
 ## Der Installer und `set -eE`
 
 `install.sh` läuft unter `set -eE` mit einer ERR-Falle: Bricht ein

@@ -828,6 +828,47 @@
                                 -->
                             </div>
 
+                            {#
+                                Der gemeinsame Zweitname.
+
+                                Eine gespeicherte Web-App startet immer
+                                genau die Adresse, unter der sie
+                                gespeichert wurde. Wer mehrere XRacks
+                                betreibt, braucht deshalb einen Namen,
+                                den alle kennen - dann findet dasselbe
+                                Symbol in jedem Raum das Geraet, das
+                                dort steht.
+                            #}
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold" for="settings-mdns-alias">
+                                    {{ t.settings_mdns_alias_title }}
+                                </label>
+                                <div class="d-flex gap-2">
+                                    <input
+                                        type="text"
+                                        id="settings-mdns-alias"
+                                        class="form-control"
+                                        autocomplete="off"
+                                        autocapitalize="none"
+                                        spellcheck="false"
+                                        placeholder="{{ t.settings_mdns_alias_placeholder }}"
+                                    >
+                                    <button
+                                        type="button"
+                                        class="btn btn-outline-light"
+                                        onclick="saveMdnsAlias()"
+                                    >
+                                        {{ t.settings_mdns_alias_save }}
+                                    </button>
+                                </div>
+
+                                <div id="settings-mdns-alias-state" class="small mt-2"></div>
+
+                                <small class="text-body-secondary">
+                                    {{ t.settings_mdns_alias_hint }}
+                                </small>
+                            </div>
+
                         </div>
                             </div>
                         </div>

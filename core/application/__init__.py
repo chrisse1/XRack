@@ -32,6 +32,7 @@ from core.bluetooth_control import BluetoothControl
 from core.usb_storage import UsbStorage
 from core.updater import Updater
 from core.console_control import ConsoleControl, MIN_DB
+from core.mdns_alias import MdnsAlias
 from core.diagnostics import Diagnostics
 from core.state_store import StateStore
 from core.dmx_control import DmxControl
@@ -158,6 +159,12 @@ class Application(
         self.updater = Updater(self.usb_storage)
 
         self.console_control = ConsoleControl()
+
+        #
+        # Der gemeinsame Zweitname im Netz (siehe core/mdns_alias.py).
+        # Gemeldet wird er unten beim Start, sobald alles steht.
+        #
+        self.mdns_alias = MdnsAlias(self.logger)
 
         self.dmx_control = DmxControl()
 
@@ -292,6 +299,25 @@ class Application(
             daemon=True,
         )
         self._port_forward_thread.start()
+
+        #
+        # Der gemeinsame Zweitname, unter dem eine gespeicherte
+        # Web-App jedes XRack findet. Darf folgenlos scheitern: Ohne
+        # avahi-publish oder ohne Netz gibt es eben nur den eigenen
+        # Hostnamen, und das ist kein Grund, den Start aufzuhalten.
+        #
+        gemerkter_name = self.state_store.get("mdns_alias", "")
+
+        if gemerkter_name:
+
+            erfolg, meldung = self.mdns_alias.setzen(gemerkter_name)
+
+            if not erfolg:
+                self.logger.warning(
+                    "Zweiter Name '%s.local' nicht gemeldet: %s",
+                    gemerkter_name,
+                    meldung,
+                )
 
         #
         # Die systemd-Unit des Access Points auf den Stand des Codes

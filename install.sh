@@ -326,7 +326,8 @@ install_system_dependencies() {
         iptables \
         iw \
         hostapd \
-        avahi-daemon > /dev/null
+        avahi-daemon \
+        avahi-utils > /dev/null
     }
 
     mit_punkten \

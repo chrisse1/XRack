@@ -116,6 +116,15 @@ XRack finds the console by itself. If a router blocks the discovery
 broadcast, enter the IP in the settings; the magnifier button in the
 channel strip card searches again.
 
+- **Shared name for the web app** — saving the interface as an app on a
+  tablet also saves the address it was running under. With more than one
+  XRack the same icon leads nowhere in the next room, and an app has no
+  address bar to change it in. So every unit can announce a shared name
+  on top of its own: set `xrack` everywhere and one saved app finds
+  whichever XRack is in the room. The unit's own name stays as it is.
+  Two units with the same shared name must not be on the same network at
+  once; XRack reports the clash in the settings.
+
 #### Lighting
 
 Everything below is behind one switch under *Settings → Lighting* —
@@ -378,6 +387,17 @@ scrollen.
 Das Pult findet XRack selbst. Lässt ein Router die Suche nicht durch,
 trägt man die IP in den Einstellungen ein; der Lupen-Knopf in der
 Kanalzug-Karte sucht erneut.
+
+- **Gemeinsamer Name für die Web-App** — wer die Oberfläche auf dem
+  Tablet als App speichert, speichert damit auch die Adresse, unter der
+  sie lief. Bei mehreren XRacks führt dasselbe Symbol im nächsten
+  Proberaum ins Leere, und eine App hat keine Adresszeile, in der man
+  das ändern könnte. Deshalb kann jedes Gerät zusätzlich zu seinem
+  eigenen Namen einen gemeinsamen melden — trägt man überall `xrack`
+  ein, findet dieselbe App in jedem Raum das XRack, das dort steht. Der
+  eigene Name bleibt daneben bestehen. Zwei Geräte mit demselben
+  gemeinsamen Namen dürfen nicht gleichzeitig im selben Netz stehen;
+  XRack meldet den Konflikt in den Einstellungen.
 
 #### Licht
 
