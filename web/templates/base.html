@@ -853,9 +853,27 @@
                                         spellcheck="false"
                                         placeholder="{{ t.settings_mdns_alias_placeholder }}"
                                     >
+                                    {#
+                                        btn-outline-secondary, nicht
+                                        -light: Die Dialoge sind WEISS
+                                        (Bootstrap-Vorgabe, XRack setzt
+                                        für sie kein dunkles Thema). Ein
+                                        "light"-Knopf ist dort weiße
+                                        Schrift auf weißem Grund mit
+                                        weißem Rand - unsichtbar. Genau
+                                        so kam die Meldung vom Tablet:
+                                        Der Name ließ sich eintragen,
+                                        "da fehlt ein Button".
+
+                                        text-nowrap wie beim Knopf der
+                                        Funkregion darüber: Die
+                                        Beschriftung soll nicht
+                                        umbrechen, wenn das Eingabefeld
+                                        daneben eng wird.
+                                    #}
                                     <button
                                         type="button"
-                                        class="btn btn-outline-light"
+                                        class="btn btn-outline-secondary text-nowrap"
                                         onclick="saveMdnsAlias()"
                                     >
                                         {{ t.settings_mdns_alias_save }}
@@ -1351,9 +1369,14 @@
                 #}
                 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
 
+                    {#
+                        Auch hier -secondary statt -light: weißer
+                        Dialog, siehe den Knopf beim gemeinsamen Namen
+                        in den Einstellungen.
+                    #}
                     <a
                         id="btn-light-export"
-                        class="btn btn-outline-light btn-sm"
+                        class="btn btn-outline-secondary btn-sm text-nowrap"
                         href="/api/lighting/export"
                         download="xrack-licht.json"
                     >
@@ -1363,7 +1386,7 @@
 
                     <button
                         type="button"
-                        class="btn btn-outline-light btn-sm"
+                        class="btn btn-outline-secondary btn-sm text-nowrap"
                         onclick="document.getElementById('light-import-file').click()"
                     >
                         <i class="bi bi-upload"></i>

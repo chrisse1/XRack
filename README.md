@@ -26,8 +26,12 @@ appear.
 
 ### What you need
 
-- Raspberry Pi 5
-- a Behringer X-series console (tested: XAir XR18)
+- Raspberry Pi 5 or 4
+- **Raspberry Pi OS based on Debian 13 ("Trixie")** — that is what XRack
+  is built and tested on. The installer relies on the package versions
+  of that release (NetworkManager, hostapd, avahi, OLA); older Debian
+  releases are untested.
+- a Behringer X-series console (tested: XAir XR18 and X32)
 - the USB cable between the two
 - *optional:* a MediaTek MT7612U USB Wi-Fi adapter, if XRack should open
   its own Wi-Fi network
@@ -295,8 +299,12 @@ taucht auch nicht auf.
 
 ### Was man braucht
 
-- Raspberry Pi 5
-- ein Mischpult der X-Serie (getestet: XAir XR18)
+- Raspberry Pi 5 oder 4
+- **Raspberry Pi OS auf Debian-13-Basis ("Trixie")** — darauf ist XRack
+  entwickelt und geprüft. Der Installer verlässt sich auf die
+  Paketstände dieser Fassung (NetworkManager, hostapd, avahi, OLA);
+  ältere Debian-Stände sind ungeprüft.
+- ein Mischpult der X-Serie (getestet: XAir XR18 und X32)
 - das USB-Kabel dazwischen
 - *optional:* ein MediaTek-MT7612U-WLAN-Stick, wenn XRack ein eigenes
   WLAN aufspannen soll
