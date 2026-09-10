@@ -313,7 +313,21 @@ MESSUNG = """function (kennung) {
             klassen: knopf.className,
             breite: Math.round(kasten.width),
             schrift: Math.round(kontrast(stil.color, hinten) * 100) / 100,
-            rand: Math.round(kontrast(stil.borderTopColor, hinten) * 100) / 100
+            rand: Math.round(kontrast(stil.borderTopColor, hinten) * 100) / 100,
+
+            //
+            // Die Farben auch roh - fuer den Vergleich der
+            // Speichern-Knoepfe untereinander weiter unten.
+            //
+            grund: hinten,
+            schriftfarbe: stil.color,
+
+            //
+            // Sitzt der Knopf in einer input-group, ist er ans Feld
+            // angeklebt und teilt sich dessen Rand. Das ist eine
+            // eigene Bauform mit eigenem Aussehen - siehe unten.
+            //
+            gruppe: !!knopf.closest('.input-group')
         });
     });
 
@@ -451,6 +465,77 @@ assert ergebnis["funktion"] == "function", (
 
 print(f"OK: Der Speichern-Knopf ist da, {ergebnis['breite']} px breit "
       f"und ruft saveMdnsAlias()")
+
+
+# ====================================================================
+# 3. Speichern-Knöpfe derselben Bauform sehen gleich aus
+#
+# Sichtbar allein genügt nicht. Der neue Knopf war nach der ersten
+# Reparatur zwar zu sehen, stand aber als grauer Umriss zwischen acht
+# blauen - man sucht dann trotzdem, weil er nicht aussieht wie das,
+# was man sucht.
+#
+# Zwei Bauformen gibt es mit Absicht, und sie werden getrennt
+# verglichen:
+#
+#   frei stehend - Feld und Knopf nebeneinander, der Knopf blau
+#                  gefüllt (der gemeinsame Name, der Aufnahmename,
+#                  die Samplerate, das WLAN, die PIN ...)
+#
+#   angeklebt    - der Knopf sitzt in einer input-group, teilt sich
+#                  den Rand mit dem Feld und ist ein grauer Umriss
+#                  (Pult-Adresse, Kanalzug-Sperre)
+#
+# Innerhalb einer Bauform muss es aber einheitlich sein. Verglichen
+# werden die GERECHNETEN Farben, nicht die Klassennamen: Geprüft wird
+# das Aussehen. Ob jemand dieselbe Wirkung über eine andere
+# Schreibweise erreicht, ist dem Auge egal - und diesem Test auch.
+# ====================================================================
+
+BESCHRIFTUNGEN = {
+    TEXTE["btn_save"],
+    TEXTE["settings_mdns_alias_save"],
+}
+
+alle = knoepfe_pruefen("settingsModal", 1024)
+
+speichern = [
+    knopf for knopf in alle["knoepfe"]
+    if knopf["text"] in BESCHRIFTUNGEN
+]
+
+assert len(speichern) >= 8, (
+    f"Nur {len(speichern)} Speichern-Knöpfe gefunden - da war wohl nicht "
+    f"alles aufgeklappt, der Vergleich sagt dann nichts."
+)
+
+for bauform, angeklebt in (("frei stehend", False), ("angeklebt", True)):
+
+    gleiche = [
+        knopf for knopf in speichern if knopf["gruppe"] is angeklebt
+    ]
+
+    assert gleiche, f"Keinen einzigen Speichern-Knopf der Bauform {bauform!r}."
+
+    aussehen = {
+        (knopf["grund"], knopf["schriftfarbe"]) for knopf in gleiche
+    }
+
+    assert len(aussehen) == 1, (
+        f"Die Speichern-Knöpfe der Bauform {bauform!r} sehen verschieden "
+        f"aus. Einer fällt auf, und zwar als der falsche:\n"
+        + "\n".join(
+            f"  {knopf['schriftfarbe']:>18} auf {knopf['grund']:>18}  "
+            f"{knopf['id'] or knopf['text']!r}  {knopf['klassen']}"
+            for knopf in sorted(gleiche, key=lambda k: k["grund"])
+        )
+    )
+
+    grund, schriftfarbe = aussehen.pop()
+
+    print(f"OK: Alle {len(gleiche)} Speichern-Knöpfe der Bauform "
+          f"{bauform!r} sind gleich gestaltet "
+          f"({schriftfarbe} auf {grund})")
 
 
 print("Alle Einstellungs-Knopf-Tests erfolgreich.")

@@ -843,37 +843,39 @@
                                 <label class="form-label fw-semibold" for="settings-mdns-alias">
                                     {{ t.settings_mdns_alias_title }}
                                 </label>
+                                {#
+                                    Gebaut wie die übrigen
+                                    Speichern-Zeilen des Dialogs (etwa
+                                    der Aufnahmename weiter unten):
+                                    kleines Feld, blauer Knopf
+                                    daneben, beide gleich hoch.
+
+                                    Kein btn-outline-light hier - der
+                                    Dialog ist WEISS (Bootstrap-Vorgabe,
+                                    XRack setzt für die Dialoge kein
+                                    dunkles Thema), ein "light"-Knopf
+                                    wäre dort weiße Schrift auf weißem
+                                    Grund. Genau so kam die Meldung vom
+                                    Tablet: Der Name ließ sich
+                                    eintragen, "da fehlt ein Button".
+
+                                    text-nowrap hält die Beschriftung
+                                    zusammen, wenn das Feld daneben eng
+                                    wird.
+                                #}
                                 <div class="d-flex gap-2">
                                     <input
                                         type="text"
                                         id="settings-mdns-alias"
-                                        class="form-control"
+                                        class="form-control form-control-sm"
                                         autocomplete="off"
                                         autocapitalize="none"
                                         spellcheck="false"
                                         placeholder="{{ t.settings_mdns_alias_placeholder }}"
                                     >
-                                    {#
-                                        btn-outline-secondary, nicht
-                                        -light: Die Dialoge sind WEISS
-                                        (Bootstrap-Vorgabe, XRack setzt
-                                        für sie kein dunkles Thema). Ein
-                                        "light"-Knopf ist dort weiße
-                                        Schrift auf weißem Grund mit
-                                        weißem Rand - unsichtbar. Genau
-                                        so kam die Meldung vom Tablet:
-                                        Der Name ließ sich eintragen,
-                                        "da fehlt ein Button".
-
-                                        text-nowrap wie beim Knopf der
-                                        Funkregion darüber: Die
-                                        Beschriftung soll nicht
-                                        umbrechen, wenn das Eingabefeld
-                                        daneben eng wird.
-                                    #}
                                     <button
                                         type="button"
-                                        class="btn btn-outline-secondary text-nowrap"
+                                        class="btn btn-primary btn-sm text-nowrap"
                                         onclick="saveMdnsAlias()"
                                     >
                                         {{ t.settings_mdns_alias_save }}
