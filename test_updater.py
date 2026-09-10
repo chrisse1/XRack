@@ -935,4 +935,174 @@ with _tf.TemporaryDirectory() as tmp:
 
     print("OK: Ein Update auf eine neuere Version laeuft unveraendert weiter")
 
+# ====================================================================
+# Nach dem Update muss install.sh ausfuehrbar sein
+#
+# Am Geraet gemeldet: Nach dem Update vom USB-Stick ging
+# "./install.sh" erst nach einem chmod +x.
+#
+# Die Ursache steckt in zwei Zeilen, die einzeln harmlos aussehen:
+# zipfile.extractall() wirft die Unix-Rechte weg (entpackt wird mit
+# der Vorgabemaske, also 0644), und shutil.copy2() schreibt genau die
+# anschliessend auf die Installation. Der Reparaturschritt danach
+# fasste nur scripts/ an - install.sh liegt im Wurzelverzeichnis.
+#
+# Geprueft wird die ganze Kette, so wie sie im Betrieb laeuft:
+# entpacken, Rechte wiederherstellen, kopieren.
+# ====================================================================
+
+import os as _os
+import stat as _stat
+
+
+def _zip_mit_rechten(ziel: _P, modi: dict[str, int],
+                     system: int = 3) -> _P:
+    """
+    Eine ZIP wie von GitHub - mit den angegebenen Rechten je Datei.
+
+    `system` ist das Betriebssystem im ZIP-Eintrag: 3 heisst Unix
+    (dort stehen Rechte drin), 0 heisst Windows (dort nicht).
+    """
+
+    with _zip.ZipFile(ziel, "w") as archiv:
+
+        for name, modus in modi.items():
+
+            eintrag = _zip.ZipInfo(f"XRack-main/{name}")
+            eintrag.create_system = system
+
+            if system == 3:
+                eintrag.external_attr = (modus & 0xFFFF) << 16
+
+            archiv.writestr(eintrag, f"# {name}\n")
+
+    return ziel
+
+
+with _tf.TemporaryDirectory() as tmp:
+
+    wurzel = _P(tmp)
+
+    #
+    # So sieht es in der ZIP von GitHub aus: install.sh und die
+    # Skripte ausfuehrbar, alles andere nicht.
+    #
+    paket = _zip_mit_rechten(wurzel / "paket.zip", {
+        "install.sh": 0o755,
+        "main.py": 0o644,
+        "scripts/xrack-restart.sh": 0o755,
+        "web/i18n.py": 0o644,
+    })
+
+    entpackt = wurzel / "entpackt"
+    entpackt.mkdir()
+
+    with _zip.ZipFile(paket) as archiv:
+        archiv.extractall(entpackt)
+
+        #
+        # Ohne diesen Schritt sind die Rechte weg - genau hier ging es
+        # verloren.
+        #
+        updater.rechte_wiederherstellen(archiv, entpackt)
+
+    quelle = entpackt / "XRack-main"
+
+    assert _os.access(quelle / "install.sh", _os.X_OK), (
+        "Schon beim Entpacken ist das Ausführungsrecht weg."
+    )
+    assert _os.access(quelle / "scripts" / "xrack-restart.sh", _os.X_OK)
+
+    assert not _os.access(quelle / "main.py", _os.X_OK), (
+        "main.py ist kein Programm und darf nicht ausführbar werden."
+    )
+
+    #
+    # Und der zweite Teil der Kette: Beim Kopieren muss das Recht
+    # mitkommen (shutil.copy2 uebertraegt den Modus der Quelle).
+    #
+    installation = wurzel / "installation"
+    installation.mkdir()
+
+    updater.copy_tree(quelle, installation)
+
+    assert _os.access(installation / "install.sh", _os.X_OK), (
+        "Nach dem Kopieren ist install.sh nicht ausführbar - genau das "
+        "war die Meldung vom Gerät."
+    )
+    assert _os.access(installation / "scripts" / "xrack-restart.sh", _os.X_OK)
+
+    print("OK: install.sh ist nach Entpacken und Kopieren ausführbar")
+
+    #
+    # Eine ZIP, die es zu gut meint: 0777. Uebernommen werden duerfen
+    # nur die Ausfuehrungs-Bits - eine Datei von aussen soll keine
+    # Schreibrechte fuer andere setzen koennen.
+    #
+    gierig = _zip_mit_rechten(wurzel / "gierig.zip", {"install.sh": 0o777})
+
+    ordner = wurzel / "gierig"
+    ordner.mkdir()
+
+    with _zip.ZipFile(gierig) as archiv:
+        archiv.extractall(ordner)
+        updater.rechte_wiederherstellen(archiv, ordner)
+
+    modus = (ordner / "XRack-main" / "install.sh").stat().st_mode
+
+    assert modus & _stat.S_IXUSR, "Ausführbar sollte es schon sein."
+
+    assert not modus & _stat.S_IWOTH, (
+        f"Die ZIP hat Schreibrechte für alle gesetzt: {oct(modus)}"
+    )
+    assert not modus & (_stat.S_ISUID | _stat.S_ISGID), (
+        f"Die ZIP hat setuid/setgid gesetzt: {oct(modus)}"
+    )
+
+    print("OK: Aus der ZIP kommen nur Ausführungsrechte, sonst nichts")
+
+    #
+    # Eine unter Windows gepackte ZIP traegt gar keine Rechte. Dann
+    # greift das Netz darunter.
+    #
+    windows = _zip_mit_rechten(
+        wurzel / "windows.zip",
+        {"install.sh": 0o755, "scripts/xrack-restart.sh": 0o755,
+         "main.py": 0o644},
+        system=0,
+    )
+
+    ordner = wurzel / "windows"
+    ordner.mkdir()
+
+    with _zip.ZipFile(windows) as archiv:
+        archiv.extractall(ordner)
+        updater.rechte_wiederherstellen(archiv, ordner)
+
+    quelle = ordner / "XRack-main"
+
+    assert not _os.access(quelle / "install.sh", _os.X_OK), (
+        "Der Versuch taugt nur, wenn die Rechte wirklich fehlen."
+    )
+
+    ziel = wurzel / "windows-installation"
+    ziel.mkdir()
+
+    updater.copy_tree(quelle, ziel)
+
+    updater.ausfuehrbar_machen(ziel)
+
+    assert _os.access(ziel / "install.sh", _os.X_OK), (
+        "Ohne Rechte in der ZIP muss das Netz darunter greifen - sonst "
+        "ist install.sh nach dem Update wieder nicht ausführbar."
+    )
+    assert _os.access(ziel / "scripts" / "xrack-restart.sh", _os.X_OK)
+
+    assert not _os.access(ziel / "main.py", _os.X_OK), (
+        "Das Netz darunter darf nicht alles ausführbar machen."
+    )
+
+    print("OK: Ohne Rechte in der ZIP greift das Netz darunter")
+
+
 print("Alle Tests erfolgreich.")
