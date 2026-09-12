@@ -4091,6 +4091,14 @@ function applyTls(stand) {
     if (stand.pin_required) {
         warnung.textContent = I18N.settings_tls_pin_required;
         warnung.classList.remove("d-none");
+    } else if (stand.present && !stand.installable) {
+        //
+        // Ohne CA:TRUE nimmt Android das Zertifikat nicht in seinen
+        // Speicher - der Download waere dann ein Knopf, der eine
+        // unbrauchbare Datei liefert.
+        //
+        warnung.textContent = I18N.settings_tls_not_installable;
+        warnung.classList.remove("d-none");
     } else if (!stand.alias_covered) {
         warnung.textContent =
             I18N.settings_tls_alias_missing.replace("{name}", stand.alias || "");

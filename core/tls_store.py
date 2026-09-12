@@ -185,6 +185,7 @@ class TlsStore:
             return {
                 "present": False,
                 "imported": False,
+                "installable": False,
                 "names": [],
                 "valid_until": "",
                 "days_left": 0,
@@ -203,10 +204,76 @@ class TlsStore:
         return {
             "present": True,
             "imported": self.marke.exists(),
+            "installable": self.installierbar(),
             "names": self.namen(),
             "valid_until": ende.strftime("%Y-%m-%d") if ende else "",
             "days_left": rest,
         }
+
+    def installierbar(self, pfad: Path | None = None) -> bool:
+        """
+        Laesst sich das Zertifikat auf einem Geraet in den
+        Zertifikatsspeicher legen?
+
+        Dazu muss es sich selbst als Zertifizierungsstelle ausweisen
+        ("basicConstraints CA:TRUE"). Android nimmt es sonst gar nicht
+        an, und Firefox fuehrt es nicht unter den Zertifizierungs-
+        stellen.
+
+        openssl setzt das bei einem selbstsignierten Zertifikat von
+        sich aus - die vorhandenen tragen es also schon. Geprueft wird
+        es trotzdem: Faellt es einmal weg, merkt das niemand ausser
+        dem Nutzer am Tablet, und der kann es nicht einordnen.
+        """
+
+        pfad = pfad or self.zertifikat
+
+        if not pfad.is_file():
+            return False
+
+        lauf = self._openssl("x509", "-in", str(pfad), "-noout", "-text")
+
+        if lauf.returncode != 0:
+            return False
+
+        text = lauf.stdout.decode("utf-8", "replace")
+
+        return "CA:TRUE" in text
+
+    def oeffentlich(self) -> bytes | None:
+        """
+        Der oeffentliche Teil zum Herunterladen - ohne Schluessel.
+
+        Diese Datei geht OHNE PIN und OHNE Kennwort heraus, und das ist
+        richtig: Der oeffentliche Teil des Zertifikats geht bei jedem
+        Verbindungsaufbau ueber die Leitung, an jeden, der fragt. Er
+        ist kein Geheimnis und kann keines sein.
+
+        Genau deshalb steht die Probe darunter. Sie prueft nicht die
+        Datei, sie prueft UNS: Wer hier eines Tages versehentlich die
+        Schluesseldatei einsetzt, verschenkt den Schluessel an jeden im
+        Netz. Lieber nichts ausliefern als das.
+        """
+
+        if not self.zertifikat.is_file():
+            return None
+
+        daten = self.zertifikat.read_bytes()
+
+        if b"PRIVATE KEY" in daten:
+
+            self.logger.error(
+                "Abbruch: In %s steht ein privater Schluessel - diese Datei "
+                "wird nicht ausgeliefert.",
+                self.zertifikat,
+            )
+
+            return None
+
+        if b"-----BEGIN CERTIFICATE-----" not in daten:
+            return None
+
+        return daten
 
     def deckt_ab(self, name: str) -> bool:
         """Gilt das Zertifikat für diesen Namen?"""

@@ -89,6 +89,31 @@ class ZertifikatMixin:
 
         return zustand
 
+    def zertifikat_datei(self) -> tuple[bytes | None, str]:
+        """
+        Das Zertifikat zum Herunterladen - oeffentlicher Teil, kein
+        Schluessel, keine PIN.
+
+        Kein Widerspruch zu zertifikat_erlaubt(): Dort geht es um den
+        privaten Schluessel. Der oeffentliche Teil geht bei jedem
+        Verbindungsaufbau an jeden heraus, der fragt - ihn
+        zurueckzuhalten wuerde nichts schuetzen und nur die Einrichtung
+        auf dem Tablet verhindern.
+
+        Der Dateiname traegt den Namen des Racks: Wer die Zertifikate
+        von zwei Racks im Download-Ordner hat, soll sie unterscheiden
+        koennen.
+        """
+
+        daten = self.tls_store.oeffentlich()
+
+        if daten is None:
+            return None, "Es gibt kein Zertifikat zum Herunterladen."
+
+        name = self.mdns_alias.name or self.mdns_alias.hostname()
+
+        return daten, f"xrack-{name}.crt"
+
     def zertifikat_namen(self) -> list[str]:
         """
         Die Namen, unter denen dieses Rack erreichbar ist.

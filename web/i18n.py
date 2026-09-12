@@ -292,6 +292,25 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Für das Zertifikat muss erst eine PIN vergeben werden - ohne "
             "sie könnte jeder im Netz den privaten Schlüssel abholen."
         ),
+        #
+        # Die zweite Stufe: Das Zertifikat aufs Gerät legen, dann
+        # fragt der Browser dort gar nicht mehr. Diese Datei enthält
+        # nur den öffentlichen Teil - kein Kennwort, keine PIN.
+        #
+        "settings_tls_download": "Zertifikat herunterladen",
+        "settings_tls_download_hint": (
+            "Damit der Browser gar nicht mehr fragt: Datei herunterladen "
+            "und auf dem Gerät in den Zertifikatsspeicher legen (Android: "
+            "Einstellungen → Sicherheit → Zertifikat installieren → "
+            "CA-Zertifikat; iPhone/iPad: Profil installieren, danach unter "
+            "Zertifikatsvertrauenseinstellungen freigeben). Die Datei "
+            "enthält nur den öffentlichen Teil - kein Kennwort nötig."
+        ),
+        "settings_tls_not_installable": (
+            "Dieses Zertifikat lässt sich auf einem Gerät nicht als "
+            "Zertifizierungsstelle eintragen. \"Neu erzeugen\" erstellt "
+            "eines, das sich eintragen lässt."
+        ),
         "settings_tls_password": "Kennwort für die Datei",
         "settings_tls_export": "Sichern",
         "settings_tls_import": "Einspielen",
@@ -1022,6 +1041,19 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "A PIN has to be set before the certificate can be handled - "
             "without one, anybody on the network could fetch the private "
             "key."
+        ),
+        "settings_tls_download": "Download certificate",
+        "settings_tls_download_hint": (
+            "To stop the browser asking at all: download the file and add "
+            "it to the device's certificate store (Android: Settings → "
+            "Security → Install a certificate → CA certificate; "
+            "iPhone/iPad: install the profile, then enable it under "
+            "Certificate Trust Settings). The file holds only the public "
+            "part - no password needed."
+        ),
+        "settings_tls_not_installable": (
+            "This certificate cannot be added to a device as a certificate "
+            "authority. \"Create new\" makes one that can."
         ),
         "settings_tls_password": "Password for the file",
         "settings_tls_export": "Save",
