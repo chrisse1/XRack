@@ -2917,6 +2917,22 @@ function updatePracticeCard(data) {
         mitspielen.disabled = data.music_playing;
     }
 
+    //
+    // Der Versatz gehoert zum Mitschnitt: ohne einen ist er ohne
+    // Wirkung. Getippt wird er von Hand, deshalb nur setzen, wenn
+    // niemand gerade darin schreibt.
+    //
+    const versatz = document.getElementById("practice-offset");
+
+    if (versatz) {
+
+        if (document.activeElement !== versatz) {
+            versatz.value = data.practice_offset_ms || 0;
+        }
+
+        versatz.disabled = data.music_playing;
+    }
+
     const schleife = document.getElementById("practice-repeat");
 
     if (schleife && document.activeElement !== schleife) {
@@ -2980,9 +2996,15 @@ function updatePracticeCard(data) {
             }
 
             if (mitspielen && mitspielen.value) {
+
                 teile.push(
                     I18N.practice_take_hint.replace(
                         "{name}", mitspielen.value.replace(/\.w64$/i, ""))
+                );
+
+                teile.push(
+                    I18N.practice_offset_hint.replace(
+                        "{ms}", data.practice_offset_ms || 0)
                 );
             }
 
@@ -3045,6 +3067,17 @@ async function stopPractice() {
     await refreshDashboard();
 }
 
+async function setPracticeOffset(millisekunden) {
+
+    await fetch("/api/practice/offset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ offset_ms: millisekunden })
+    });
+
+    await refreshDashboard();
+}
+
 async function setPracticeRecord(an) {
 
     await fetch("/api/practice/record", {
@@ -3086,6 +3119,10 @@ document.getElementById("practice-mix").addEventListener("change", () => {
 
 document.getElementById("practice-take").addEventListener("change", () => {
     updatePracticeCard(lastStatusData);
+});
+
+document.getElementById("practice-offset").addEventListener("change", (e) => {
+    setPracticeOffset(Number(e.target.value) || 0);
 });
 
 function updateMusicPlayer(data) {

@@ -53,6 +53,10 @@ class PracticeRecordSelection(BaseModel):
     record: bool
 
 
+class PracticeOffsetSelection(BaseModel):
+    offset_ms: int
+
+
 class PracticeRepeatSelection(BaseModel):
     repeat: bool
 
@@ -193,6 +197,20 @@ def set_practice_record(auswahl: PracticeRecordSelection, request: Request):
 
     return {
         "success": application.set_practice_record(auswahl.record)
+    }
+
+
+@router.post("/api/practice/offset")
+def set_practice_offset(auswahl: PracticeOffsetSelection, request: Request):
+    """
+    Die Laufzeit durch das Pult, um die der Mitschnitt beim
+    Zusammenhoeren vorgezogen wird.
+    """
+
+    application = request.app.state.application
+
+    return {
+        "success": application.set_practice_offset(auswahl.offset_ms)
     }
 
 

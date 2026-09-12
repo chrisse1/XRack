@@ -284,25 +284,40 @@ class MusikMixin:
         start_channel = start_channel_from_filename(pfad.name)
 
         #
-        # Zuerst die Aufnahme, dann der Ton.
+        # Die Aufnahme beginnt mit dem ERSTEN BLOCK, der zum Interface
+        # geht - nicht vorher.
         #
-        # Die Reihenfolge ist nicht gleichgültig: Läuft der Mitschnitt
-        # schon, wenn der erste Ton kommt, fehlt am Anfang nichts.
-        # Andersherum wäre der Einsatz weg - und gerade der ist beim
-        # Üben das Interessante.
+        # Hier stand zuerst "erst die Aufnahme starten, dann den Ton",
+        # mit dem Gedanken, dass dann am Anfang nichts fehlt. Der
+        # Gedanke stimmt, aber er macht den Mitschnitt unbrauchbar für
+        # das Zusammenhören: Zwischen beiden Aufrufen liegen das Öffnen
+        # von ALSA, ein Threadstart und das Anlegen der Datei -
+        # zusammen einige zehn Millisekunden, und jedes Mal
+        # unterschiedlich viele. Dieser Zufall stünde im Mitschnitt und
+        # liesse sich nachher durch nichts mehr herausrechnen.
         #
-        # Ganz gleichzeitig geht es nicht, und es muss auch nicht: Der
-        # Vorlauf von einigen Millisekunden arbeitet der Laufzeit durch
-        # das Pult entgegen (XRack gibt aus, das Pult schickt zurück,
-        # XRack nimmt auf). Beides zu messen wäre eine eigene Funktion
-        # und gehört nicht hierher.
+        # So dagegen ist der Abstand zwischen Mix und Mitschnitt für
+        # jeden Lauf DERSELBE - und damit eine Grösse, die sich einmal
+        # messen und danach immer anwenden lässt (practice_offset_ms).
         #
+        # Was bleibt, ist die Laufzeit des Weges: XRack schreibt in den
+        # ALSA-Puffer, das Pult wandelt, mischt und schickt zurück,
+        # XRack liest wieder aus einem Puffer. Die ist von hier aus
+        # nicht auszurechnen - sie hängt am Pult, an der Route durch
+        # das Pult und an der Puffergrösse. Gemessen werden muss sie.
+        #
+        beim_start = None
+
         if mitschneiden:
 
-            if not self.recorder.start(self.record_name_prefix):
-                return False, "Die Aufnahme liess sich nicht starten."
-
-            self.practice_recording = True
+            def beim_start():
+                if self.recorder.start(self.record_name_prefix):
+                    self.practice_recording = True
+                else:
+                    self.logger.error(
+                        "Der Mitschnitt liess sich nicht starten - das "
+                        "Üben läuft ohne ihn weiter."
+                    )
 
         erfolg = self.music_player.play_practice(
             self.selected_audio_device,
@@ -312,6 +327,8 @@ class MusikMixin:
             wiederholen=wiederholen,
             mitschnitt=mitschnitt_pfad,
             mitschnitt_start=mitschnitt_start,
+            versatz=self.practice_offset_ms / 1000.0,
+            beim_start=beim_start,
         )
 
         if erfolg:
@@ -322,9 +339,12 @@ class MusikMixin:
             #
             # Kein halber Zustand: Ohne Ton ist der Mitschnitt sinnlos,
             # und eine Aufnahme, die weiterläuft, ohne dass jemand sie
-            # gestartet hat, ist schlimmer als gar keine.
+            # gestartet hat, ist schlimmer als gar keine. Gestartet
+            # wurde sie hier zwar noch gar nicht (das tut der erste
+            # Block), aber der Weg dorthin kann auch mitten im Start
+            # abbrechen.
             #
-            if mitschneiden:
+            if mitschneiden and self.practice_recording:
                 self.recorder.stop()
                 self.practice_recording = False
 
@@ -376,6 +396,32 @@ class MusikMixin:
             for name in self.recorder.recordings
             if kind_from_filename(name) != KIND_PRACTICE
         ]
+
+
+    def set_practice_offset(self, millisekunden: int) -> bool:
+        """
+        Wie weit der Mitschnitt beim Zusammenhören vorgezogen wird.
+
+        Das ist die Laufzeit des ganzen Weges - XRack, Puffer, USB,
+        Pult, zurück. Sie liegt bei einer Puffergrösse von 1024
+        Rahmen in der Grössenordnung einiger zehn Millisekunden, aber
+        eine Zahl daraus zu rechnen wäre geraten: Sie hängt am Pult, an
+        der Route durch das Pult und daran, wie voll ALSA seine Puffer
+        wirklich fährt.
+
+        Deshalb ist es ein Wert, den man setzt - nach Gehör oder nach
+        einer Messung. Negative Werte gibt es nicht: Der Mitschnitt
+        kann dem Mix nicht vorauseilen.
+        """
+
+        self.practice_offset_ms = max(0, min(2000, int(millisekunden)))
+
+        self.state_store.set(
+            "practice_offset_ms",
+            self.practice_offset_ms,
+        )
+
+        return True
 
 
     def set_practice_record(self, an: bool) -> bool:

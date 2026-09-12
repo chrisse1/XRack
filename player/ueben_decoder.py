@@ -90,6 +90,8 @@ class UebenDecoder:
 
         self._mitschnitt_start = 0
 
+        self._versatz = 0.0
+
         self._offen = False
 
     @property
@@ -108,6 +110,7 @@ class UebenDecoder:
         start_channel: int,
         mitschnitt: Path | None = None,
         mitschnitt_start: int = 0,
+        versatz: float = 0.0,
     ) -> None:
         """
         Sagt, wie breit die Ausgabe ist und wo die Quellen liegen.
@@ -124,6 +127,23 @@ class UebenDecoder:
         self._mitschnitt = Path(mitschnitt) if mitschnitt else None
 
         self._mitschnitt_start = mitschnitt_start
+
+        #
+        # Um wie viel der Mitschnitt VORGEZOGEN wird (Sekunden).
+        #
+        # Er hinkt dem Mix immer hinterher, und zwar um die Laufzeit
+        # des ganzen Wegs: XRack schreibt in den ALSA-Puffer, das Pult
+        # wandelt, mischt und schickt zurueck, XRack liest wieder aus
+        # einem Puffer. Nichts davon ist null, und keines der Stuecke
+        # laesst sich von hier aus ausrechnen - gemessen werden muss
+        # es. Hier wird es nur angewandt: Steht der Mix an Stelle p,
+        # wird der Mitschnitt ab p+versatz gelesen.
+        #
+        # Nie negativ: Der Mitschnitt kann dem Mix nicht vorauseilen,
+        # das waere Hellsehen. Ein negativer Wert waere ein Denkfehler
+        # und soll nicht stillschweigend etwas Falsches tun.
+        #
+        self._versatz = max(0.0, float(versatz))
 
     def passt(self, pfad: Path) -> bool:
         """
@@ -175,7 +195,9 @@ class UebenDecoder:
 
         self.quellen = []
 
-        for datei, start in self._gewuenschte_quellen(path):
+        for nummer, (datei, start) in enumerate(
+            self._gewuenschte_quellen(path)
+        ):
 
             quelle = Quelle(datei, start)
 
@@ -200,8 +222,20 @@ class UebenDecoder:
 
             quelle.byte_versatz = quelle.start_channel * BYTES_PER_SAMPLE
 
-            if start_position > 0:
-                quelle.leser.seek(start_position)
+            #
+            # Quelle 0 ist der Mix: Er wird dort gelesen, wo die
+            # Wiedergabe steht. Der Mitschnitt (Quelle 1) wird um die
+            # Laufzeit weiter vorn gelesen - so faellt der Ton, den
+            # der Spielende zu einer Stelle gespielt hat, wieder auf
+            # genau diese Stelle.
+            #
+            stelle = start_position
+
+            if nummer > 0:
+                stelle += self._versatz
+
+            if stelle > 0:
+                quelle.leser.seek(stelle)
 
             self.quellen.append(quelle)
 

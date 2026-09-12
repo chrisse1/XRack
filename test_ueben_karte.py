@@ -89,12 +89,19 @@ class Spieler:
 
     def play_practice(self, device, path, start_channel, rate,
                       wiederholen=False, mitschnitt=None,
-                      mitschnitt_start=0):
+                      mitschnitt_start=0, versatz=0.0, beim_start=None):
 
         PROTOKOLL.append("ton-an")
 
         if not self.oeffnet:
             return False
+
+        #
+        # Das echte Gegenstueck ruft beim ersten Block ans Interface -
+        # hier sofort, denn die Attrappe hat keinen Lesethread.
+        #
+        if beim_start is not None:
+            beim_start()
 
         self.aufrufe.append({
             "pfad": Path(path),
@@ -103,6 +110,7 @@ class Spieler:
             "wiederholen": wiederholen,
             "mitschnitt": mitschnitt,
             "mitschnitt_start": mitschnitt_start,
+            "versatz": versatz,
         })
         self.playing = True
         return True
@@ -179,6 +187,10 @@ class Anwendung(MusikMixin):
         self.practice_recording = False
 
         self.practice_active = False
+
+        self.practice_offset_ms = self.state_store.get(
+            "practice_offset_ms", 0
+        )
 
         self.record_name_prefix = "Soundcheck"
 
@@ -436,12 +448,17 @@ with tempfile.TemporaryDirectory() as tmp:
     print("OK: Die Schleife wird gemerkt und erreicht den Spieler")
 
     # ----------------------------------------------------------------
-    # 7b. Üben + mitschneiden: erst die Aufnahme, dann der Ton
+    # 7b. Üben + mitschneiden: die Aufnahme beginnt mit dem Ton
     #
-    # Die Reihenfolge ist der ganze Trick. Läuft der Mitschnitt schon,
-    # wenn der erste Ton kommt, fehlt am Anfang nichts. Andersherum
-    # wäre der Einsatz weg - und gerade der ist beim Üben das
-    # Interessante.
+    # Nicht vorher, und das ist der ganze Trick. Zwischen "Aufnahme
+    # starten" und "der erste Ton geht hinaus" liegen das Öffnen von
+    # ALSA, ein Threadstart und das Anlegen der Datei - zusammen einige
+    # zehn Millisekunden, und jedes Mal unterschiedlich viele. Wer die
+    # Aufnahme vorher startet, hat diesen Zufall im Mitschnitt stehen
+    # und kann ihn nachher durch nichts mehr herausrechnen.
+    #
+    # So dagegen ist der Abstand für jeden Lauf derselbe - und damit
+    # eine Grösse, die sich einmal messen und danach anwenden lässt.
     # ----------------------------------------------------------------
 
     anwendung.music_player.playing = False
@@ -455,10 +472,11 @@ with tempfile.TemporaryDirectory() as tmp:
 
     assert erfolg, meldung
 
-    assert PROTOKOLL == ["aufnahme-an", "ton-an"], (
-        f"Gerufen wurde in dieser Reihenfolge: {PROTOKOLL}. Erst die "
-        f"Aufnahme, dann der Ton - sonst fehlt auf dem Mitschnitt der "
-        f"Einsatz."
+    assert PROTOKOLL == ["ton-an", "aufnahme-an"], (
+        f"Gerufen wurde in dieser Reihenfolge: {PROTOKOLL}. Die "
+        f"Aufnahme gehört an den ersten Block des Spielers - davor "
+        f"liegt eine Anlaufzeit, die jedes Mal anders ausfällt und "
+        f"sich hinterher nicht mehr herausrechnen lässt."
     )
 
     assert anwendung.recorder.recording, "Es wird gar nicht aufgenommen."
@@ -536,10 +554,11 @@ with tempfile.TemporaryDirectory() as tmp:
 
     assert not erfolg and meldung, "Der Fehlschlag blieb unbemerkt."
 
-    assert PROTOKOLL == ["aufnahme-an", "ton-an", "aufnahme-aus"], (
-        f"Nach dem Fehlschlag stand: {PROTOKOLL}. Die begonnene "
-        f"Aufnahme muss wieder beendet werden - sonst läuft sie weiter, "
-        f"ohne dass jemand sie gestartet hat."
+    assert PROTOKOLL == ["ton-an"], (
+        f"Nach dem Fehlschlag stand: {PROTOKOLL}. Kommt der Ton gar "
+        f"nicht erst zustande, darf auch keine Aufnahme angefangen "
+        f"haben - sie liefe sonst weiter, ohne dass jemand sie "
+        f"gestartet hat."
     )
 
     assert anwendung.recorder.recording is False
@@ -702,6 +721,53 @@ with tempfile.TemporaryDirectory() as tmp:
     )
 
     print("OK: Zum Dazuhören stehen die Aufnahmen bereit, nicht die Mixe")
+
+    # ----------------------------------------------------------------
+    # 7j. Der Versatz wird gemerkt und erreicht den Spieler
+    #
+    # Er ist die Laufzeit des Weges XRack -> Pult -> XRack. Von hier
+    # aus lässt sie sich nicht ausrechnen: Sie hängt am Pult, an der
+    # Route durch das Pult und daran, wie voll ALSA seine Puffer
+    # wirklich fährt. Also wird sie gesetzt - und muss dann auch
+    # ankommen.
+    # ----------------------------------------------------------------
+
+    anwendung.set_practice_offset(80)
+
+    assert StateStore(zustand).get("practice_offset_ms") == 80, (
+        "Der Versatz wurde nicht am Gerät gemerkt - nach einem Neustart "
+        "müsste man ihn neu einstellen."
+    )
+
+    anwendung.music_player.playing = False
+    anwendung.uebung_nachfuehren()
+    anwendung.music_player.aufrufe.clear()
+
+    erfolg, meldung = anwendung.start_practice(
+        "Uebung-1_p.w64", mitschnitt="Soundcheck-2_s9.w64"
+    )
+
+    assert erfolg, meldung
+
+    assert anwendung.music_player.aufrufe[0]["versatz"] == 0.08, (
+        f"Der Spieler bekam einen Versatz von "
+        f"{anwendung.music_player.aufrufe[0]['versatz']} s statt 0,08 - "
+        f"in Sekunden, denn dort wird damit gespult."
+    )
+
+    #
+    # Und die Grenzen: Ein negativer Versatz wäre Hellsehen, ein
+    # riesiger ein Vertipper.
+    #
+    anwendung.set_practice_offset(-50)
+    assert anwendung.practice_offset_ms == 0, anwendung.practice_offset_ms
+
+    anwendung.set_practice_offset(99999)
+    assert anwendung.practice_offset_ms == 2000, anwendung.practice_offset_ms
+
+    anwendung.set_practice_offset(0)
+
+    print("OK: Der Versatz wird gemerkt, begrenzt und weitergereicht")
 
 
 # ====================================================================
@@ -958,6 +1024,10 @@ KARTE = """function () {
         knopf_ueben: knopf('btn-mode-practice'),
         mixe: feld('practice-mix'),
         takes: feld('practice-take'),
+        versatz: (() => {
+            const e = document.getElementById('practice-offset');
+            return e ? { wert: e.value, gesperrt: e.disabled } : null;
+        })(),
         kanalfeld: document.getElementById('practice-channels'),
         schleife: schalter ? schalter.checked : null,
         mitschnitt: aufnahme ? {
@@ -1345,6 +1415,66 @@ assert TEXTE["practice_take_hint"].replace(
 )
 
 print("OK: Die Auswahl 'Dazu hören' bietet Aufnahmen an, keine Mixe")
+
+
+# ====================================================================
+# 13e. Der Versatz steht in der Karte und geht ans Gerät
+#
+# Er ist die Laufzeit durch das Pult. Ausrechnen lässt sie sich nicht,
+# also stellt man sie ein - nach Gehör oder nach einer Messung. Dann
+# muss der Wert aber auch dastehen und ankommen.
+# ====================================================================
+
+mit_versatz = ausfuehren(
+    stand(
+        player_mode="practice",
+        practice_mixes=MIXE,
+        practice_takes=TAKES,
+        practice_offset_ms=85,
+    ),
+    KARTE,
+    vorlauf=(
+        "const f = document.getElementById('practice-take');"
+        "f.value = 'Soundcheck-7_s9.w64';"
+        "f.dispatchEvent(new Event('change'));"
+    ),
+)
+
+assert mit_versatz["versatz"]["wert"] == "85", (
+    f"Im Versatzfeld steht {mit_versatz['versatz']['wert']!r} statt 85."
+)
+
+assert TEXTE["practice_offset_hint"].replace(
+    "{ms}", "85"
+) in mit_versatz["hinweis"], (
+    f"Im Hinweis fehlt der Versatz: {mit_versatz['hinweis']!r}"
+)
+
+geschickter_versatz = ausfuehren(
+    stand(
+        player_mode="practice",
+        practice_mixes=MIXE,
+        practice_takes=TAKES,
+    ),
+    KARTE,
+    vorlauf=(
+        "const f = document.getElementById('practice-offset');"
+        "f.value = '120';"
+        "f.dispatchEvent(new Event('change'));"
+    ),
+)
+
+versaetze = [
+    p for p in geschickter_versatz["posts"]
+    if p["url"] == "/api/practice/offset"
+]
+
+assert versaetze and versaetze[0]["body"] == {"offset_ms": 120}, (
+    f"Der Versatz wurde nicht ans Gerät geschickt: "
+    f"{geschickter_versatz['posts']}"
+)
+
+print("OK: Der Versatz steht in der Karte und geht ans Gerät")
 
 
 # ====================================================================

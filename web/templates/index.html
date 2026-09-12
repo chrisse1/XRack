@@ -371,6 +371,28 @@
                       id="practice-take"
                       class="form-select form-select-sm w-auto flex-grow-1">
                   </select>
+
+                  {#
+                      Die Laufzeit des Weges XRack -> Pult -> XRack.
+                      Sie laesst sich von hier aus nicht ausrechnen -
+                      sie haengt am Pult, an der Route durch das Pult
+                      und an den Puffern. Deshalb ein Feld: nach Gehoer
+                      einstellbar, einmal gemerkt.
+                  #}
+                  <span class="text-nowrap small text-body-secondary">
+                      {{ t.practice_offset_label }}
+                  </span>
+
+                  <input
+                      type="number"
+                      id="practice-offset"
+                      class="form-control form-control-sm"
+                      style="width: 5.5rem"
+                      min="0"
+                      max="2000"
+                      step="5"
+                  >
+                  <span class="small text-body-secondary">ms</span>
               </div>
 
               {#

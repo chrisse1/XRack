@@ -138,6 +138,16 @@ class Application(
         )
 
         #
+        # Die Laufzeit des Weges XRack -> Pult -> XRack, in
+        # Millisekunden. Beim Zusammenhoeren wird der Mitschnitt um so
+        # viel vorgezogen (siehe set_practice_offset).
+        #
+        self.practice_offset_ms = self.state_store.get(
+            "practice_offset_ms",
+            0,
+        )
+
+        #
         # Hat DIESER Uebungslauf die Aufnahme gestartet? Nur dann wird
         # sie mit dem Ueben auch wieder beendet (siehe stop_practice).
         #
@@ -631,6 +641,8 @@ class Application(
         self.status.practice_repeat = self.music_player.wiederholen
 
         self.status.practice_record = self.practice_record
+
+        self.status.practice_offset_ms = self.practice_offset_ms
 
         #
         # Laeuft die Aufnahme wirklich noch? Der Recorder kann von

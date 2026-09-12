@@ -462,6 +462,208 @@ assert kanaele == 8, (
 print("OK: Ohne Mitschnitt läuft der Weg von Stufe 2 unverändert")
 
 
+# ====================================================================
+# 7. Der Versatz zieht NUR den Mitschnitt vor
+#
+# Der Mitschnitt hinkt dem Mix immer hinterher, um die Laufzeit des
+# ganzen Weges: XRack schreibt in den ALSA-Puffer, das Pult wandelt,
+# mischt und schickt zurück, XRack liest wieder aus einem Puffer.
+# Ausrechnen lässt sich das von hier aus nicht - anwenden schon: Steht
+# der Mix an Stelle p, wird der Mitschnitt ab p+versatz gelesen.
+#
+# Geprüft mit einer Datei, deren Werte mit dem Rahmen wachsen - daran
+# lässt sich ablesen, WO gelesen wird.
+# ====================================================================
+
+schreiber = W64Writer()
+schreiber.directory = ORDNER
+schreiber.open(
+    channels=2, sample_rate=RATE, bits_per_sample=24,
+    name_prefix="Zaehler2", marker=MARKER_SOUNDCHECK, start_channel=9,
+)
+block = bytearray()
+for n in range(RATE):
+    block += struct.pack("<i", n) + struct.pack("<i", n)
+schreiber.write(bytes(block))
+schreiber.close()
+
+ZAEHLER2 = Path(schreiber.filename)
+
+VERSATZ = 0.25
+
+#
+# Auch der MIX muss mitzaehlen, sonst faellt eine Verschiebung an ihm
+# gar nicht auf: Die Pruefdatei von oben traegt in jedem Rahmen
+# dieselben Werte, ein Sprung darin ist unsichtbar. Genau daran ist
+# die erste Fassung dieses Abschnitts vorbeigelaufen.
+#
+schreiber = W64Writer()
+schreiber.directory = ORDNER
+schreiber.open(
+    channels=8, sample_rate=RATE, bits_per_sample=24,
+    name_prefix="Zaehlmix", marker=MARKER_PRACTICE,
+)
+block = bytearray()
+for n in range(RATE):
+    block += struct.pack("<i", n)
+    for kanal in range(1, 8):
+        block += struct.pack("<i", 1000001 + kanal)
+schreiber.write(bytes(block))
+schreiber.close()
+
+ZAEHLMIX = Path(schreiber.filename)
+
+dekoder = UebenDecoder()
+
+dekoder.einrichten(
+    breite=INTERFACE,
+    start_channel=0,
+    mitschnitt=ZAEHLER2,
+    mitschnitt_start=8,
+    versatz=VERSATZ,
+)
+
+assert dekoder.open(ZAEHLMIX, channels=INTERFACE, rate=RATE)
+
+werte = kanalwerte(dekoder.read(CHUNK), INTERFACE)
+
+dekoder.close()
+
+assert werte[0] == 0, (
+    f"Der Mix beginnt bei Rahmen {werte[0]} statt bei 0 - der Versatz "
+    f"hat ihn mitverschoben. Dann verschiebt sich alles gemeinsam, und "
+    f"gewonnen ist nichts."
+)
+
+erwartet = int(VERSATZ * RATE)
+
+assert abs(werte[8] - erwartet) <= 1, (
+    f"Der Mitschnitt steht bei Rahmen {werte[8]} statt bei {erwartet} - "
+    f"um {VERSATZ * 1000:.0f} ms vorgezogen zu werden, muss er dort "
+    f"anfangen."
+)
+
+#
+# Und zusammen mit einem Sprung: Beides addiert sich, sonst stimmte
+# die Zuordnung nach jedem Spulen nicht mehr.
+#
+dekoder.einrichten(
+    breite=INTERFACE,
+    start_channel=0,
+    mitschnitt=ZAEHLER2,
+    mitschnitt_start=8,
+    versatz=VERSATZ,
+)
+
+assert dekoder.open(
+    ZAEHLMIX, channels=INTERFACE, rate=RATE, start_position=0.5
+)
+
+gesprungen = kanalwerte(dekoder.read(CHUNK), INTERFACE)
+
+dekoder.close()
+
+assert abs(gesprungen[0] - int(0.5 * RATE)) <= 1, (
+    f"Nach dem Sprung steht der Mix bei {gesprungen[0]} statt bei "
+    f"{int(0.5 * RATE)} - der Versatz gehört nicht auf ihn."
+)
+
+erwartet = int((0.5 + VERSATZ) * RATE)
+
+assert abs(gesprungen[8] - erwartet) <= 1, (
+    f"Nach dem Sprung steht der Mitschnitt bei {gesprungen[8]} statt "
+    f"bei {erwartet} - Sprung und Versatz müssen sich addieren."
+)
+
+print("OK: Der Versatz zieht nur den Mitschnitt vor, auch nach Sprüngen")
+
+
+# ====================================================================
+# 8. Ein negativer Versatz gibt es nicht
+#
+# Der Mitschnitt kann dem Mix nicht vorauseilen - das wäre Hellsehen.
+# Ein negativer Wert wäre ein Denkfehler und soll nicht
+# stillschweigend etwas Falsches tun.
+# ====================================================================
+
+dekoder.einrichten(
+    breite=INTERFACE,
+    start_channel=0,
+    mitschnitt=ZAEHLER2,
+    mitschnitt_start=8,
+    versatz=-0.25,
+)
+
+#
+# Gemessen an einer Sprungstelle, nicht bei 0: Am Anfang faengt der
+# Sprung "nach hinten" ohnehin am Dateianfang an, ein negativer Wert
+# sieht dort aus wie keiner. Erst mitten im Stueck zeigt sich, ob er
+# wirkt - und dort waere er ein hoerbarer Fehler.
+#
+assert dekoder.open(
+    ZAEHLMIX, channels=INTERFACE, rate=RATE, start_position=0.5
+)
+
+zurueck = kanalwerte(dekoder.read(CHUNK), INTERFACE)
+
+dekoder.close()
+
+erwartet = int(0.5 * RATE)
+
+assert abs(zurueck[8] - erwartet) <= 1, (
+    f"Bei negativem Versatz steht der Mitschnitt bei {zurueck[8]} "
+    f"statt bei {erwartet} - er würde dem Mix vorauseilen, und das "
+    f"wäre Hellsehen."
+)
+
+print("OK: Ein negativer Versatz bleibt wirkungslos")
+
+
+# ====================================================================
+# 9. Die Aufnahme beginnt mit dem ersten Block, nicht vorher
+#
+# Das ist die Voraussetzung dafür, dass der Versatz überhaupt eine
+# feste Grösse ist. Zwischen "Aufnahme starten" und "der erste Ton
+# geht hinaus" liegen das Öffnen von ALSA, ein Threadstart und das
+# Öffnen der Datei - zusammen einige zehn Millisekunden, und jedes Mal
+# unterschiedlich viele. Dieser Zufall stünde sonst im Mitschnitt und
+# liesse sich durch nichts mehr herausrechnen.
+# ====================================================================
+
+class LangsamerAusgang(Ausgang):
+    """Ein Interface, dessen Öffnen dauert - wie in echt."""
+
+    def open(self, device, channels, rate, start_channel=0,
+             sample_format=None):
+        time.sleep(0.05)
+        return super().open(device, channels, rate, start_channel,
+                            sample_format)
+
+
+ausgang = LangsamerAusgang()
+
+spieler = MusicPlayer(ausgang, MusicLibrary(ORDNER))
+
+gerufen = []
+
+spieler.play_practice(
+    geraet, MIX, start_channel=0, rate=RATE,
+    beim_start=lambda: gerufen.append(len(ausgang.bloecke)),
+)
+
+warte_auf(lambda: len(ausgang.bloecke) > 3, was="mehrere Blöcke")
+
+spieler.stop()
+
+assert gerufen == [1], (
+    f"Der Ruf kam nach {gerufen} Blöcken (erwartet: genau einmal, nach "
+    f"dem ersten). Vorher hiesse: Die Aufnahme läuft, bevor ein Ton da "
+    f"ist - und um wie viel, weiss hinterher niemand."
+)
+
+print("OK: Der Ruf für die Aufnahme kommt genau mit dem ersten Block")
+
+
 arbeit.cleanup()
 
 print("Alle Tests zum Mitschnitt beim Üben erfolgreich.")

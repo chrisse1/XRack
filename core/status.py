@@ -117,6 +117,11 @@ class SystemStatus(BaseModel):
     # Die Aufnahmen, die sich zum Uebungsmix dazulegen lassen.
     #
     practice_takes: list[str] = []
+
+    #
+    # Um wie viel der Mitschnitt beim Zusammenhoeren vorgezogen wird.
+    #
+    practice_offset_ms: int = 0
     practice_mixes: list[str] = []
 
     bluetooth_streaming: bool = False

@@ -157,6 +157,7 @@ class Anwendung(AufnahmeMixin, MusikMixin):
         self.practice_record = False
         self.practice_recording = False
         self.practice_active = False
+        self.practice_offset_ms = 0
 
 
 arbeit = tempfile.TemporaryDirectory()

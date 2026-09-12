@@ -62,6 +62,18 @@ class MusicPlayer:
 
         self._mitschnitt: Path | None = None
 
+        #
+        # Wird EINMAL gerufen, sobald der erste Block wirklich beim
+        # Interface ist. Daran haengt der Gleichlauf beim Mitschneiden:
+        # Zwischen "Aufnahme starten" und "der erste Ton geht hinaus"
+        # liegen das Oeffnen von ALSA, ein Threadstart und das Oeffnen
+        # der Datei - zusammen einige zehn Millisekunden, und jedes Mal
+        # unterschiedlich viele. Wer die Aufnahme vorher startet, hat
+        # diesen Zufall im Mitschnitt stehen und kann ihn nachher nicht
+        # mehr herausrechnen.
+        #
+        self._beim_ersten_block = None
+
         self._aktiver_decoder = self.decoder
 
         self._playing = False
@@ -225,6 +237,8 @@ class MusicPlayer:
         #
         self._mitschnitt = None
 
+        self._beim_ersten_block = None
+
         playlist = self.library.build_shuffled_playlist(folder)
 
         if not playlist:
@@ -278,6 +292,8 @@ class MusicPlayer:
         #
         self._mitschnitt = None
 
+        self._beim_ersten_block = None
+
         if not path.exists():
             return False
 
@@ -298,6 +314,8 @@ class MusicPlayer:
         wiederholen: bool = False,
         mitschnitt: Path | None = None,
         mitschnitt_start: int = 0,
+        versatz: float = 0.0,
+        beim_start=None,
     ) -> bool:
         """
         Einen Übungsmix abspielen - auf Wunsch mit einem Mitschnitt
@@ -333,6 +351,8 @@ class MusicPlayer:
 
         self._mitschnitt = mitschnitt
 
+        self._beim_ersten_block = beim_start
+
         if mitschnitt is None:
 
             return self._start(
@@ -352,6 +372,7 @@ class MusicPlayer:
             )
 
             self._mitschnitt = None
+            self._beim_ersten_block = None
 
             return False
 
@@ -360,6 +381,7 @@ class MusicPlayer:
             start_channel=start_channel,
             mitschnitt=mitschnitt,
             mitschnitt_start=mitschnitt_start,
+            versatz=versatz,
         )
 
         #
@@ -372,6 +394,7 @@ class MusicPlayer:
         if not self.ueben_decoder.passt(path):
 
             self._mitschnitt = None
+            self._beim_ersten_block = None
 
             return False
 
@@ -786,6 +809,23 @@ class MusicPlayer:
                     break
 
                 self.backend.write(data)
+
+                #
+                # Erst JETZT ist der Ton unterwegs. Was hier haengt,
+                # verzoegert den zweiten Block - der Puffer traegt
+                # aber eine ganze Periode, das reicht dafuer bequem.
+                #
+                if self._beim_ersten_block is not None:
+
+                    ruf = self._beim_ersten_block
+                    self._beim_ersten_block = None
+
+                    try:
+                        ruf()
+                    except Exception as fehler:
+                        self.logger.exception(
+                            "Beim Start des Mitschnitts: %s", fehler
+                        )
 
             #
             # War eine Pause im Spiel? Gefragt wird nach der
