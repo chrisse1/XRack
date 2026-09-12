@@ -214,6 +214,32 @@ def set_practice_offset(auswahl: PracticeOffsetSelection, request: Request):
     }
 
 
+@router.post("/api/practice/latency")
+def start_latency_measurement(request: Request):
+    """
+    Die Laufzeit durch das Pult messen (Klick hin, Klick zurueck).
+
+    Laeuft im Hintergrund - der Fortschritt kommt ueber
+    GET /api/practice/latency.
+    """
+
+    application = request.app.state.application
+
+    erfolg, meldung = application.start_laufzeit_messung()
+
+    return {
+        "success": erfolg,
+        "message": meldung,
+    }
+
+
+@router.get("/api/practice/latency")
+def latency_status(request: Request):
+    """Was die Laufzeitmessung gerade tut."""
+
+    return request.app.state.application.laufzeit_status()
+
+
 @router.post("/api/practice/repeat")
 def set_practice_repeat(auswahl: PracticeRepeatSelection, request: Request):
     """Die Schleife ein- oder ausschalten."""

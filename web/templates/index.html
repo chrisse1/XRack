@@ -393,6 +393,16 @@
                       step="5"
                   >
                   <span class="small text-body-secondary">ms</span>
+
+                  <button
+                      type="button"
+                      id="btn-practice-latency"
+                      class="btn btn-outline-secondary btn-sm text-nowrap"
+                      onclick="messeLaufzeit()"
+                  >
+                      <i class="bi bi-stopwatch me-1"></i>
+                      {{ t.practice_latency_measure }}
+                  </button>
               </div>
 
               {#

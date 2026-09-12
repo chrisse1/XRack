@@ -2,8 +2,13 @@
 Musikspieler: Ordner und Dateien abspielen, verwalten - und Üben.
 """
 
+import shutil
+import tempfile
+import threading
+import time
 from pathlib import Path
 
+from core.laufzeit_messung import MESSDAUER_S, klick_datei, versatz_ms
 from core.recording_kind import (
     KIND_PRACTICE,
     kind_from_filename,
@@ -396,6 +401,190 @@ class MusikMixin:
             for name in self.recorder.recordings
             if kind_from_filename(name) != KIND_PRACTICE
         ]
+
+
+    # ----------------------------------------------------------------
+    # Die Laufzeit messen
+    #
+    # Gemessen wird genau das, was nachher korrigiert wird: ein
+    # Uebungslauf mit einem Klick-Mix, mitgeschnitten ueber den ganz
+    # normalen Weg. Steht der Klick im Mix bei einer Sekunde und im
+    # Mitschnitt bei 1,08 s, ist die Laufzeit 80 ms - ohne eine
+    # einzige Annahme ueber Puffer, Perioden oder Pulte.
+    #
+    # Begruendung ausfuehrlich in core/laufzeit_messung.py.
+    # ----------------------------------------------------------------
+
+    def laufzeit_status(self) -> dict:
+        """Was die Messung gerade tut - für die Oberfläche."""
+
+        with self._laufzeit_lock:
+            return dict(self._laufzeit_stand)
+
+
+    def start_laufzeit_messung(self) -> tuple[bool, str]:
+        """
+        Startet die Messung im Hintergrund.
+
+        Sie dauert einige Sekunden (Klick-Mix schreiben, abspielen,
+        auswerten) - zu lange für eine Anfrage, die auf Antwort
+        wartet. Der Fortschritt kommt über laufzeit_status().
+        """
+
+        if self.selected_audio_device is None:
+            return False, "Kein Audiogerät gewählt."
+
+        if not self.recorder.bereit:
+            return False, "Kein Audiogerät geöffnet."
+
+        if self.recorder.recording:
+            return False, "Es läuft bereits eine Aufnahme."
+
+        laeuft, grund = self.wiedergabe_laeuft()
+
+        if laeuft:
+            return False, f"{grund} Erst anhalten."
+
+        with self._laufzeit_lock:
+
+            if self._laufzeit_stand["active"]:
+                return False, "Es läuft bereits eine Messung."
+
+            self._laufzeit_stand = {
+                "active": True,
+                "success": None,
+                "ms": 0,
+                "error": "",
+            }
+
+        threading.Thread(
+            target=self._laufzeit_messen,
+            daemon=True,
+        ).start()
+
+        return True, ""
+
+
+    def _laufzeit_messen(self) -> None:
+        """
+        Der eigentliche Lauf - in einem eigenen Faden.
+
+        Aufgeräumt wird in jedem Fall: Der Klick-Mix und der Mitschnitt
+        der Messung sind Wegwerfdateien. Blieben sie liegen, stünden
+        sie in der Aufnahmenliste und niemand wüsste, wozu.
+        """
+
+        klick = None
+        mitschnitt = None
+
+        arbeitsordner = tempfile.mkdtemp(prefix="xrack_laufzeit_")
+
+        try:
+
+            klick = klick_datei(
+                Path(arbeitsordner),
+                self.selected_audio_device.channels,
+                self.mixer_sample_rate,
+            )
+
+            #
+            # Derselbe Weg wie beim Ueben mit Mitschnitt: Die Aufnahme
+            # beginnt mit dem ersten Block, der zum Interface geht.
+            # Genau daran haengt die Messung - startete sie frueher,
+            # maesse man die Anlaufzeit von XRack mit.
+            #
+            gestartet = []
+
+            def beim_start():
+                if self.recorder.start("Laufzeitmessung"):
+                    gestartet.append(self.recorder.current_filename)
+
+            erfolg = self.music_player.play_practice(
+                self.selected_audio_device,
+                klick,
+                start_channel=0,
+                rate=self.mixer_sample_rate,
+                beim_start=beim_start,
+            )
+
+            if not erfolg:
+                self._laufzeit_fertig(False, 0, "Der Klick liess sich nicht abspielen.")
+                return
+
+            #
+            # Warten, bis der Klick-Mix durch ist - er ist wenige
+            # Sekunden lang. Die Frist ist grosszuegig und nur dafuer
+            # da, dass ein haengender Spieler die Messung nicht
+            # ewig offen laesst.
+            #
+            frist = time.monotonic() + MESSDAUER_S + 10.0
+
+            while self.music_player.playing and time.monotonic() < frist:
+                time.sleep(0.05)
+
+            self.music_player.stop()
+
+            self.recorder.stop()
+
+            if not gestartet:
+                self._laufzeit_fertig(
+                    False, 0, "Der Mitschnitt liess sich nicht starten."
+                )
+                return
+
+            mitschnitt = self.recorder.writer.directory / gestartet[0]
+
+            if not mitschnitt.is_file():
+                self._laufzeit_fertig(
+                    False, 0, "Der Mitschnitt der Messung fehlt."
+                )
+                return
+
+            ms, grund = versatz_ms(mitschnitt, self.mixer_sample_rate)
+
+            if ms < 0:
+                self._laufzeit_fertig(False, 0, grund)
+                return
+
+            self.set_practice_offset(ms)
+
+            self._laufzeit_fertig(True, ms, "")
+
+        except Exception as fehler:
+
+            self.logger.exception("Laufzeitmessung fehlgeschlagen: %s", fehler)
+
+            self._laufzeit_fertig(False, 0, "Unerwarteter Fehler.")
+
+        finally:
+
+            #
+            # Wegwerfdateien - auch wenn unterwegs etwas schiefging.
+            #
+            for datei in (klick, mitschnitt):
+                try:
+                    if datei is not None:
+                        Path(datei).unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+            shutil.rmtree(arbeitsordner, ignore_errors=True)
+
+
+    def _laufzeit_fertig(self, erfolg: bool, ms: int, grund: str) -> None:
+
+        with self._laufzeit_lock:
+            self._laufzeit_stand = {
+                "active": False,
+                "success": erfolg,
+                "ms": ms,
+                "error": grund,
+            }
+
+        if erfolg:
+            self.logger.info("Laufzeit gemessen: %d ms", ms)
+        else:
+            self.logger.warning("Laufzeitmessung ohne Ergebnis: %s", grund)
 
 
     def set_practice_offset(self, millisekunden: int) -> bool:

@@ -7,14 +7,14 @@ weil der Umbau ueber mehrere Sitzungen laeuft: Wer hier weiterarbeitet
 allem die BEGRUENDUNGEN vorfinden, nicht nur das Ergebnis.
 
 **Stand:** Stufen 1 bis 4 gebaut, dazu der Gleichlauf beim
-Zusammenhoeren (3.0.0-dev9). Das Aufnahmefenster steht und ist am
+Zusammenhoeren samt Messung (3.0.0-dev10). Das Aufnahmefenster steht und ist am
 Geraet abgenommen; der Musikspieler spielt Uebungsmixe mehrkanalig mit
 Spulen und Schleife; die Karte hat den Umschalter Musik | Ueben; das
 Geuebte laesst sich mitschneiden und zusammen mit dem Mix wieder
 abspielen; die Sperrmatrix steht als Tabelle im Versuch. Offen: die
 Messung der Laufzeit durch das Pult. Stufe 5 (aus Mix und Versuch eine
 Datei schreiben) ist zurueckgestellt - beim Testen war sie nicht
-wichtig.
+wichtig, die Laufzeit dafuer umso mehr.
 
 **Versionen:** Auf diesem Zweig 3.0.0-dev1, -dev2 ... je Stufe. Wer
 so eine Fassung auf dem Geraet hat, sieht am Namen, dass es eine
@@ -326,14 +326,35 @@ zu füllen. Angewandt wird er beim Zusammenhören — steht der Mix an
 Stelle p, wird der Mitschnitt ab p+Versatz gelesen. Nur der
 Mitschnitt, und nie negativ: Vorauseilen wäre Hellsehen.
 
-**Die Messung (noch nicht gebaut).** Weil Teil 1 jetzt fest ist, ist
-Teil 2 eine Konstante der Anlage — einmal messen genügt. Der
-ehrlichste Weg misst genau das, was nachher korrigiert wird: ein
-Übungslauf mit einem Klick-Mix, mitgeschnitten über den normalen Weg;
-die Stelle des Klicks im Mitschnitt IST der Versatz. Voraussetzung ist
-eine Schleife im Pult (der ausgegebene Kanal muss ins Aufnahmefenster
-zurückgeroutet sein) — die kann XRack nicht selbst herstellen und muss
-sie dazusagen.
+**Die Messung (gebaut, 3.0.0-dev10).** Weil Teil 1 fest ist, ist
+Teil 2 eine Konstante der Anlage — einmal messen genügt. Gemessen wird
+genau das, was nachher korrigiert wird: ein Übungslauf mit einem
+Klick-Mix, mitgeschnitten über den ganz normalen Weg. Steht der Klick
+im Mix bei einer Sekunde und im Mitschnitt bei 1,08 s, ist die
+Laufzeit 80 ms — ohne eine einzige Annahme über Puffer, Perioden oder
+Pulte (`core/laufzeit_messung.py`).
+
+Drei Entscheidungen, die dabei etwas kosten würden, wenn man sie
+anders träfe:
+
+- **Der Klick geht auf ALLE Ausgabekanäle.** XRack weiss nicht,
+  welchen Weg das Pult zurückführt — so ist es egal, und es genügt
+  der Weg, der zum Üben ohnehin eingerichtet ist.
+- **Scharfer Anfang, weiches Ende.** Gesucht wird die erste Stelle
+  über der Schwelle. Mit einem sanften Einschwingen fände man sie ein
+  paar Abtastwerte später — jedes Mal gleich viel, aber jedes Mal zu
+  spät.
+- **Die erste Flanke zählt, nicht die lauteste Stelle.** Was danach
+  kommt, ist Nachhall und Nachregeln des Weges; die Laufzeit ist der
+  Anfang.
+- **Kein Klick ist ein Befund, kein Messwert.** Ist der Weg im Pult
+  nicht geschlossen, kommt eine Begründung statt einer Zahl. Eine Zahl
+  auszugeben wäre das Schlimmste: Sie würde stillschweigend falsch
+  korrigieren.
+
+Voraussetzung bleibt die Schleife im Pult. Die kann XRack nicht selbst
+herstellen — deshalb fragt der Knopf vorher und sagt, was einzurichten
+ist.
 
 - Knopf **„Üben + mitschneiden"**: startet Übungsmix und Aufnahme in
   einem Zug (Aufnahmefenster aus Stufe 1 - beim Üben typisch zwei

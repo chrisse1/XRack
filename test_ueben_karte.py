@@ -870,8 +870,11 @@ def seite_bauen(daten: dict, vorlauf: str, pruefung: str) -> str:
         "<script>window.I18N = " + json.dumps(TEXTE) + ";\n"
         "window.__posts = [];\n"
         "window.__rufe = [];\n"
+        "window.__gets = [];\n"
         "window.fetch = async (url, optionen) => {\n"
         "  window.__rufe.push(String(url));\n"
+        "  if (!optionen || !optionen.method || optionen.method === 'GET')\n"
+        "    window.__gets.push(String(url));\n"
         "  if (optionen && optionen.method === 'POST')\n"
         "    window.__posts.push({ url: String(url),\n"
         "      body: optionen.body ? JSON.parse(optionen.body) : null });\n"
@@ -883,7 +886,8 @@ def seite_bauen(daten: dict, vorlauf: str, pruefung: str) -> str:
         "  return { ok: true, json: async () => ({ success: true }) };\n"
         "};\n"
         "window.alert = (text) => { window.__alert = String(text); };\n"
-        "window.confirm = () => true;\n"
+        "window.confirm = (text) => { window.__frage = String(text);\n"
+        "  return true; };\n"
         "</script>"
     )
 
@@ -1475,6 +1479,57 @@ assert versaetze and versaetze[0]["body"] == {"offset_ms": 120}, (
 )
 
 print("OK: Der Versatz steht in der Karte und geht ans Gerät")
+
+
+# ====================================================================
+# 13f. Der Messknopf fragt vorher, was am Pult nötig ist
+#
+# XRack kann die Schleife im Pult nicht selbst herstellen, und eine
+# Messung ohne sie findet nichts. Wer den Knopf drückt, muss vorher
+# wissen, was er einrichten muss - sonst bekommt er nur eine
+# Fehlermeldung und weiss nicht, warum.
+# ====================================================================
+
+MESSUNG = """function () {
+    return {
+        gefragt: window.__frage || '',
+        posts: window.__posts.filter(
+            (p) => p.url.indexOf('/api/status') !== 0),
+        //
+        // Nur die ABFRAGEN, nicht der Start: Beide gehen an dieselbe
+        // Adresse, der Start aber als POST.
+        //
+        abfragen: window.__gets.filter(
+            (u) => u.indexOf('/api/practice/latency') === 0)
+    };
+}"""
+
+gemessen = ausfuehren(
+    stand(player_mode="practice", practice_mixes=MIXE, practice_takes=TAKES),
+    MESSUNG,
+    vorlauf="document.getElementById('btn-practice-latency').click();",
+)
+
+assert gemessen["gefragt"] == TEXTE["practice_latency_confirm"], (
+    f"Vor der Messung wurde nicht erklärt, was am Pult nötig ist: "
+    f"{gemessen['gefragt']!r}"
+)
+
+messungen = [
+    p for p in gemessen["posts"] if p["url"] == "/api/practice/latency"
+]
+
+assert messungen, (
+    f"Der Messknopf hat die Messung nicht gestartet: {gemessen['posts']}"
+)
+
+assert gemessen["abfragen"], (
+    "Nach dem Start wurde nicht nachgefragt, wie es steht - die "
+    "Messung dauert Sekunden, das Ergebnis kommt nicht mit der "
+    "Antwort auf den Start."
+)
+
+print("OK: Der Messknopf erklärt sich, startet und fragt nach")
 
 
 # ====================================================================

@@ -148,6 +148,20 @@ class Application(
         )
 
         #
+        # Der Stand der Laufzeitmessung. Sie laeuft in einem eigenen
+        # Faden (siehe MusikMixin.start_laufzeit_messung), deshalb
+        # unter Schloss.
+        #
+        self._laufzeit_lock = threading.Lock()
+
+        self._laufzeit_stand = {
+            "active": False,
+            "success": None,
+            "ms": 0,
+            "error": "",
+        }
+
+        #
         # Hat DIESER Uebungslauf die Aufnahme gestartet? Nur dann wird
         # sie mit dem Ueben auch wieder beendet (siehe stop_practice).
         #

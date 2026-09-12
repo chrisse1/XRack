@@ -2933,6 +2933,22 @@ function updatePracticeCard(data) {
         versatz.disabled = data.music_playing;
     }
 
+    const messen = document.getElementById("btn-practice-latency");
+
+    if (messen && !laufzeitLaeuft) {
+
+        //
+        // Die Messung ist selbst eine Wiedergabe MIT Aufnahme - sie
+        // faellt unter dieselben Sperren wie das Ueben.
+        //
+        messen.disabled = (
+            data.music_playing
+            || data.playback_active
+            || data.recording
+            || !isAudioReady(data)
+        );
+    }
+
     const schleife = document.getElementById("practice-repeat");
 
     if (schleife && document.activeElement !== schleife) {
@@ -3063,6 +3079,80 @@ async function startPractice() {
 async function stopPractice() {
 
     await fetch("/api/practice/stop", { method: "POST" });
+
+    await refreshDashboard();
+}
+
+//
+// Die Laufzeit durch das Pult messen.
+//
+// Sie laeuft einige Sekunden im Hintergrund - deshalb starten,
+// nachfragen, und erst dann das Ergebnis. Vorher wird gesagt, was
+// dafuer am Pult eingerichtet sein muss: XRack kann die Schleife nicht
+// selbst herstellen, und eine Messung ohne sie findet nichts.
+//
+let laufzeitLaeuft = false;
+
+async function messeLaufzeit() {
+
+    if (laufzeitLaeuft) return;
+
+    if (!confirm(I18N.practice_latency_confirm)) return;
+
+    const knopf = document.getElementById("btn-practice-latency");
+
+    const antwort = await fetch("/api/practice/latency", { method: "POST" });
+
+    const ergebnis = await antwort.json();
+
+    if (!ergebnis.success) {
+        if (ergebnis.message) alert(ergebnis.message);
+        return;
+    }
+
+    laufzeitLaeuft = true;
+
+    if (knopf) {
+        knopf.disabled = true;
+        knopf.textContent = I18N.practice_latency_running;
+    }
+
+    //
+    // Nachfragen, bis sie fertig ist. Die Frist ist nur dafuer da,
+    // dass ein haengender Lauf den Knopf nicht fuer immer sperrt.
+    //
+    const frist = Date.now() + 60000;
+
+    while (Date.now() < frist) {
+
+        await new Promise((weiter) => setTimeout(weiter, 500));
+
+        let stand;
+
+        try {
+            stand = await (await fetch("/api/practice/latency")).json();
+        } catch (fehler) {
+            break;
+        }
+
+        if (stand.active) continue;
+
+        if (stand.success) {
+            alert(I18N.practice_latency_done.replace("{ms}", stand.ms));
+        } else if (stand.error) {
+            alert(stand.error);
+        }
+
+        break;
+    }
+
+    laufzeitLaeuft = false;
+
+    if (knopf) {
+        knopf.innerHTML =
+            `<i class="bi bi-stopwatch me-1"></i>${I18N.practice_latency_measure}`;
+        knopf.disabled = false;
+    }
 
     await refreshDashboard();
 }

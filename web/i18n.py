@@ -88,6 +88,18 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "practice_take_label": "Dazu hören:",
         "practice_offset_label": "Versatz:",
         "practice_offset_hint": "Versatz {ms} ms",
+        "practice_latency_measure": "messen",
+        "practice_latency_confirm": (
+            "XRack spielt gleich einen kurzen Klick auf allen "
+            "Wiedergabekanälen und nimmt dabei auf.\n\n"
+            "Damit etwas zu messen ist, muss der Klick am Pult auf "
+            "einen Kanal zurückkommen, der gerade aufgenommen wird - "
+            "derselbe Weg, den der Übungsmix beim Üben nimmt. Auf "
+            "diesem Kanal sollte es sonst still sein.\n\n"
+            "Die Messung dauert etwa fünf Sekunden. Jetzt starten?"
+        ),
+        "practice_latency_running": "Messung läuft …",
+        "practice_latency_done": "Gemessen: {ms} ms",
         "practice_take_none": "nichts",
         "practice_take_hint": "mit {name}",
         "practice_record_hint": "Mitschnitt: Kanal {a}-{b}",
@@ -880,6 +892,18 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "practice_take_label": "Play along with:",
         "practice_offset_label": "Offset:",
         "practice_offset_hint": "offset {ms} ms",
+        "practice_latency_measure": "measure",
+        "practice_latency_confirm": (
+            "XRack will play a short click on all playback channels "
+            "and record at the same time.\n\n"
+            "For anything to be measured, the click has to come back "
+            "at the console on a channel that is being recorded - the "
+            "same path the practice mix takes. That channel should be "
+            "quiet otherwise.\n\n"
+            "The measurement takes about five seconds. Start now?"
+        ),
+        "practice_latency_running": "measuring …",
+        "practice_latency_done": "Measured: {ms} ms",
         "practice_take_none": "nothing",
         "practice_take_hint": "with {name}",
         "practice_record_hint": "Recording: channels {a}-{b}",
