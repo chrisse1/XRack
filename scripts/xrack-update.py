@@ -268,6 +268,84 @@ def gelesene_version(wurzel: Path) -> tuple[int, ...] | None:
     return None
 
 
+def ausfuehrbar_machen(install_dir: Path) -> None:
+    """
+    Das Netz unter den Rechten aus der ZIP.
+
+    Bringt die ZIP gar keine mit (unter Windows gepackt, siehe
+    rechte_wiederherstellen), waere sonst nichts mehr ausfuehrbar.
+    Was ausfuehrbar sein MUSS, wird es hier auf jeden Fall.
+
+    install.sh gehoert ausdruecklich dazu: Es liegt im
+    Wurzelverzeichnis und war deshalb lange nicht dabei - nach einem
+    Update ging "./install.sh" erst nach einem chmod von Hand.
+    """
+
+    dateien = list((install_dir / "scripts").glob("*"))
+    dateien.append(install_dir / "install.sh")
+
+    for datei in dateien:
+
+        if not datei.is_file() or datei.suffix not in (".sh", ".py"):
+            continue
+
+        try:
+            datei.chmod(0o755)
+        except OSError as exc:
+            log(f"Rechte fuer {datei.name} nicht gesetzt: {exc}")
+
+
+def rechte_wiederherstellen(archive: zipfile.ZipFile, ziel: Path) -> None:
+    """
+    Die Ausfuehrungsrechte aus der ZIP wieder herstellen.
+
+    Warum das noetig ist: zipfile.extractall() wirft die Unix-Rechte
+    weg. Entpackte Dateien bekommen die Vorgabemaske (0644), und
+    shutil.copy2() schreibt genau die anschliessend auf die
+    Installation. Nach einem Update war install.sh deshalb nicht mehr
+    ausfuehrbar - gemeldet vom Geraet, "./install.sh" ging erst nach
+    einem chmod.
+
+    Die ZIP von GitHub traegt die Rechte durchaus bei sich
+    (external_attr >> 16). Sie werden beim Entpacken nur nicht
+    beachtet.
+
+    Uebernommen werden AUSSCHLIESSLICH die Ausfuehrungs-Bits. Eine
+    ZIP ist etwas, das von aussen kommt; sie soll keine Schreibrechte
+    fuer andere setzen und kein setuid vergeben koennen. Was sie darf,
+    ist sagen: "das hier ist ein Programm".
+    """
+
+    for eintrag in archive.infolist():
+
+        #
+        # Nur ZIPs, die unter Unix gepackt wurden, tragen ueberhaupt
+        # Rechte. Alles andere (Windows: 0) waere geraten.
+        #
+        if eintrag.create_system != 3:
+            continue
+
+        modus = eintrag.external_attr >> 16
+
+        if not modus:
+            continue
+
+        ausfuehrbar = modus & 0o111
+
+        if not ausfuehrbar:
+            continue
+
+        pfad = ziel / eintrag.filename
+
+        if not pfad.is_file():
+            continue
+
+        try:
+            pfad.chmod(pfad.stat().st_mode | ausfuehrbar)
+        except OSError as exc:
+            log(f"Rechte fuer {eintrag.filename} nicht gesetzt: {exc}")
+
+
 def find_source_directory(extracted: Path) -> Path | None:
     """
     GitHub-ZIPs enthalten einen einzelnen Ordner (z.B. "XRack-main").
@@ -606,6 +684,7 @@ def run_update(
     try:
         with zipfile.ZipFile(zip_file) as archive:
             archive.extractall(EXTRACT_DIR)
+            rechte_wiederherstellen(archive, EXTRACT_DIR)
     except (zipfile.BadZipFile, OSError) as exc:
         log(f"Entpacken fehlgeschlagen: {exc}")
         write_status(
@@ -731,9 +810,7 @@ def run_update(
         copy_tree(source_dir, install_dir)
         chown_tree(install_dir, service_user)
 
-        for script in (install_dir / "scripts").glob("*"):
-            if script.suffix in (".sh", ".py"):
-                script.chmod(0o755)
+        ausfuehrbar_machen(install_dir)
 
         #
         # Die systemd-Unit des Access Points neu schreiben.

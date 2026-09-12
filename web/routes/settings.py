@@ -64,6 +64,10 @@ class RecordingPrefixSelection(BaseModel):
     prefix: str
 
 
+class MdnsAliasSelection(BaseModel):
+    name: str
+
+
 @router.get("/api/settings")
 def get_settings(request: Request):
 
@@ -90,6 +94,11 @@ def get_settings(request: Request):
         "console_host": console["host"],
         "console_host_source": console["source"],
         "faders_autolock": application.get_faders_autolock(),
+        #
+        # Der gemeinsame Zweitname im Netz - Name, Zustand und
+        # gegebenenfalls die Meldung, warum er nicht steht.
+        #
+        "mdns_alias": application.get_mdns_alias(),
     }
 
 
@@ -246,6 +255,22 @@ def set_wifi_country(
     application = request.app.state.application
 
     success, message = application.set_wifi_country(auswahl.country)
+
+    return {
+        "success": success,
+        "message": message,
+    }
+
+
+@router.post("/api/settings/mdns-alias")
+def set_mdns_alias(
+    auswahl: MdnsAliasSelection,
+    request: Request,
+):
+
+    application = request.app.state.application
+
+    success, message = application.set_mdns_alias(auswahl.name)
 
     return {
         "success": success,

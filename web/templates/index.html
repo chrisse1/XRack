@@ -74,7 +74,18 @@
 
             {% set header_right %}
             <span class="fw-normal small">{{ t.status_label }}</span>
-            <strong id="recorder-status" class="small">{{ t.state_idle }}</strong>
+            {#
+                Der Zustand schon beim Ausliefern, nicht erst beim
+                ersten Puls: Hier stand fest "bereit", und ohne
+                Soundkarte war das eine Sekunde lang genau die falsche
+                Auskunft. Der Schlüssel wird aus dem Zustand gebildet
+                (state_idle, state_no_device, state_recording, ...),
+                damit kein zweiter Ort zu pflegen ist - das JavaScript
+                schreibt danach dasselbe hin.
+            #}
+            <strong id="recorder-status" class="small">
+                {{ t["state_" + (status.recorder.value or "idle")] }}
+            </strong>
             {% endset %}
 
             {% set body %}
@@ -88,8 +99,42 @@
                       id="record-channels"
                       class="form-select form-select-sm w-auto">
                   </select>
+
+                  {#
+                      Was das Interface hergibt. Ohne diese Zahl nimmt
+                      man am X32 stillschweigend 18 von 32 Kanaelen
+                      auf - die Vorgabe stammt vom XR18.
+                  #}
+                  <span id="record-channels-available"
+                        class="text-body-secondary small"></span>
               </div>
+
+              {#
+                  Wie lange der Platz noch reicht. Am X32 sind es rund
+                  22 GB je Stunde - das will man VOR der Aufnahme
+                  wissen, nicht mittendrin.
+              #}
+              <span id="record-space" class="small text-body-secondary"></span>
             </div>
+
+            {#
+                Drei Hinweise, die eine Aufnahme retten koennen: kein
+                offenes Interface (dann geht gar nichts), eine falsch
+                eingestellte Samplerate (die Aufnahme waere hinterher
+                zu schnell oder zu langsam) und ein voller Speicher.
+
+                Der erste steht zuerst, weil er alles andere erledigt:
+                Ohne Soundkarte sind Restzeit und Samplerate
+                gegenstandslos.
+            #}
+            <div id="record-device-warning"
+                 class="alert alert-warning py-2 px-3 small mt-2 d-none"></div>
+
+            <div id="record-rate-warning"
+                 class="alert alert-warning py-2 px-3 small mt-2 d-none"></div>
+
+            <div id="record-space-warning"
+                 class="alert alert-warning py-2 px-3 small mt-2 d-none"></div>
 
             <hr>
 

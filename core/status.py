@@ -19,6 +19,14 @@ class RecorderState(str, Enum):
     PLAYBACK = "playback"
     MONITORING = "monitoring"
 
+    #
+    # Kein Audiogerät offen. Eigener Zustand, weil IDLE als "bereit"
+    # angezeigt wird - und bereit ist XRack dann gerade nicht. Die
+    # Karte meldete das lange trotzdem, samt Knopf, der eine Aufnahme
+    # ohne Soundkarte startete.
+    #
+    NO_DEVICE = "no_device"
+
 
 class SystemStatus(BaseModel):
     """Current XRack system status."""
@@ -51,6 +59,21 @@ class SystemStatus(BaseModel):
     recording: bool = False
     recorder_monitoring: bool = False
     recorder_levels: list[float] = []
+
+    #
+    # Stimmt die eingestellte Samplerate mit der gemessenen ueberein?
+    # None heisst "noch kein Urteil" - siehe recorder/rate_check.py.
+    #
+    rate_plausible: bool | None = None
+    rate_measured: float = 0.0
+    rate_likely: int = 0
+
+    #
+    # Wie lange der freie Platz noch reicht (Sekunden) und ob eine
+    # Aufnahme deswegen beendet wurde.
+    #
+    disk_seconds_left: float = 0.0
+    disk_stopped: bool = False
 
     playback_active: bool = False
     playback_filename: str = ""

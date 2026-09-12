@@ -88,8 +88,13 @@ def recorder_channels(
 
     application = request.app.state.application
 
+    #
+    # Von Hand gewaehlt: Ab jetzt fasst XRack die Kanalzahl beim
+    # Geraetewechsel nicht mehr von sich aus an.
+    #
     success = application.set_record_channels(
-        selection.channels
+        selection.channels,
+        manuell=True,
     )
 
     return {

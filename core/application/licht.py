@@ -48,17 +48,56 @@ class LichtMixin:
         # laengst weg ist - und man sucht den Fehler bei der Musik.
         #
         #
-        # Wie viele Kanaele das Interface hat - fuer die Auswahl des
-        # Kanalpaars in den Einstellungen. Dieselbe Quelle, aus der
-        # start_light_show() prueft, ob das gewaehlte Paar ueberhaupt
-        # existiert.
+        # Wie viele Kanaele das Interface WIRKLICH liefert - fuer die
+        # Auswahl der Quelle in den Einstellungen. Dieselbe Zahl, an
+        # der start_light_show() prueft, ob es die gewaehlte Quelle
+        # ueberhaupt gibt.
         #
-        stand["input_channels"] = self.recorder.backend.channels
+        # Ausdruecklich nicht die Aufnahmebreite: Die Show hoert am
+        # vollen Strom mit (siehe recorder/recorder.py) und darf
+        # deshalb auch auf einen Kanal hoeren, den niemand aufnimmt.
+        # Vorher stand hier die Aufnahmebreite - an einem X32 waren
+        # damit nur 18 von 32 Kanaelen waehlbar, weil XRack in seiner
+        # Vorgabe 18 aufnimmt.
+        #
+        stand["input_channels"] = self.recorder.backend.native_channels
 
         stand["show_stream"] = self.light_engine.strom_da
         stand["show_blocks"] = self.light_engine.bloecke
 
         return stand
+
+    # ----------------------------------------------------------------
+    # Sichern und Einspielen
+    # ----------------------------------------------------------------
+
+    def export_lighting(self) -> dict:
+        """Die Lichteinrichtung als Abbild - zum Mitnehmen."""
+
+        return self.lighting_store.exportieren()
+
+    def import_lighting(self, daten: dict) -> tuple[bool, str]:
+        """
+        Eine gesicherte Lichteinrichtung einspielen.
+
+        Danach ist das Licht aus: Die Lampen des anderen Geräts
+        stehen woanders, und was gerade leuchtet, gehörte zur alten
+        Einrichtung. Ein Blackout ist hier die ehrliche Antwort.
+        """
+
+        erfolg, meldung = self.lighting_store.importieren(daten)
+
+        if not erfolg:
+            return False, meldung
+
+        self.stop_light_show()
+
+        self.light_values = {}
+        self.light_brightness = {}
+
+        self.dmx_control.blackout()
+
+        return True, ""
 
     def set_lighting_enabled(self, enabled: bool) -> tuple[bool, str]:
         """
@@ -364,7 +403,12 @@ class LichtMixin:
 
         einstellungen = self.lighting_store.show_einstellungen()
 
-        kanaele = self.recorder.backend.channels
+        #
+        # Die volle Kanalzahl des Interfaces, nicht die
+        # Aufnahmebreite - die Show hoert am ungeschnittenen Strom
+        # mit.
+        #
+        kanaele = self.recorder.backend.native_channels
 
         #
         # Der Nutzer gibt den ersten Kanal 1-basiert an. Beim Paar
@@ -397,8 +441,23 @@ class LichtMixin:
         # Den Audiostrom offen halten, ohne als Pegelprüfung zu
         # gelten (siehe recorder/recorder.py).
         #
+        # Der Rückgabewert zählt: Ein Gerät kann gewählt sein, ohne
+        # dass es sich öffnen ließ (die Prüfung oben sieht das nicht).
+        # Dann wird der Mithörer wieder abgemeldet, statt eine Show zu
+        # starten, die nie einen Block bekommt.
+        #
         self.recorder.add_consumer(self.light_engine.block_empfangen)
-        self.recorder.start_analysis()
+
+        if not self.recorder.start_analysis():
+
+            self.recorder.remove_consumer(
+                self.light_engine.block_empfangen
+            )
+
+            return False, (
+                "Das Audiogerät ist nicht geöffnet - ohne Eingang gibt es "
+                "nichts zu hören."
+            )
 
         self._show_uebernahme = True
 

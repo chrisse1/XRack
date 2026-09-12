@@ -32,6 +32,7 @@ from core.bluetooth_control import BluetoothControl
 from core.usb_storage import UsbStorage
 from core.updater import Updater
 from core.console_control import ConsoleControl, MIN_DB
+from core.mdns_alias import MdnsAlias
 from core.diagnostics import Diagnostics
 from core.state_store import StateStore
 from core.dmx_control import DmxControl
@@ -158,6 +159,12 @@ class Application(
         self.updater = Updater(self.usb_storage)
 
         self.console_control = ConsoleControl()
+
+        #
+        # Der gemeinsame Zweitname im Netz (siehe core/mdns_alias.py).
+        # Gemeldet wird er unten beim Start, sobald alles steht.
+        #
+        self.mdns_alias = MdnsAlias(self.logger)
 
         self.dmx_control = DmxControl()
 
@@ -294,6 +301,25 @@ class Application(
         self._port_forward_thread.start()
 
         #
+        # Der gemeinsame Zweitname, unter dem eine gespeicherte
+        # Web-App jedes XRack findet. Darf folgenlos scheitern: Ohne
+        # avahi-publish oder ohne Netz gibt es eben nur den eigenen
+        # Hostnamen, und das ist kein Grund, den Start aufzuhalten.
+        #
+        gemerkter_name = self.state_store.get("mdns_alias", "")
+
+        if gemerkter_name:
+
+            erfolg, meldung = self.mdns_alias.setzen(gemerkter_name)
+
+            if not erfolg:
+                self.logger.warning(
+                    "Zweiter Name '%s.local' nicht gemeldet: %s",
+                    gemerkter_name,
+                    meldung,
+                )
+
+        #
         # Die systemd-Unit des Access Points auf den Stand des Codes
         # bringen.
         #
@@ -329,6 +355,40 @@ class Application(
             self.diagnostics.start()
 
 
+    def _recorder_zustand(self) -> None:
+        """
+        Welcher Zustand in der Soundcheck-Karte steht.
+
+        Die laufenden Zustaende zuerst, "kein Geraet" davor, "bereit"
+        zuletzt. Die Reihenfolge ist die eigentliche Aussage:
+
+          - Faellt das Geraet mitten in einer Aufnahme zu, soll die
+            Karte weiter sagen, was laeuft - es wird ja noch in eine
+            offene Datei geschrieben, und die muss beendet werden.
+          - "bereit" steht ganz hinten, denn genau das stand hier
+            lange zu oft: ohne angeschlossene Konsole "bereit", mit
+            einem Aufnahmeknopf, der eine unbrauchbare Datei anlegte.
+
+        Steht als eigene Methode da, damit die Reihenfolge geprueft
+        werden kann, ohne psutil, ALSA und ein Pult mitzubringen -
+        siehe test_recorder_kein_geraet.py.
+        """
+
+        if self.recorder.recording:
+            self.status.recorder = RecorderState.RECORDING
+
+        elif self.player.playing:
+            self.status.recorder = RecorderState.PLAYBACK
+
+        elif self.recorder.monitoring:
+            self.status.recorder = RecorderState.MONITORING
+
+        elif not self.status.audio:
+            self.status.recorder = RecorderState.NO_DEVICE
+
+        else:
+            self.status.recorder = RecorderState.IDLE
+
     def update_status(self) -> None:
         """Aktualisiert den aktuellen Systemstatus."""
         
@@ -352,6 +412,23 @@ class Application(
             self.status.audio_sample_bits = 0
             self.status.audio_formats = []
             self.status.audio_core_open = self.audio_core.opened
+
+        #
+        # Ist der Audioweg wirklich benutzbar? Zweierlei muss stimmen:
+        # ein gewaehltes Geraet UND ein offenes PCM-Handle. Das Zweite
+        # allein reicht nicht, denn das Oeffnen kann scheitern, ohne
+        # dass die Auswahl verschwindet (siehe
+        # audio/audio_backend.py).
+        #
+        # Stand frueher weiter unten und hiess nur "status.audio".
+        # Hier oben, weil der Recorder-Zustand dieselbe Antwort
+        # braucht - zweimal geschrieben koennten die beiden
+        # auseinanderlaufen.
+        #
+        self.status.audio = (
+            self.status.audio_connected
+            and self.status.audio_core_open
+        )
 
         self.status.hostname = platform.node()
 
@@ -387,18 +464,63 @@ class Application(
             1,
         )
         
-        if self.recorder.recording:
-            self.status.recorder = RecorderState.RECORDING
-        elif self.player.playing:
-            self.status.recorder = RecorderState.PLAYBACK
-        elif self.recorder.monitoring:
-            self.status.recorder = RecorderState.MONITORING
-        else:
-            self.status.recorder = RecorderState.IDLE
+        self._recorder_zustand()
 
         self.status.recording = (
             self.recorder.recording
         )
+
+        #
+        # Die Samplerate: gemessen, nicht geglaubt. Ohne laufenden
+        # Lesethread gibt es nichts zu melden - dann bleibt das
+        # Urteil offen.
+        #
+        pruefung = self.recorder.rate_check
+
+        if pruefung is not None:
+
+            stand = pruefung.status()
+
+            self.status.rate_plausible = stand["plausible"]
+            self.status.rate_measured = stand["measured"]
+            self.status.rate_likely = stand["likely"]
+
+        else:
+            self.status.rate_plausible = None
+            self.status.rate_measured = 0.0
+            self.status.rate_likely = 0
+
+        #
+        # Speicherplatz: Wie lange reicht er noch? Waehrend einer
+        # Aufnahme schreibt der Lesethread den Wert fort, sonst wird
+        # er hier gerechnet - wer 22 GB je Stunde schreibt, will das
+        # VORHER wissen.
+        #
+        if self.recorder.recording:
+            self.status.disk_seconds_left = round(self.recorder.restzeit, 1)
+        else:
+            self.status.disk_seconds_left = round(
+                self.recorder.platz_restzeit(), 1
+            )
+
+        #
+        # Der Lesethread darf sich nicht selbst anhalten - er wuerde
+        # auf sich selbst warten. Hat er wegen Speichermangels
+        # aufgehoert zu schreiben, wird hier ordentlich abgemeldet.
+        #
+        if self.recorder.platz_stopp and not self.status.disk_stopped:
+
+            self.logger.warning(
+                "Aufnahme wegen Speichermangels beendet: %s",
+                self.recorder.current_filename,
+            )
+
+            self.status.disk_stopped = True
+
+            self.recorder.platz_aufraeumen()
+
+        elif not self.recorder.platz_stopp:
+            self.status.disk_stopped = False
 
         self.status.recorder_monitoring = (
             self.recorder.monitoring
@@ -469,11 +591,6 @@ class Application(
         self.status.music_duration = round(
             self.music_player.track_duration,
             1,
-        )
-
-        self.status.audio = (
-            self.status.audio_connected
-            and self.status.audio_core_open
         )
 
         self.status.usb_connected = self.usb_storage.connected

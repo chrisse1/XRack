@@ -24,6 +24,19 @@ function isAudioBusy(data) {
     return data.recording || data.recorder_monitoring || data.playback_active || data.music_playing || data.bluetooth_streaming;
 }
 
+//
+// Ist ein Audiogeraet offen? Das Feld kommt aus dem Status und meint
+// beides zusammen: gewaehlt UND wirklich geoeffnet (siehe
+// Application.update_status).
+//
+// Ohne das melde die Soundcheck-Karte "bereit", auch wenn keine
+// Konsole angeschlossen war - und der Aufnahmeknopf liess sich
+// druecken.
+//
+function isAudioReady(data) {
+    return Boolean(data.audio);
+}
+
 let lastStatusData = {};
 
 // Verbindungsüberwachung: Ein Modal poppt auf, sobald das Statuspoll
@@ -163,6 +176,7 @@ function updateRecorder(data) {
     updateRecorderStatus(data);
     updateRecordingInfo(data);
     updateRecordChannels(data);
+    updateRecordWarnings(data);
     updateRecordingList(data.recordings);
     updateSoundcheckButton(data);
     updateLevelCheckButton(data);
@@ -182,12 +196,23 @@ function updateRecorderToggleButton(data) {
         button.innerHTML = `<i class="bi bi-record-circle fs-3"></i><small>${I18N.btn_recording_start}</small>`;
         button.classList.remove("btn-secondary");
         button.classList.add("btn-danger");
-        button.disabled = data.playback_active;
+
+        //
+        // Ohne offenes Interface bleibt der Knopf zu. Der Recorder
+        // lehnt ohnehin ab (siehe recorder/recorder.py) - ein Knopf,
+        // der sich druecken laesst und dann nichts tut, ist aber
+        // schlimmer als einer, der gesperrt ist und sagt, warum.
+        //
+        const bereit = isAudioReady(data);
+
+        button.disabled = data.playback_active || !bereit;
+        button.title = bereit ? "" : I18N.record_no_device;
     }
 }
 
 const RECORDER_STATE_LABELS = {
     idle: () => I18N.state_idle,
+    no_device: () => I18N.state_no_device,
     recording: () => I18N.state_recording,
     playback: () => I18N.state_playback,
     monitoring: () => I18N.state_monitoring,
@@ -353,6 +378,107 @@ function updateRecordChannels(data) {
     select.disabled = isAudioBusy(data);
 }
 
+//
+// Zwei Warnungen, die eine Aufnahme retten koennen - und die
+// Restzeit, die man VOR dem Druck auf Aufnahme sehen will.
+//
+// Am X32 schreibt XRack rund 22 GB je Stunde. Und die Samplerate
+// kann XRack nicht erkennen (die X-Serie meldet ueber USB immer den
+// ganzen Bereich), sie wird deshalb gemessen: Rahmen je Sekunde
+// gegen die Uhr.
+//
+function updateRecordWarnings(data) {
+
+    //
+    // Kein Interface offen? Dann steht das zuerst da, denn es
+    // erledigt alles andere: Restzeit und Samplerate sind ohne
+    // Soundkarte gegenstandslos.
+    //
+    const geraetWarnung = document.getElementById("record-device-warning");
+
+    if (geraetWarnung) {
+
+        if (isAudioReady(data)) {
+            geraetWarnung.classList.add("d-none");
+        } else {
+            geraetWarnung.textContent = I18N.record_no_device;
+            geraetWarnung.classList.remove("d-none");
+        }
+    }
+
+    //
+    // Wie viele Kanaele das Interface ueberhaupt hergibt.
+    //
+    const verfuegbar = document.getElementById("record-channels-available");
+
+    if (verfuegbar) {
+        verfuegbar.textContent = data.audio_channels
+            ? I18N.record_channels_available.replace("{n}", data.audio_channels)
+            : "";
+    }
+
+    //
+    // Die Restzeit.
+    //
+    const platz = document.getElementById("record-space");
+    const platzWarnung = document.getElementById("record-space-warning");
+
+    const rest = data.disk_seconds_left || 0;
+
+    //
+    // Datenrate in GB je Stunde - dieselbe Rechnung wie im Recorder.
+    //
+    const gb = data.audio_sample_rate && data.record_channels
+        ? (data.record_channels * 4 * data.audio_sample_rate * 3600
+            / 1000 / 1000 / 1000).toFixed(1)
+        : "0";
+
+    if (platz) {
+        platz.textContent = rest > 0
+            ? I18N.record_space_left.replace("{time}", formatDuration(rest))
+            : "";
+    }
+
+    if (platzWarnung) {
+
+        if (data.disk_stopped) {
+            platzWarnung.textContent = I18N.record_space_stopped;
+            platzWarnung.classList.remove("d-none");
+        } else if (rest > 0 && rest < 15 * 60) {
+            platzWarnung.textContent = I18N.record_space_warning
+                .replace("{time}", formatDuration(rest))
+                .replace("{gb}", gb);
+            platzWarnung.classList.remove("d-none");
+        } else {
+            platzWarnung.classList.add("d-none");
+        }
+    }
+
+    //
+    // Die Samplerate. Solange es kein Urteil gibt (null), steht dort
+    // nichts - lieber nichts sagen als etwas Falsches.
+    //
+    const rateWarnung = document.getElementById("record-rate-warning");
+
+    if (!rateWarnung) return;
+
+    if (data.rate_plausible === false) {
+
+        rateWarnung.textContent = data.rate_likely
+            ? I18N.record_rate_warning
+                .replace("{expected}", data.audio_sample_rate)
+                .replace("{likely}", data.rate_likely)
+            : I18N.record_rate_dropouts
+                .replace("{measured}", Math.round(data.rate_measured))
+                .replace("{expected}", data.audio_sample_rate);
+
+        rateWarnung.classList.remove("d-none");
+
+    } else {
+        rateWarnung.classList.add("d-none");
+    }
+}
+
 async function setRecordChannels(channels) {
     const response = await fetch("/api/recorder/channels", {
         method: "POST",
@@ -463,7 +589,19 @@ function updateSoundcheckButton(data) {
         button.innerHTML = `<i class="bi bi-play-circle fs-3"></i><small>${label}</small>`;
         button.classList.remove("btn-warning");
         button.classList.add("btn-success");
-        button.disabled = !selectedRecording || data.recording || data.music_playing;
+
+        //
+        // Abgespielt wird auf denselben Kanaelen, auf denen
+        // aufgenommen wurde - ohne Interface gibt es die nicht.
+        // Application.start_soundcheck lehnt das schon ab, der Knopf
+        // sah es bisher nur nicht.
+        //
+        const bereit = isAudioReady(data);
+
+        button.disabled = !selectedRecording || data.recording
+            || data.music_playing || !bereit;
+
+        button.title = bereit ? "" : I18N.record_no_device;
     }
 
     updateRecorderKindBadge();
@@ -517,7 +655,16 @@ function updateLevelCheckButton(data) {
         button.innerHTML = `<i class="bi bi-soundwave me-2"></i>${I18N.btn_level_check}`;
         button.classList.remove("btn-info");
         button.classList.add("btn-outline-info");
-        button.disabled = false;
+
+        //
+        // Wie beim Aufnahmeknopf: ohne offenes Interface gesperrt.
+        // Die Pegelpruefung startete sonst einen Lesethread, der nie
+        // einen Block bekam - Anzeige leer, Grund nirgends.
+        //
+        const bereit = isAudioReady(data);
+
+        button.disabled = !bereit;
+        button.title = bereit ? "" : I18N.record_no_device;
     }
 }
 
@@ -1550,6 +1697,8 @@ function renderFaders(channels) {
 
     faderChannels = channels;
 
+    faderZeilenAusgleichen();
+
     channels.forEach((channel, index) => {
         if (faderDragging === channel.channel) return;
 
@@ -1566,6 +1715,80 @@ function renderFaders(channels) {
         renderMuteButton(mute, channel.muted);
     });
 }
+
+//
+// Die Kanalzuege gleichmaessig auf die Zeilen verteilen.
+//
+// Das CSS packt so viele in eine Zeile, wie hineinpassen
+// (grid-template-columns: repeat(auto-fit, ...)). Beim XR18 sind das
+// alle siebzehn - eine Zeile, genau richtig. Am X32 sind es
+// dreiunddreissig: Die erste Zeile ist dann randvoll, die zweite
+// halb leer. Siebzehn und sechzehn sehen nicht nur aufgeraeumter
+// aus, sie geben auch jedem Regler mehr Breite.
+//
+// Wie viele ueberhaupt in eine Zeile passen, weiss nur der Browser -
+// er haengt an Fensterbreite, Schriftgroesse und Zoom. Deshalb wird
+// er gefragt, statt zu rechnen: erst die Vorgabe aus dem CSS wirken
+// lassen, dann die daraus entstandenen Spalten zaehlen.
+//
+function faderZeilenAusgleichen() {
+
+    const grid = document.getElementById("faders-grid");
+
+    if (!grid) return;
+
+    //
+    // Zurueck auf die CSS-Vorgabe: Sonst zaehlt gleich die eigene
+    // Aufteilung von vorhin statt der moeglichen.
+    //
+    grid.style.gridTemplateColumns = "";
+
+    const anzahl = grid.children.length;
+
+    if (!anzahl) return;
+
+    const stil = window.getComputedStyle(grid);
+
+    //
+    // Auf schmalen Geraeten stapelt das CSS die Zuege als Zeilen
+    // untereinander - dort gibt es keine Spalten zu verteilen. Das
+    // steht bewusst nicht als Breite in Pixeln hier, sondern wird am
+    // tatsaechlichen Zustand abgelesen: Die Umschaltbreite gehoert
+    // ins CSS und soll nur dort stehen.
+    //
+    if (stil.display !== "grid") return;
+
+    const passen = stil.gridTemplateColumns
+        .split(" ")
+        .filter((eintrag) => eintrag).length;
+
+    //
+    // Passt alles in eine Zeile, bleibt es dabei.
+    //
+    if (passen < 1 || anzahl <= passen) return;
+
+    const zeilen = Math.ceil(anzahl / passen);
+    const spalten = Math.ceil(anzahl / zeilen);
+
+    grid.style.gridTemplateColumns = `repeat(${spalten}, minmax(0, 1fr))`;
+}
+
+//
+// Beim Drehen oder Groessenaendern passt die Aufteilung nicht mehr -
+// dann neu rechnen. Gebremst, damit das Ziehen am Fensterrand nicht
+// bei jedem Pixel eine Neuberechnung ausloest.
+//
+let faderAusgleichTimer = null;
+
+window.addEventListener("resize", () => {
+
+    if (faderAusgleichTimer !== null) clearTimeout(faderAusgleichTimer);
+
+    faderAusgleichTimer = setTimeout(() => {
+        faderAusgleichTimer = null;
+        faderZeilenAusgleichen();
+    }, 150);
+});
 
 async function toggleMute(channel) {
     const cell = document.querySelector(
@@ -3049,6 +3272,7 @@ async function loadSettings() {
         applyWlanSettings(data.wlan);
         applyConsoleHost(data);
         applyFadersAutolock(data.faders_autolock);
+        applyMdnsAlias(data.mdns_alias);
     } catch (error) {
         console.error("Fehler beim Laden der Einstellungen:", error);
     }
@@ -3756,6 +3980,82 @@ async function saveConsoleHost() {
 // ------------------------------------------------------------
 // Automatische Sperre der Kanalzuege
 // ------------------------------------------------------------
+
+//
+// Der gemeinsame Zweitname im Netz.
+//
+// Eine gespeicherte Web-App startet immer genau die Adresse, unter der
+// sie gespeichert wurde. Wer mehrere XRacks hat, traegt deshalb
+// ueberall denselben Zweitnamen ein - dann findet dasselbe Symbol in
+// jedem Raum das Geraet, das dort steht.
+//
+function applyMdnsAlias(stand) {
+
+    const feld = document.getElementById("settings-mdns-alias");
+    const anzeige = document.getElementById("settings-mdns-alias-state");
+
+    if (!feld || !anzeige || !stand) return;
+
+    //
+    // Nicht ueberschreiben, waehrend jemand tippt.
+    //
+    if (document.activeElement !== feld) feld.value = stand.name || "";
+
+    const zeilen = [];
+
+    //
+    // Der eigene Name gehoert daneben: Er bleibt, was er ist, und
+    // unter ihm ist das Geraet auch weiterhin erreichbar.
+    //
+    zeilen.push(
+        '<span class="text-body-secondary">'
+        + I18N.settings_mdns_alias_own.replace("{host}", stand.hostname || "?")
+        + "</span>"
+    );
+
+    if (!stand.available) {
+        zeilen.push('<span class="text-warning">'
+            + I18N.settings_mdns_alias_missing + "</span>");
+    } else if (stand.error) {
+        zeilen.push('<span class="text-warning">' + stand.error + "</span>");
+    } else if (stand.published) {
+        zeilen.push('<span class="text-success">'
+            + I18N.settings_mdns_alias_published
+                .replace("{name}", (stand.name || "") + ".local")
+                .replace("{addresses}", (stand.addresses || []).join(", "))
+            + "</span>");
+    } else {
+        zeilen.push('<span class="text-body-secondary">'
+            + I18N.settings_mdns_alias_off + "</span>");
+    }
+
+    anzeige.innerHTML = zeilen.join("<br>");
+}
+
+async function saveMdnsAlias() {
+
+    const feld = document.getElementById("settings-mdns-alias");
+
+    if (!feld) return;
+
+    const response = await fetch("/api/settings/mdns-alias", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: feld.value.trim() })
+    });
+
+    const ergebnis = await response.json();
+
+    if (!ergebnis.success) {
+        alert(ergebnis.message);
+    }
+
+    //
+    // Den Stand vom Server holen, statt ihn zu raten: Ob der Name
+    // wirklich im Netz steht, weiss nur das Geraet.
+    //
+    await loadSettings();
+}
 
 function applyFadersAutolock(einstellung) {
     if (!einstellung) return;
@@ -5138,6 +5438,44 @@ async function lightRequest(url, koerper) {
     }
 
     return result.success;
+}
+
+//
+// Eine gesicherte Einrichtung einspielen.
+//
+// Gefragt wird vorher: Es ersetzt die vorhandene Einrichtung, und
+// hinterher ist das Licht aus - die Lampen der anderen Anlage stehen
+// woanders.
+//
+async function importLighting(feld) {
+
+    const datei = feld.files && feld.files[0];
+
+    //
+    // Das Feld gleich leeren: Sonst laesst sich dieselbe Datei nicht
+    // ein zweites Mal waehlen (der Browser meldet keine Aenderung).
+    //
+    feld.value = "";
+
+    if (!datei) return;
+
+    if (!confirm(I18N.light_import_confirm)) return;
+
+    const daten = new FormData();
+    daten.append("file", datei);
+
+    const response = await fetch("/api/lighting/import", {
+        method: "POST",
+        body: daten
+    });
+
+    const ergebnis = await response.json();
+
+    if (!ergebnis.success) {
+        alert(ergebnis.message || I18N.light_import_failed);
+    }
+
+    await refreshLighting();
 }
 
 // ------------------------------------------------------------

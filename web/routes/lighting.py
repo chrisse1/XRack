@@ -2,7 +2,10 @@
 Lichtsteuerung über DMX.
 """
 
-from fastapi import APIRouter, Request
+import json
+
+from fastapi import APIRouter, File, Request, UploadFile
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -231,6 +234,53 @@ def lighting_scene_delete(
     application = request.app.state.application
 
     success, message = application.delete_light_scene(selection.id)
+
+    return {"success": success, "message": message}
+
+
+@router.get("/api/lighting/export")
+def lighting_export(request: Request):
+    """
+    Die Lichteinrichtung als Datei zum Herunterladen.
+
+    Gedacht fuers zweite XRack: Vorlagen, Lampen, Szenen und
+    Show-Einstellungen wandern mit, alles Geraetegebundene bleibt hier
+    (siehe LightingStore.exportieren).
+    """
+
+    application = request.app.state.application
+
+    abbild = application.export_lighting()
+
+    return JSONResponse(
+        content=abbild,
+        headers={
+            "Content-Disposition":
+                'attachment; filename="xrack-licht.json"',
+        },
+    )
+
+
+@router.post("/api/lighting/import")
+async def lighting_import(
+    request: Request,
+    file: UploadFile = File(...),
+):
+    """Eine gesicherte Lichteinrichtung einspielen."""
+
+    application = request.app.state.application
+
+    roh = await file.read()
+
+    try:
+        daten = json.loads(roh.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return {
+            "success": False,
+            "message": "Die Datei lässt sich nicht lesen.",
+        }
+
+    success, message = application.import_lighting(daten)
 
     return {"success": success, "message": message}
 

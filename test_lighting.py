@@ -438,8 +438,23 @@ class RecorderAttrappe:
     """
 
     class Backend:
+
+        #
+        # Zwei verschiedene Zahlen, und das mit Absicht: Das
+        # Interface liefert 18 Kanaele, aufgenommen werden davon 8.
+        # Genau so stand es am X32 im Proberaum - dort sind es 32 und
+        # 18 -, und daran faellt auf, wenn die Lichtshow wieder an
+        # der Aufnahmebreite haengt statt am Interface.
+        #
         channels = 8
+        native_channels = 18
         rate = 48000
+
+        #
+        # Ein Strom ist offen - sonst lehnt die Show ab (siehe
+        # Recorder.bereit).
+        #
+        opened = True
 
     backend = Backend()
 
@@ -452,7 +467,12 @@ class RecorderAttrappe:
         pass
 
     def start_analysis(self):
-        pass
+        #
+        # True wie der echte Recorder, wenn ein Strom offen ist. Die
+        # Show wertet das aus: Ohne Strom wird sie abgelehnt, statt zu
+        # laufen, ohne je einen Block zu sehen.
+        #
+        return True
 
     def remove_consumer(self, verbraucher):
         pass
@@ -2541,11 +2561,20 @@ with tempfile.TemporaryDirectory() as tmp:
 
     app, _ = aufbau(Path(tmp))
 
-    assert app.get_lighting_status()["input_channels"] == 8, (
-        app.get_lighting_status().get("input_channels")
+    #
+    # Die volle Kanalzahl des Interfaces, nicht die Aufnahmebreite
+    # (8). Am X32 gemeldet: In der Lichtshow standen nur 18 Kanaele
+    # zur Auswahl statt der 32, die das Pult liefert - 18 ist die
+    # Vorgabe fuer die AUFNAHME, und die hat mit der Lichtquelle
+    # nichts zu tun.
+    #
+    assert app.get_lighting_status()["input_channels"] == 18, (
+        "Die Auswahl der Lichtquelle haengt an der Aufnahmebreite "
+        "statt am Interface: "
+        + str(app.get_lighting_status().get("input_channels"))
     )
 
-    print("OK: Die Kanalzahl des Interfaces steht im Bericht")
+    print("OK: Die volle Kanalzahl des Interfaces steht im Bericht")
 
 
 # ====================================================================
@@ -3847,18 +3876,45 @@ with tempfile.TemporaryDirectory() as tmp:
     print("OK: Mono und Paar kommen so in der Analyse an, wie eingestellt")
 
     #
-    # Die Grenzen: Das Interface der Attrappe hat acht Kanaele. Der
-    # einzelne Kanal 8 ist gueltig, das Paar 8+9 nicht - und die
-    # Meldung muss den Fall nennen, der wirklich vorliegt. "Das Paar
-    # 8+9 gibt es nicht" waere bei Mono schlicht gelogen.
+    # Und der Fall vom X32: Kanal 12 liegt JENSEITS der
+    # Aufnahmebreite (8), aber innerhalb dessen, was das Interface
+    # liefert (18). Die Show muss ihn hoeren duerfen - genau dafuer
+    # bekommt sie den ungeschnittenen Strom.
     #
     app.lighting_store.set_show_einstellungen({
-        "channel": 8, "channel_mono": True,
+        "channel": 12, "channel_mono": True,
     })
 
     ok, meldung = app.start_light_show()
 
-    assert ok, "Bei acht Kanälen muss der einzelne Kanal 8 gehen: " + meldung
+    assert ok, (
+        "Ein Kanal jenseits der Aufnahmebreite wird abgelehnt - dann "
+        "haengt die Lichtquelle wieder an der Aufnahme: " + meldung
+    )
+
+    assert app.light_engine.analyse.links == 11, app.light_engine.analyse.links
+    assert app.light_engine.analyse.channels == 18, (
+        "Die Analyse rechnet mit der falschen Rahmenbreite - sie liest "
+        f"dann den falschen Kanal: {app.light_engine.analyse.channels}"
+    )
+
+    app.stop_light_show()
+
+    print("OK: Die Show hört auch auf Kanäle, die nicht aufgenommen werden")
+
+    #
+    # Die Grenzen: Das Interface der Attrappe liefert 18 Kanaele. Der
+    # einzelne Kanal 18 ist gueltig, das Paar 18+19 nicht - und die
+    # Meldung muss den Fall nennen, der wirklich vorliegt. "Das Paar
+    # 18+19 gibt es nicht" waere bei Mono schlicht gelogen.
+    #
+    app.lighting_store.set_show_einstellungen({
+        "channel": 18, "channel_mono": True,
+    })
+
+    ok, meldung = app.start_light_show()
+
+    assert ok, "Bei 18 Kanälen muss der einzelne Kanal 18 gehen: " + meldung
 
     app.stop_light_show()
 
@@ -3866,17 +3922,17 @@ with tempfile.TemporaryDirectory() as tmp:
 
     ok, meldung = app.start_light_show()
 
-    assert not ok, "Das Paar 8+9 gibt es bei acht Kanälen nicht."
-    assert "8+9" in meldung, meldung
+    assert not ok, "Das Paar 18+19 gibt es bei 18 Kanälen nicht."
+    assert "18+19" in meldung, meldung
 
     app.lighting_store.set_show_einstellungen({
-        "channel": 9, "channel_mono": True,
+        "channel": 19, "channel_mono": True,
     })
 
     ok, meldung = app.start_light_show()
 
-    assert not ok, "Kanal 9 gibt es bei acht Kanälen nicht."
-    assert "Kanal 9" in meldung and "+" not in meldung, (
+    assert not ok, "Kanal 19 gibt es bei 18 Kanälen nicht."
+    assert "Kanal 19" in meldung and "+" not in meldung, (
         "Die Meldung nennt bei Mono den falschen Fall: " + meldung
     )
 

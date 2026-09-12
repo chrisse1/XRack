@@ -26,8 +26,12 @@ appear.
 
 ### What you need
 
-- Raspberry Pi 5
-- a Behringer X-series console (tested: XAir XR18)
+- Raspberry Pi 5 or 4
+- **Raspberry Pi OS based on Debian 13 ("Trixie")** — that is what XRack
+  is built and tested on. The installer relies on the package versions
+  of that release (NetworkManager, hostapd, avahi, OLA); older Debian
+  releases are untested.
+- a Behringer X-series console (tested: XAir XR18 and X32)
 - the USB cable between the two
 - *optional:* a MediaTek MT7612U USB Wi-Fi adapter, if XRack should open
   its own Wi-Fi network
@@ -116,6 +120,15 @@ XRack finds the console by itself. If a router blocks the discovery
 broadcast, enter the IP in the settings; the magnifier button in the
 channel strip card searches again.
 
+- **Shared name for the web app** — saving the interface as an app on a
+  tablet also saves the address it was running under. With more than one
+  XRack the same icon leads nowhere in the next room, and an app has no
+  address bar to change it in. So every unit can announce a shared name
+  on top of its own: set `xrack` everywhere and one saved app finds
+  whichever XRack is in the room. The unit's own name stays as it is.
+  Two units with the same shared name must not be on the same network at
+  once; XRack reports the clash in the settings.
+
 #### Lighting
 
 Everything below is behind one switch under *Settings → Lighting* —
@@ -131,12 +144,19 @@ without DMX you never see it.
 - **Scenes** — save what is currently lit and recall it with one button.
   Scenes are stored relative to the fixture, so moving a fixture to a
   different start address does not invalidate them.
+- **Save and load the setup** — templates, fixtures, scenes and show
+  settings as a file, for moving to a second XRack. Wi-Fi, PIN, device
+  name and console address stay where they are; a faulty file is
+  refused with a reason instead of wrecking the setup you have.
 - **Music-driven light show** — XRack listens to the desk and makes
   light out of it. The source is either a channel pair or a **single
   channel**, and the single channel is the interesting one: on an AUX
   bus you can build a mix just for the light — bass drum and snare up
   front, the vocal out — and it costs one USB channel instead of two.
-  The one you save is free for recording. Each fixture has a *kind*:
+  The one you save is free for recording. Every channel the interface
+  offers can be picked, including ones that are not being recorded:
+  the show listens to the full stream, and how many channels go into
+  the file is a separate question. Each fixture has a *kind*:
 
   | Kind | What it does |
   | --- | --- |
@@ -279,8 +299,12 @@ taucht auch nicht auf.
 
 ### Was man braucht
 
-- Raspberry Pi 5
-- ein Mischpult der X-Serie (getestet: XAir XR18)
+- Raspberry Pi 5 oder 4
+- **Raspberry Pi OS auf Debian-13-Basis ("Trixie")** — darauf ist XRack
+  entwickelt und geprüft. Der Installer verlässt sich auf die
+  Paketstände dieser Fassung (NetworkManager, hostapd, avahi, OLA);
+  ältere Debian-Stände sind ungeprüft.
+- ein Mischpult der X-Serie (getestet: XAir XR18 und X32)
 - das USB-Kabel dazwischen
 - *optional:* ein MediaTek-MT7612U-WLAN-Stick, wenn XRack ein eigenes
   WLAN aufspannen soll
@@ -326,6 +350,14 @@ sie sich einzeln, ohne den ganzen Installer:
 
 #### Aufnehmen und abspielen
 
+- **Zwei Wächter für die Aufnahme** — XRack misst die tatsächlich
+  ankommende Samplerate und meldet sich, wenn sie nicht zur Einstellung
+  passt (sonst wäre die Aufnahme hinterher zu schnell oder zu langsam;
+  erkennen lässt sie sich nicht, die X-Serie meldet über USB immer den
+  ganzen Bereich). Und der freie Platz steht als Restzeit in der Karte:
+  32 Kanäle bei 48 kHz sind rund 22 GB je Stunde. Wird es knapp, wird
+  die Aufnahme rechtzeitig **beendet** statt abgebrochen — eine
+  geschlossene Datei ist lesbar, eine abgebrochene nicht.
 - **Virtueller Soundcheck** — alle Kanäle direkt vom Pult aufnehmen und
   danach auf genau denselben Kanälen wieder abspielen. Die Band kann
   soundchecken, ohne zu spielen.
@@ -376,6 +408,17 @@ Das Pult findet XRack selbst. Lässt ein Router die Suche nicht durch,
 trägt man die IP in den Einstellungen ein; der Lupen-Knopf in der
 Kanalzug-Karte sucht erneut.
 
+- **Gemeinsamer Name für die Web-App** — wer die Oberfläche auf dem
+  Tablet als App speichert, speichert damit auch die Adresse, unter der
+  sie lief. Bei mehreren XRacks führt dasselbe Symbol im nächsten
+  Proberaum ins Leere, und eine App hat keine Adresszeile, in der man
+  das ändern könnte. Deshalb kann jedes Gerät zusätzlich zu seinem
+  eigenen Namen einen gemeinsamen melden — trägt man überall `xrack`
+  ein, findet dieselbe App in jedem Raum das XRack, das dort steht. Der
+  eigene Name bleibt daneben bestehen. Zwei Geräte mit demselben
+  gemeinsamen Namen dürfen nicht gleichzeitig im selben Netz stehen;
+  XRack meldet den Konflikt in den Einstellungen.
+
 #### Licht
 
 Alles Folgende steckt hinter einem Schalter unter *Einstellungen →
@@ -392,13 +435,21 @@ Licht* — wer kein DMX hat, sieht es gar nicht erst.
 - **Szenen** — den aktuellen Stand speichern und per Knopfdruck wieder
   aufrufen. Szenen liegen relativ zur Lampe: Wer eine Lampe später auf
   eine andere Startadresse zieht, muss seine Szenen nicht neu bauen.
+- **Einrichtung sichern und einspielen** — Vorlagen, Lampen, Szenen und
+  Show-Einstellungen als Datei, zum Übertragen auf ein zweites XRack.
+  WLAN, PIN, Gerätename und Pult-Adresse bleiben, wo sie sind; eine
+  fehlerhafte Datei wird begründet abgelehnt, statt die vorhandene
+  Einrichtung zu zerlegen.
 - **Musikgesteuerte Lichtshow** — XRack hört auf das Pult und macht
   daraus Licht. Als Quelle lässt sich ein Kanalpaar wählen oder ein
   **einzelner Kanal** — und der einzelne ist der spannende Fall: Auf
   einem AUX-Bus kann man einen eigenen Mix nur fürs Licht bauen,
   Bassdrum und Snare vorn, die Stimme heraus. Das kostet dann einen
   USB-Kanal statt zweier, und der gesparte steht für Aufnahmen bereit.
-  Jede Lampe hat dabei eine *Art*:
+  Zur Wahl stehen dabei alle Kanäle, die das Interface liefert — auch
+  solche, die gar nicht aufgenommen werden. Die Show hört am vollen
+  Strom mit; wie viele Kanäle in die Datei gehen, ist eine andere
+  Frage. Jede Lampe hat dabei eine *Art*:
 
   | Art | Was sie tut |
   | --- | --- |

@@ -170,6 +170,13 @@ body {
 
    Unter 992px: waagerechte Zeilen (Name links, Regler dehnt sich,
    dB rechts). Ab 992px: senkrechte Fader nebeneinander wie am Pult.
+
+   Eine Ausnahme gibt es doch: Passen nicht alle Zuege in eine Zeile,
+   setzt faderZeilenAusgleichen() in xrack.js die Spaltenzahl als
+   Inline-Stil, damit sich die Zuege gleichmaessig auf die Zeilen
+   verteilen (am X32 sonst 26 und 7). Wie viele nebeneinander passen,
+   entscheidet weiterhin allein die Regel hier unten - das
+   JavaScript liest sie nur ab.
    ------------------------------------------------------------------ */
 
 .fader-grid {

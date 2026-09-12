@@ -177,6 +177,105 @@ damit lässt sich die Show samt Blitz auf die Snare ohne Band prüfen.
 
 ---
 
+## Warum die Samplerate gemessen und nicht geglaubt wird
+
+XRack kann die Samplerate nicht erkennen. Mischpulte der X-Serie melden
+über USB immer den ganzen unterstützten Bereich, nicht ihre laufende
+Clock — deshalb stellt man sie von Hand ein. Steht sie falsch, läuft
+trotzdem alles: Pegel, Aufnahme, Lichtshow. Auffallen tut es beim
+Abhören, wenn die Aufnahme zu schnell oder zu langsam ist, und dann ist
+der Abend vorbei.
+
+Messen lässt es sich aber. Die Blöcke kommen im Takt der
+*tatsächlichen* Clock — Rahmen je Sekunde Wanduhr ist die wahre Rate,
+ganz gleich, was eingestellt ist. Drei Dinge machen daraus eine
+brauchbare Auskunft statt eines Fehlalarms:
+
+- **Der erste Block zählt nicht mit.** In ihm steckt der Rückstau aus
+  dem ALSA-Puffer seit dem Öffnen. Er würde die Messung gerade am
+  Anfang nach oben ziehen — dort, wo noch nichts mittelt.
+- **Unter drei Sekunden gibt es kein Urteil**, sondern `None`. Ein
+  „stimmt nicht" nach einer halben Sekunde wäre schlimmer als
+  Schweigen: Man würde eine richtige Einstellung ändern.
+- **Passt die Messung zu keiner üblichen Rate**, wird keine geraten.
+  47000 Hz sind kein Einstellungsfehler, sondern Aussetzer beim Lesen —
+  und dann ist „stell auf 48000" der falsche Rat.
+
+Gemessen wird nur, umgestellt wird nichts. Die Rate ist eine Angabe
+über die Hardware, und die gehört dem Nutzer; XRack sagt ihm, dass
+etwas nicht zusammenpasst.
+
+Beim Speicherplatz ist die Überlegung dieselbe, nur mit Eingriff: Läuft
+die Karte mitten in einer Aufnahme voll, bricht das Schreiben ab, und
+der Wave64-Kopf bekommt seine Größen nicht mehr nachgetragen — die
+Datei ist unlesbar. Deshalb hört XRack vorher auf und schließt die
+Datei ordentlich. Eine beendete Aufnahme ist zu retten, eine
+abgebrochene nicht.
+
+Der Lesethread hält sich dabei **nicht selbst an**: Er würde auf sich
+selbst warten (`Thread.join()` auf den eigenen Faden). Er beendet nur
+das Schreiben, schließt die Datei und setzt eine Marke; abgemeldet wird
+im Statuslauf der Anwendung, also im Hauptfaden.
+
+---
+
+## Der gemeinsame Name im Netz
+
+Wer die Oberfläche auf dem Tablet als App speichert, speichert damit
+auch die Adresse: `https://x18rack.local:8080`. Im nächsten Proberaum
+steht ein anderes XRack, das Symbol führt ins Leere — und eine
+gespeicherte Web-App hat keine Adresszeile, in der man das ändern
+könnte.
+
+### Warum das nicht im Browser abgefangen wird
+
+Das Naheliegende wäre eine Rückfrage in der App: „Nicht erreichbar —
+andere Adresse?" Nur läuft dafür kein einziger Befehl. Antwortet der
+Rechner nicht, kommt die Seite gar nicht erst an; was der Nutzer
+sieht, ist die Fehlerseite des Browsers, nicht XRack.
+
+Der einzige Weg, im Fehlerfall trotzdem eigenen Code auszuführen, ist
+ein **Service Worker** mit einer zwischengespeicherten
+Ausweichseite. Der ist hier gesperrt: Ein Service Worker verlangt
+einen „sicheren Kontext", und dazu zählt eine HTTPS-Verbindung mit
+einem Zertifikat, dem der Browser nicht traut, ausdrücklich nicht —
+auch dann nicht, wenn man die Warnung einmal weggeklickt hat. XRack
+liefert ein selbstsigniertes Zertifikat aus (siehe
+`generate_tls_certificate` in `install.sh`), und das soll so bleiben.
+
+### Der Weg über den Namen
+
+Also andersherum: Nicht die App lernt mehrere Adressen, sondern die
+Geräte teilen sich einen Namen. Jedes XRack meldet über avahi
+zusätzlich zu seinem Hostnamen einen **gemeinsamen Zweitnamen**
+(`core/mdns_alias.py`). Trägt man auf jedem Gerät `xrack` ein, findet
+dieselbe gespeicherte App in jedem Raum das Gerät, das dort steht.
+
+Gemacht wird das mit `avahi-publish -a`, einem Kindprozess **je
+Adresse**: Solange er läuft, steht der Name im Netz. Mehrere Adressen
+sind der Normalfall — der Pi hängt am Kabel und spannt gleichzeitig
+einen Access Point auf, und je nach Raum erreicht ihn das Tablet über
+den einen oder den anderen Weg. Ein einzelner Eintrag zeigte im
+falschen Netz ins Leere.
+
+Zwei Dinge hält eine Wache im Auge: Wechselt die Adresse (Kabel raus,
+Access Point an), wird der Name neu gemeldet — ein Eintrag auf eine
+Adresse, die es nicht mehr gibt, ist schlimmer als gar keiner. Und
+endet ein Kindprozess, war es ein **Namenskonflikt**: Dann stehen zwei
+XRacks mit demselben Zweitnamen im selben Netz. Das erscheint in den
+Einstellungen, und danach ist erst einmal eine Minute Ruhe — zwei
+Geräte, die sich im Sekundentakt um denselben Namen streiten, fluten
+nur das Netz.
+
+Was avahi im echten Netz daraus macht, kann nur ein Versuch am Gerät
+zeigen. Die Testreihe (`test_mdns_alias.py`) prüft die Seite, die XRack
+gehört: dass für jede Adresse gemeldet wird, dass ein Adresswechsel
+nachgezogen wird, dass ein Konflikt gemeldet statt verschwiegen wird
+und dass ein fehlendes `avahi-publish` (Paket `avahi-utils`) als
+solches dasteht.
+
+---
+
 ## Der Installer und `set -eE`
 
 `install.sh` läuft unter `set -eE` mit einer ERR-Falle: Bricht ein
@@ -392,6 +491,16 @@ der Mittelwert von *x* und 0 ist *x*/2. Den Bändern ist das egal, sie
 messen sich an der laufenden Spitze. Die **Stille-Schwelle** aber
 arbeitet auf dem absoluten Pegel; wer von einem halb belegten Paar auf
 Mono umstellt, muss sie unter Umständen nachziehen.
+
+Damit das überhaupt geht, hört die Show am **ungeschnittenen** Strom
+mit. Der Recorder liest das Interface immer mit allen Kanälen (anders
+geht es bei der X-Serie ohnehin nicht) und schneidet erst für Datei
+und Pegelanzeige auf die eingestellte Aufnahmebreite. Vorher fiel der
+Schnitt schon beim Lesen — und die Lichtshow hing als Mithörer daran:
+Am X32 standen ihr 18 Kanäle zur Auswahl statt der 32, die das Pult
+liefert. 18 ist die Vorgabe für die *Aufnahme* und hat mit der
+Lichtquelle nichts zu tun. Wer nur acht Spuren aufnimmt, soll das
+Licht trotzdem von Kanal 12 holen dürfen — genau das ist der AUX-Fall.
 
 In der Oberfläche ist das **eine** Auswahl mit zwei Gruppen, nicht
 eine Auswahl plus ein Schalter daneben. Der Grund steht in der

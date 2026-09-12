@@ -447,6 +447,15 @@
                                         {{ t.settings_console_host_label }}
                                     </label>
 
+                                    {#
+                                        Der Knopf ist blau wie jeder
+                                        Speichern-Knopf in diesem
+                                        Dialog. Bootstrap zeigt in
+                                        einer input-group gern einen
+                                        grauen Umriss - hier zaehlt
+                                        aber, dass "Speichern" ueberall
+                                        gleich aussieht.
+                                    #}
                                     <div class="input-group input-group-sm">
                                         <input
                                             type="text"
@@ -457,7 +466,7 @@
                                         >
                                         <button
                                             id="btn-settings-console-host"
-                                            class="btn btn-outline-secondary"
+                                            class="btn btn-primary"
                                             type="button"
                                         >
                                             {{ t.btn_save }}
@@ -508,7 +517,7 @@
                                         </span>
                                         <button
                                             id="btn-settings-faders-autolock"
-                                            class="btn btn-outline-secondary"
+                                            class="btn btn-primary"
                                             type="button"
                                         >
                                             {{ t.btn_save }}
@@ -570,14 +579,22 @@
                                 >
                                     {{ t.settings_wifi_country_title }}
                                 </label>
+                                {#
+                                    Gebaut wie die Samplerate-Zeile
+                                    weiter oben: kleines Auswahlfeld,
+                                    blauer Knopf daneben, beide gleich
+                                    hoch. Blau, weil jeder Knopf in
+                                    diesem Dialog, der eine Zeile
+                                    bestätigt, blau ist.
+                                #}
                                 <div class="d-flex gap-2">
                                     <select
                                         id="settings-wifi-country"
-                                        class="form-select"
+                                        class="form-select form-select-sm"
                                     ></select>
                                     <button
                                         type="button"
-                                        class="btn btn-outline-secondary text-nowrap"
+                                        class="btn btn-primary btn-sm text-nowrap"
                                         id="btn-save-wifi-country"
                                     >
                                         {{ t.settings_wifi_country_save }}
@@ -828,6 +845,67 @@
                                 -->
                             </div>
 
+                            {#
+                                Der gemeinsame Zweitname.
+
+                                Eine gespeicherte Web-App startet immer
+                                genau die Adresse, unter der sie
+                                gespeichert wurde. Wer mehrere XRacks
+                                betreibt, braucht deshalb einen Namen,
+                                den alle kennen - dann findet dasselbe
+                                Symbol in jedem Raum das Geraet, das
+                                dort steht.
+                            #}
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold" for="settings-mdns-alias">
+                                    {{ t.settings_mdns_alias_title }}
+                                </label>
+                                {#
+                                    Gebaut wie die übrigen
+                                    Speichern-Zeilen des Dialogs (etwa
+                                    der Aufnahmename weiter unten):
+                                    kleines Feld, blauer Knopf
+                                    daneben, beide gleich hoch.
+
+                                    Kein btn-outline-light hier - der
+                                    Dialog ist WEISS (Bootstrap-Vorgabe,
+                                    XRack setzt für die Dialoge kein
+                                    dunkles Thema), ein "light"-Knopf
+                                    wäre dort weiße Schrift auf weißem
+                                    Grund. Genau so kam die Meldung vom
+                                    Tablet: Der Name ließ sich
+                                    eintragen, "da fehlt ein Button".
+
+                                    text-nowrap hält die Beschriftung
+                                    zusammen, wenn das Feld daneben eng
+                                    wird.
+                                #}
+                                <div class="d-flex gap-2">
+                                    <input
+                                        type="text"
+                                        id="settings-mdns-alias"
+                                        class="form-control form-control-sm"
+                                        autocomplete="off"
+                                        autocapitalize="none"
+                                        spellcheck="false"
+                                        placeholder="{{ t.settings_mdns_alias_placeholder }}"
+                                    >
+                                    <button
+                                        type="button"
+                                        class="btn btn-primary btn-sm text-nowrap"
+                                        onclick="saveMdnsAlias()"
+                                    >
+                                        {{ t.settings_mdns_alias_save }}
+                                    </button>
+                                </div>
+
+                                <div id="settings-mdns-alias-state" class="small mt-2"></div>
+
+                                <small class="text-body-secondary">
+                                    {{ t.settings_mdns_alias_hint }}
+                                </small>
+                            </div>
+
                         </div>
                             </div>
                         </div>
@@ -1036,10 +1114,18 @@
                             <div class="input-group input-group-sm mb-1">
                                 <select id="settings-light-port" class="form-select"></select>
 
+                                {#
+                                    Blaue Flaeche, kein Umriss - der
+                                    Knopf bestaetigt die Zeile, wie
+                                    "Speichern" ueberall sonst im
+                                    Dialog. Kein btn-sm: Die
+                                    input-group-sm gibt die Groesse
+                                    schon vor.
+                                #}
                                 <button
                                     type="button"
                                     id="btn-light-port-patch"
-                                    class="btn btn-outline-primary"
+                                    class="btn btn-primary"
                                 >
                                     {{ t.light_output_assign }}
                                 </button>
@@ -1299,6 +1385,54 @@
             </div>
 
             <div class="modal-body">
+
+                {#
+                    Sichern und Einspielen.
+
+                    Wer zwei XRacks betreibt, baut die Einrichtung
+                    sonst zweimal von Hand. Mitgenommen wird nur, was
+                    zwischen Geraeten wandern darf - nichts
+                    Geraetegebundenes (siehe LightingStore.exportieren).
+                #}
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+
+                    {#
+                        Auch hier -secondary statt -light: weißer
+                        Dialog, siehe den Knopf beim gemeinsamen Namen
+                        in den Einstellungen.
+                    #}
+                    <a
+                        id="btn-light-export"
+                        class="btn btn-outline-secondary btn-sm text-nowrap"
+                        href="/api/lighting/export"
+                        download="xrack-licht.json"
+                    >
+                        <i class="bi bi-download"></i>
+                        {{ t.light_export }}
+                    </a>
+
+                    <button
+                        type="button"
+                        class="btn btn-outline-secondary btn-sm text-nowrap"
+                        onclick="document.getElementById('light-import-file').click()"
+                    >
+                        <i class="bi bi-upload"></i>
+                        {{ t.light_import }}
+                    </button>
+
+                    <input
+                        id="light-import-file"
+                        type="file"
+                        accept="application/json,.json"
+                        class="d-none"
+                        onchange="importLighting(this)"
+                    >
+
+                    <span class="form-text m-0">{{ t.light_transfer_hint }}</span>
+
+                </div>
+
+                <hr>
 
                 <h6 class="fw-semibold">{{ t.light_fixtures_title }}</h6>
 
