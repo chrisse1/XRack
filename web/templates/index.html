@@ -95,18 +95,19 @@
                       {{ t.record_channels_label }}
                   </span>
 
+                  {#
+                      Wie viele Kanaele das Interface hergibt, stand
+                      hier frueher daneben ("von 18 des Interfaces").
+                      Es steht schon in der Audio-Karte darueber, und
+                      der Anlass ist weg: Die Aufnahmebreite folgt
+                      inzwischen dem Interface (siehe
+                      select_audio_device), statt stillschweigend bei
+                      der XR18-Vorgabe zu bleiben.
+                  #}
                   <select
                       id="record-channels"
                       class="form-select form-select-sm w-auto">
                   </select>
-
-                  {#
-                      Was das Interface hergibt. Ohne diese Zahl nimmt
-                      man am X32 stillschweigend 18 von 32 Kanaelen
-                      auf - die Vorgabe stammt vom XR18.
-                  #}
-                  <span id="record-channels-available"
-                        class="text-body-secondary small"></span>
               </div>
 
               {#

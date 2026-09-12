@@ -407,17 +407,6 @@ function updateRecordWarnings(data) {
     }
 
     //
-    // Wie viele Kanaele das Interface ueberhaupt hergibt.
-    //
-    const verfuegbar = document.getElementById("record-channels-available");
-
-    if (verfuegbar) {
-        verfuegbar.textContent = data.audio_channels
-            ? I18N.record_channels_available.replace("{n}", data.audio_channels)
-            : "";
-    }
-
-    //
     // Die Restzeit.
     //
     const platz = document.getElementById("record-space");

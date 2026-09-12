@@ -26,8 +26,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "soundcheck_title": "Soundcheck & Üben",
         "status_label": "Status:",
         "record_channels_label": "Aufnahmekanäle:",
-        "record_channels_available": "von {n} des Interfaces",
-        "record_space_left": "Platz für {time}",
+        "record_space_left": "Verbleibend: {time}",
         "record_space_warning": (
             "Der Speicher reicht nur noch für {time}. Bei {gb} GB je Stunde "
             "ist die Karte bald voll - XRack beendet eine laufende Aufnahme "
@@ -713,8 +712,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "soundcheck_title": "Soundcheck & Practice",
         "status_label": "Status:",
         "record_channels_label": "Recording channels:",
-        "record_channels_available": "of {n} on the interface",
-        "record_space_left": "Room for {time}",
+        "record_space_left": "Remaining: {time}",
         "record_space_warning": (
             "Only {time} of recording space left. At {gb} GB per hour the "
             "card fills up quickly - XRack ends a running recording in time "
