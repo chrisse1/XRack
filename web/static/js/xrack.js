@@ -3262,6 +3262,12 @@ async function loadSettings() {
         applyConsoleHost(data);
         applyFadersAutolock(data.faders_autolock);
         applyMdnsAlias(data.mdns_alias);
+
+        //
+        // Das Zertifikat hat seine eigene Abfrage - es haengt nicht an
+        // den Einstellungen, sondern an Dateien auf der Platte.
+        //
+        await loadTls();
     } catch (error) {
         console.error("Fehler beim Laden der Einstellungen:", error);
     }
@@ -3699,6 +3705,17 @@ document.getElementById("settings-pin-input").addEventListener("keydown", (event
     if (event.key === "Enter") confirmSettingsPin();
 });
 
+//
+// Die eingegebene PIN bleibt in der Seite, solange sie offen ist.
+//
+// Gebraucht wird sie nur fuer das Zertifikat: Das sind die einzigen
+// Endpunkte, die die PIN wirklich auf dem Server pruefen (es geht um
+// den privaten Schluessel, siehe core/application/zertifikat.py).
+// Ohne dieses Merken muesste der Nutzer sie dort ein zweites Mal
+// eintippen, obwohl er den Dialog gerade damit geoeffnet hat.
+//
+let settingsPin = "";
+
 async function confirmSettingsPin() {
     const pin = document.getElementById("settings-pin-input").value;
 
@@ -3713,6 +3730,8 @@ async function confirmSettingsPin() {
         document.getElementById("settings-pin-error").classList.remove("d-none");
         return;
     }
+
+    settingsPin = pin;
 
     pinVerifiedPendingOpen = true;
     settingsPinModal.hide();
@@ -4020,6 +4039,194 @@ function applyMdnsAlias(stand) {
 
     anzeige.innerHTML = zeilen.join("<br>");
 }
+
+// ============================================================
+// Das TLS-Zertifikat
+//
+// Warum XRack keines mitliefert: Dann laege der private Schluessel
+// oeffentlich, und jeder im selben WLAN koennte sich lautlos als
+// XRack ausgeben - samt der PIN, die jemand eintippt. Stattdessen
+// traegt der Nutzer SEIN Zertifikat von seinem einen Rack auf sein
+// anderes. Zusammen mit demselben gemeinsamen Namen ist das fuer den
+// Browser ein Ziel mit einem Zertifikat: eine Rueckfrage statt einer
+// je Rack.
+// ============================================================
+
+function applyTls(stand) {
+
+    const anzeige = document.getElementById("settings-tls-state");
+    const warnung = document.getElementById("settings-tls-warning");
+
+    if (!anzeige || !stand) return;
+
+    //
+    // textContent und nicht innerHTML: Die Namen stammen aus dem
+    // Zertifikat, und ein eingespieltes Zertifikat ist eine fremde
+    // Datei. Was daraus kommt, wird angezeigt, nicht ausgefuehrt.
+    //
+    if (!stand.present) {
+        anzeige.textContent = I18N.settings_tls_none;
+        anzeige.className = "small mb-2 text-warning";
+    } else {
+        anzeige.textContent = [
+            stand.imported ? I18N.settings_tls_imported : I18N.settings_tls_self,
+            I18N.settings_tls_valid
+                .replace("{date}", stand.valid_until)
+                .replace("{days}", stand.days_left),
+            I18N.settings_tls_names.replace("{names}", (stand.names || []).join(", "))
+        ].join(" \u00b7 ");
+        anzeige.className = "small mb-2 text-body-secondary";
+    }
+
+    if (!warnung) return;
+
+    //
+    // Zwei Gruende, hier etwas zu sagen - und beide bedeuten, dass die
+    // Uebertragung ihren Zweck verfehlt:
+    //
+    //   ohne PIN       gibt XRack den Schluessel gar nicht erst heraus
+    //   ohne den Namen fragt der Browser unter dem gemeinsamen Namen
+    //                  trotzdem weiter nach
+    //
+    if (stand.pin_required) {
+        warnung.textContent = I18N.settings_tls_pin_required;
+        warnung.classList.remove("d-none");
+    } else if (!stand.alias_covered) {
+        warnung.textContent =
+            I18N.settings_tls_alias_missing.replace("{name}", stand.alias || "");
+        warnung.classList.remove("d-none");
+    } else {
+        warnung.classList.add("d-none");
+    }
+}
+
+async function loadTls() {
+
+    try {
+        const response = await fetch("/api/tls");
+        applyTls(await response.json());
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+function tlsMeldung(text, gut) {
+
+    const feld = document.getElementById("settings-tls-result");
+
+    if (!feld) return;
+
+    feld.textContent = text || "";
+    feld.className = "small mt-2 " + (gut ? "text-success" : "text-danger");
+}
+
+async function exportTls() {
+
+    const kennwort = document.getElementById("settings-tls-password").value;
+
+    const response = await fetch("/api/tls/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: settingsPin, password: kennwort })
+    });
+
+    //
+    // Bei einem Fehlschlag kommt JSON zurueck, bei Erfolg die Datei.
+    // Deshalb der Blick auf den Inhaltstyp: Ein Download, der in
+    // Wirklichkeit eine Fehlermeldung ist, waere das Schlimmste -
+    // der Nutzer traegt ihn zum anderen Rack und merkt es dort.
+    //
+    const typ = response.headers.get("Content-Type") || "";
+
+    if (typ.indexOf("application/json") >= 0) {
+        const ergebnis = await response.json();
+        tlsMeldung(ergebnis.message, false);
+        return;
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+
+    const verweis = document.createElement("a");
+    verweis.href = url;
+    verweis.download = "xrack-zertifikat.p12";
+    document.body.appendChild(verweis);
+    verweis.click();
+    verweis.remove();
+
+    URL.revokeObjectURL(url);
+
+    tlsMeldung(I18N.settings_tls_exported, true);
+}
+
+async function importTls(eingabe) {
+
+    const datei = eingabe.files && eingabe.files[0];
+
+    if (!datei) return;
+
+    const daten = new FormData();
+    daten.append("file", datei);
+    daten.append("pin", settingsPin);
+    daten.append("password", document.getElementById("settings-tls-password").value);
+
+    const response = await fetch("/api/tls/import", { method: "POST", body: daten });
+
+    const ergebnis = await response.json();
+
+    //
+    // Das Feld leeren, sonst laesst sich dieselbe Datei nach einem
+    // Fehlschlag nicht noch einmal waehlen (der Browser meldet keine
+    // Aenderung).
+    //
+    eingabe.value = "";
+
+    tlsMeldung(
+        ergebnis.success ? I18N.settings_tls_imported_ok : ergebnis.message,
+        ergebnis.success
+    );
+
+    if (ergebnis.success) {
+        document.getElementById("btn-settings-restart").classList.remove("d-none");
+        await loadTls();
+    }
+}
+
+async function renewTls() {
+
+    if (!confirm(I18N.confirm_tls_renew)) return;
+
+    const response = await fetch("/api/tls/renew", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: settingsPin })
+    });
+
+    const ergebnis = await response.json();
+
+    tlsMeldung(
+        ergebnis.success ? I18N.settings_tls_renewed : ergebnis.message,
+        ergebnis.success
+    );
+
+    if (ergebnis.success) {
+        document.getElementById("btn-settings-restart").classList.remove("d-none");
+        await loadTls();
+    }
+}
+
+document.getElementById("btn-tls-export").addEventListener("click", exportTls);
+
+document.getElementById("btn-tls-import").addEventListener("click", () => {
+    document.getElementById("tls-import-file").click();
+});
+
+document.getElementById("tls-import-file").addEventListener("change", (ereignis) => {
+    importTls(ereignis.target);
+});
+
+document.getElementById("btn-tls-renew").addEventListener("click", renewTls);
+
 
 async function saveMdnsAlias() {
 
