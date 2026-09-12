@@ -447,6 +447,15 @@
                                         {{ t.settings_console_host_label }}
                                     </label>
 
+                                    {#
+                                        Der Knopf ist blau wie jeder
+                                        Speichern-Knopf in diesem
+                                        Dialog. Bootstrap zeigt in
+                                        einer input-group gern einen
+                                        grauen Umriss - hier zaehlt
+                                        aber, dass "Speichern" ueberall
+                                        gleich aussieht.
+                                    #}
                                     <div class="input-group input-group-sm">
                                         <input
                                             type="text"
@@ -457,7 +466,7 @@
                                         >
                                         <button
                                             id="btn-settings-console-host"
-                                            class="btn btn-outline-secondary"
+                                            class="btn btn-primary"
                                             type="button"
                                         >
                                             {{ t.btn_save }}
@@ -508,7 +517,7 @@
                                         </span>
                                         <button
                                             id="btn-settings-faders-autolock"
-                                            class="btn btn-outline-secondary"
+                                            class="btn btn-primary"
                                             type="button"
                                         >
                                             {{ t.btn_save }}
