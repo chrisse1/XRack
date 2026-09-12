@@ -382,6 +382,27 @@
                       </label>
                   </div>
 
+                  {#
+                      Mitgeschnitten wird das Aufnahmefenster aus der
+                      Soundcheck-Karte - beim Ueben typisch zwei
+                      Kanaele ab dem eigenen Instrument. Welche das
+                      sind, steht im Hinweis daneben: Ein Mitschnitt,
+                      von dem man nicht weiss, was darauf ist, ist
+                      keiner.
+                  #}
+                  <div class="form-check form-switch mb-0">
+                      <input
+                          type="checkbox"
+                          role="switch"
+                          id="practice-record"
+                          class="form-check-input"
+                      >
+                      <label class="form-check-label text-nowrap"
+                             for="practice-record">
+                          {{ t.practice_record }}
+                      </label>
+                  </div>
+
                   <small id="practice-hint"
                          class="text-body-secondary ms-auto"></small>
 

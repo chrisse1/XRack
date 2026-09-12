@@ -62,6 +62,14 @@ TEXTE = get_translations("de")
 # nachgestellt. Was hier durchrutscht, merkt man am Gerät.
 # ====================================================================
 
+#
+# Ein gemeinsames Protokoll: Wer wann gerufen wurde. Die REIHENFOLGE
+# ist beim Mitschneiden kein Schoenheitsfehler - laeuft der Ton vor
+# der Aufnahme los, fehlt auf dem Mitschnitt der Einsatz.
+#
+PROTOKOLL: list[str] = []
+
+
 class Spieler:
     """Ein Musikspieler, der sich merkt, womit er gerufen wurde."""
 
@@ -70,12 +78,23 @@ class Spieler:
         self.paused = False
         self.wiederholen = False
         self.aufrufe = []
+        self.oeffnet = True
 
     def set_wiederholen(self, an):
         self.wiederholen = bool(an)
 
+    def stop(self):
+        PROTOKOLL.append("ton-aus")
+        self.playing = False
+
     def play_practice(self, device, path, start_channel, rate,
                       wiederholen=False):
+
+        PROTOKOLL.append("ton-an")
+
+        if not self.oeffnet:
+            return False
+
         self.aufrufe.append({
             "pfad": Path(path),
             "start_channel": start_channel,
@@ -99,9 +118,29 @@ class Schreiber:
 
 
 class Aufnehmer:
+    """Ein Recorder, der sich nur merkt, was mit ihm geschah."""
+
     def __init__(self, ordner, namen):
         self.writer = Schreiber(ordner)
         self.recordings = list(namen)
+        self.bereit = True
+        self.recording = False
+        self.praefixe = []
+
+    def start(self, name_prefix="Soundcheck"):
+
+        PROTOKOLL.append("aufnahme-an")
+
+        if not self.bereit or self.recording:
+            return False
+
+        self.praefixe.append(name_prefix)
+        self.recording = True
+        return True
+
+    def stop(self):
+        PROTOKOLL.append("aufnahme-aus")
+        self.recording = False
 
 
 class Anwendung(MusikMixin):
@@ -129,6 +168,14 @@ class Anwendung(MusikMixin):
         self.practice_repeat = self.state_store.get(
             "practice_repeat", False
         )
+
+        self.practice_record = self.state_store.get(
+            "practice_record", False
+        )
+
+        self.practice_recording = False
+
+        self.record_name_prefix = "Soundcheck"
 
 
 with tempfile.TemporaryDirectory() as tmp:
@@ -380,6 +427,174 @@ with tempfile.TemporaryDirectory() as tmp:
 
     print("OK: Die Schleife wird gemerkt und erreicht den Spieler")
 
+    # ----------------------------------------------------------------
+    # 7b. Üben + mitschneiden: erst die Aufnahme, dann der Ton
+    #
+    # Die Reihenfolge ist der ganze Trick. Läuft der Mitschnitt schon,
+    # wenn der erste Ton kommt, fehlt am Anfang nichts. Andersherum
+    # wäre der Einsatz weg - und gerade der ist beim Üben das
+    # Interessante.
+    # ----------------------------------------------------------------
+
+    anwendung.music_player.playing = False
+    anwendung.music_player.aufrufe.clear()
+    PROTOKOLL.clear()
+
+    erfolg, meldung = anwendung.start_practice(
+        "Uebung-1_p.w64", mitschneiden=True
+    )
+
+    assert erfolg, meldung
+
+    assert PROTOKOLL == ["aufnahme-an", "ton-an"], (
+        f"Gerufen wurde in dieser Reihenfolge: {PROTOKOLL}. Erst die "
+        f"Aufnahme, dann der Ton - sonst fehlt auf dem Mitschnitt der "
+        f"Einsatz."
+    )
+
+    assert anwendung.recorder.recording, "Es wird gar nicht aufgenommen."
+
+    assert anwendung.practice_recording is True, (
+        "XRack merkt sich nicht, dass DIESER Lauf die Aufnahme "
+        "gestartet hat - beim Stoppen bliebe sie laufen."
+    )
+
+    assert anwendung.recorder.praefixe == ["Soundcheck"], (
+        f"Der Mitschnitt heisst nach {anwendung.recorder.praefixe} - "
+        f"er ist eine Aufnahme wie jede andere und trägt denselben "
+        f"Namen."
+    )
+
+    print("OK: Mitgeschnitten wird ab dem ersten Ton, nicht danach")
+
+    # ----------------------------------------------------------------
+    # 7c. Der Stop-Knopf beendet beides - aber nur das Eigene
+    #
+    # Lief die Aufnahme schon vorher (von der Soundcheck-Karte aus),
+    # bleibt sie laufen. Etwas zu beenden, was man nicht angefangen
+    # hat, wäre eine böse Überraschung: Die Datei ist dann zu, und
+    # niemand hat es angeordnet.
+    # ----------------------------------------------------------------
+
+    PROTOKOLL.clear()
+
+    anwendung.stop_practice()
+
+    assert PROTOKOLL == ["ton-aus", "aufnahme-aus"], (
+        f"Beendet wurde: {PROTOKOLL} - zum Üben gehört beides."
+    )
+
+    assert anwendung.practice_recording is False
+
+    #
+    # Der Gegenfall: eine fremde Aufnahme bleibt stehen.
+    #
+    anwendung.recorder.recording = True
+    anwendung.practice_recording = False
+    anwendung.music_player.playing = True
+    PROTOKOLL.clear()
+
+    anwendung.stop_practice()
+
+    assert PROTOKOLL == ["ton-aus"], (
+        f"Beendet wurde: {PROTOKOLL}. Diese Aufnahme hat das Üben "
+        f"nicht gestartet - sie anzuhalten wäre eine Überraschung, und "
+        f"zwar eine, die Ton kostet."
+    )
+
+    assert anwendung.recorder.recording is True
+
+    anwendung.recorder.recording = False
+
+    print("OK: Gestoppt wird nur der Mitschnitt, den das Üben startete")
+
+    # ----------------------------------------------------------------
+    # 7d. Kein halber Zustand
+    #
+    # Lässt sich der Übungsmix nicht öffnen, darf keine Aufnahme
+    # zurückbleiben, die niemand angeordnet hat und die niemand
+    # beendet.
+    # ----------------------------------------------------------------
+
+    anwendung.music_player.oeffnet = False
+    anwendung.music_player.playing = False
+    PROTOKOLL.clear()
+
+    erfolg, meldung = anwendung.start_practice(
+        "Uebung-1_p.w64", mitschneiden=True
+    )
+
+    assert not erfolg and meldung, "Der Fehlschlag blieb unbemerkt."
+
+    assert PROTOKOLL == ["aufnahme-an", "ton-an", "aufnahme-aus"], (
+        f"Nach dem Fehlschlag stand: {PROTOKOLL}. Die begonnene "
+        f"Aufnahme muss wieder beendet werden - sonst läuft sie weiter, "
+        f"ohne dass jemand sie gestartet hat."
+    )
+
+    assert anwendung.recorder.recording is False
+    assert anwendung.practice_recording is False
+
+    anwendung.music_player.oeffnet = True
+
+    print("OK: Ein Fehlschlag lässt keine Aufnahme zurück")
+
+    # ----------------------------------------------------------------
+    # 7e. Ohne offenes Gerät wird nicht mitgeschnitten
+    #
+    # Und zwar VORHER abgelehnt: Sonst liefe der Übungsmix, und der
+    # Mitschnitt, den man mitlaufen glaubt, gäbe es nicht.
+    # ----------------------------------------------------------------
+
+    anwendung.recorder.bereit = False
+    anwendung.music_player.playing = False
+    PROTOKOLL.clear()
+
+    erfolg, meldung = anwendung.start_practice(
+        "Uebung-1_p.w64", mitschneiden=True
+    )
+
+    assert not erfolg and meldung, (
+        "Üben mit Mitschnitt startete ohne offenes Gerät."
+    )
+
+    assert PROTOKOLL == [], (
+        f"Es wurde trotzdem etwas gerufen: {PROTOKOLL}. Der Übungsmix "
+        f"liefe dann, und der Mitschnitt, den man mitlaufen glaubt, "
+        f"gäbe es nicht."
+    )
+
+    #
+    # Ohne Mitschnitt geht es weiterhin - das Üben selbst braucht den
+    # Recorder nicht.
+    #
+    erfolg, meldung = anwendung.start_practice("Uebung-1_p.w64")
+
+    assert erfolg, (
+        f"Ohne Mitschnitt lässt sich nicht mehr üben: {meldung}"
+    )
+
+    anwendung.recorder.bereit = True
+    anwendung.music_player.playing = False
+
+    print("OK: Ohne Gerät kein Mitschnitt - und trotzdem Üben")
+
+    # ----------------------------------------------------------------
+    # 7f. Der Schalter wird am Gerät gemerkt
+    # ----------------------------------------------------------------
+
+    anwendung.set_practice_record(True)
+
+    assert StateStore(zustand).get("practice_record") is True, (
+        "Der Schalter 'Mitschneiden' wurde nicht gemerkt."
+    )
+
+    anwendung.set_practice_record(False)
+
+    assert StateStore(zustand).get("practice_record") is False
+
+    print("OK: Der Schalter 'Mitschneiden' wird am Gerät gemerkt")
+
 
 # ====================================================================
 # Teil 2: Die Karte im Browser
@@ -611,6 +826,7 @@ KARTE = """function () {
     };
 
     const schalter = document.getElementById('practice-repeat');
+    const aufnahme = document.getElementById('practice-record');
     const hinweis = document.getElementById('practice-hint');
 
     //
@@ -635,6 +851,11 @@ KARTE = """function () {
         mixe: feld('practice-mix'),
         kanalfeld: document.getElementById('practice-channels'),
         schleife: schalter ? schalter.checked : null,
+        mitschnitt: aufnahme ? {
+            an: aufnahme.checked,
+            gesperrt: aufnahme.disabled,
+            grund: aufnahme.title || ''
+        } : null,
         transport: knopf('btn-music-stop'),
         lautstaerke: sichtbar('player-fader-music'),
         hinweis: hinweis ? (hinweis.textContent || '').trim() : '',
@@ -871,6 +1092,7 @@ geschickt = ausfuehren(
     vorlauf=(
         "document.getElementById('practice-mix').value = 'Uebung-Blues_p9.w64';"
         "document.getElementById('practice-repeat').checked = true;"
+        "document.getElementById('practice-record').checked = true;"
         "document.getElementById('btn-music-stop').click();"
     ),
 )
@@ -885,12 +1107,122 @@ assert len(starts) == 1, (
 assert starts[0]["body"] == {
     "filename": "Uebung-Blues_p9.w64",
     "repeat": True,
+    "record": True,
 }, (
     f"Geschickt wurde {starts[0]['body']} - das ist nicht, was in den "
     f"Feldern stand. (Ein Kanal gehört NICHT dazu: Der steht im Namen.)"
 )
 
 print("OK: Der Üben-Knopf schickt Datei und Schleife - und keinen Kanal")
+
+
+# ====================================================================
+# 13b. Mitschneiden: der Schalter und was er nach sich zieht
+#
+# Aufgenommen wird das Fenster aus der Soundcheck-Karte. Welche Kanäle
+# das sind, muss dranstehen: Ein Mitschnitt, von dem man nicht weiss,
+# was darauf ist, ist keiner.
+# ====================================================================
+
+mit_aufnahme = ausfuehren(
+    stand(
+        player_mode="practice",
+        practice_mixes=MIXE,
+        practice_record=True,
+        record_start_channel=9,
+        record_channels=2,
+    ),
+    KARTE,
+)
+
+assert mit_aufnahme["mitschnitt"]["an"] is True, (
+    "Der Schalter steht auf aus, obwohl er am Gerät an ist."
+)
+
+assert not mit_aufnahme["mitschnitt"]["gesperrt"], (
+    "Der Schalter ist gesperrt, obwohl ein Interface offen ist."
+)
+
+erwartet = " · ".join((
+    TEXTE["practice_hint"].replace("{a}", "1"),
+    TEXTE["practice_record_hint"].replace("{a}", "9").replace("{b}", "10"),
+))
+
+assert mit_aufnahme["hinweis"] == erwartet, (
+    f"Im Hinweis steht {mit_aufnahme['hinweis']!r} - dort gehört hin, "
+    f"welche Kanäle mitgeschnitten werden: {erwartet!r}"
+)
+
+#
+# Und ohne Interface: zu, mit Begründung. Ein Schalter, der sich
+# umlegen lässt und nichts bewirkt, ist schlimmer als ein gesperrter.
+#
+ohne_geraet = ausfuehren(
+    stand(
+        player_mode="practice",
+        practice_mixes=MIXE,
+        audio=False,
+        audio_channels=0,
+        recorder="no_device",
+    ),
+    KARTE,
+)
+
+assert ohne_geraet["mitschnitt"]["gesperrt"], (
+    "Ohne Interface lässt sich 'Mitschneiden' einschalten - dann liefe "
+    "der Übungsmix, und den Mitschnitt gäbe es nicht."
+)
+
+assert ohne_geraet["mitschnitt"]["grund"] == TEXTE[
+    "practice_record_no_device"
+], ohne_geraet["mitschnitt"]["grund"]
+
+print("OK: Der Mitschnitt-Schalter sagt, was er aufnimmt - und wann nicht")
+
+
+# ====================================================================
+# 13c. Beim Üben beendet der Stop-Knopf beides
+#
+# Nicht /api/music/stop: Das hielte den Ton an und liesse den
+# Mitschnitt weiterlaufen - eine Aufnahme, die niemand mehr beendet.
+# ====================================================================
+
+beendet = ausfuehren(
+    stand(
+        player_mode="practice",
+        practice_mixes=MIXE,
+        music_playing=True,
+        practice_recording=True,
+    ),
+    KARTE,
+    vorlauf="document.getElementById('btn-music-stop').click();",
+)
+
+adressen = [p["url"] for p in beendet["posts"]]
+
+assert "/api/practice/stop" in adressen, (
+    f"Der Stop-Knopf rief {adressen} - beim Üben gehört der Aufruf an "
+    f"/api/practice/stop, sonst läuft der Mitschnitt weiter."
+)
+
+assert "/api/music/stop" not in adressen, (
+    f"Der Stop-Knopf rief zusätzlich /api/music/stop: {adressen}"
+)
+
+#
+# Der Gegenfall: Beim Musikspieler bleibt es beim alten Weg.
+#
+musik_beendet = ausfuehren(
+    stand(player_mode="music", practice_mixes=MIXE, music_playing=True),
+    KARTE,
+    vorlauf="document.getElementById('btn-music-stop').click();",
+)
+
+assert "/api/music/stop" in [
+    p["url"] for p in musik_beendet["posts"]
+], musik_beendet["posts"]
+
+print("OK: Beim Üben beendet der Stop-Knopf auch den Mitschnitt")
 
 
 # ====================================================================

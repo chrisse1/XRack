@@ -132,6 +132,17 @@ class Application(
             False,
         )
 
+        self.practice_record = self.state_store.get(
+            "practice_record",
+            False,
+        )
+
+        #
+        # Hat DIESER Uebungslauf die Aufnahme gestartet? Nur dann wird
+        # sie mit dem Ueben auch wieder beendet (siehe stop_practice).
+        #
+        self.practice_recording = False
+
         self.record_name_prefix = self.state_store.get(
             "record_name_prefix",
             "Soundcheck",
@@ -611,6 +622,18 @@ class Application(
         self.status.player_mode = self.player_mode
 
         self.status.practice_repeat = self.music_player.wiederholen
+
+        self.status.practice_record = self.practice_record
+
+        #
+        # Laeuft die Aufnahme wirklich noch? Der Recorder kann von
+        # selbst aufgehoert haben (voller Datentraeger) - dann gehoert
+        # sie nicht mehr zum Ueben.
+        #
+        if not self.recorder.recording:
+            self.practice_recording = False
+
+        self.status.practice_recording = self.practice_recording
 
         self.status.practice_mixes = self.practice_mixes()
 

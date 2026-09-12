@@ -137,6 +137,7 @@ class MusikMixin:
         self,
         filename: str,
         wiederholen: bool = False,
+        mitschneiden: bool = False,
     ) -> tuple[bool, str]:
         """
         Einen Übungsmix abspielen.
@@ -170,11 +171,40 @@ class MusikMixin:
         if not pfad.is_file():
             return False, "Der Übungsmix ist nicht da."
 
+        if mitschneiden and not self.recorder.bereit:
+            return False, (
+                "Zum Mitschneiden fehlt ein offenes Audiogerät."
+            )
+
+        if mitschneiden and self.recorder.recording:
+            return False, "Es läuft bereits eine Aufnahme."
+
         #
         # Im Namen steht der erste Kanal 1-basiert ("_p9"), der
         # ChannelInserter zaehlt ab 0. Ohne Ziffer ist es Kanal 1.
         #
         start_channel = start_channel_from_filename(pfad.name)
+
+        #
+        # Zuerst die Aufnahme, dann der Ton.
+        #
+        # Die Reihenfolge ist nicht gleichgültig: Läuft der Mitschnitt
+        # schon, wenn der erste Ton kommt, fehlt am Anfang nichts.
+        # Andersherum wäre der Einsatz weg - und gerade der ist beim
+        # Üben das Interessante.
+        #
+        # Ganz gleichzeitig geht es nicht, und es muss auch nicht: Der
+        # Vorlauf von einigen Millisekunden arbeitet der Laufzeit durch
+        # das Pult entgegen (XRack gibt aus, das Pult schickt zurück,
+        # XRack nimmt auf). Beides zu messen wäre eine eigene Funktion
+        # und gehört nicht hierher.
+        #
+        if mitschneiden:
+
+            if not self.recorder.start(self.record_name_prefix):
+                return False, "Die Aufnahme liess sich nicht starten."
+
+            self.practice_recording = True
 
         erfolg = self.music_player.play_practice(
             self.selected_audio_device,
@@ -185,9 +215,50 @@ class MusikMixin:
         )
 
         if not erfolg:
+
+            #
+            # Kein halber Zustand: Ohne Ton ist der Mitschnitt sinnlos,
+            # und eine Aufnahme, die weiterläuft, ohne dass jemand sie
+            # gestartet hat, ist schlimmer als gar keine.
+            #
+            if mitschneiden:
+                self.recorder.stop()
+                self.practice_recording = False
+
             return False, "Der Übungsmix liess sich nicht öffnen."
 
         return True, ""
+
+
+    def stop_practice(self) -> bool:
+        """
+        Das Üben beenden - und den Mitschnitt gleich mit.
+
+        Nur den eigenen: Lief die Aufnahme schon vorher (von der
+        Soundcheck-Karte aus), bleibt sie laufen. Etwas zu beenden, was
+        man nicht angefangen hat, wäre eine böse Überraschung - die
+        Datei ist dann zu, und niemand hat es angeordnet.
+        """
+
+        self.music_player.stop()
+
+        if self.practice_recording:
+
+            self.recorder.stop()
+
+            self.practice_recording = False
+
+        return True
+
+
+    def set_practice_record(self, an: bool) -> bool:
+        """Merkt sich, ob beim Üben mitgeschnitten werden soll."""
+
+        self.practice_record = bool(an)
+
+        self.state_store.set("practice_record", self.practice_record)
+
+        return True
 
 
     def set_practice_repeat(self, an: bool) -> bool:

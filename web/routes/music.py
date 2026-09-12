@@ -45,6 +45,11 @@ class PlayerModeSelection(BaseModel):
 class PracticeSelection(BaseModel):
     filename: str
     repeat: bool = False
+    record: bool = False
+
+
+class PracticeRecordSelection(BaseModel):
+    record: bool
 
 
 class PracticeRepeatSelection(BaseModel):
@@ -155,11 +160,37 @@ def start_practice(auswahl: PracticeSelection, request: Request):
     erfolg, meldung = application.start_practice(
         auswahl.filename,
         auswahl.repeat,
+        auswahl.record,
     )
 
     return {
         "success": erfolg,
         "message": meldung,
+    }
+
+
+@router.post("/api/practice/stop")
+def stop_practice(request: Request):
+    """
+    Das Ueben beenden - samt Mitschnitt, wenn dieser Lauf ihn
+    gestartet hat.
+    """
+
+    application = request.app.state.application
+
+    return {
+        "success": application.stop_practice()
+    }
+
+
+@router.post("/api/practice/record")
+def set_practice_record(auswahl: PracticeRecordSelection, request: Request):
+    """Den Schalter "Mitschneiden" merken."""
+
+    application = request.app.state.application
+
+    return {
+        "success": application.set_practice_record(auswahl.record)
     }
 
 

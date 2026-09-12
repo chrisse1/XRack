@@ -103,6 +103,15 @@ class SystemStatus(BaseModel):
     #
     player_mode: str = "music"
     practice_repeat: bool = False
+
+    #
+    # practice_record ist der SCHALTER (soll mitgeschnitten werden),
+    # practice_recording der ZUSTAND (dieser Uebungslauf nimmt gerade
+    # auf). Zwei Dinge, die leicht zusammenfallen - und dann wuerde
+    # der Schalter beim Stoppen umspringen.
+    #
+    practice_record: bool = False
+    practice_recording: bool = False
     practice_mixes: list[str] = []
 
     bluetooth_streaming: bool = False

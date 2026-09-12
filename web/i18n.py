@@ -83,6 +83,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Quelle aus."
         ),
         "practice_hint": "Liegt ab Kanal {a}",
+        "practice_record": "Mitschneiden",
+        "practice_record_hint": "Mitschnitt: Kanal {a}-{b}",
+        "practice_record_no_device": (
+            "Zum Mitschneiden fehlt ein offenes Audiogerät."
+        ),
         "stem_combine_start_channel_label": "Erster Kanal:",
         "stem_combine_start_channel_hint": (
             "Ab hier liegt der Mix später beim Üben - jede Datei auf "
@@ -864,6 +869,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Stop first: switching swaps the card's source."
         ),
         "practice_hint": "Starts at channel {a}",
+        "practice_record": "Record along",
+        "practice_record_hint": "Recording: channels {a}-{b}",
+        "practice_record_no_device": (
+            "Recording along needs an open audio device."
+        ),
         "stem_combine_start_channel_label": "First channel:",
         "stem_combine_start_channel_hint": (
             "This is where the mix will sit while practising - each "

@@ -6,7 +6,7 @@ weil der Umbau ueber mehrere Sitzungen laeuft: Wer hier weiterarbeitet
 - ich beim naechsten Mal oder jemand anderes -, soll den Stand und vor
 allem die BEGRUENDUNGEN vorfinden, nicht nur das Ergebnis.
 
-**Stand:** Stufen 1 bis 3 gebaut (3.0.0-dev4). Das Aufnahmefenster
+**Stand:** Stufen 1 bis 3b-1 gebaut (3.0.0-dev5). Das Aufnahmefenster
 steht und ist am Geraet abgenommen; der Musikspieler kann Uebungsmixe
 mehrkanalig abspielen, mit Spulen und Schleife; die Karte hat den
 Umschalter Musik | Ueben. Stufen 3b, 4 und 5 stehen aus.
@@ -227,6 +227,36 @@ Was noch offen ist: Die Soundcheck-Karte spielt Übungsmixe weiterhin
 selbst ab. Es gibt den Weg also zweimal — das räumt Stufe 4 auf.
 
 ### Stufe 3b — Mitschneiden und Zusammenhören
+
+**Teil 1 gebaut (3.0.0-dev5): mitschneiden.**
+
+Kein eigener Knopf „Üben + mitschneiden", sondern ein **Schalter**
+neben „Wiederholen" — gestartet wird weiter mit dem einen
+Transportknopf. Zwei Startknöpfe für dieselbe Sache wären genau das,
+was in dev4 schon einmal weggeräumt wurde.
+
+Was daran nicht beliebig ist:
+
+- **Erst die Aufnahme, dann der Ton.** Läuft der Mitschnitt schon,
+  wenn der erste Ton kommt, fehlt am Anfang nichts; andersherum wäre
+  der Einsatz weg — und gerade der ist beim Üben das Interessante.
+  Ganz gleichzeitig geht es nicht und muss es nicht: Der Vorlauf von
+  Millisekunden arbeitet der Laufzeit durchs Pult entgegen.
+- **Gestoppt wird nur das Eigene.** Lief die Aufnahme schon vorher
+  (von der Soundcheck-Karte aus), bleibt sie laufen. Dafür merkt sich
+  XRack, ob DIESER Übungslauf sie gestartet hat.
+- **Kein halber Zustand.** Lässt sich der Übungsmix nicht öffnen, wird
+  die begonnene Aufnahme wieder beendet — sonst liefe sie weiter, ohne
+  dass jemand sie gestartet hat.
+- **Ohne offenes Gerät wird vorher abgelehnt**, nicht unterwegs: Sonst
+  liefe der Mix, und den Mitschnitt, den man mitlaufen glaubt, gäbe es
+  nicht.
+- Aufgenommen wird das **Aufnahmefenster aus der Soundcheck-Karte**
+  (Stufe 1). Welche Kanäle das sind, steht in der Üben-Karte daneben —
+  ein Mitschnitt, von dem man nicht weiss, was darauf ist, ist keiner.
+
+Offen bleibt Teil 2: den Mitschnitt zusammen mit dem Übungsmix
+abspielen (zweite Quelle im Spieler).
 
 - Knopf **„Üben + mitschneiden"**: startet Übungsmix und Aufnahme in
   einem Zug (Aufnahmefenster aus Stufe 1 - beim Üben typisch zwei

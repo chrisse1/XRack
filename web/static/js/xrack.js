@@ -2830,6 +2830,26 @@ function updatePracticeCard(data) {
         schleife.checked = Boolean(data.practice_repeat);
     }
 
+    const mitschnitt = document.getElementById("practice-record");
+
+    if (mitschnitt) {
+
+        if (document.activeElement !== mitschnitt) {
+            mitschnitt.checked = Boolean(data.practice_record);
+        }
+
+        //
+        // Ohne offenes Interface gibt es nichts aufzunehmen. Der
+        // Schalter bleibt dann zu und sagt, warum - ein Schalter, der
+        // sich umlegen laesst und nichts bewirkt, ist schlimmer.
+        //
+        const bereit = isAudioReady(data);
+
+        mitschnitt.disabled = !bereit || data.music_playing;
+
+        mitschnitt.title = bereit ? "" : I18N.practice_record_no_device;
+    }
+
     //
     // Auf welchen Kanaelen der Mix landet, steht in SEINEM Namen
     // ("Probe-1_p9.w64") - hier wird es nur vorgelesen. Ein Feld zum
@@ -2839,10 +2859,35 @@ function updatePracticeCard(data) {
     const hinweis = document.getElementById("practice-hint");
 
     if (hinweis) {
-        hinweis.textContent = mixe.length
-            ? I18N.practice_hint.replace(
-                "{a}", startkanalAusName(auswahl.value))
-            : I18N.practice_none;
+
+        if (!mixe.length) {
+            hinweis.textContent = I18N.practice_none;
+        } else {
+
+            const teile = [
+                I18N.practice_hint.replace(
+                    "{a}", startkanalAusName(auswahl.value))
+            ];
+
+            //
+            // Was aufgenommen wird, steht in der Soundcheck-Karte -
+            // hier wird es nur dazugesagt. Ein Mitschnitt, von dem man
+            // nicht weiss, was darauf ist, ist keiner.
+            //
+            if (mitschnitt && mitschnitt.checked) {
+
+                const von = data.record_start_channel || 1;
+                const bis = von + (data.record_channels || 0) - 1;
+
+                teile.push(
+                    I18N.practice_record_hint
+                        .replace("{a}", von)
+                        .replace("{b}", bis)
+                );
+            }
+
+            hinweis.textContent = teile.join(" · ");
+        }
     }
 }
 
@@ -2863,6 +2908,7 @@ async function startPractice() {
 
     const auswahl = document.getElementById("practice-mix");
     const schleife = document.getElementById("practice-repeat");
+    const mitschnitt = document.getElementById("practice-record");
 
     if (!auswahl || !auswahl.value) return;
 
@@ -2871,7 +2917,8 @@ async function startPractice() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             filename: auswahl.value,
-            repeat: schleife ? schleife.checked : false
+            repeat: schleife ? schleife.checked : false,
+            record: mitschnitt ? mitschnitt.checked : false
         })
     });
 
@@ -2880,6 +2927,29 @@ async function startPractice() {
     if (!ergebnis.success && ergebnis.message) {
         alert(ergebnis.message);
     }
+
+    await refreshDashboard();
+}
+
+//
+// Beim Ueben beendet der Stop-Knopf BEIDES - Ton und Mitschnitt. Der
+// Server beendet dabei nur, was dieser Uebungslauf gestartet hat
+// (siehe Application.stop_practice).
+//
+async function stopPractice() {
+
+    await fetch("/api/practice/stop", { method: "POST" });
+
+    await refreshDashboard();
+}
+
+async function setPracticeRecord(an) {
+
+    await fetch("/api/practice/record", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ record: an })
+    });
 
     await refreshDashboard();
 }
@@ -2897,6 +2967,10 @@ async function setPracticeRepeat(an) {
 
 document.getElementById("practice-repeat").addEventListener("change", (e) => {
     setPracticeRepeat(e.target.checked);
+});
+
+document.getElementById("practice-record").addEventListener("change", (e) => {
+    setPracticeRecord(e.target.checked);
 });
 
 function updateMusicPlayer(data) {
@@ -3137,7 +3211,7 @@ function updateMusicButtons(data) {
         stopButton.classList.add("btn-outline-danger");
         stopButton.classList.remove("btn-primary");
 
-        stopButton.onclick = stopMusic;
+        stopButton.onclick = ueben ? stopPractice : stopMusic;
         stopButton.disabled = !data.music_playing;
     }
 
