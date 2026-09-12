@@ -100,11 +100,13 @@ ERWARTETE_MIXINS = {
     "AufnahmeMixin",
     "BluetoothMixin",
     "EinstellungenMixin",
+    "LichtMixin",
     "MusikMixin",
     "NetzwerkMixin",
     "PultMixin",
     "UsbMixin",
     "WartungMixin",
+    "ZertifikatMixin",
 }
 
 vorhanden = {k.__name__ for k in Application.__mro__}

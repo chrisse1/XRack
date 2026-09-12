@@ -26,8 +26,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "soundcheck_title": "Soundcheck & Üben",
         "status_label": "Status:",
         "record_channels_label": "Aufnahmekanäle:",
-        "record_channels_available": "von {n} des Interfaces",
-        "record_space_left": "Platz für {time}",
+        "record_space_left": "Verbleibend: {time}",
         "record_space_warning": (
             "Der Speicher reicht nur noch für {time}. Bei {gb} GB je Stunde "
             "ist die Karte bald voll - XRack beendet eine laufende Aufnahme "
@@ -260,6 +259,58 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_mdns_alias_missing": (
             "avahi-publish fehlt (Paket avahi-utils) - install.sh erneut "
             "laufen lassen."
+        ),
+        #
+        # Das Zertifikat. Es steht direkt unter dem gemeinsamen Namen,
+        # weil es nur zusammen mit ihm etwas bringt: ein Name, ein
+        # Zertifikat, eine Rueckfrage im Browser.
+        #
+        "settings_tls_title": "Zertifikat (HTTPS)",
+        "settings_tls_hint": (
+            "Das Zertifikat wird auf diesem Gerät erzeugt, deshalb fragt "
+            "der Browser beim ersten Besuch nach. Wer mehrere XRacks hat, "
+            "sichert es hier einmal und spielt es auf den anderen ein - "
+            "zusammen mit demselben gemeinsamen Namen fragt der Browser "
+            "dann nur noch einmal für alle. Die Datei ist mit dem Kennwort "
+            "verschlüsselt; sie enthält den privaten Schlüssel und gehört "
+            "in keine fremden Hände."
+        ),
+        "settings_tls_self": "Auf diesem Gerät erzeugt",
+        "settings_tls_imported": "Übertragen",
+        "settings_tls_valid": "gültig bis {date} ({days} Tage)",
+        "settings_tls_names": "gilt für: {names}",
+        "settings_tls_none": (
+            "Kein Zertifikat vorhanden - XRack läuft unverschlüsselt."
+        ),
+        "settings_tls_alias_missing": (
+            "Das Zertifikat gilt nicht für den gemeinsamen Namen "
+            "\"{name}.local\" - unter diesem Namen fragt der Browser "
+            "weiter nach. \"Neu erzeugen\" nimmt ihn auf; danach muss das "
+            "Zertifikat erneut auf die anderen Racks."
+        ),
+        "settings_tls_pin_required": (
+            "Für das Zertifikat muss erst eine PIN vergeben werden - ohne "
+            "sie könnte jeder im Netz den privaten Schlüssel abholen."
+        ),
+        "settings_tls_password": "Kennwort für die Datei",
+        "settings_tls_export": "Sichern",
+        "settings_tls_import": "Einspielen",
+        "settings_tls_renew": "Neu erzeugen",
+        "settings_tls_exported": (
+            "Gesichert. Ohne das Kennwort ist die Datei wertlos - mit ihm "
+            "kann sich jemand als dieses XRack ausgeben."
+        ),
+        "settings_tls_imported_ok": (
+            "Eingespielt. Es gilt nach einem Neustart des Dienstes."
+        ),
+        "settings_tls_renewed": (
+            "Neues Zertifikat erzeugt. Es gilt nach einem Neustart des "
+            "Dienstes, und der Browser fragt danach einmal erneut."
+        ),
+        "confirm_tls_renew": (
+            "Neues Zertifikat erzeugen? Das alte gilt danach nicht mehr: "
+            "Der Browser fragt an jedem Gerät erneut nach, und auf andere "
+            "Racks übertragene Zertifikate passen nicht mehr dazu."
         ),
         "faders_snapshot_label": "Snapshot",
         "faders_snapshot_load": "Laden",
@@ -713,8 +764,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "soundcheck_title": "Soundcheck & Practice",
         "status_label": "Status:",
         "record_channels_label": "Recording channels:",
-        "record_channels_available": "of {n} on the interface",
-        "record_space_left": "Room for {time}",
+        "record_space_left": "Remaining: {time}",
         "record_space_warning": (
             "Only {time} of recording space left. At {gb} GB per hour the "
             "card fills up quickly - XRack ends a running recording in time "
@@ -945,6 +995,53 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_mdns_alias_missing": (
             "avahi-publish is missing (package avahi-utils) - run install.sh "
             "again."
+        ),
+        "settings_tls_title": "Certificate (HTTPS)",
+        "settings_tls_hint": (
+            "The certificate is created on this unit, which is why the "
+            "browser asks on the first visit. With several XRacks, save it "
+            "here once and load it onto the others - together with the same "
+            "shared name the browser then asks once for all of them. The "
+            "file is encrypted with the password; it contains the private "
+            "key and belongs in no one else's hands."
+        ),
+        "settings_tls_self": "Created on this unit",
+        "settings_tls_imported": "Transferred",
+        "settings_tls_valid": "valid until {date} ({days} days)",
+        "settings_tls_names": "valid for: {names}",
+        "settings_tls_none": (
+            "No certificate present - XRack is running unencrypted."
+        ),
+        "settings_tls_alias_missing": (
+            "The certificate does not cover the shared name "
+            "\"{name}.local\" - under that name the browser keeps asking. "
+            "\"Create new\" includes it; after that the certificate has to "
+            "go to the other racks again."
+        ),
+        "settings_tls_pin_required": (
+            "A PIN has to be set before the certificate can be handled - "
+            "without one, anybody on the network could fetch the private "
+            "key."
+        ),
+        "settings_tls_password": "Password for the file",
+        "settings_tls_export": "Save",
+        "settings_tls_import": "Load",
+        "settings_tls_renew": "Create new",
+        "settings_tls_exported": (
+            "Saved. Without the password the file is worthless - with it, "
+            "someone can impersonate this XRack."
+        ),
+        "settings_tls_imported_ok": (
+            "Loaded. It takes effect after the service restarts."
+        ),
+        "settings_tls_renewed": (
+            "New certificate created. It takes effect after the service "
+            "restarts, and the browser will ask once more afterwards."
+        ),
+        "confirm_tls_renew": (
+            "Create a new certificate? The old one stops being valid: the "
+            "browser will ask again on every device, and certificates "
+            "transferred to other racks will no longer match."
         ),
         "faders_snapshot_label": "Snapshot",
         "faders_snapshot_load": "Load",

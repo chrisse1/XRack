@@ -612,6 +612,19 @@ zertifikat_passt() {
         || return 1
 
     #
+    # Ein ÜBERTRAGENES Zertifikat bleibt, wie es ist - auch wenn es
+    # auf einen anderen Rechnernamen lautet. Genau dafür ist es da:
+    # Wer mehrere Racks hat, trägt eines davon auf alle, damit der
+    # Browser nur einmal nachfragt (siehe core/tls_store.py). Ohne
+    # diese Ausnahme würde der nächste Installationslauf die
+    # Übertragung stillschweigend rückgängig machen - und niemand
+    # wüsste, warum der Browser wieder fragt.
+    #
+    if [ -f "${crt}.imported" ]; then
+        return 0
+    fi
+
+    #
     # Deckt es den aktuellen Hostnamen ab? Auf den genauen Eintrag
     # geprüft und nicht nur auf das Vorkommen: Sonst würde bei
     # Hostname "pi" auch ein Zertifikat für "pi-studio" passen.
@@ -628,7 +641,12 @@ generate_tls_certificate() {
 
     if zertifikat_passt; then
 
-        echo "$(L "XRack: Vorhandenes TLS-Zertifikat wird behalten (Browser-Ausnahmen bleiben gültig)." "XRack: Keeping the existing TLS certificate (browser exceptions stay valid).")"
+        if [ -f "${INSTALL_DIR}/certs/xrack.crt.imported" ]; then
+            echo "$(L "XRack: Übertragenes TLS-Zertifikat wird behalten." "XRack: Keeping the transferred TLS certificate.")"
+        else
+            echo "$(L "XRack: Vorhandenes TLS-Zertifikat wird behalten (Browser-Ausnahmen bleiben gültig)." "XRack: Keeping the existing TLS certificate (browser exceptions stay valid).")"
+        fi
+
         return 0
     fi
 

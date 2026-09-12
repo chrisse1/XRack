@@ -33,6 +33,8 @@ from core.usb_storage import UsbStorage
 from core.updater import Updater
 from core.console_control import ConsoleControl, MIN_DB
 from core.mdns_alias import MdnsAlias
+from core.pin_bremse import PinBremse
+from core.tls_store import TlsStore
 from core.diagnostics import Diagnostics
 from core.state_store import StateStore
 from core.dmx_control import DmxControl
@@ -58,6 +60,7 @@ from core.application.netzwerk import NetzwerkMixin
 from core.application.pult import PultMixin
 from core.application.usb import UsbMixin
 from core.application.wartung import WartungMixin
+from core.application.zertifikat import ZertifikatMixin
 
 
 class Application(
@@ -71,6 +74,7 @@ class Application(
     PultMixin,
     UsbMixin,
     WartungMixin,
+    ZertifikatMixin,
 ):
     """Main XRack application."""
 
@@ -165,6 +169,24 @@ class Application(
         # Gemeldet wird er unten beim Start, sobald alles steht.
         #
         self.mdns_alias = MdnsAlias(self.logger)
+
+        #
+        # Das TLS-Zertifikat. Es gehoert neben den Zweitnamen: Erst
+        # beide zusammen sorgen dafuer, dass der Browser bei mehreren
+        # Racks nur einmal nachfragt - ein Name, ein Zertifikat
+        # (siehe core/tls_store.py).
+        #
+        self.tls_store = TlsStore(
+            Path(self.config.data.server.ssl_certfile),
+            Path(self.config.data.server.ssl_keyfile),
+        )
+
+        #
+        # Und die Bremse davor: Am Zertifikat wird die PIN wirklich
+        # geprueft, und vier Ziffern sind ohne Bremse schnell
+        # durchprobiert (siehe core/pin_bremse.py).
+        #
+        self.pin_bremse = PinBremse()
 
         self.dmx_control = DmxControl()
 

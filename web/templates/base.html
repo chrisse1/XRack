@@ -906,6 +906,91 @@
                                 </small>
                             </div>
 
+                            {#
+                                Das Zertifikat steht direkt unter dem
+                                gemeinsamen Namen, weil es nur mit ihm
+                                zusammen etwas bringt: Ein Name UND
+                                dasselbe Zertifikat ergeben eine
+                                einzige Rueckfrage im Browser fuer
+                                alle Racks des Nutzers.
+
+                                Mitgeliefert wird bewusst keines: Dann
+                                laege der private Schluessel oeffentlich,
+                                und jeder im selben WLAN koennte sich
+                                lautlos als XRack ausgeben. Der Nutzer
+                                traegt SEIN Zertifikat von Rack zu
+                                Rack - verschluesselt mit einem
+                                Kennwort, das nur er kennt.
+                            #}
+                            <hr>
+
+                            <div class="mb-3">
+                                <label
+                                    class="form-label fw-semibold"
+                                    for="settings-tls-password"
+                                >
+                                    {{ t.settings_tls_title }}
+                                </label>
+
+                                <div id="settings-tls-state" class="small mb-2"></div>
+
+                                <div
+                                    id="settings-tls-warning"
+                                    class="alert alert-warning py-2 px-3 small d-none"
+                                ></div>
+
+                                <div class="d-flex flex-wrap gap-2 align-items-center">
+                                    <input
+                                        type="password"
+                                        id="settings-tls-password"
+                                        class="form-control form-control-sm"
+                                        autocomplete="new-password"
+                                        placeholder="{{ t.settings_tls_password }}"
+                                    >
+                                    <button
+                                        type="button"
+                                        id="btn-tls-export"
+                                        class="btn btn-primary btn-sm text-nowrap"
+                                    >
+                                        {{ t.settings_tls_export }}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        id="btn-tls-import"
+                                        class="btn btn-primary btn-sm text-nowrap"
+                                    >
+                                        {{ t.settings_tls_import }}
+                                    </button>
+
+                                    {#
+                                        Neu erzeugen ist die Nebenaktion
+                                        und macht alle bestehenden
+                                        Browser-Ausnahmen ungueltig -
+                                        deshalb grau und mit Rueckfrage.
+                                    #}
+                                    <button
+                                        type="button"
+                                        id="btn-tls-renew"
+                                        class="btn btn-outline-secondary btn-sm text-nowrap"
+                                    >
+                                        {{ t.settings_tls_renew }}
+                                    </button>
+
+                                    <input
+                                        type="file"
+                                        id="tls-import-file"
+                                        accept=".p12,application/x-pkcs12"
+                                        class="d-none"
+                                    >
+                                </div>
+
+                                <div id="settings-tls-result" class="small mt-2"></div>
+
+                                <small class="text-body-secondary">
+                                    {{ t.settings_tls_hint }}
+                                </small>
+                            </div>
+
                         </div>
                             </div>
                         </div>

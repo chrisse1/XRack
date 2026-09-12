@@ -57,6 +57,15 @@ by default `https://xrack.local:8080`. The certificate is self-signed, so
 the browser shows a warning once ("Advanced" → "Proceed"); it remembers
 the exception afterwards.
 
+Running several XRacks? Settings → *Certificate (HTTPS)* saves the
+certificate to an encrypted file and loads it onto the other units.
+Together with the same shared name, all of them are one destination with
+one certificate for the browser — so it asks once, not once per rack. The
+file contains the private key: it is encrypted with a password of your
+choosing, XRack only hands it out once a PIN is set, and it ships with no
+certificate of its own. A certificate shipped with the software would put
+its private key in everyone's hands.
+
 At the end the installer says whether lighting could be set up. If it
 failed, the reason is right there — and it can be caught up on its own,
 without the whole installer:
@@ -329,6 +338,16 @@ Danach ist die Weboberfläche unter `https://<hostname>.local:<port>`
 erreichbar, standardmäßig `https://xrack.local:8080`. Das Zertifikat ist
 selbstsigniert, der Browser zeigt deshalb einmalig eine Warnung
 ("Erweitert" → "Trotzdem fortfahren") und merkt sich die Ausnahme.
+
+Wer mehrere XRacks betreibt: Einstellungen → *Zertifikat (HTTPS)* sichert
+das Zertifikat in eine verschlüsselte Datei und spielt es auf den anderen
+Geräten ein. Zusammen mit demselben gemeinsamen Namen sind sie für den
+Browser ein Ziel mit einem Zertifikat — er fragt einmal statt einmal je
+Rack. In der Datei steckt der private Schlüssel: Sie ist mit einem selbst
+gewählten Kennwort verschlüsselt, XRack gibt sie nur heraus, wenn eine
+PIN vergeben ist, und ein eigenes Zertifikat liefert XRack bewusst nicht
+mit. Ein mitgeliefertes läge mit seinem privaten Schlüssel in aller
+Hände.
 
 Am Ende sagt der Installer, ob die Lichtsteuerung eingerichtet werden
 konnte. Ist sie ausgefallen, steht der Grund dabei — nachholen lässt

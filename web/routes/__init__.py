@@ -42,6 +42,7 @@ from web.routes import (
     system,
     update,
     usb,
+    zertifikat,
 )
 
 router = APIRouter()
@@ -59,5 +60,6 @@ for _teil in (
     diagnostics,
     lighting,
     update,
+    zertifikat,
 ):
     router.include_router(_teil.router)
