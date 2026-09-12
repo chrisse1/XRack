@@ -88,7 +88,8 @@ class Spieler:
         self.playing = False
 
     def play_practice(self, device, path, start_channel, rate,
-                      wiederholen=False):
+                      wiederholen=False, mitschnitt=None,
+                      mitschnitt_start=0):
 
         PROTOKOLL.append("ton-an")
 
@@ -100,6 +101,8 @@ class Spieler:
             "start_channel": start_channel,
             "rate": rate,
             "wiederholen": wiederholen,
+            "mitschnitt": mitschnitt,
+            "mitschnitt_start": mitschnitt_start,
         })
         self.playing = True
         return True
@@ -595,6 +598,99 @@ with tempfile.TemporaryDirectory() as tmp:
 
     print("OK: Der Schalter 'Mitschneiden' wird am Gerät gemerkt")
 
+    # ----------------------------------------------------------------
+    # 7g. Den Versuch zum Mix dazulegen
+    #
+    # Er liegt auf den Kanälen, auf denen er aufgenommen wurde - und
+    # die stehen in seinem Namen. Genau dafür reist der Startkanal
+    # mit der Datei (Stufe 1).
+    # ----------------------------------------------------------------
+
+    anwendung.music_player.playing = False
+    anwendung.music_player.aufrufe.clear()
+
+    erfolg, meldung = anwendung.start_practice(
+        "Uebung-1_p.w64", mitschnitt="Soundcheck-2_s9.w64"
+    )
+
+    assert erfolg, meldung
+
+    ruf = anwendung.music_player.aufrufe[0]
+
+    assert ruf["mitschnitt"] == ordner / "Soundcheck-2_s9.w64", (
+        f"Der Spieler bekam {ruf['mitschnitt']} als Mitschnitt."
+    )
+
+    assert ruf["mitschnitt_start"] == 8, (
+        f"Der Versuch soll ab Kanal {ruf['mitschnitt_start'] + 1} "
+        f"liegen - aufgenommen wurde er laut Name ab Kanal 9. Ein "
+        f"Kanal daneben, und er liegt auf einer fremden Spur."
+    )
+
+    #
+    # Ohne Ziffer im Namen: Kanal 1, wie bei allen alten Aufnahmen.
+    #
+    anwendung.music_player.playing = False
+    anwendung.music_player.aufrufe.clear()
+
+    erfolg, meldung = anwendung.start_practice(
+        "Uebung-1_p.w64", mitschnitt="Soundcheck-1_s.w64"
+    )
+
+    assert erfolg, meldung
+
+    assert anwendung.music_player.aufrufe[0]["mitschnitt_start"] == 0, (
+        anwendung.music_player.aufrufe[0]["mitschnitt_start"]
+    )
+
+    print("OK: Der Versuch landet auf den Kanälen aus seinem Namen")
+
+    # ----------------------------------------------------------------
+    # 7h. Was kein Mitschnitt ist, wird nicht dazugelegt
+    #
+    # Zwei Übungsmixe übereinander wären Brei - und eine Datei, die es
+    # nicht gibt, wäre eine stille Überraschung.
+    # ----------------------------------------------------------------
+
+    anwendung.music_player.playing = False
+    anwendung.music_player.aufrufe.clear()
+
+    erfolg, meldung = anwendung.start_practice(
+        "Uebung-1_p.w64", mitschnitt="Uebung-2_p.w64"
+    )
+
+    assert not erfolg and meldung, (
+        "Ein zweiter Übungsmix wurde als Mitschnitt angenommen."
+    )
+
+    erfolg, meldung = anwendung.start_practice(
+        "Uebung-1_p.w64", mitschnitt="Gibtsnicht_s.w64"
+    )
+
+    assert not erfolg and meldung, (
+        "Ein Mitschnitt, den es nicht gibt, wurde angenommen."
+    )
+
+    assert anwendung.music_player.aufrufe == [], (
+        "Trotz Ablehnung wurde der Spieler gerufen."
+    )
+
+    print("OK: Nur wirkliche Aufnahmen werden dazugelegt")
+
+    # ----------------------------------------------------------------
+    # 7i. In der Auswahl stehen die Aufnahmen, nicht die Mixe
+    # ----------------------------------------------------------------
+
+    takes = anwendung.practice_takes()
+
+    assert "Soundcheck-1_s.w64" in takes and "Soundcheck-2_s9.w64" in takes
+
+    assert not [n for n in takes if n.endswith(("_p.w64", "_p9.w64"))], (
+        f"In der Mitschnitt-Auswahl stehen Übungsmixe: {takes}"
+    )
+
+    print("OK: Zum Dazuhören stehen die Aufnahmen bereit, nicht die Mixe")
+
 
 # ====================================================================
 # Teil 2: Die Karte im Browser
@@ -849,6 +945,7 @@ KARTE = """function () {
         knopf_musik: knopf('btn-mode-music'),
         knopf_ueben: knopf('btn-mode-practice'),
         mixe: feld('practice-mix'),
+        takes: feld('practice-take'),
         kanalfeld: document.getElementById('practice-channels'),
         schleife: schalter ? schalter.checked : null,
         mitschnitt: aufnahme ? {
@@ -870,6 +967,8 @@ KARTE = """function () {
 }"""
 
 MIXE = ["Uebung-Bach_p.w64", "Uebung-Blues_p9.w64"]
+
+TAKES = ["Soundcheck-7_s9.w64", "Soundcheck-8_s.w64"]
 
 
 # ====================================================================
@@ -1087,12 +1186,13 @@ print("OK: Umgeschaltet wird nur, wenn wirklich nichts läuft")
 # ====================================================================
 
 geschickt = ausfuehren(
-    stand(player_mode="practice", practice_mixes=MIXE),
+    stand(player_mode="practice", practice_mixes=MIXE, practice_takes=TAKES),
     KARTE,
     vorlauf=(
         "document.getElementById('practice-mix').value = 'Uebung-Blues_p9.w64';"
         "document.getElementById('practice-repeat').checked = true;"
         "document.getElementById('practice-record').checked = true;"
+        "document.getElementById('practice-take').value = 'Soundcheck-7_s9.w64';"
         "document.getElementById('btn-music-stop').click();"
     ),
 )
@@ -1108,6 +1208,7 @@ assert starts[0]["body"] == {
     "filename": "Uebung-Blues_p9.w64",
     "repeat": True,
     "record": True,
+    "take": "Soundcheck-7_s9.w64",
 }, (
     f"Geschickt wurde {starts[0]['body']} - das ist nicht, was in den "
     f"Feldern stand. (Ein Kanal gehört NICHT dazu: Der steht im Namen.)"
@@ -1178,6 +1279,60 @@ assert ohne_geraet["mitschnitt"]["grund"] == TEXTE[
 ], ohne_geraet["mitschnitt"]["grund"]
 
 print("OK: Der Mitschnitt-Schalter sagt, was er aufnimmt - und wann nicht")
+
+
+# ====================================================================
+# 13d. "Dazu hören": die Auswahl der Versuche
+#
+# Angeboten wird jede Aufnahme, aber kein Übungsmix - zwei Mixe
+# übereinander wären Brei. Und obenan steht "nichts": Der Normalfall
+# ist, ohne Versuch zu üben.
+# ====================================================================
+
+dazu = ausfuehren(
+    stand(
+        player_mode="practice",
+        practice_mixes=MIXE,
+        practice_takes=TAKES,
+    ),
+    KARTE,
+)
+
+assert dazu["takes"]["werte"] == [""] + TAKES, (
+    f"In der Auswahl stehen {dazu['takes']['werte']} - erwartet waren "
+    f"'nichts' und danach die Aufnahmen."
+)
+
+assert dazu["takes"]["gewaehlt"] == "", (
+    "Vorbelegt ist ein Versuch - der Normalfall ist, ohne zu üben."
+)
+
+#
+# Ist einer gewählt, sagt die Karte es: Sonst übt man gegen einen
+# Versuch, von dem man nichts weiss.
+#
+gewaehlt = ausfuehren(
+    stand(
+        player_mode="practice",
+        practice_mixes=MIXE,
+        practice_takes=TAKES,
+    ),
+    KARTE,
+    vorlauf=(
+        "const f = document.getElementById('practice-take');"
+        "f.value = 'Soundcheck-7_s9.w64';"
+        "f.dispatchEvent(new Event('change'));"
+    ),
+)
+
+assert TEXTE["practice_take_hint"].replace(
+    "{name}", "Soundcheck-7_s9"
+) in gewaehlt["hinweis"], (
+    f"Im Hinweis steht {gewaehlt['hinweis']!r} - dort gehört hin, "
+    f"welcher Versuch mitläuft."
+)
+
+print("OK: Die Auswahl 'Dazu hören' bietet Aufnahmen an, keine Mixe")
 
 
 # ====================================================================

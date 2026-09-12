@@ -356,6 +356,24 @@
               </div>
 
               {#
+                  Der Mitschnitt zum Mitspielen: Er liegt im selben
+                  Strom wie der Mix, auf den Kanaelen, auf denen er
+                  aufgenommen wurde. Zwei Wiedergaben gleichzeitig kann
+                  das Interface nicht - zwei Dateien in EINER
+                  Wiedergabe schon.
+              #}
+              <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                  <span>
+                      {{ t.practice_take_label }}
+                  </span>
+
+                  <select
+                      id="practice-take"
+                      class="form-select form-select-sm w-auto flex-grow-1">
+                  </select>
+              </div>
+
+              {#
                   Kein Kanalfeld: Auf welchen Kanaelen ein Uebungsmix
                   liegt, steht in seinem Namen und wird beim Erstellen
                   einmal festgelegt - ein Mix wird fuer einen Platz im

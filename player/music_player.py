@@ -13,6 +13,7 @@ from audio.audio_playback_backend import AudioPlaybackBackend
 from audio.models import AudioDevice
 from player.music_library import MusicLibrary
 from player.track_decoder import TrackDecoder, probe_duration, probe_tags
+from player.ueben_decoder import UebenDecoder
 from player.w64_decoder import (
     W64Decoder,
     eckdaten,
@@ -50,6 +51,16 @@ class MusicPlayer:
         # beiden gerade zustaendig ist, entscheidet _decoder_fuer().
         #
         self.eigener_decoder = W64Decoder()
+
+        #
+        # Beim Ueben mit Mitschnitt liegen ZWEI Dateien in einem
+        # Strom - der Mix auf seinen Kanaelen, der Versuch auf seinen.
+        # Zustaendig ist dann dieser Dekoder (siehe
+        # player/ueben_decoder.py).
+        #
+        self.ueben_decoder = UebenDecoder()
+
+        self._mitschnitt: Path | None = None
 
         self._aktiver_decoder = self.decoder
 
@@ -206,6 +217,14 @@ class MusicPlayer:
         if self.playing:
             self.stop()
 
+        #
+        # Kein Mitschnitt: Der gehoert zum Ueben. Bliebe er vom letzten
+        # Mal stehen, liefe der naechste Titel durch den falschen
+        # Dekoder - und ffmpeg-Material durch einen Wave64-Leser ergibt
+        # gar nichts.
+        #
+        self._mitschnitt = None
+
         playlist = self.library.build_shuffled_playlist(folder)
 
         if not playlist:
@@ -228,6 +247,9 @@ class MusicPlayer:
         Wert statt vier - siehe player/w64_decoder.py).
         """
 
+        if self._mitschnitt is not None:
+            return self.ueben_decoder
+
         if liest_xrack_selbst(track):
             return self.eigener_decoder
 
@@ -248,6 +270,14 @@ class MusicPlayer:
         if self.playing:
             self.stop()
 
+        #
+        # Kein Mitschnitt: Der gehoert zum Ueben. Bliebe er vom letzten
+        # Mal stehen, liefe der naechste Titel durch den falschen
+        # Dekoder - und ffmpeg-Material durch einen Wave64-Leser ergibt
+        # gar nichts.
+        #
+        self._mitschnitt = None
+
         if not path.exists():
             return False
 
@@ -266,15 +296,25 @@ class MusicPlayer:
         start_channel: int,
         rate: int,
         wiederholen: bool = False,
+        mitschnitt: Path | None = None,
+        mitschnitt_start: int = 0,
     ) -> bool:
         """
-        Einen Übungsmix abspielen.
+        Einen Übungsmix abspielen - auf Wunsch mit einem Mitschnitt
+        darüber.
 
         Der Unterschied zu play_file() ist die Kanalzahl: Ein
         Übungsmix bringt sie selbst mit (vier Stems sind acht Kanäle),
         während Musik immer Stereo ist. Gelesen wird die Datei von
         XRack selbst - ffmpeg liest unsere Wave64 falsch, siehe
         player/w64_decoder.py.
+
+        Mit Mitschnitt liegen zwei Dateien in EINEM Strom (mehr gibt
+        das Interface nicht her). Dann übernimmt der UebenDecoder, und
+        geöffnet wird mit der vollen Kanalzahl des Interfaces: Der
+        Dekoder legt beide Quellen gleich an ihren Platz, und der
+        ChannelInserter im Backend hat nichts mehr zu tun - eine
+        Schleife über die Rahmen statt zweier.
         """
 
         if self.playing:
@@ -291,13 +331,57 @@ class MusicPlayer:
             )
             return False
 
+        self._mitschnitt = mitschnitt
+
+        if mitschnitt is None:
+
+            return self._start(
+                device,
+                [path],
+                folder_mode=False,
+                start_channel=start_channel,
+                rate=rate,
+                channels=daten["channels"],
+                wiederholen=wiederholen,
+            )
+
+        if not Path(mitschnitt).exists():
+
+            self.logger.error(
+                "Mitschnitt nicht gefunden: %s", mitschnitt
+            )
+
+            self._mitschnitt = None
+
+            return False
+
+        self.ueben_decoder.einrichten(
+            breite=device.channels,
+            start_channel=start_channel,
+            mitschnitt=mitschnitt,
+            mitschnitt_start=mitschnitt_start,
+        )
+
+        #
+        # Vorher fragen, nicht unterwegs scheitern: Eine Quelle, die
+        # ueber den Rand des Interfaces ragt, waere entweder halbiert
+        # (ein Stereopaar auseinandergerissen) oder sie schriebe in den
+        # naechsten Rahmen - dann ist nicht eine Spur still, sondern
+        # alles verschoben.
+        #
+        if not self.ueben_decoder.passt(path):
+
+            self._mitschnitt = None
+
+            return False
+
         return self._start(
             device,
             [path],
             folder_mode=False,
-            start_channel=start_channel,
+            start_channel=0,
             rate=rate,
-            channels=daten["channels"],
+            channels=device.channels,
             wiederholen=wiederholen,
         )
 

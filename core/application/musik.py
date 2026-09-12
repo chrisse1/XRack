@@ -138,6 +138,7 @@ class MusikMixin:
         filename: str,
         wiederholen: bool = False,
         mitschneiden: bool = False,
+        mitschnitt: str = "",
     ) -> tuple[bool, str]:
         """
         Einen Übungsmix abspielen.
@@ -170,6 +171,34 @@ class MusikMixin:
 
         if not pfad.is_file():
             return False, "Der Übungsmix ist nicht da."
+
+        #
+        # Ein Mitschnitt zum Mitspielen: Er liegt im selben Strom wie
+        # der Mix, auf den Kanälen, auf denen er aufgenommen wurde.
+        # Zwei Wiedergaben gleichzeitig kann das Interface nicht - zwei
+        # Dateien in einer Wiedergabe schon.
+        #
+        mitschnitt_pfad = None
+        mitschnitt_start = 0
+
+        if mitschnitt:
+
+            mitschnitt_pfad = (
+                self.recorder.writer.directory / Path(mitschnitt).name
+            )
+
+            if not mitschnitt_pfad.is_file():
+                return False, "Der Mitschnitt ist nicht da."
+
+            if kind_from_filename(mitschnitt) == KIND_PRACTICE:
+                return False, (
+                    "Ein Übungsmix ist kein Mitschnitt - sonst lägen "
+                    "zwei Mixe übereinander."
+                )
+
+            mitschnitt_start = start_channel_from_filename(
+                mitschnitt_pfad.name
+            ) - 1
 
         if mitschneiden and not self.recorder.bereit:
             return False, (
@@ -212,6 +241,8 @@ class MusikMixin:
             start_channel=start_channel - 1,
             rate=self.mixer_sample_rate,
             wiederholen=wiederholen,
+            mitschnitt=mitschnitt_pfad,
+            mitschnitt_start=mitschnitt_start,
         )
 
         if not erfolg:
@@ -224,6 +255,12 @@ class MusikMixin:
             if mitschneiden:
                 self.recorder.stop()
                 self.practice_recording = False
+
+            if mitschnitt_pfad is not None:
+                return False, (
+                    "Übungsmix und Mitschnitt passen nicht zusammen auf "
+                    "das Interface - siehe Protokoll."
+                )
 
             return False, "Der Übungsmix liess sich nicht öffnen."
 
@@ -249,6 +286,22 @@ class MusikMixin:
             self.practice_recording = False
 
         return True
+
+
+    def practice_takes(self) -> list[str]:
+        """
+        Die Aufnahmen, die sich zum Übungsmix dazulegen lassen.
+
+        Alles ausser Übungsmixen: Ein Mitschnitt ist eine Aufnahme wie
+        jede andere (so entschieden, damit es keine dritte Art gibt) -
+        erkennbar ist er ohnehin am Kanal, auf dem er liegt.
+        """
+
+        return [
+            name
+            for name in self.recorder.recordings
+            if kind_from_filename(name) != KIND_PRACTICE
+        ]
 
 
     def set_practice_record(self, an: bool) -> bool:

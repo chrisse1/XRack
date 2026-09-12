@@ -46,6 +46,7 @@ class PracticeSelection(BaseModel):
     filename: str
     repeat: bool = False
     record: bool = False
+    take: str = ""
 
 
 class PracticeRecordSelection(BaseModel):
@@ -161,6 +162,7 @@ def start_practice(auswahl: PracticeSelection, request: Request):
         auswahl.filename,
         auswahl.repeat,
         auswahl.record,
+        auswahl.take,
     )
 
     return {

@@ -2824,6 +2824,44 @@ function updatePracticeCard(data) {
         if (mixe.includes(vorher)) auswahl.value = vorher;
     }
 
+    //
+    // Was sich dazuhoeren laesst: alle Aufnahmen ausser Uebungsmixen.
+    // Zwei Mixe uebereinander waeren Brei.
+    //
+    const mitspielen = document.getElementById("practice-take");
+
+    if (mitspielen) {
+
+        const takes = data.practice_takes || [];
+
+        const kennung = takes.join("|");
+
+        if (mitspielen.dataset.built !== kennung) {
+
+            const vorher = mitspielen.value;
+
+            mitspielen.innerHTML = "";
+
+            const keiner = document.createElement("option");
+            keiner.value = "";
+            keiner.textContent = I18N.practice_take_none;
+            mitspielen.appendChild(keiner);
+
+            takes.forEach((name) => {
+                const eintrag = document.createElement("option");
+                eintrag.value = name;
+                eintrag.textContent = name.replace(/\.w64$/i, "");
+                mitspielen.appendChild(eintrag);
+            });
+
+            mitspielen.dataset.built = kennung;
+
+            if (takes.includes(vorher)) mitspielen.value = vorher;
+        }
+
+        mitspielen.disabled = data.music_playing;
+    }
+
     const schleife = document.getElementById("practice-repeat");
 
     if (schleife && document.activeElement !== schleife) {
@@ -2886,6 +2924,13 @@ function updatePracticeCard(data) {
                 );
             }
 
+            if (mitspielen && mitspielen.value) {
+                teile.push(
+                    I18N.practice_take_hint.replace(
+                        "{name}", mitspielen.value.replace(/\.w64$/i, ""))
+                );
+            }
+
             hinweis.textContent = teile.join(" · ");
         }
     }
@@ -2909,6 +2954,7 @@ async function startPractice() {
     const auswahl = document.getElementById("practice-mix");
     const schleife = document.getElementById("practice-repeat");
     const mitschnitt = document.getElementById("practice-record");
+    const mitspielen = document.getElementById("practice-take");
 
     if (!auswahl || !auswahl.value) return;
 
@@ -2918,7 +2964,8 @@ async function startPractice() {
         body: JSON.stringify({
             filename: auswahl.value,
             repeat: schleife ? schleife.checked : false,
-            record: mitschnitt ? mitschnitt.checked : false
+            record: mitschnitt ? mitschnitt.checked : false,
+            take: mitspielen ? mitspielen.value : ""
         })
     });
 
@@ -2971,6 +3018,19 @@ document.getElementById("practice-repeat").addEventListener("change", (e) => {
 
 document.getElementById("practice-record").addEventListener("change", (e) => {
     setPracticeRecord(e.target.checked);
+});
+
+//
+// Die Auswahl steht nur im Browser: Anders als Schleife und
+// Mitschneiden ist sie kein Zustand des Racks, sondern die Frage
+// "welchen Versuch hoere ich mir jetzt an".
+//
+document.getElementById("practice-mix").addEventListener("change", () => {
+    updatePracticeCard(lastStatusData);
+});
+
+document.getElementById("practice-take").addEventListener("change", () => {
+    updatePracticeCard(lastStatusData);
 });
 
 function updateMusicPlayer(data) {

@@ -6,7 +6,7 @@ weil der Umbau ueber mehrere Sitzungen laeuft: Wer hier weiterarbeitet
 - ich beim naechsten Mal oder jemand anderes -, soll den Stand und vor
 allem die BEGRUENDUNGEN vorfinden, nicht nur das Ergebnis.
 
-**Stand:** Stufen 1 bis 3b-1 gebaut (3.0.0-dev5). Das Aufnahmefenster
+**Stand:** Stufen 1 bis 3b gebaut (3.0.0-dev6). Das Aufnahmefenster
 steht und ist am Geraet abgenommen; der Musikspieler kann Uebungsmixe
 mehrkanalig abspielen, mit Spulen und Schleife; die Karte hat den
 Umschalter Musik | Ueben. Stufen 3b, 4 und 5 stehen aus.
@@ -255,8 +255,41 @@ Was daran nicht beliebig ist:
   (Stufe 1). Welche Kanäle das sind, steht in der Üben-Karte daneben —
   ein Mitschnitt, von dem man nicht weiss, was darauf ist, ist keiner.
 
-Offen bleibt Teil 2: den Mitschnitt zusammen mit dem Übungsmix
-abspielen (zweite Quelle im Spieler).
+**Teil 2 gebaut (3.0.0-dev6): zusammenhören.**
+
+Ein zweites Auswahlfeld „Dazu hören" in der Üben-Karte. Ist ein
+Versuch gewählt, legt XRack beide Dateien in EINEN Wiedergabestrom —
+den Mix auf seine Kanäle, den Versuch auf seine. Mehr als einen Strom
+gibt das Interface nicht her; zwei Dateien in einem Strom sind kein
+Problem.
+
+- **Der Versuch liegt auf den Kanälen, auf denen er aufgenommen
+  wurde** — sie stehen in seinem Namen (`_s9`). Genau dafür reist der
+  Startkanal seit Stufe 1 mit der Datei.
+- **Die Ausgabe hat die volle Kanalzahl des Interfaces.** Damit ist
+  der `ChannelInserter` im Backend ein Durchreicher, und es bleibt bei
+  EINER Schleife über die Rahmen statt zweier — auf dem Pi ist das der
+  heißeste Punkt im Lesethread. Ohne Versuch bleibt der Weg von Stufe 2
+  unverändert (Backend setzt ein, `UebenDecoder` ist nicht beteiligt).
+- **Der Mix gibt die Länge vor.** Ein kürzerer Versuch wird ab seinem
+  Ende still, ein längerer endet mit dem Mix: Man übt zum Stück, nicht
+  umgekehrt.
+- **Ein Sprung bewegt beide.** Sonst liefe der Versuch nach dem Spulen
+  gegen eine andere Stelle, und das Üben wäre wertlos.
+- **Was über den Rand des Interfaces ragt, wird vorher abgelehnt** —
+  nicht unterwegs abgeschnitten: Ein halbes Stereopaar ist kein
+  Stereo, und in den nächsten Rahmen zu schreiben hiesse, dass ab dort
+  alles verschoben ist.
+
+Geprüft wird mit echten Dateien (`test_ueben_mitschnitt.py`): jeder
+Kanal trägt seinen eigenen Wert, eine Verschiebung um einen einzigen
+Kanal fällt sofort auf.
+
+Was offenbleibt: der Versatz durch das Pult. XRack gibt aus, das Pult
+schickt zurück, XRack nimmt auf — der Versuch liegt also einige
+Millisekunden hinter dem Mix. Ob das beim Hören stört, muss das Gerät
+zeigen; messen liesse es sich (ein Klick ausgeben, denselben Kanal
+aufnehmen, den Ausschlag suchen), das wäre aber eine eigene Funktion.
 
 - Knopf **„Üben + mitschneiden"**: startet Übungsmix und Aufnahme in
   einem Zug (Aufnahmefenster aus Stufe 1 - beim Üben typisch zwei

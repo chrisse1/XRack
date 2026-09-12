@@ -637,6 +637,8 @@ class Application(
 
         self.status.practice_mixes = self.practice_mixes()
 
+        self.status.practice_takes = self.practice_takes()
+
         self.status.music_paused = self.music_player.paused
 
         self.status.music_track = self.music_player.current_track

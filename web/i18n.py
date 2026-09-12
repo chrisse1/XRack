@@ -84,6 +84,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "practice_hint": "Liegt ab Kanal {a}",
         "practice_record": "Mitschneiden",
+        "practice_take_label": "Dazu hören:",
+        "practice_take_none": "nichts",
+        "practice_take_hint": "mit {name}",
         "practice_record_hint": "Mitschnitt: Kanal {a}-{b}",
         "practice_record_no_device": (
             "Zum Mitschneiden fehlt ein offenes Audiogerät."
@@ -870,6 +873,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "practice_hint": "Starts at channel {a}",
         "practice_record": "Record along",
+        "practice_take_label": "Play along with:",
+        "practice_take_none": "nothing",
+        "practice_take_hint": "with {name}",
         "practice_record_hint": "Recording: channels {a}-{b}",
         "practice_record_no_device": (
             "Recording along needs an open audio device."

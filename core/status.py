@@ -112,6 +112,11 @@ class SystemStatus(BaseModel):
     #
     practice_record: bool = False
     practice_recording: bool = False
+
+    #
+    # Die Aufnahmen, die sich zum Uebungsmix dazulegen lassen.
+    #
+    practice_takes: list[str] = []
     practice_mixes: list[str] = []
 
     bluetooth_streaming: bool = False
