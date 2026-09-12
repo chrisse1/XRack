@@ -674,6 +674,103 @@ try:
 
     print("OK: Ohne Neustart steht auch keine Neustart-Warnung da")
 
+    # ----------------------------------------------------------------
+    # 13. Beim geordneten Herunterfahren wird abgeschlossen
+    #
+    # Das ist die Voraussetzung dafür, dass Abschnitt 11 überhaupt
+    # etwas aussagt. Der Aufzeichnungs-Thread ist ein Daemon-Thread:
+    # Beim Beenden stirbt er mit, ohne noch etwas zu schreiben - und
+    # die Aufzeichnung schloss daraus beim nächsten Start, der Prozess
+    # sei abgestürzt.
+    #
+    # Am Gerät sah das so aus: Nach einem völlig geordneten
+    # "systemctl restart" hätte dort "nicht ordentlich beendet"
+    # gestanden. Eine Warnung, die bei jedem normalen Neustart
+    # erscheint, schickt die nächste Fehlersuche in die falsche
+    # Richtung.
+    #
+    # Geprüft wird an der ECHTEN Anwendung: Der lifespan von FastAPI
+    # wird durchlaufen, wie uvicorn es beim Herunterfahren tut.
+    # ----------------------------------------------------------------
+
+    import asyncio
+
+    from web.server import create_app
+
+    class Ausgabe:
+        name = "XRack"
+        version = "test"
+
+    class Daten:
+        application = Ausgabe()
+
+    class Konfiguration:
+        data = Daten()
+
+    class RackMitDiagnose:
+        """Nur so viel Application, wie create_app anfasst."""
+
+        def __init__(self, diagnose):
+            self.config = Konfiguration()
+            self.diagnostics = diagnose
+            self.logger = diagnostics_module.logging.getLogger("XRack-Test")
+
+    proband = Diagnostics(FakeApplication())
+    proband._close_writer()
+    diagnostics_module.LOG_FILE.unlink(missing_ok=True)
+
+    proband._default_route = lambda: ("192.168.1.1", "wlan0")
+    proband._temperature = lambda: "45C"
+    proband._load = lambda: "0.10"
+    proband._self_check = lambda port: "ok"
+    proband._ping = lambda host: True
+    proband._stromsparen = lambda interface: "off"
+    proband._prozess_laufzeit = lambda: 7200.0
+    proband._system_laufzeit = lambda: 90000.0
+
+    diagnostics_module.INTERVAL = 0.01
+
+    #
+    # Wie im Betrieb gestartet - mit eigenem Thread.
+    #
+    proband.start()
+
+    time.sleep(0.1)
+
+    app = create_app(RackMitDiagnose(proband))
+
+    async def herunterfahren():
+        async with app.router.lifespan_context(app):
+            pass
+
+    asyncio.run(herunterfahren())
+
+    assert proband.enabled is False, (
+        "Die Aufzeichnung läuft nach dem Herunterfahren weiter."
+    )
+
+    inhalt = diagnostics_module.LOG_FILE.read_text(encoding="utf-8")
+
+    assert "Aufzeichnung beendet" in inhalt, (
+        f"Beim geordneten Herunterfahren fehlt die Abschlusszeile - dann "
+        f"hält die Diagnose beim nächsten Start jeden normalen Neustart "
+        f"für einen Absturz:\n{inhalt}"
+    )
+
+    #
+    # Und der Beweis, dass es zusammenpasst: Der nächste Start liest
+    # diese Datei und meldet KEINEN Abbruch.
+    #
+    nachher = Diagnostics(FakeApplication())
+    nachher._close_writer()
+
+    assert nachher._vorherige_lief_weiter() is False, (
+        "Eine ordentlich abgeschlossene Aufzeichnung gilt trotzdem als "
+        "abgebrochen."
+    )
+
+    print("OK: Geordnetes Herunterfahren schliesst die Aufzeichnung ab")
+
     print("Alle Tests erfolgreich.")
 
 finally:
