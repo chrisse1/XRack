@@ -98,6 +98,14 @@ class SystemStatus(BaseModel):
     music_duration: float = 0.0
     music_preferred_start_channel: int = 1
 
+    #
+    # Die Karte zeigt entweder den Musikspieler oder das Ueben.
+    #
+    player_mode: str = "music"
+    practice_channel: int = 1
+    practice_repeat: bool = False
+    practice_mixes: list[str] = []
+
     bluetooth_streaming: bool = False
     bluetooth_device_name: str = ""
 

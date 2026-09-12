@@ -258,17 +258,53 @@
         <div class="col-lg-6">
           <div class="player-stack">
 
+            {#
+                Eine Karte, zwei Quellen: Musik oder Ueben.
+
+                Warum nicht zwei Karten nebeneinander: Zwei
+                Wiedergabestroeme kann das Interface nicht (deshalb
+                schliessen sich Musik und Soundcheck seit jeher aus).
+                Zwei Karten wuerden also etwas anbieten, was die
+                Hardware nicht hergibt - und den Platz auf dem Tablet
+                doppelt belegen.
+
+                Getauscht wird nur der KOPF der Karte. Transport,
+                Schnellregler, Angaben und Positionsregler sind fuer
+                beide dasselbe - es ist ja derselbe Spieler.
+            #}
             {% set title %}
-            <i class="bi bi-music-note-list me-2"></i>{{ t.music_player_title }}
+            <i class="bi bi-music-note-list me-2" id="player-icon"></i>
+            <span id="player-title-text">{{ t.music_player_title }}</span>
             {% endset %}
 
             {% set header_right %}
+            <div class="btn-group btn-group-sm me-2" role="group">
+                <button
+                    type="button"
+                    id="btn-mode-music"
+                    class="btn btn-outline-primary active"
+                    onclick="setPlayerMode('music')"
+                >
+                    {{ t.mode_music }}
+                </button>
+                <button
+                    type="button"
+                    id="btn-mode-practice"
+                    class="btn btn-outline-primary"
+                    onclick="setPlayerMode('practice')"
+                >
+                    {{ t.mode_practice }}
+                </button>
+            </div>
             <span class="fw-normal small">{{ t.status_label }}</span>
             <strong id="player-status" class="small">{{ t.status_stopped }}</strong>
             {% endset %}
 
             {% set body %}
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+
+            {# --- Kopf A: Musik ------------------------------------ #}
+            <div id="player-head-music"
+                 class="d-flex flex-wrap justify-content-between align-items-center gap-2">
               <div class="d-flex align-items-center gap-2">
                   <span>
                       {{ t.music_channels_label }}
@@ -289,6 +325,72 @@
                   <i class="bi bi-folder2-open me-2"></i>
                   {{ t.btn_open_folder }}
               </button>
+            </div>
+
+            {# --- Kopf B: Ueben ------------------------------------ #}
+            <div id="player-head-practice" class="d-none">
+
+              <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                  <span>
+                      {{ t.practice_mix_label }}
+                  </span>
+
+                  <select
+                      id="practice-mix"
+                      class="form-select form-select-sm w-auto flex-grow-1">
+                  </select>
+
+                  {#
+                      Steht jetzt hier statt im Dialog "Alle Dateien":
+                      Wer einen Uebungsmix sucht, sucht ihn dort, wo er
+                      ihn benutzt.
+                  #}
+                  <button
+                      type="button"
+                      id="btn-practice-create"
+                      class="btn btn-outline-secondary btn-sm text-nowrap"
+                  >
+                      <i class="bi bi-layers me-1"></i>
+                      {{ t.btn_stem_combine_open }}
+                  </button>
+              </div>
+
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                  <span>
+                      {{ t.music_channels_label }}
+                  </span>
+
+                  <select
+                      id="practice-channels"
+                      class="form-select form-select-sm w-auto">
+                  </select>
+
+                  <div class="form-check form-switch ms-2 mb-0">
+                      <input
+                          type="checkbox"
+                          role="switch"
+                          id="practice-repeat"
+                          class="form-check-input"
+                      >
+                      <label class="form-check-label text-nowrap"
+                             for="practice-repeat">
+                          {{ t.practice_repeat }}
+                      </label>
+                  </div>
+
+                  <button
+                      type="button"
+                      id="btn-practice-start"
+                      class="btn btn-primary btn-sm text-nowrap ms-auto"
+                      onclick="startPractice()"
+                  >
+                      <i class="bi bi-play-circle me-1"></i>
+                      {{ t.btn_practice }}
+                  </button>
+              </div>
+
+              <div id="practice-hint" class="small text-body-secondary mt-2"></div>
+
             </div>
 
             <hr>

@@ -120,6 +120,23 @@ class Application(
             1,
         )
 
+        #
+        # Die Karte zeigt entweder den Musikspieler oder das Ueben -
+        # zwei Wiedergabestroeme kann das Interface nicht, deshalb ist
+        # es eine Karte mit Umschalter (siehe set_player_mode).
+        #
+        self.player_mode = self.state_store.get("player_mode", "music")
+
+        self.practice_channel_preference = self.state_store.get(
+            "practice_channel",
+            1,
+        )
+
+        self.practice_repeat = self.state_store.get(
+            "practice_repeat",
+            False,
+        )
+
         self.record_name_prefix = self.state_store.get(
             "record_name_prefix",
             "Soundcheck",
@@ -592,6 +609,17 @@ class Application(
         #
 
         self.status.music_playing = self.music_player.playing
+
+        #
+        # Was die Karte gerade zeigt, und was das Ueben braucht.
+        #
+        self.status.player_mode = self.player_mode
+
+        self.status.practice_channel = self.practice_channel_preference
+
+        self.status.practice_repeat = self.music_player.wiederholen
+
+        self.status.practice_mixes = self.practice_mixes()
 
         self.status.music_paused = self.music_player.paused
 

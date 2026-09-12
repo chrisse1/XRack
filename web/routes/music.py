@@ -38,6 +38,24 @@ class MusicChannelSelection(BaseModel):
     start_channel: int
 
 
+class PlayerModeSelection(BaseModel):
+    mode: str
+
+
+class PracticeSelection(BaseModel):
+    filename: str
+    start_channel: int
+    repeat: bool = False
+
+
+class PracticeRepeatSelection(BaseModel):
+    repeat: bool
+
+
+class PracticeChannelSelection(BaseModel):
+    start_channel: int
+
+
 @router.get("/api/music/browse")
 def music_browse(
     request: Request,
@@ -111,6 +129,72 @@ def music_play_file(
 
     return {
         "success": success
+    }
+
+
+@router.post("/api/player/mode")
+def set_player_mode(auswahl: PlayerModeSelection, request: Request):
+    """
+    Zwischen Musikspieler und Ueben umschalten.
+
+    Die Karte tauscht dabei ihre Quelle aus - deshalb nicht, solange
+    etwas laeuft (siehe Application.set_player_mode).
+    """
+
+    application = request.app.state.application
+
+    erfolg, meldung = application.set_player_mode(auswahl.mode)
+
+    return {
+        "success": erfolg,
+        "message": meldung,
+    }
+
+
+@router.post("/api/practice/start")
+def start_practice(auswahl: PracticeSelection, request: Request):
+    """Einen Uebungsmix abspielen."""
+
+    application = request.app.state.application
+
+    erfolg, meldung = application.start_practice(
+        auswahl.filename,
+        auswahl.start_channel,
+        auswahl.repeat,
+    )
+
+    return {
+        "success": erfolg,
+        "message": meldung,
+    }
+
+
+@router.post("/api/practice/channel")
+def set_practice_channel(auswahl: PracticeChannelSelection, request: Request):
+    """
+    Den Startkanal fuers Ueben merken.
+
+    Eigene Einstellung neben der fuer Musik: Der Uebungsmix belegt
+    mehrere Kanaele und liegt darum selten dort, wo die Musik liegt.
+    """
+
+    application = request.app.state.application
+
+    return {
+        "success": application.set_practice_channel_preference(
+            auswahl.start_channel
+        )
+    }
+
+
+@router.post("/api/practice/repeat")
+def set_practice_repeat(auswahl: PracticeRepeatSelection, request: Request):
+    """Die Schleife ein- oder ausschalten."""
+
+    application = request.app.state.application
+
+    return {
+        "success": application.set_practice_repeat(auswahl.repeat)
     }
 
 

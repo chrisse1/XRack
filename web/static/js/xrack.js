@@ -2486,17 +2486,45 @@ function showStemCombineError(message) {
 
 document.getElementById("btn-stem-combine-add-file").addEventListener("click", addStemCombineRow);
 
-document.getElementById("btn-open-stem-combine").addEventListener("click", () => {
-    const recordingsModalElement = document.getElementById("recordingsModal");
-    bootstrap.Modal.getOrCreateInstance(recordingsModalElement).hide();
+//
+// Woher der Uebungsmix-Dialog geoeffnet wurde.
+//
+// Er sass frueher nur im Dialog "Alle Dateien" und kehrte beim
+// Schliessen dorthin zurueck. Jetzt steht er auch in der Ueben-Karte -
+// von dort zurueckzukehren waere falsch: Man haette einen Dialog vor
+// sich, den man nie geoeffnet hat.
+//
+let stemCombineHerkunft = "recordings";
+
+function oeffneStemCombine(herkunft) {
+
+    stemCombineHerkunft = herkunft;
+
+    if (herkunft === "recordings") {
+        bootstrap.Modal
+            .getOrCreateInstance(document.getElementById("recordingsModal"))
+            .hide();
+    }
 
     resetStemCombineModal();
 
-    const modalElement = document.getElementById("stemCombineModal");
-    bootstrap.Modal.getOrCreateInstance(modalElement).show();
+    bootstrap.Modal
+        .getOrCreateInstance(document.getElementById("stemCombineModal"))
+        .show();
+}
+
+document.getElementById("btn-open-stem-combine").addEventListener("click", () => {
+    oeffneStemCombine("recordings");
+});
+
+document.getElementById("btn-practice-create").addEventListener("click", () => {
+    oeffneStemCombine("practice");
 });
 
 document.getElementById("stemCombineModal").addEventListener("hidden.bs.modal", () => {
+
+    if (stemCombineHerkunft !== "recordings") return;
+
     const recordingsModalElement = document.getElementById("recordingsModal");
     bootstrap.Modal.getOrCreateInstance(recordingsModalElement).show();
 });
@@ -2616,16 +2644,234 @@ function formatFileSize(bytes) {
 // 11b. MUSIC PLAYER
 // ============================================================
 
+// ============================================================
+// Musik oder Üben - eine Karte, zwei Quellen
+//
+// Zwei Wiedergabestroeme kann das Interface nicht (deshalb schliessen
+// sich Musik und Soundcheck seit jeher aus). Zwei Karten nebeneinander
+// wuerden also etwas anbieten, was die Hardware nicht hergibt -
+// deshalb eine Karte mit Umschalter.
+//
+// Getauscht wird nur der KOPF: Transport, Schnellregler, Angaben und
+// Positionsregler sind fuer beide dasselbe, es ist ja derselbe
+// Spieler.
+// ============================================================
+
+function applyPlayerMode(data) {
+
+    const ueben = data.player_mode === "practice";
+
+    const kopfMusik = document.getElementById("player-head-music");
+    const kopfUeben = document.getElementById("player-head-practice");
+
+    if (kopfMusik) kopfMusik.classList.toggle("d-none", ueben);
+    if (kopfUeben) kopfUeben.classList.toggle("d-none", !ueben);
+
+    const titel = document.getElementById("player-title-text");
+    if (titel) {
+        titel.textContent = ueben ? I18N.practice_title : I18N.music_player_title;
+    }
+
+    const symbol = document.getElementById("player-icon");
+    if (symbol) {
+        symbol.className = ueben
+            ? "bi bi-repeat me-2"
+            : "bi bi-music-note-list me-2";
+    }
+
+    const knopfMusik = document.getElementById("btn-mode-music");
+    const knopfUeben = document.getElementById("btn-mode-practice");
+
+    if (knopfMusik) knopfMusik.classList.toggle("active", !ueben);
+    if (knopfUeben) knopfUeben.classList.toggle("active", ueben);
+
+    //
+    // Nicht umschalten, solange etwas laeuft: Die Karte tauscht
+    // darunter die Quelle aus. Der Server lehnt es ebenfalls ab - hier
+    // ist es nur der sichtbare Teil derselben Regel.
+    //
+    const laeuft = data.music_playing || data.music_paused;
+
+    [knopfMusik, knopfUeben].forEach((knopf) => {
+        if (!knopf) return;
+        knopf.disabled = laeuft;
+        knopf.title = laeuft ? I18N.practice_busy : "";
+    });
+}
+
+async function setPlayerMode(mode) {
+
+    const response = await fetch("/api/player/mode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode })
+    });
+
+    const ergebnis = await response.json();
+
+    if (!ergebnis.success && ergebnis.message) {
+        alert(ergebnis.message);
+    }
+
+    await refreshDashboard();
+}
+
+function updatePracticeCard(data) {
+
+    const auswahl = document.getElementById("practice-mix");
+
+    if (!auswahl) return;
+
+    const mixe = data.practice_mixes || [];
+
+    //
+    // Nur neu aufbauen, wenn sich die Liste geaendert hat - sonst
+    // springt die Auswahl bei jeder Statusabfrage zurueck.
+    //
+    const kennung = mixe.join("|");
+
+    if (auswahl.dataset.built !== kennung) {
+
+        const vorher = auswahl.value;
+
+        auswahl.innerHTML = "";
+
+        mixe.forEach((name) => {
+            const eintrag = document.createElement("option");
+            eintrag.value = name;
+            eintrag.textContent = name.replace(/\.w64$/i, "");
+            auswahl.appendChild(eintrag);
+        });
+
+        auswahl.dataset.built = kennung;
+
+        if (mixe.includes(vorher)) auswahl.value = vorher;
+    }
+
+    const kanaele = document.getElementById("practice-channels");
+
+    if (kanaele) {
+        buildChannelOptions(kanaele, data.audio_channels, data.practice_channel);
+
+        if (data.music_playing) {
+            kanaele.value = data.music_start_channel + 1;
+        }
+
+        kanaele.disabled = isAudioBusy(data);
+
+        //
+        // Dasselbe wie bei der Musik: merken und den Schnellregler
+        // mitnehmen. Sonst zeigt er nach dem Kanalwechsel noch auf
+        // das alte Paar.
+        //
+        kanaele.onchange = () => {
+            const vorher = pairFaders.music.start;
+            const nachher = Number(kanaele.value);
+
+            setPracticeChannelPreference(nachher);
+            handlePairChange("music", vorher, nachher);
+        };
+    }
+
+    const schleife = document.getElementById("practice-repeat");
+
+    if (schleife && document.activeElement !== schleife) {
+        schleife.checked = Boolean(data.practice_repeat);
+    }
+
+    const starten = document.getElementById("btn-practice-start");
+
+    if (starten) {
+        starten.disabled = (
+            mixe.length === 0
+            || data.music_playing
+            || data.playback_active
+            || !isAudioReady(data)
+        );
+    }
+
+    const hinweis = document.getElementById("practice-hint");
+
+    if (hinweis) {
+        hinweis.textContent = mixe.length
+            ? I18N.practice_hint
+            : I18N.practice_none;
+    }
+}
+
+async function startPractice() {
+
+    const auswahl = document.getElementById("practice-mix");
+    const kanaele = document.getElementById("practice-channels");
+    const schleife = document.getElementById("practice-repeat");
+
+    if (!auswahl || !auswahl.value) return;
+
+    const response = await fetch("/api/practice/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            filename: auswahl.value,
+            start_channel: kanaele ? Number(kanaele.value) : 1,
+            repeat: schleife ? schleife.checked : false
+        })
+    });
+
+    const ergebnis = await response.json();
+
+    if (!ergebnis.success && ergebnis.message) {
+        alert(ergebnis.message);
+    }
+
+    await refreshDashboard();
+}
+
+async function setPracticeChannelPreference(startChannel) {
+
+    await fetch("/api/practice/channel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start_channel: startChannel })
+    });
+}
+
+async function setPracticeRepeat(an) {
+
+    await fetch("/api/practice/repeat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repeat: an })
+    });
+
+    await refreshDashboard();
+}
+
+document.getElementById("practice-repeat").addEventListener("change", (e) => {
+    setPracticeRepeat(e.target.checked);
+});
+
 function updateMusicPlayer(data) {
     musicPlaying = data.music_playing;
     musicPaused = data.music_paused;
 
+    applyPlayerMode(data);
+    updatePracticeCard(data);
     updateMusicChannels(data);
     updateMusicStatus(data);
     updateMusicButtons(data);
     updateMusicSeek(data);
 
-    const select = document.getElementById("music-channels");
+    //
+    // Der Schnellregler gehoert zu dem, was gerade laeuft. Beim Ueben
+    // ist das der Uebungsmix - also der Kanal aus DESSEN Auswahl.
+    //
+    // Stuende hier fest "music-channels", regelte man beim Ueben ein
+    // Paar, aus dem gar nichts kommt: Der Regler bewegt sich, es
+    // passiert nichts, und woran es liegt, sieht man ihm nicht an.
+    //
+    const select = document.getElementById(
+        data.player_mode === "practice" ? "practice-channels" : "music-channels"
+    );
 
     //
     // Pausiert zählt als "läuft": Wer kurz anhält, um die Lautstärke

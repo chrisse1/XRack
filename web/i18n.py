@@ -63,6 +63,31 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "btn_recording_stop": "Aufnahme stoppen",
         "btn_soundcheck": "Soundcheck",
         "btn_practice": "Üben",
+
+        #
+        # Die Karte, die zwischen Musik und Üben umschaltet.
+        #
+        "mode_music": "Musik",
+        "mode_practice": "Üben",
+        "practice_title": "Üben",
+        "practice_mix_label": "Übungsmix:",
+        "practice_repeat": "Wiederholen",
+        "practice_none": (
+            "Noch kein Übungsmix da. \"Übungsmix erstellen\" legt aus "
+            "zwei bis acht Stereodateien einen an - jede Datei landet "
+            "auf einem eigenen Kanalpaar, damit sich beim Üben jede "
+            "Spur einzeln regeln lässt."
+        ),
+        "practice_busy": (
+            "Erst anhalten: Beim Umschalten tauscht die Karte ihre "
+            "Quelle aus."
+        ),
+        "practice_hint": (
+            "Der Mix landet ab dem gewählten Kanal auf so vielen "
+            "Kanälen, wie er Spuren hat. Mitschneiden lässt sich das "
+            "Geübte mit der Soundcheck-Karte - dort einstellen, ab "
+            "welchem Kanal aufgenommen wird."
+        ),
         "badge_kind_soundcheck": "Soundcheck",
         "badge_kind_practice": "Übungsmix",
         "btn_stop": "Stop",
@@ -823,6 +848,26 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "btn_recording_stop": "Stop recording",
         "btn_soundcheck": "Soundcheck",
         "btn_practice": "Practice",
+        "mode_music": "Music",
+        "mode_practice": "Practice",
+        "practice_title": "Practice",
+        "practice_mix_label": "Practice mix:",
+        "practice_repeat": "Repeat",
+        "practice_none": (
+            "No practice mix yet. \"Create practice mix\" builds one "
+            "from two to eight stereo files - each file lands on its "
+            "own channel pair so every part can be set separately "
+            "while practising."
+        ),
+        "practice_busy": (
+            "Stop first: switching swaps the card's source."
+        ),
+        "practice_hint": (
+            "The mix lands from the chosen channel onto as many "
+            "channels as it has parts. To record yourself playing "
+            "along, use the soundcheck card - set there which channel "
+            "recording starts from."
+        ),
         "badge_kind_soundcheck": "Soundcheck",
         "badge_kind_practice": "Practice mix",
         "btn_stop": "Stop",

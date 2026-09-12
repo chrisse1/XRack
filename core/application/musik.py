@@ -1,6 +1,10 @@
 """
-Musikspieler: Ordner und Dateien abspielen, verwalten.
+Musikspieler: Ordner und Dateien abspielen, verwalten - und Üben.
 """
+
+from pathlib import Path
+
+from core.recording_kind import KIND_PRACTICE, kind_from_filename
 
 
 class MusikMixin:
@@ -70,6 +74,133 @@ class MusikMixin:
             start_channel=start_channel - 1,
             rate=self.mixer_sample_rate,
         )
+
+
+    # ----------------------------------------------------------------
+    # Üben
+    #
+    # Dieselbe Karte, dieselbe Mechanik - nur eine andere Quelle. Der
+    # Musikspieler kann seit Stufe 2 auch mehrkanalige Übungsmixe
+    # abspielen (siehe player/w64_decoder.py), und damit fällt der
+    # Grund weg, dafür einen zweiten Spieler zu haben.
+    #
+    # Zwei Wiedergabeströme kann das Interface ohnehin nicht - deshalb
+    # ist es EINE Karte mit Umschalter und nicht zwei nebeneinander.
+    # ----------------------------------------------------------------
+
+    def set_player_mode(self, mode: str) -> tuple[bool, str]:
+        """
+        Zwischen Musik und Üben umschalten.
+
+        Nicht, solange etwas läuft: Die Karte tauscht darunter die
+        Quelle aus, und mitten in der Wiedergabe umzuschalten wäre eine
+        Falle - man drückt auf "Üben" und die Musik läuft weiter.
+        """
+
+        if mode not in ("music", "practice"):
+            return False, "Unbekannte Betriebsart."
+
+        if self.music_player.playing:
+            return False, (
+                "Erst anhalten - die Karte tauscht beim Umschalten die "
+                "Quelle aus."
+            )
+
+        self.player_mode = mode
+
+        self.state_store.set("player_mode", mode)
+
+        return True, ""
+
+
+    def practice_mixes(self) -> list[str]:
+        """
+        Die vorhandenen Übungsmixe.
+
+        Erkannt werden sie am Namen, wie überall (siehe
+        core/recording_kind.py) - eine eigene Verwaltungsdatei gibt es
+        bewusst nicht.
+        """
+
+        return [
+            name
+            for name in self.recorder.recordings
+            if kind_from_filename(name) == KIND_PRACTICE
+        ]
+
+
+    def start_practice(
+        self,
+        filename: str,
+        start_channel: int,
+        wiederholen: bool = False,
+    ) -> tuple[bool, str]:
+        """
+        Einen Übungsmix abspielen.
+
+        `start_channel` ist 1-basiert, wie überall in der Oberfläche.
+        """
+
+        if self.selected_audio_device is None:
+            return False, "Kein Audiogerät gewählt."
+
+        if self.player.playing:
+            return False, (
+                "Es läuft gerade ein Soundcheck - zwei Wiedergaben "
+                "gleichzeitig kann das Interface nicht."
+            )
+
+        if kind_from_filename(filename) != KIND_PRACTICE:
+            return False, "Das ist kein Übungsmix."
+
+        pfad = self.recorder.writer.directory / Path(filename).name
+
+        if not pfad.is_file():
+            return False, "Der Übungsmix ist nicht da."
+
+        self.set_practice_channel_preference(start_channel)
+
+        erfolg = self.music_player.play_practice(
+            self.selected_audio_device,
+            pfad,
+            start_channel=start_channel - 1,
+            rate=self.mixer_sample_rate,
+            wiederholen=wiederholen,
+        )
+
+        if not erfolg:
+            return False, "Der Übungsmix liess sich nicht öffnen."
+
+        return True, ""
+
+
+    def set_practice_repeat(self, an: bool) -> bool:
+        """Die Schleife ein- oder ausschalten."""
+
+        self.practice_repeat = bool(an)
+
+        self.state_store.set("practice_repeat", self.practice_repeat)
+
+        self.music_player.set_wiederholen(self.practice_repeat)
+
+        return True
+
+
+    def set_practice_channel_preference(self, start_channel: int) -> bool:
+        """
+        Merkt sich, auf welchen Kanälen der Übungsmix landet - eigene
+        Einstellung, denn Musik und Übungsmix liegen selten am selben
+        Platz.
+        """
+
+        self.practice_channel_preference = max(1, int(start_channel))
+
+        self.state_store.set(
+            "practice_channel",
+            self.practice_channel_preference,
+        )
+
+        return True
 
 
     def set_music_channel_preference(self, start_channel: int) -> bool:

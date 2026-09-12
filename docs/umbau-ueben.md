@@ -6,10 +6,10 @@ weil der Umbau ueber mehrere Sitzungen laeuft: Wer hier weiterarbeitet
 - ich beim naechsten Mal oder jemand anderes -, soll den Stand und vor
 allem die BEGRUENDUNGEN vorfinden, nicht nur das Ergebnis.
 
-**Stand:** Stufen 1 und 2 gebaut (3.0.0-dev2). Das Aufnahmefenster
+**Stand:** Stufen 1 bis 3 gebaut (3.0.0-dev3). Das Aufnahmefenster
 steht und ist am Geraet abgenommen; der Musikspieler kann Uebungsmixe
-mehrkanalig abspielen, mit Spulen und Schleife. Stufen 3, 3b, 4 und 5
-stehen aus.
+mehrkanalig abspielen, mit Spulen und Schleife; die Karte hat den
+Umschalter Musik | Ueben. Stufen 3b, 4 und 5 stehen aus.
 
 **Versionen:** Auf diesem Zweig 3.0.0-dev1, -dev2 ... je Stufe. Wer
 so eine Fassung auf dem Geraet hat, sieht am Namen, dass es eine
@@ -158,6 +158,36 @@ Soundcheck-Karte spielt den Übungsmix ab jetzt über den Musikspieler.
   aus `recordings/`), Startkanal, Transport, Position — und den Knopf
   „Übungsmix erstellen", der heute im Dialog „Alle Dateien" versteckt
   ist.
+
+**Gebaut (3.0.0-dev3).** Was dabei zur Sprache kam und nicht im
+Entwurf stand:
+
+- **Der Schnellregler folgt der Quelle, die die Karte zeigt.** Er
+  hing am Feld der Musik. Beim Üben regelte man damit ein Paar, aus
+  dem gar nichts kommt — und schlimmer: Beim Wechsel des Üben-Kanals
+  vergleicht `handlePairChange()` gegen dieses Paar, XRack böte also
+  an, am Pult die FALSCHE Kopplung zu lösen. Sichtbar wird der
+  Unterschied nur im Ruhezustand; läuft erst etwas, folgt auch das
+  Musikfeld dem laufenden Kanal. Genau dort wird es deshalb geprüft
+  (`test_ueben_karte.py`, Abschnitt 15).
+
+- **Der Üben-Kanal wird beim Wählen gemerkt**, nicht erst beim
+  Starten — eigene Einstellung neben der für Musik (`/api/practice/channel`),
+  denn ein Übungsmix belegt mehrere Kanäle und liegt selten dort, wo
+  die Musik liegt.
+
+- **„Übungsmix erstellen" kehrt dorthin zurück, wo es herkam.** Der
+  Dialog saß bisher nur im Fenster „Alle Dateien" und öffnete es beim
+  Schließen wieder. Von der Üben-Karte aus hieße das: Es geht
+  unvermittelt die Dateiliste auf, die man nie geöffnet hat.
+
+- **Die Sperre steht an zwei Stellen** — im Browser (die Knöpfe sind
+  zu, mit Grund im Tooltip) und in `Application.set_player_mode()`.
+  Die zweite ist die verbindliche: Was nur die Oberfläche verhindert,
+  verhindert sie nur, solange sie stimmt.
+
+Was noch offen ist: Die Soundcheck-Karte spielt Übungsmixe weiterhin
+selbst ab. Es gibt den Weg also zweimal — das räumt Stufe 4 auf.
 
 ### Stufe 3b — Mitschneiden und Zusammenhören
 
