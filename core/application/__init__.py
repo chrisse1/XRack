@@ -127,11 +127,6 @@ class Application(
         #
         self.player_mode = self.state_store.get("player_mode", "music")
 
-        self.practice_channel_preference = self.state_store.get(
-            "practice_channel",
-            1,
-        )
-
         self.practice_repeat = self.state_store.get(
             "practice_repeat",
             False,
@@ -614,8 +609,6 @@ class Application(
         # Was die Karte gerade zeigt, und was das Ueben braucht.
         #
         self.status.player_mode = self.player_mode
-
-        self.status.practice_channel = self.practice_channel_preference
 
         self.status.practice_repeat = self.music_player.wiederholen
 

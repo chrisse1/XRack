@@ -4,7 +4,11 @@ Musikspieler: Ordner und Dateien abspielen, verwalten - und Üben.
 
 from pathlib import Path
 
-from core.recording_kind import KIND_PRACTICE, kind_from_filename
+from core.recording_kind import (
+    KIND_PRACTICE,
+    kind_from_filename,
+    start_channel_from_filename,
+)
 
 
 class MusikMixin:
@@ -132,13 +136,21 @@ class MusikMixin:
     def start_practice(
         self,
         filename: str,
-        start_channel: int,
         wiederholen: bool = False,
     ) -> tuple[bool, str]:
         """
         Einen Übungsmix abspielen.
 
-        `start_channel` ist 1-basiert, wie überall in der Oberfläche.
+        Auf welchen Kanälen er landet, steht im Dateinamen und wird
+        nicht vor jedem Üben neu gewählt: Ein Übungsmix wird für einen
+        Platz im Pult gebaut - vier Stems liegen auf 1-8, und dort
+        gehören sie beim nächsten Mal wieder hin. Gesetzt wird der
+        Kanal einmal beim Erstellen (siehe start_stem_combine).
+
+        Dasselbe tut der Soundcheck-Spieler mit Aufnahmen, und aus
+        demselben Grund: Die Angabe reist über USB, Download und
+        Backup mit, XRack muss nirgends Buch führen (ausführlich in
+        core/recording_kind.py).
         """
 
         if self.selected_audio_device is None:
@@ -158,7 +170,11 @@ class MusikMixin:
         if not pfad.is_file():
             return False, "Der Übungsmix ist nicht da."
 
-        self.set_practice_channel_preference(start_channel)
+        #
+        # Im Namen steht der erste Kanal 1-basiert ("_p9"), der
+        # ChannelInserter zaehlt ab 0. Ohne Ziffer ist es Kanal 1.
+        #
+        start_channel = start_channel_from_filename(pfad.name)
 
         erfolg = self.music_player.play_practice(
             self.selected_audio_device,
@@ -182,23 +198,6 @@ class MusikMixin:
         self.state_store.set("practice_repeat", self.practice_repeat)
 
         self.music_player.set_wiederholen(self.practice_repeat)
-
-        return True
-
-
-    def set_practice_channel_preference(self, start_channel: int) -> bool:
-        """
-        Merkt sich, auf welchen Kanälen der Übungsmix landet - eigene
-        Einstellung, denn Musik und Übungsmix liegen selten am selben
-        Platz.
-        """
-
-        self.practice_channel_preference = max(1, int(start_channel))
-
-        self.state_store.set(
-            "practice_channel",
-            self.practice_channel_preference,
-        )
 
         return True
 

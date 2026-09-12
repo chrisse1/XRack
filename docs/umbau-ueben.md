@@ -6,7 +6,7 @@ weil der Umbau ueber mehrere Sitzungen laeuft: Wer hier weiterarbeitet
 - ich beim naechsten Mal oder jemand anderes -, soll den Stand und vor
 allem die BEGRUENDUNGEN vorfinden, nicht nur das Ergebnis.
 
-**Stand:** Stufen 1 bis 3 gebaut (3.0.0-dev3). Das Aufnahmefenster
+**Stand:** Stufen 1 bis 3 gebaut (3.0.0-dev4). Das Aufnahmefenster
 steht und ist am Geraet abgenommen; der Musikspieler kann Uebungsmixe
 mehrkanalig abspielen, mit Spulen und Schleife; die Karte hat den
 Umschalter Musik | Ueben. Stufen 3b, 4 und 5 stehen aus.
@@ -185,6 +185,43 @@ Entwurf stand:
   zu, mit Grund im Tooltip) und in `Application.set_player_mode()`.
   Die zweite ist die verbindliche: Was nur die Oberfläche verhindert,
   verhindert sie nur, solange sie stimmt.
+
+**Nachgebessert nach dem ersten Blick auf das Gerät (3.0.0-dev4).**
+Vier Dinge, die erst an der fertigen Karte auffielen:
+
+- **Das Kanalfeld in der Üben-Karte ist weg.** Es bot Stereopaare an
+  („Kanal 1+2"), während ein Übungsmix acht Kanäle belegen kann — es
+  hat also gelogen. Und es stellte vor jedem Üben neu zur Wahl, was
+  einmal feststeht: Ein Mix wird für einen Platz im Pult gebaut.
+  Gewählt wird der erste Kanal jetzt beim **Erstellen**, er wandert in
+  den Dateinamen (`Probe-1_p9.w64`) und wird beim Üben von dort
+  gelesen — dieselbe Regel wie bei Aufnahmen, mit derselben
+  Begründung. Die Dateizeilen im Erstellen-Dialog folgen der Wahl,
+  sonst stünde dort weiter „Kanal 1+2" über einer Datei, die auf 9+10
+  landet.
+
+- **Gestartet wird mit dem Transportknopf.** Der eigene Startknopf
+  oben in der Karte war zweierlei Bedienung für eine Sache. Solange
+  nichts läuft, heißt der Stop-Knopf „Üben"; läuft etwas, heißt er
+  „Stop" — wie der eine Knopf in der Soundcheck-Karte.
+
+- **Der Schnellregler ist beim Üben ausgeblendet.** Er regelt EIN
+  Stereopaar. Beim Übungsmix wäre das ein Achtel des Tons, und warum
+  der Rest nicht leiser wird, sieht man dem Regler nicht an. Geregelt
+  wird beim Üben am Pult, Spur für Spur — das ist ja der Sinn.
+
+- **Der Positionsregler hing unterhalb der Karte in der Luft.** Nicht
+  die Üben-Karte war schuld, sondern eine Regel, die seit jeher so
+  stand: Ab dem zweispaltigen Raster bekamen Spieler- und
+  Bluetooth-Karte feste 2/3 und 1/3 der Höhe (`flex-basis: 0`,
+  `min-height: 0`), gleich wie viel darin stand. Passte es nicht, lief
+  der Inhalt unten heraus — ohne Rahmen, ohne Fehlermeldung. Zwei
+  Zeilen mehr im Üben-Kopf haben es sichtbar gemacht. Jetzt ist die
+  Inhaltshöhe die Untergrenze (`flex-basis: auto`, `min-height: 100%`
+  am Stapel); der überschüssige Platz wird weiterhin 2:1 verteilt.
+  Gemessen wird das seither im Browser (`test_ueben_karte.py`,
+  Abschnitt 16) — mit den echten Stilvorlagen, denn ohne sie fällt so
+  etwas in keinem Test auf.
 
 Was noch offen ist: Die Soundcheck-Karte spielt Übungsmixe weiterhin
 selbst ab. Es gibt den Weg also zweimal — das räumt Stufe 4 auf.

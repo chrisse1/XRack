@@ -126,10 +126,6 @@ class Anwendung(MusikMixin):
 
         self.player_mode = self.state_store.get("player_mode", "music")
 
-        self.practice_channel_preference = self.state_store.get(
-            "practice_channel", 1
-        )
-
         self.practice_repeat = self.state_store.get(
             "practice_repeat", False
         )
@@ -145,6 +141,12 @@ with tempfile.TemporaryDirectory() as tmp:
         "Uebung-1_p.w64",
         "Soundcheck-2_s9.w64",
         "Uebung-2_p.w64",
+
+        #
+        # Mit Kanalziffer: Dieser Mix wurde fuer die Kanaele 9ff.
+        # gebaut und gehoert beim Ueben wieder dorthin.
+        #
+        "Uebung-3_p9.w64",
         "Alt-ohne-Marke.w64",
     ]
 
@@ -163,7 +165,11 @@ with tempfile.TemporaryDirectory() as tmp:
 
     mixe = anwendung.practice_mixes()
 
-    assert mixe == ["Uebung-1_p.w64", "Uebung-2_p.w64"], (
+    assert mixe == [
+        "Uebung-1_p.w64",
+        "Uebung-2_p.w64",
+        "Uebung-3_p9.w64",
+    ], (
         f"In der Üben-Auswahl stehen {mixe} - dort gehören nur die "
         f"Übungsmixe hin, keine Soundchecks."
     )
@@ -233,13 +239,13 @@ with tempfile.TemporaryDirectory() as tmp:
     # irgendwo.
     # ----------------------------------------------------------------
 
-    erfolg, meldung = anwendung.start_practice("Soundcheck-1_s.w64", 3)
+    erfolg, meldung = anwendung.start_practice("Soundcheck-1_s.w64")
 
     assert not erfolg and meldung, (
         "Ein Soundcheck wurde als Übungsmix abgespielt."
     )
 
-    erfolg, meldung = anwendung.start_practice("Gibtsnicht_p.w64", 3)
+    erfolg, meldung = anwendung.start_practice("Gibtsnicht_p.w64")
 
     assert not erfolg and meldung, (
         "Ein Übungsmix, den es nicht gibt, wurde angenommen."
@@ -253,7 +259,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # Und der Pfad muss im Aufnahmeordner bleiben: Ein Name mit ../
     # zeigte sonst aus dem Ordner heraus.
     #
-    erfolg, meldung = anwendung.start_practice("../Uebung-1_p.w64", 1)
+    erfolg, meldung = anwendung.start_practice("../Uebung-1_p.w64")
 
     if erfolg:
         gerufen = anwendung.music_player.aufrufe[-1]["pfad"]
@@ -276,7 +282,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
     anwendung.player.playing = True
 
-    erfolg, meldung = anwendung.start_practice("Uebung-1_p.w64", 3)
+    erfolg, meldung = anwendung.start_practice("Uebung-1_p.w64")
 
     assert not erfolg and meldung, (
         "Üben startete, obwohl ein Soundcheck lief - zwei "
@@ -288,7 +294,7 @@ with tempfile.TemporaryDirectory() as tmp:
     ohne_geraet = Anwendung(ordner, NAMEN, ordner / "leer.json")
     ohne_geraet.selected_audio_device = None
 
-    erfolg, meldung = ohne_geraet.start_practice("Uebung-1_p.w64", 3)
+    erfolg, meldung = ohne_geraet.start_practice("Uebung-1_p.w64")
 
     assert not erfolg and meldung, (
         "Üben startete ohne Audiogerät."
@@ -297,15 +303,19 @@ with tempfile.TemporaryDirectory() as tmp:
     print("OK: Üben startet nicht gegen eine laufende Wiedergabe")
 
     # ----------------------------------------------------------------
-    # 6. Der Startkanal geht 1-basiert rein und 0-basiert weiter
+    # 6. Auf welchen Kanälen der Mix landet, steht in seinem Namen
     #
-    # Die Oberfläche zählt ab 1 (am Pult steht "9"), der
-    # ChannelInserter ab 0. Genau an solchen Übergängen gehen Werte
-    # verloren.
+    # Gewählt wird das einmal beim Erstellen, nicht vor jedem Üben:
+    # Ein Übungsmix wird für einen Platz im Pult gebaut. Die Angabe
+    # reist im Namen mit - über USB, Download und Backup -, und XRack
+    # muss nirgends Buch führen.
+    #
+    # Der Übergang ist die heikle Stelle: Der Name zählt ab 1 (am Pult
+    # steht "9"), der ChannelInserter ab 0.
     # ----------------------------------------------------------------
 
     erfolg, meldung = anwendung.start_practice(
-        "Uebung-2_p.w64", 9, wiederholen=True
+        "Uebung-3_p9.w64", wiederholen=True
     )
 
     assert erfolg, meldung
@@ -316,11 +326,11 @@ with tempfile.TemporaryDirectory() as tmp:
 
     ruf = anwendung.music_player.aufrufe[0]
 
-    assert ruf["pfad"] == ordner / "Uebung-2_p.w64", ruf["pfad"]
+    assert ruf["pfad"] == ordner / "Uebung-3_p9.w64", ruf["pfad"]
 
     assert ruf["start_channel"] == 8, (
-        f"Der Spieler bekam Kanal {ruf['start_channel']} statt 8 - "
-        f"gewählt war der neunte Kanal, gezählt wird ab 0. Der Mix "
+        f"Der Spieler bekam Kanal {ruf['start_channel']} statt 8 - im "
+        f"Namen steht der neunte Kanal, gezählt wird ab 0. Der Mix "
         f"landete sonst ein Paar daneben."
     )
 
@@ -330,12 +340,24 @@ with tempfile.TemporaryDirectory() as tmp:
         "Die Schleife wurde nicht durchgereicht."
     )
 
-    assert StateStore(zustand).get("practice_channel") == 9, (
-        "Der gewählte Kanal wurde nicht gemerkt - nach einem Neustart "
-        "stünde die Auswahl wieder auf 1."
+    #
+    # Und der Gegenfall: Ohne Ziffer bleibt es Kanal 1. Alle bisher
+    # erstellten Übungsmixe heissen so.
+    #
+    anwendung.music_player.aufrufe.clear()
+    anwendung.music_player.playing = False
+
+    erfolg, meldung = anwendung.start_practice("Uebung-2_p.w64")
+
+    assert erfolg, meldung
+
+    assert anwendung.music_player.aufrufe[0]["start_channel"] == 0, (
+        f"Ein Mix ohne Kanalziffer landete auf Kanal "
+        f"{anwendung.music_player.aufrufe[0]['start_channel'] + 1} - "
+        f"alle bisher erstellten Mixe heissen so und gehören auf 1."
     )
 
-    print("OK: Der Startkanal reist richtig gezählt bis zum Spieler")
+    print("OK: Der Kanal steht im Namen und reist richtig gezählt mit")
 
     # ----------------------------------------------------------------
     # 7. Die Schleife wird gemerkt und weitergegeben
@@ -442,6 +464,16 @@ def seite_bauen(daten: dict, vorlauf: str, pruefung: str) -> str:
     xrack = (WURZEL / "web/static/js/xrack.js").read_text(encoding="utf-8")
 
     #
+    # Das echte Aussehen, nicht nur die Struktur: Ohne die Stilvorlagen
+    # steht jedes Element untereinander, und eine Karte, aus der der
+    # Positionsregler unten herausfaellt, faellt nicht auf.
+    #
+    stil = (
+        (WURZEL / "web/static/css/bootstrap.min.css").read_text(encoding="utf-8")
+        + (WURZEL / "web/static/css/xrack.css").read_text(encoding="utf-8")
+    )
+
+    #
     # Die Netzwerkaufrufe werden nachgestellt UND mitgeschrieben: Was
     # ein Knopf schickt, ist die halbe Prüfung.
     #
@@ -484,7 +516,8 @@ def seite_bauen(daten: dict, vorlauf: str, pruefung: str) -> str:
     )
 
     return (
-        "<!doctype html><html><head><meta charset=\"utf-8\"></head><body>"
+        "<!doctype html><html><head><meta charset=\"utf-8\">"
+        + "<style>" + stil + "</style></head><body>"
         + inhalt
         + vorspann
         + "<script>" + bootstrap + "</script>"
@@ -518,6 +551,13 @@ def ausfuehren(daten: dict, pruefung: str, vorlauf: str = "") -> dict:
                 str(BROWSER),
                 "--no-sandbox",
                 "--disable-gpu",
+                #
+                # Breit genug fuer das zweispaltige Raster (ab 992px):
+                # Nur dort teilen sich Spieler- und Bluetooth-Karte
+                # die Hoehe der Recorder-Karte, und nur dort kann der
+                # Positionsregler aus der Karte fallen.
+                #
+                "--window-size=1400,900",
                 "--virtual-time-budget=6000",
                 "--dump-dom",
                 f"file://{datei}",
@@ -555,7 +595,8 @@ KARTE = """function () {
         return k ? {
             gesperrt: k.disabled,
             grund: k.title || '',
-            aktiv: k.classList.contains('active')
+            aktiv: k.classList.contains('active'),
+            text: (k.textContent || '').trim()
         } : null;
     };
 
@@ -572,6 +613,18 @@ KARTE = """function () {
     const schalter = document.getElementById('practice-repeat');
     const hinweis = document.getElementById('practice-hint');
 
+    //
+    // Liegt der Positionsregler noch INNERHALB der Karte? Gemessen,
+    // nicht geraten: Ob etwas unten herausfaellt, sieht man dem HTML
+    // nicht an.
+    //
+    const karte = document.getElementById('player-head-music')
+        .closest('.card');
+    const regler = document.getElementById('music-seek');
+
+    const k = karte.getBoundingClientRect();
+    const r = regler.getBoundingClientRect();
+
     return {
         titel: (document.getElementById('player-title-text')
                 .textContent || '').trim(),
@@ -580,10 +633,12 @@ KARTE = """function () {
         knopf_musik: knopf('btn-mode-music'),
         knopf_ueben: knopf('btn-mode-practice'),
         mixe: feld('practice-mix'),
-        kanaele: feld('practice-channels'),
+        kanalfeld: document.getElementById('practice-channels'),
         schleife: schalter ? schalter.checked : null,
-        starten: knopf('btn-practice-start'),
+        transport: knopf('btn-music-stop'),
+        lautstaerke: sichtbar('player-fader-music'),
         hinweis: hinweis ? (hinweis.textContent || '').trim() : '',
+        ueberstand: Math.round(r.bottom - k.bottom),
         posts: window.__posts.filter(
             (p) => p.url.indexOf('/api/status') !== 0),
         regler_kanal: (typeof pairFaders !== 'undefined'
@@ -593,7 +648,7 @@ KARTE = """function () {
     };
 }"""
 
-MIXE = ["Uebung-Bach_p.w64", "Uebung-Blues_p.w64"]
+MIXE = ["Uebung-Bach_p.w64", "Uebung-Blues_p9.w64"]
 
 
 # ====================================================================
@@ -623,21 +678,34 @@ assert not musik["knopf_ueben"]["gesperrt"], (
     "Es lässt sich nicht auf Üben umschalten, obwohl nichts läuft."
 )
 
+assert musik["lautstaerke"] is True, (
+    "Der Schnellregler fehlt beim Musikspieler - dort gehört er hin."
+)
+
+assert musik["transport"]["text"] == TEXTE["btn_stop"], (
+    f"Der Transportknopf heisst auf 'Musik' {musik['transport']['text']!r} "
+    f"- dort ist und bleibt er der Stop-Knopf."
+)
+
 print("OK: Auf 'Musik' zeigt die Karte den Musikspieler")
 
 
 # ====================================================================
 # 9. Auf "Üben" wird der Kopf getauscht - und gefüllt
 #
-# Getauscht wird nur der Kopf: Transport, Schnellregler und
-# Positionsregler sind für beide dasselbe, es ist ja derselbe Spieler.
+# Getauscht wird nur der Kopf: Transport, Angaben und Positionsregler
+# sind für beide dasselbe, es ist ja derselbe Spieler.
+#
+# Was NICHT mitkommt, ist der Schnellregler: Ein Übungsmix liegt auf
+# so vielen Kanälen, wie er Spuren hat - ein Stereoregler passt
+# darauf nicht. Man verstellte den Pegel eines Paares und wunderte
+# sich, warum nur ein Teil leiser wird.
 # ====================================================================
 
 ueben = ausfuehren(
     stand(
         player_mode="practice",
         practice_mixes=MIXE,
-        practice_channel=9,
         practice_repeat=True,
     ),
     KARTE,
@@ -655,53 +723,83 @@ assert ueben["mixe"]["werte"] == MIXE, (
     f"In der Auswahl stehen {ueben['mixe']['werte']} statt {MIXE}."
 )
 
-assert ueben["kanaele"]["gewaehlt"] == "9", (
-    f"Vorbelegt ist Kanal {ueben['kanaele']['gewaehlt']} statt 9 - der "
-    f"zuletzt benutzte Kanal wird nicht angeboten, und man stellt ihn "
-    f"vor jedem Üben neu ein."
-)
-
 assert ueben["schleife"] is True, (
     "Der Schleifenschalter steht auf aus, obwohl er am Gerät an ist."
 )
 
-assert not ueben["starten"]["gesperrt"], (
-    "Der Üben-Knopf ist gesperrt, obwohl ein Mix da und alles frei ist."
+assert ueben["lautstaerke"] is False, (
+    "Der Schnellregler steht auch beim Üben da. Er regelt ein einziges "
+    "Stereopaar - beim Übungsmix wäre das ein Achtel des Tons, und "
+    "warum es nicht leiser wird, sieht man dem Regler nicht an."
 )
 
-assert ueben["hinweis"] == TEXTE["practice_hint"], ueben["hinweis"]
+assert ueben["kanalfeld"] is None, (
+    "In der Üben-Karte steht wieder ein Kanalfeld. Auf welchen Kanälen "
+    "ein Mix liegt, steht in seinem Namen - ein Feld daneben kann dem "
+    "nur widersprechen."
+)
 
-print("OK: Auf 'Üben' steht der Üben-Kopf da, gefüllt aus dem Status")
+print("OK: Auf 'Üben' steht der Üben-Kopf da, ohne Regler und ohne Kanalfeld")
 
 
 # ====================================================================
-# 10. Ohne Übungsmix ein Satz statt eines toten Knopfes
+# 10. Die Karte liest vor, wo der Mix landet
 #
-# Ein Knopf, der sich drücken lässt und nichts tut, ist schlimmer als
-# einer, der gesperrt ist und sagt, warum.
+# Nicht wählen, nur anzeigen: Das Feld von früher bot Stereopaare an
+# ("Kanal 1+2"), während ein Übungsmix acht Kanäle belegen kann - es
+# hat also gelogen. Der Name weiss es besser.
 # ====================================================================
+
+assert ueben["hinweis"] == TEXTE["practice_hint"].replace("{a}", "1"), (
+    f"Zu 'Uebung-Bach_p.w64' steht da {ueben['hinweis']!r} - ohne "
+    f"Ziffer im Namen ist es Kanal 1."
+)
+
+gewaehlt = ausfuehren(
+    stand(player_mode="practice", practice_mixes=MIXE),
+    KARTE,
+    vorlauf=(
+        "const f = document.getElementById('practice-mix');"
+        "f.value = 'Uebung-Blues_p9.w64';"
+        "f.dispatchEvent(new Event('change'));"
+    ),
+)
+
+assert gewaehlt["hinweis"] == TEXTE["practice_hint"].replace("{a}", "9"), (
+    f"Zu 'Uebung-Blues_p9.w64' steht da {gewaehlt['hinweis']!r} - im "
+    f"Namen steht Kanal 9."
+)
+
+print("OK: Die Karte liest den Kanal aus dem Namen vor")
+
+
+# ====================================================================
+# 11. Gestartet wird mit dem Transportknopf
+#
+# Ein eigener Startknopf stand vorher oben in der Karte - das ist
+# zweierlei Bedienung für eine Sache. XRack macht es überall so: EIN
+# Knopf startet und stoppt.
+# ====================================================================
+
+assert ueben["transport"]["text"] == TEXTE["btn_practice"], (
+    f"Der Transportknopf heisst beim Üben {ueben['transport']['text']!r} "
+    f"- solange nichts läuft, ist er der Startknopf."
+)
+
+assert not ueben["transport"]["gesperrt"], (
+    "Der Startknopf ist gesperrt, obwohl ein Mix da und alles frei ist."
+)
 
 leer = ausfuehren(stand(player_mode="practice", practice_mixes=[]), KARTE)
 
-assert leer["starten"]["gesperrt"], (
-    "Der Üben-Knopf lässt sich ohne einen einzigen Übungsmix drücken."
+assert leer["transport"]["gesperrt"], (
+    "Ohne einen einzigen Übungsmix lässt sich 'Üben' drücken - der "
+    "Knopf tut dann nichts, und das ist schlimmer als ein gesperrter."
 )
 
 assert leer["hinweis"] == TEXTE["practice_none"], leer["hinweis"]
 
-print("OK: Ohne Übungsmix steht da, wie man einen anlegt")
-
-
-# ====================================================================
-# 11. Während der Wiedergabe ist der Umschalter zu
-#
-# Die Karte tauscht beim Umschalten ihre Quelle aus. Ein Umschalten
-# mitten in der Wiedergabe wäre eine Falle - man drückt auf "Musik",
-# und der Übungsmix läuft weiter. Der Server lehnt es ebenfalls ab
-# (siehe Teil 1); hier steht der sichtbare Teil derselben Regel.
-# ====================================================================
-
-laeuft = ausfuehren(
+laeuft_mix = ausfuehren(
     stand(
         player_mode="practice",
         practice_mixes=MIXE,
@@ -711,17 +809,40 @@ laeuft = ausfuehren(
     KARTE,
 )
 
+assert laeuft_mix["transport"]["text"] == TEXTE["btn_stop"], (
+    f"Während das Üben läuft, heisst der Knopf "
+    f"{laeuft_mix['transport']['text']!r} - dann muss er Stop heissen, "
+    f"sonst gibt es keinen Weg zurück."
+)
+
+assert not laeuft_mix["transport"]["gesperrt"], (
+    "Der Stop-Knopf ist während des Übens gesperrt - dann lässt es "
+    "sich nicht beenden."
+)
+
+print("OK: Ein Knopf startet und stoppt das Üben")
+
+
+# ====================================================================
+# 12. Während der Wiedergabe ist der Umschalter zu
+#
+# Die Karte tauscht beim Umschalten ihre Quelle aus. Ein Umschalten
+# mitten in der Wiedergabe wäre eine Falle - man drückt auf "Musik",
+# und der Übungsmix läuft weiter. Der Server lehnt es ebenfalls ab
+# (siehe Teil 1); hier steht der sichtbare Teil derselben Regel.
+# ====================================================================
+
 for name in ("knopf_musik", "knopf_ueben"):
 
-    assert laeuft[name]["gesperrt"], (
+    assert laeuft_mix[name]["gesperrt"], (
         f"Der Umschalter ({name}) lässt sich während der Wiedergabe "
         f"drücken - der Server lehnt ab, und für den Nutzer sieht es "
         f"aus, als sei XRack kaputt."
     )
 
-    assert laeuft[name]["grund"] == TEXTE["practice_busy"], (
+    assert laeuft_mix[name]["grund"] == TEXTE["practice_busy"], (
         f"Am gesperrten Umschalter steht kein Grund: "
-        f"{laeuft[name]['grund']!r}"
+        f"{laeuft_mix[name]['grund']!r}"
     )
 
 pausiert = ausfuehren(
@@ -738,21 +859,19 @@ print("OK: Umgeschaltet wird nur, wenn wirklich nichts läuft")
 
 
 # ====================================================================
-# 12. Der Üben-Knopf schickt, was in den Feldern steht
+# 13. Der Üben-Knopf schickt, was in den Feldern steht
 #
-# Die Felder sind die eine Hälfte, der Aufruf die andere. Ein Wert,
-# der zwischen beiden verlorengeht, fällt sonst erst am Pult auf -
-# dort läuft der Mix dann auf den falschen Kanälen.
+# Ein Wert, der zwischen Feld und Aufruf verlorengeht, fällt sonst
+# erst am Pult auf.
 # ====================================================================
 
 geschickt = ausfuehren(
-    stand(player_mode="practice", practice_mixes=MIXE, practice_channel=5),
+    stand(player_mode="practice", practice_mixes=MIXE),
     KARTE,
     vorlauf=(
-        "document.getElementById('practice-mix').value = 'Uebung-Blues_p.w64';"
-        "document.getElementById('practice-channels').value = '11';"
+        "document.getElementById('practice-mix').value = 'Uebung-Blues_p9.w64';"
         "document.getElementById('practice-repeat').checked = true;"
-        "document.getElementById('btn-practice-start').click();"
+        "document.getElementById('btn-music-stop').click();"
     ),
 )
 
@@ -764,19 +883,18 @@ assert len(starts) == 1, (
 )
 
 assert starts[0]["body"] == {
-    "filename": "Uebung-Blues_p.w64",
-    "start_channel": 11,
+    "filename": "Uebung-Blues_p9.w64",
     "repeat": True,
 }, (
     f"Geschickt wurde {starts[0]['body']} - das ist nicht, was in den "
-    f"Feldern stand."
+    f"Feldern stand. (Ein Kanal gehört NICHT dazu: Der steht im Namen.)"
 )
 
-print("OK: Der Üben-Knopf schickt Datei, Startkanal und Schleife")
+print("OK: Der Üben-Knopf schickt Datei und Schleife - und keinen Kanal")
 
 
 # ====================================================================
-# 13. Der Umschalter schickt die Betriebsart ans Gerät
+# 14. Der Umschalter schickt die Betriebsart ans Gerät
 #
 # Und nicht in den Browserspeicher: Was das Rack tut, soll auf jedem
 # Tablet gleich aussehen.
@@ -799,7 +917,63 @@ print("OK: Der Umschalter schickt die Betriebsart ans Gerät")
 
 
 # ====================================================================
-# 14. Der Übungsmix-Dialog kehrt nicht in einen Dialog zurück,
+# 15. Beim Üben wird kein Kanalpaar abgefragt
+#
+# Der Regler ist versteckt - dann hat er auch nichts zu holen. Sonst
+# liefe im Hintergrund eine Abfrage je Sekunde für etwas, das niemand
+# sieht.
+# ====================================================================
+
+#
+# Gemessen am Zustand des Reglers, nicht an den Netzaufrufen: Das
+# Bluetooth-Feld hat einen eigenen Schnellregler, der holt sein Paar
+# weiterhin - die Adresse allein sagt also nicht, wer gefragt hat.
+#
+assert ueben["regler_kanal"] is None, (
+    f"Der Schnellregler des Spielers steht beim Üben auf Kanal "
+    f"{ueben['regler_kanal']}, obwohl er versteckt ist - dann läuft "
+    f"im Hintergrund eine Abfrage je Sekunde für etwas, das niemand "
+    f"sieht."
+)
+
+assert musik["regler_kanal"] == 1, (
+    f"Beim Musikspieler steht der Schnellregler auf "
+    f"{musik['regler_kanal']} statt auf dem Paar der Musik."
+)
+
+print("OK: Beim Üben fragt der versteckte Regler nichts ab")
+
+
+# ====================================================================
+# 16. Der Positionsregler bleibt in der Karte
+#
+# Er hing eine Fassung lang UNTERHALB der Karte in der Luft: Ab dem
+# zweispaltigen Raster bekamen Spieler- und Bluetooth-Karte feste 2/3
+# und 1/3 der Höhe (flex-basis: 0), egal wie viel darin stand. Zwei
+# Zeilen mehr im Üben-Kopf, und der Inhalt lief unten heraus - ohne
+# Rahmen, ohne Fehlermeldung.
+#
+# Gemessen wird deshalb, nicht angesehen: Die Unterkante des Reglers
+# muss über der Unterkante der Karte liegen.
+# ====================================================================
+
+for bezeichnung, ergebnis in (
+    ("Musik", musik),
+    ("Üben", ueben),
+    ("Üben, ohne Mix", leer),
+):
+
+    assert ergebnis["ueberstand"] < 0, (
+        f"{bezeichnung}: Der Positionsregler steht "
+        f"{ergebnis['ueberstand']} px UNTER der Karte - er hängt also "
+        f"ausserhalb in der Luft."
+    )
+
+print("OK: Der Positionsregler bleibt in allen Fällen in der Karte")
+
+
+# ====================================================================
+# 17. Der Übungsmix-Dialog kehrt nicht in einen Dialog zurück,
 #     den man nie geöffnet hat
 #
 # "Übungsmix erstellen" saß früher nur im Dialog "Alle Dateien" und
@@ -813,9 +987,17 @@ DIALOG = """function () {
         const e = document.getElementById(id);
         return e ? e.classList.contains('show') : null;
     };
+
+    const kanal = document.getElementById('stem-combine-start-channel');
+
     return {
         stems: offen('stemCombineModal'),
-        dateien: offen('recordingsModal')
+        dateien: offen('recordingsModal'),
+        kanalwerte: kanal
+            ? Array.from(kanal.options).map((o) => o.value) : null,
+        spuren: Array.from(
+            document.querySelectorAll('#stem-combine-files label')
+        ).map((l) => (l.textContent || '').trim())
     };
 }"""
 
@@ -838,88 +1020,48 @@ print("OK: Der Übungsmix-Dialog kehrt dorthin zurück, wo er herkam")
 
 
 # ====================================================================
-# 15. Der Schnellregler gehört zu der Quelle, die die Karte zeigt
+# 18. Im Erstellen-Dialog wird der erste Kanal gewählt
 #
-# Karte und Regler sind dieselben für Musik und Üben - der Kanal ist
-# es nicht. Geprüft wird der Zustand VOR dem Start, denn genau dort
-# gehen die beiden auseinander: Läuft erst einmal etwas, folgt auch
-# die Musikauswahl dem laufenden Kanal.
+# Hier gehört die Wahl hin und nicht in die Üben-Karte: Ein Übungsmix
+# wird für einen Platz im Pult gebaut, und dorthin gehört er beim
+# nächsten Mal wieder.
 #
-# Zwei Dinge hängen daran. Das sichtbare: Der Regler zeigt Pegel und
-# Mute eines Paars, aus dem gar nichts kommt. Das unsichtbare und
-# schlimmere: Beim Wechsel des Üben-Kanals vergleicht
-# handlePairChange() gegen dieses Paar - XRack böte an, am Pult die
-# FALSCHE Kopplung zu lösen.
+# Die Beschriftung der Dateizeilen muss mitgehen. Stünde dort weiter
+# "Kanal 1+2", während der Mix ab Kanal 9 liegt, wäre der Dialog eine
+# Anleitung zum Falschladen.
 # ====================================================================
 
-regler = ausfuehren(
-    stand(
-        player_mode="practice",
-        practice_mixes=MIXE,
-        practice_channel=9,
-        music_preferred_start_channel=1,
-    ),
-    KARTE,
-)
-
-assert "/api/console/pair?start=9" in regler["regler"], (
-    f"Der Schnellregler hat das Paar 9+10 nie geholt, gefragt hat er "
-    f"nach {regler['regler']}."
-)
-
-assert regler["regler_kanal"] == 9, (
-    f"Der Schnellregler steht auf Kanal {regler['regler_kanal']} - beim "
-    f"Üben gehört er an das Paar des Übungsmixes (9+10), nicht an das "
-    f"der Musik. Sonst bewegt man den Regler, und es passiert nichts."
-)
-
-#
-# Der Gegenfall: Auf "Musik" bleibt er an der Musikauswahl.
-#
-regler_musik = ausfuehren(
-    stand(
-        player_mode="music",
-        practice_mixes=MIXE,
-        practice_channel=9,
-        music_preferred_start_channel=3,
-    ),
-    KARTE,
-)
-
-assert regler_musik["regler_kanal"] == 3, (
-    f"Auf 'Musik' steht der Schnellregler auf Kanal "
-    f"{regler_musik['regler_kanal']} statt auf dem Paar der Musik (3+4)."
-)
-
-print("OK: Der Schnellregler folgt dem Kanal der laufenden Quelle")
-
-
-# ====================================================================
-# 16. Der Üben-Kanal wird gemerkt, sobald man ihn wählt
-#
-# Wie bei der Musik: Wer den Kanal einstellt und dann erst sucht,
-# welches Stück er üben will, soll ihn beim Start nicht neu setzen
-# müssen.
-# ====================================================================
-
-gemerkt = ausfuehren(
-    stand(player_mode="practice", practice_mixes=MIXE, practice_channel=1),
-    KARTE,
+erstellen = ausfuehren(
+    stand(player_mode="practice", practice_mixes=MIXE, audio_channels=18),
+    DIALOG,
     vorlauf=(
-        "const f = document.getElementById('practice-channels');"
-        "f.value = '7';"
-        "f.dispatchEvent(new Event('change'));"
+        "document.getElementById('btn-practice-create').click();"
+        "const k = document.getElementById('stem-combine-start-channel');"
+        "k.value = '9';"
+        "k.dispatchEvent(new Event('change'));"
     ),
 )
 
-kanaele = [p for p in gemerkt["posts"] if p["url"] == "/api/practice/channel"]
-
-assert kanaele and kanaele[0]["body"] == {"start_channel": 7}, (
-    f"Der gewählte Kanal wurde nicht gemerkt: {gemerkt['posts']}"
+assert erstellen["kanalwerte"] == [
+    "1", "3", "5", "7", "9", "11", "13", "15", "17"
+], (
+    f"Angeboten werden {erstellen['kanalwerte']} - erwartet waren nur "
+    f"ungerade Kanäle: Jeder Stem ist ein Stereopaar, ab einem geraden "
+    f"Kanal läge jedes Paar quer über zwei Paare des Pults."
 )
 
-print("OK: Der Üben-Kanal wird gemerkt, sobald man ihn wählt")
+erwartet = [
+    TEXTE["stem_combine_channel_label"]
+    .replace("{a}", str(a)).replace("{b}", str(a + 1))
+    for a in (9, 11)
+]
 
+assert erstellen["spuren"] == erwartet, (
+    f"Die Dateizeilen heissen {erstellen['spuren']} statt {erwartet} - "
+    f"ab Kanal 9 liegt die erste Datei auf 9+10, nicht auf 1+2."
+)
+
+print("OK: Der Erstellen-Dialog wählt den Kanal und beschriftet danach")
 
 
 print("Alle Tests der Üben-Karte erfolgreich.")

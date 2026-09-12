@@ -82,11 +82,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Erst anhalten: Beim Umschalten tauscht die Karte ihre "
             "Quelle aus."
         ),
-        "practice_hint": (
-            "Der Mix landet ab dem gewählten Kanal auf so vielen "
-            "Kanälen, wie er Spuren hat. Mitschneiden lässt sich das "
-            "Geübte mit der Soundcheck-Karte - dort einstellen, ab "
-            "welchem Kanal aufgenommen wird."
+        "practice_hint": "Liegt ab Kanal {a}",
+        "stem_combine_start_channel_label": "Erster Kanal:",
+        "stem_combine_start_channel_hint": (
+            "Ab hier liegt der Mix später beim Üben - jede Datei auf "
+            "einem eigenen Kanalpaar. Die Angabe steht danach im "
+            "Dateinamen und muss beim Üben nicht neu gewählt werden."
         ),
         "badge_kind_soundcheck": "Soundcheck",
         "badge_kind_practice": "Übungsmix",
@@ -862,11 +863,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "practice_busy": (
             "Stop first: switching swaps the card's source."
         ),
-        "practice_hint": (
-            "The mix lands from the chosen channel onto as many "
-            "channels as it has parts. To record yourself playing "
-            "along, use the soundcheck card - set there which channel "
-            "recording starts from."
+        "practice_hint": "Starts at channel {a}",
+        "stem_combine_start_channel_label": "First channel:",
+        "stem_combine_start_channel_hint": (
+            "This is where the mix will sit while practising - each "
+            "file on its own channel pair. The setting then lives in "
+            "the file name and need not be chosen again."
         ),
         "badge_kind_soundcheck": "Soundcheck",
         "badge_kind_practice": "Practice mix",

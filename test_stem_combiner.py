@@ -245,6 +245,134 @@ try:
     except StemCombineError:
         print("OK: Mehr als 8 Dateien wird abgelehnt")
 
+    # ----------------------------------------------------------------
+    # 4. Der erste Kanal wandert in den Dateinamen
+    #
+    # Ein Übungsmix wird für einen Platz im Pult gebaut: Vier Stems ab
+    # Kanal 9 gehören beim nächsten Üben wieder auf 9. Die Angabe
+    # reist im Namen mit - über USB, Download und Backup -, statt in
+    # einer Verwaltungsdatei zu stehen, die niemand mitkopiert
+    # (ausführlich in core/recording_kind.py).
+    #
+    # Geprüft wird auch das Gegenstück: dass der Name rückwärts wieder
+    # denselben Kanal ergibt. Genau dort ginge er sonst verloren.
+    # ----------------------------------------------------------------
+
+    from core.recording_kind import (  # noqa: E402
+        KIND_PRACTICE,
+        kind_from_filename,
+        start_channel_from_filename,
+    )
+
+    ab_neun = combine_stems(
+        [stem1, stem2],
+        target_rate=RATE,
+        name_prefix="AbKanalNeun",
+        start_channel=9,
+    )
+
+    created_files.append(Path("recordings") / ab_neun)
+
+    assert start_channel_from_filename(ab_neun) == 9, (
+        f"Aus {ab_neun!r} liest XRack Kanal "
+        f"{start_channel_from_filename(ab_neun)} statt 9 - der Mix "
+        f"landete beim Üben wieder auf Kanal 1, ohne Fehlermeldung."
+    )
+
+    assert kind_from_filename(ab_neun) == KIND_PRACTICE, (
+        f"{ab_neun!r} gilt nicht mehr als Übungsmix - mit der Ziffer "
+        f"im Kürzel darf die Art nicht verlorengehen."
+    )
+
+    #
+    # Und ohne Angabe bleibt alles, wie es war: Jeder bisher erstellte
+    # Übungsmix heisst so und gehört auf Kanal 1.
+    #
+    assert start_channel_from_filename(filename) == 1, (
+        f"{filename!r} meint plötzlich Kanal "
+        f"{start_channel_from_filename(filename)} - ohne Angabe ist es "
+        f"Kanal 1, sonst wären alle alten Mixe verschoben."
+    )
+
+    print("OK: Der erste Kanal steht im Namen und lässt sich zurücklesen")
+
+    # ----------------------------------------------------------------
+    # 5. Was nicht auf das Interface passt, wird vorher abgelehnt
+    #
+    # Gemessen ab dem ersten Kanal, nicht ab 1: Vier Stems ab Kanal 13
+    # brauchen bis Kanal 20. Was darüber hinausragt, wäre beim Üben
+    # still - und warum, sähe niemand.
+    #
+    # Und nur ungerade Startkanäle: Jeder Stem ist ein Stereopaar; ab
+    # einem geraden Kanal läge jedes Paar quer über zwei Paare des
+    # Pults, links und rechts kämen aus verschiedenen Zügen.
+    # ----------------------------------------------------------------
+
+    import threading  # noqa: E402
+    import time  # noqa: E402
+
+    from core.application.aufnahme import AufnahmeMixin  # noqa: E402
+
+    class Interface:
+        def __init__(self, channels):
+            self.channels = channels
+
+    class Prueflauf(AufnahmeMixin):
+        """Nur die Annahme prüfen - gerechnet wird hier nichts."""
+
+        def __init__(self, channels):
+            self.selected_audio_device = Interface(channels)
+            self.mixer_sample_rate = RATE
+            self._stem_combine_lock = threading.Lock()
+            self.stem_combine_state = {"active": False}
+            self.gestartet = []
+
+        def _run_stem_combine(self, name, file_paths, start_channel=1):
+            self.gestartet.append((name, len(file_paths), start_channel))
+
+    faelle = (
+        (18, 1, 4, True,  "vier Stems ab Kanal 1 auf einem 18er"),
+        (18, 11, 4, True, "vier Stems ab Kanal 11 - passt bis 18"),
+        (18, 13, 4, False, "vier Stems ab Kanal 13 - reicht bis 20"),
+        (18, 2, 2, False, "gerader Startkanal"),
+        (18, 0, 2, False, "Kanal 0 gibt es nicht"),
+    )
+
+    for kanaele, start, stems, erlaubt, beschreibung in faelle:
+
+        lauf = Prueflauf(kanaele)
+
+        erfolg, meldung = lauf.start_stem_combine(
+            "Prüfung",
+            [stem1] * stems,
+            start,
+        )
+
+        assert erfolg is erlaubt, (
+            f"{beschreibung}: {'abgelehnt' if erlaubt else 'angenommen'} "
+            f"({meldung!r})"
+        )
+
+        if erlaubt:
+            #
+            # Der Kanal muss auch wirklich weitergereicht werden - er
+            # ist es, der gleich im Dateinamen landet. Die Arbeit läuft
+            # in einem eigenen Faden, also warten statt schlafen.
+            #
+            frist = time.monotonic() + 5
+
+            while not lauf.gestartet and time.monotonic() < frist:
+                time.sleep(0.01)
+
+            assert lauf.gestartet == [("Prüfung", stems, start)], (
+                f"{beschreibung}: weitergereicht wurde "
+                f"{lauf.gestartet}"
+            )
+        else:
+            assert meldung, f"{beschreibung}: Ablehnung ohne Begründung."
+
+    print("OK: Der Kanalbereich wird geprüft, bevor etwas geschrieben wird")
+
     print("Alle Tests erfolgreich.")
 
 finally:

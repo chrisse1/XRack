@@ -44,16 +44,11 @@ class PlayerModeSelection(BaseModel):
 
 class PracticeSelection(BaseModel):
     filename: str
-    start_channel: int
     repeat: bool = False
 
 
 class PracticeRepeatSelection(BaseModel):
     repeat: bool
-
-
-class PracticeChannelSelection(BaseModel):
-    start_channel: int
 
 
 @router.get("/api/music/browse")
@@ -159,31 +154,12 @@ def start_practice(auswahl: PracticeSelection, request: Request):
 
     erfolg, meldung = application.start_practice(
         auswahl.filename,
-        auswahl.start_channel,
         auswahl.repeat,
     )
 
     return {
         "success": erfolg,
         "message": meldung,
-    }
-
-
-@router.post("/api/practice/channel")
-def set_practice_channel(auswahl: PracticeChannelSelection, request: Request):
-    """
-    Den Startkanal fuers Ueben merken.
-
-    Eigene Einstellung neben der fuer Musik: Der Uebungsmix belegt
-    mehrere Kanaele und liegt darum selten dort, wo die Musik liegt.
-    """
-
-    application = request.app.state.application
-
-    return {
-        "success": application.set_practice_channel_preference(
-            auswahl.start_channel
-        )
     }
 
 

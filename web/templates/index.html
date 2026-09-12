@@ -355,17 +355,21 @@
                   </button>
               </div>
 
+              {#
+                  Kein Kanalfeld: Auf welchen Kanaelen ein Uebungsmix
+                  liegt, steht in seinem Namen und wird beim Erstellen
+                  einmal festgelegt - ein Mix wird fuer einen Platz im
+                  Pult gebaut, und dorthin gehoert er beim naechsten
+                  Mal wieder.
+
+                  Und kein eigener Startknopf: Gestartet wird mit dem
+                  Stop-Knopf im Transport, der beim Ueben zum
+                  Umschaltknopf wird. So steht die Bedienung an einer
+                  Stelle, wie in der Soundcheck-Karte auch.
+              #}
               <div class="d-flex flex-wrap align-items-center gap-2">
-                  <span>
-                      {{ t.music_channels_label }}
-                  </span>
 
-                  <select
-                      id="practice-channels"
-                      class="form-select form-select-sm w-auto">
-                  </select>
-
-                  <div class="form-check form-switch ms-2 mb-0">
+                  <div class="form-check form-switch mb-0">
                       <input
                           type="checkbox"
                           role="switch"
@@ -378,18 +382,10 @@
                       </label>
                   </div>
 
-                  <button
-                      type="button"
-                      id="btn-practice-start"
-                      class="btn btn-primary btn-sm text-nowrap ms-auto"
-                      onclick="startPractice()"
-                  >
-                      <i class="bi bi-play-circle me-1"></i>
-                      {{ t.btn_practice }}
-                  </button>
-              </div>
+                  <small id="practice-hint"
+                         class="text-body-secondary ms-auto"></small>
 
-              <div id="practice-hint" class="small text-body-secondary mt-2"></div>
+              </div>
 
             </div>
 
@@ -432,9 +428,18 @@
                 man zuerst braucht (starten, pausieren, weiter), steht
                 oben; die Lautstaerke regelt man danach.
             #}
+            {#
+                Nur beim Musikspieler: Ein Uebungsmix liegt auf so
+                vielen Kanaelen, wie er Spuren hat - ein Stereoregler
+                passt darauf nicht, und geregelt wird beim Ueben
+                ohnehin am Pult, Spur fuer Spur. Versteckt wird er in
+                applyPlayerMode().
+            #}
+            <div id="player-fader-music">
             {% with prefix = "music" %}
               {% include "components/pair_fader.html" %}
             {% endwith %}
+            </div>
 
             <hr>
 

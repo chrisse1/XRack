@@ -425,6 +425,7 @@ def combine_recordings(
     request: Request,
     name: str = Form(...),
     files: list[UploadFile] = File(...),
+    start_channel: int = Form(1),
 ):
     """
     Übungsmix: kombiniert mehrere hochgeladene Stereo-Stems (siehe
@@ -452,7 +453,11 @@ def combine_recordings(
 
         file_paths.append(destination)
 
-    success, message = application.start_stem_combine(name, file_paths)
+    success, message = application.start_stem_combine(
+        name,
+        file_paths,
+        start_channel,
+    )
 
     if not success:
 

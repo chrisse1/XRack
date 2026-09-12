@@ -2439,21 +2439,55 @@ const STEM_COMBINE_MAX_FILES = 8;
 let stemCombineRowCount = 0;
 let stemCombinePollTimer = null;
 
+//
+// Ab welchem Kanal der Mix liegen soll. Alles andere im Dialog haengt
+// daran - auch die Beschriftung der Dateizeilen, denn "Kanal 1+2" ist
+// gelogen, wenn der Mix ab Kanal 9 liegt.
+//
+function stemCombineStartkanal() {
+
+    const feld = document.getElementById("stem-combine-start-channel");
+
+    return feld && feld.value ? Number(feld.value) : 1;
+}
+
+function stemCombineZeileBeschriften(zeile, nummer) {
+
+    const start = stemCombineStartkanal();
+
+    const a = start + (nummer - 1) * 2;
+
+    const beschriftung = zeile.querySelector("label");
+
+    if (beschriftung) {
+        beschriftung.textContent = I18N.stem_combine_channel_label
+            .replace("{a}", a)
+            .replace("{b}", a + 1);
+    }
+}
+
+function stemCombineBeschriftungenErneuern() {
+
+    const zeilen = document.querySelectorAll("#stem-combine-files > div");
+
+    zeilen.forEach((zeile, index) => {
+        stemCombineZeileBeschriften(zeile, index + 1);
+    });
+}
+
 function addStemCombineRow() {
     if (stemCombineRowCount >= STEM_COMBINE_MAX_FILES) return;
 
     stemCombineRowCount++;
-    const a = stemCombineRowCount * 2 - 1;
-    const b = stemCombineRowCount * 2;
 
     const row = document.createElement("div");
     row.className = "mb-2";
     row.innerHTML = `
-        <label class="form-label small mb-1">
-            ${I18N.stem_combine_channel_label.replace("{a}", a).replace("{b}", b)}
-        </label>
+        <label class="form-label small mb-1"></label>
         <input type="file" class="form-control form-control-sm stem-combine-file-input" accept=".wav,.w64">
     `;
+
+    stemCombineZeileBeschriften(row, stemCombineRowCount);
 
     document.getElementById("stem-combine-files").appendChild(row);
 
@@ -2464,6 +2498,35 @@ function addStemCombineRow() {
 function resetStemCombineModal() {
     document.getElementById("stem-combine-name").value = "";
     document.getElementById("stem-combine-files").innerHTML = "";
+
+    //
+    // Nur ungerade Kanaele: Jeder Stem ist ein Stereopaar. Ab einem
+    // geraden Kanal laege jedes Paar quer ueber zwei Paare des Pults.
+    //
+    const kanal = document.getElementById("stem-combine-start-channel");
+
+    if (kanal) {
+
+        const vorher = kanal.value;
+        const verfuegbar = lastStatusData.audio_channels || 0;
+
+        kanal.innerHTML = "";
+
+        for (let start = 1; start + 1 <= verfuegbar; start += 2) {
+            const eintrag = document.createElement("option");
+            eintrag.value = start;
+            eintrag.textContent = I18N.channel_option
+                .replace("{a}", start)
+                .replace("{b}", start + 1);
+            kanal.appendChild(eintrag);
+        }
+
+        if (vorher) kanal.value = vorher;
+
+        if (!kanal.value && kanal.options.length) kanal.selectedIndex = 0;
+
+        kanal.onchange = stemCombineBeschriftungenErneuern;
+    }
     document.getElementById("stemCombineProgressWrapper").classList.add("d-none");
     document.getElementById("stemCombineError").classList.add("d-none");
 
@@ -2553,6 +2616,7 @@ async function submitStemCombine() {
 
     const formData = new FormData();
     formData.append("name", name);
+    formData.append("start_channel", String(stemCombineStartkanal()));
     for (const file of files) {
         formData.append("files", file);
     }
@@ -2679,6 +2743,18 @@ function applyPlayerMode(data) {
             : "bi bi-music-note-list me-2";
     }
 
+    //
+    // Der Schnellregler gehoert zum Musikspieler. Ein Uebungsmix liegt
+    // auf so vielen Kanaelen, wie er Spuren hat - ein Stereoregler
+    // passt darauf nicht, und geregelt wird beim Ueben am Pult, Spur
+    // fuer Spur. Ihn stehen zu lassen hiesse, den Pegel EINES Paares
+    // zu verstellen und sich zu wundern, warum nur ein Teil leiser
+    // wird.
+    //
+    const regler = document.getElementById("player-fader-music");
+
+    if (regler) regler.classList.toggle("d-none", ueben);
+
     const knopfMusik = document.getElementById("btn-mode-music");
     const knopfUeben = document.getElementById("btn-mode-practice");
 
@@ -2748,61 +2824,44 @@ function updatePracticeCard(data) {
         if (mixe.includes(vorher)) auswahl.value = vorher;
     }
 
-    const kanaele = document.getElementById("practice-channels");
-
-    if (kanaele) {
-        buildChannelOptions(kanaele, data.audio_channels, data.practice_channel);
-
-        if (data.music_playing) {
-            kanaele.value = data.music_start_channel + 1;
-        }
-
-        kanaele.disabled = isAudioBusy(data);
-
-        //
-        // Dasselbe wie bei der Musik: merken und den Schnellregler
-        // mitnehmen. Sonst zeigt er nach dem Kanalwechsel noch auf
-        // das alte Paar.
-        //
-        kanaele.onchange = () => {
-            const vorher = pairFaders.music.start;
-            const nachher = Number(kanaele.value);
-
-            setPracticeChannelPreference(nachher);
-            handlePairChange("music", vorher, nachher);
-        };
-    }
-
     const schleife = document.getElementById("practice-repeat");
 
     if (schleife && document.activeElement !== schleife) {
         schleife.checked = Boolean(data.practice_repeat);
     }
 
-    const starten = document.getElementById("btn-practice-start");
-
-    if (starten) {
-        starten.disabled = (
-            mixe.length === 0
-            || data.music_playing
-            || data.playback_active
-            || !isAudioReady(data)
-        );
-    }
-
+    //
+    // Auf welchen Kanaelen der Mix landet, steht in SEINEM Namen
+    // ("Probe-1_p9.w64") - hier wird es nur vorgelesen. Ein Feld zum
+    // Waehlen gab es einmal; es log, weil es Stereopaare anbot,
+    // waehrend ein Uebungsmix acht Kanaele belegen kann.
+    //
     const hinweis = document.getElementById("practice-hint");
 
     if (hinweis) {
         hinweis.textContent = mixe.length
-            ? I18N.practice_hint
+            ? I18N.practice_hint.replace(
+                "{a}", startkanalAusName(auswahl.value))
             : I18N.practice_none;
     }
+}
+
+//
+// Der erste Kanal aus dem Dateinamen: "_p9" heisst Kanal 9, "_p" und
+// alles ohne Kuerzel heisst Kanal 1. Dieselbe Regel wie in
+// core/recording_kind.py - sie steht hier ein zweites Mal, weil der
+// Browser den Namen liest, bevor er den Server fragt.
+//
+function startkanalAusName(name) {
+
+    const treffer = /_[sp](\d+)\.[^.]+$/i.exec(String(name || ""));
+
+    return treffer ? Number(treffer[1]) : 1;
 }
 
 async function startPractice() {
 
     const auswahl = document.getElementById("practice-mix");
-    const kanaele = document.getElementById("practice-channels");
     const schleife = document.getElementById("practice-repeat");
 
     if (!auswahl || !auswahl.value) return;
@@ -2812,7 +2871,6 @@ async function startPractice() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             filename: auswahl.value,
-            start_channel: kanaele ? Number(kanaele.value) : 1,
             repeat: schleife ? schleife.checked : false
         })
     });
@@ -2824,15 +2882,6 @@ async function startPractice() {
     }
 
     await refreshDashboard();
-}
-
-async function setPracticeChannelPreference(startChannel) {
-
-    await fetch("/api/practice/channel", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ start_channel: startChannel })
-    });
 }
 
 async function setPracticeRepeat(an) {
@@ -2862,16 +2911,13 @@ function updateMusicPlayer(data) {
     updateMusicSeek(data);
 
     //
-    // Der Schnellregler gehoert zu dem, was gerade laeuft. Beim Ueben
-    // ist das der Uebungsmix - also der Kanal aus DESSEN Auswahl.
+    // Beim Ueben ist der Regler ausgeblendet (siehe applyPlayerMode) -
+    // dann hat er auch kein Paar zu holen. Sonst liefe im Hintergrund
+    // eine Abfrage je Sekunde fuer einen Regler, den niemand sieht.
     //
-    // Stuende hier fest "music-channels", regelte man beim Ueben ein
-    // Paar, aus dem gar nichts kommt: Der Regler bewegt sich, es
-    // passiert nichts, und woran es liegt, sieht man ihm nicht an.
-    //
-    const select = document.getElementById(
-        data.player_mode === "practice" ? "practice-channels" : "music-channels"
-    );
+    const select = data.player_mode === "practice"
+        ? null
+        : document.getElementById("music-channels");
 
     //
     // Pausiert zählt als "läuft": Wer kurz anhält, um die Lautstärke
@@ -3042,9 +3088,58 @@ function updateMusicStatus(data) {
     }
 }
 
+//
+// Kann jetzt geuebt werden? Dieselbe Frage stellt der Server noch
+// einmal (Application.start_practice) - hier ist es nur der sichtbare
+// Teil davon.
+//
+function uebenMoeglich(data) {
+
+    const auswahl = document.getElementById("practice-mix");
+
+    return Boolean(
+        auswahl
+        && auswahl.value
+        && !data.music_playing
+        && !data.playback_active
+        && isAudioReady(data)
+    );
+}
+
 function updateMusicButtons(data) {
+
+    const ueben = data.player_mode === "practice";
+
     const stopButton = document.getElementById("btn-music-stop");
-    if (stopButton) stopButton.disabled = !data.music_playing;
+
+    //
+    // Beim Ueben ist derselbe Knopf Start und Stop. Ein eigener
+    // Startknopf stand vorher oben in der Karte - das ist zweierlei
+    // Bedienung fuer eine Sache. XRack macht es ueberall so: In der
+    // Soundcheck-Karte startet und stoppt ebenfalls EIN Knopf.
+    //
+    if (stopButton && ueben && !data.music_playing) {
+
+        stopButton.innerHTML =
+            `<i class="bi bi-play-circle fs-3"></i><small>${I18N.btn_practice}</small>`;
+
+        stopButton.classList.remove("btn-outline-danger");
+        stopButton.classList.add("btn-primary");
+
+        stopButton.onclick = startPractice;
+        stopButton.disabled = !uebenMoeglich(data);
+
+    } else if (stopButton) {
+
+        stopButton.innerHTML =
+            `<i class="bi bi-stop-circle fs-3"></i><small>${I18N.btn_stop}</small>`;
+
+        stopButton.classList.add("btn-outline-danger");
+        stopButton.classList.remove("btn-primary");
+
+        stopButton.onclick = stopMusic;
+        stopButton.disabled = !data.music_playing;
+    }
 
     const skipButton = document.getElementById("btn-music-skip");
     if (skipButton) skipButton.disabled = !data.music_playing || !data.music_folder_mode;

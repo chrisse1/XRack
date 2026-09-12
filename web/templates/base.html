@@ -197,6 +197,28 @@
                     >
                 </div>
 
+                {#
+                    Auf welchen Kanaelen der Mix spaeter liegt, wird
+                    HIER entschieden und nicht vor jedem Ueben neu:
+                    Ein Uebungsmix wird fuer einen Platz im Pult
+                    gebaut. Die Angabe wandert in den Dateinamen
+                    ("Probe-1_p9.w64") und reist damit ueber USB,
+                    Download und Backup mit.
+                #}
+                <div class="mb-3">
+                    <label class="form-label"
+                           for="stem-combine-start-channel">
+                        {{ t.stem_combine_start_channel_label }}
+                    </label>
+                    <select
+                        id="stem-combine-start-channel"
+                        class="form-select">
+                    </select>
+                    <div class="form-text">
+                        {{ t.stem_combine_start_channel_hint }}
+                    </div>
+                </div>
+
                 <div id="stem-combine-files"></div>
 
                 <button

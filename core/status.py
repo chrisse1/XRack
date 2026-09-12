@@ -102,7 +102,6 @@ class SystemStatus(BaseModel):
     # Die Karte zeigt entweder den Musikspieler oder das Ueben.
     #
     player_mode: str = "music"
-    practice_channel: int = 1
     practice_repeat: bool = False
     practice_mixes: list[str] = []
 

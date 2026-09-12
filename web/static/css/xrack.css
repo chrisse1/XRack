@@ -144,18 +144,32 @@ body {
 
 @media (min-width: 992px) {
 
+    /*
+     * min-height statt height: Der Stapel soll die Hoehe der
+     * Recorder-Karte FUELLEN, aber nicht daran scheitern, wenn sein
+     * Inhalt mehr braucht.
+     *
+     * Vorher stand hier height: 100% zusammen mit flex-basis: 0 - die
+     * Karten bekamen also feste 2/3 und 1/3, egal wie viel darin
+     * stand. Passte es nicht, hing der Positionsregler UNTERHALB der
+     * Karte in der Luft, ohne Rahmen und ohne Fehlermeldung. Genau das
+     * ist passiert, als die Ueben-Karte zwei Zeilen mehr bekam.
+     *
+     * Mit flex-basis: auto ist die Inhaltshoehe die Untergrenze; der
+     * ueberschuessige Platz wird weiterhin 2:1 verteilt. Braucht der
+     * Inhalt mehr als die Nachbarspalte, waechst die Zeile mit.
+     */
+
     .player-stack {
-        height: 100%;
+        min-height: 100%;
     }
 
     .player-stack > .card:first-child {
-        flex: 2 1 0;
-        min-height: 0;
+        flex: 2 1 auto;
     }
 
     .player-stack > .card:last-child {
-        flex: 1 1 0;
-        min-height: 0;
+        flex: 1 1 auto;
     }
 
 }

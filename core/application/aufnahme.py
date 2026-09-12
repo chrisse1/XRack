@@ -190,6 +190,7 @@ class AufnahmeMixin:
         self,
         name: str,
         file_paths: list[Path],
+        start_channel: int = 1,
     ) -> tuple[bool, str]:
         """
         Startet die Zusammenführung mehrerer Stereo-Stems (z.B. Click,
@@ -199,6 +200,11 @@ class AufnahmeMixin:
         Verzeichnis kopierte Uploads, die nach Abschluss gelöscht
         werden. Reihenfolge der Liste = Kanalzuordnung (Datei 1 ->
         Kanal 1+2, ...).
+
+        `start_channel` (1-basiert) sagt, ab welchem Kanal des
+        Interfaces der Mix später liegen soll. Er wandert in den
+        Dateinamen und wird beim Üben von dort gelesen - gewählt wird
+        er einmal hier und nicht vor jedem Üben neu.
         """
 
         name = name.strip()
@@ -215,14 +221,31 @@ class AufnahmeMixin:
         if not 2 <= len(file_paths) <= 8:
             return False, "Es werden 2 bis 8 Dateien benötigt."
 
+        #
+        # Nur ungerade Startkanaele: Jeder Stem ist ein Stereopaar.
+        # Faenge der Mix auf einem geraden Kanal an, laege jedes Paar
+        # quer ueber zwei Paare des Pults - links und rechts kaemen
+        # aus verschiedenen Zuegen.
+        #
+        start_channel = int(start_channel)
+
+        if start_channel < 1 or start_channel % 2 == 0:
+            return False, "Der erste Kanal muss ungerade sein."
+
         if self.selected_audio_device is not None:
 
             max_channels = self.selected_audio_device.channels
 
-            if len(file_paths) * 2 > max_channels:
+            #
+            # Gemessen wird ab dem ersten Kanal, nicht ab 1: Vier Stems
+            # ab Kanal 13 brauchen bis Kanal 20. Was darueber
+            # hinausragt, waere beim Ueben still - und niemand saehe,
+            # warum.
+            #
+            if start_channel - 1 + len(file_paths) * 2 > max_channels:
                 return False, (
-                    f"Zu viele Dateien für das Interface "
-                    f"({max_channels} Kanäle verfügbar)."
+                    f"Zu viele Dateien für das Interface ab Kanal "
+                    f"{start_channel} ({max_channels} Kanäle verfügbar)."
                 )
 
         with self._stem_combine_lock:
@@ -239,7 +262,7 @@ class AufnahmeMixin:
 
         thread = threading.Thread(
             target=self._run_stem_combine,
-            args=(name, file_paths),
+            args=(name, file_paths, start_channel),
             daemon=True,
         )
         thread.start()
@@ -251,6 +274,7 @@ class AufnahmeMixin:
         self,
         name: str,
         file_paths: list[Path],
+        start_channel: int = 1,
     ) -> None:
 
         try:
@@ -259,6 +283,7 @@ class AufnahmeMixin:
                 file_paths,
                 self.mixer_sample_rate,
                 name,
+                start_channel=start_channel,
             )
 
             with self._stem_combine_lock:

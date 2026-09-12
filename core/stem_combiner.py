@@ -46,6 +46,7 @@ def combine_stems(
     target_rate: int,
     name_prefix: str,
     writer: W64Writer | None = None,
+    start_channel: int = 1,
 ) -> str:
     """
     Kombiniert die Stereo-Dateien aus `paths` (Reihenfolge = Kanal-
@@ -53,6 +54,13 @@ def combine_stems(
     einer Mehrkanal-.w64-Datei mit `target_rate` Hz. Kürzere Dateien
     werden bis zur Länge der längsten mit Stille aufgefüllt, statt
     abgeschnitten zu werden. Liefert den erzeugten Dateinamen.
+
+    `start_channel` (1-basiert) sagt, ab welchem Kanal des Interfaces
+    der Mix beim Üben liegen soll. Er wandert in den Dateinamen
+    ("Probe-1_p9.w64"), wie bei Aufnahmen die Art und der erste Kanal -
+    so reist die Angabe über USB, Download und Backup mit, und beim
+    Üben muss sie niemand wieder eintippen (Begründung ausführlich in
+    core/recording_kind.py).
 
     Wirft StemCombineError bei ungültiger Eingabe oder wenn eine
     Datei nicht gelesen werden kann - dann wird keine Ausgabedatei
@@ -97,6 +105,7 @@ def combine_stems(
             bits_per_sample=24,
             name_prefix=name_prefix,
             marker=MARKER_PRACTICE,
+            start_channel=start_channel,
         )
 
         exhausted = [False] * len(decoders)
