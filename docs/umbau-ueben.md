@@ -6,8 +6,10 @@ weil der Umbau ueber mehrere Sitzungen laeuft: Wer hier weiterarbeitet
 - ich beim naechsten Mal oder jemand anderes -, soll den Stand und vor
 allem die BEGRUENDUNGEN vorfinden, nicht nur das Ergebnis.
 
-**Stand:** Stufe 1 gebaut (3.0.0-dev1) - das Aufnahmefenster steht,
-Stufen 2 bis 5 stehen aus.
+**Stand:** Stufen 1 und 2 gebaut (3.0.0-dev2). Das Aufnahmefenster
+steht und ist am Geraet abgenommen; der Musikspieler kann Uebungsmixe
+mehrkanalig abspielen, mit Spulen und Schleife. Stufen 3, 3b, 4 und 5
+stehen aus.
 
 **Versionen:** Auf diesem Zweig 3.0.0-dev1, -dev2 ... je Stufe. Wer
 so eine Fassung auf dem Geraet hat, sieht am Namen, dass es eine
@@ -83,12 +85,25 @@ Parameter hat (`-ac`) — sie steht nur überall auf der Konstanten
 MP3, und `ChannelInserter` legt das Ergebnis ab dem gewünschten Kanal
 auf.
 
-**Vorbehalt, der am Gerät geprüft werden muss:** Dass ffmpeg XRacks
-selbst geschriebene W64-Dateien mehrkanalig liest. Für Stereo-Stems
-tut es das (der Übungsmix entsteht ja aus ffmpeg-Material), für die
-fertige Mehrkanaldatei ist es unbelegt. Das ist der erste Handgriff
-in Stufe 2 — geht es nicht, bleibt der Soundcheck-Spieler die Quelle
-und bekommt Pause und Spulen selbst.
+**Der Vorbehalt hat sich bestaetigt - ffmpeg kann es NICHT.**
+Nachgemessen an einer echten Datei: Der Kopf ist in Ordnung
+(WAVE_FORMAT_EXTENSIBLE, 32-Bit-Behaelter, 24 gueltige Bits,
+BlockAlign = Kanaele * 4), ffmpeg entscheidet sich trotzdem fuer
+`pcm_s24le` und liest drei Byte je Wert, wo vier stehen. Aus zwei
+Sekunden werden 2,67, jeder Kanal landet woanders, zu hoeren waere
+Rauschen.
+
+Geloest anders als geplant, und besser: XRack liest seine eigenen
+Dateien selbst (player/w64_decoder.py legt die Dekoder-Form ueber den
+vorhandenen, bewaehrten reader/w64_reader.py). Der Musikspieler
+entscheidet je Datei, wer liest - alles Uebliche ffmpeg, `.w64` XRack
+selbst. Pause, Spulen und Position kommen weiterhin vom Musikspieler.
+
+Dabei kam heraus, dass XRacks eigener Leser fast in dieselbe Falle
+getappt waere: Er las ValidBitsPerSample (24) und uebersprang
+BlockAlign. Fuer das blosse Durchreichen von Bloecken fiel das nie
+auf; sobald daraus eine Laenge oder ein Sprung gerechnet wird, kaeme
+alles um ein Drittel daneben. Jetzt liest er BlockAlign.
 
 ## Vier Stufen
 
