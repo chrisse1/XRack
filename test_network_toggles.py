@@ -1063,6 +1063,17 @@ def _lan_attrappe(bridge_an: bool, heimnetz_an: bool, erfolg: bool = True):
     zeug.set_bridge = lambda an: Application.set_bridge(zeug, an)
     zeug.set_console_access = lambda an: Application.set_console_access(zeug, an)
 
+    #
+    # Das Umschalten verwirft die gepufferte Pult-Adresse - sonst
+    # stuende nach dem Wechsel bis zu zehn Sekunden die alte da (siehe
+    # PultMixin._konsolen_lease).
+    #
+    zeug._lease_ip = None
+    zeug._lease_geprueft = 0.0
+    zeug._lease_puffer_leeren = _types.MethodType(
+        Application._lease_puffer_leeren, zeug
+    )
+
     return zeug, aufrufe
 
 

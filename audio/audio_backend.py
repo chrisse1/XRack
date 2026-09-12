@@ -2,6 +2,25 @@
 Low-Level Zugriff auf das Audio-Interface.
 
 Diese Klasse kapselt den direkten Zugriff auf ALSA.
+
+Zum Sampleformat, denn daran haengt die ganze Kette:
+
+XRack rechnet durchgaengig mit S32_LE - vier Byte je Abtastwert und
+2^31 als Vollausschlag. So messen die Pegel (recorder/level_meter.py),
+so rechnet der Uebungsmix (core/stem_combiner.py), so hoert die
+Lichtshow mit, und so steht es im Wave64-Kopf (32-Bit-Container mit
+ValidBitsPerSample=24, siehe writer/w64_writer.py).
+
+Angefordert wurde hier lange trotzdem S24_LE. Die X-Serie bietet das
+ueber USB nicht an, ALSA liefert S32_LE - richtig war es also nur, weil
+das Interface etwas anderes gab, als XRack verlangte. Im Protokoll
+stand dafuer bei JEDEM Start eine Warnung ueber eine "andere Skala",
+die nicht zutraf; und auf einem Interface, das S24_LE tatsaechlich
+anbietet, waeren die Pegel 256-fach zu niedrig gewesen.
+
+Deshalb wird jetzt das angefordert, was gebraucht wird. Kommt etwas
+anderes zurueck, ist das ein Befund und keine Nebenbemerkung: Die
+Meldung nennt das Format und was es bedeutet.
 """
 
 import logging
@@ -10,6 +29,33 @@ import alsaaudio
 
 from audio.channel_extractor import ChannelExtractor
 from audio.models import AudioDevice, DiagnosticItem
+
+
+#
+# Das Format, mit dem die ganze Kette rechnet.
+#
+WUNSCHFORMAT = alsaaudio.PCM_FORMAT_S32_LE
+
+WUNSCHFORMAT_NAME = "S32_LE"
+
+
+def formatname(wert) -> str:
+    """
+    Aus der ALSA-Zahl den Namen machen (10 -> "S32_LE").
+
+    In einer Meldung ist "gemeldet 10" fuer niemanden zu gebrauchen -
+    genau so stand es aber im Protokoll.
+    """
+
+    for name in dir(alsaaudio):
+
+        if not name.startswith("PCM_FORMAT_"):
+            continue
+
+        if getattr(alsaaudio, name) == wert:
+            return name[len("PCM_FORMAT_"):]
+
+    return str(wert)
 
 
 class AudioBackend:
@@ -120,7 +166,7 @@ class AudioBackend:
         )
         self._period_size = 1024
 
-        self._format = alsaaudio.PCM_FORMAT_S24_LE
+        self._format = WUNSCHFORMAT
 
         self._extractor = ChannelExtractor(
             input_channels=self._native_channels,
@@ -160,13 +206,26 @@ class AudioBackend:
             )
 
             if actual_format is not None and actual_format != self._format:
-                self.logger.warning(
-                    "ALSA hat ein anderes Sampleformat akzeptiert als "
-                    "angefordert: gefordert %s, gemeldet %s. Die Daten "
-                    "liegen dann auf einer anderen Skala - siehe "
-                    "recorder/level_meter.py und core/stem_combiner.py.",
-                    self._format,
-                    actual_format,
+
+                #
+                # Ein Befund, keine Nebenbemerkung: XRacks ganze Kette
+                # rechnet mit S32_LE (siehe Kopf dieser Datei). Kommt
+                # etwas anderes, stimmen Pegel und Aufnahmen nicht, und
+                # bei einem Drei-Byte-Format (S24_3LE) verrutschen sogar
+                # die Kanaele. Deshalb mit Namen, Angebot und Folge -
+                # "gemeldet 10" hat im Protokoll niemandem geholfen.
+                #
+                self._format = actual_format
+
+                self.logger.error(
+                    "Das Interface liefert %s statt %s. XRack rechnet mit "
+                    "%s (vier Byte je Wert, 2^31 Vollausschlag) - Pegel "
+                    "und Aufnahmen sind damit nicht verlaesslich. Das "
+                    "Geraet bietet an: %s.",
+                    formatname(actual_format),
+                    WUNSCHFORMAT_NAME,
+                    WUNSCHFORMAT_NAME,
+                    ", ".join(device.formats) or "unbekannt",
                 )
 
             self._pcm.setperiodsize(
@@ -285,6 +344,23 @@ class AudioBackend:
                     "PCM erfolgreich geöffnet."
                     if self.opened
                     else "PCM nicht geöffnet."
+                ),
+            )
+        )
+
+        #
+        # Das Format gehoert in die Selbstpruefung: Steht dort etwas
+        # anderes als S32_LE, sind Pegel und Aufnahmen nicht
+        # verlaesslich - und im Protokoll faellt es keinem auf.
+        #
+        diagnostics.append(
+            DiagnosticItem(
+                name="Sampleformat",
+                ok=(not self.opened) or self._format == WUNSCHFORMAT,
+                message=(
+                    formatname(self._format)
+                    if self.opened
+                    else "Nicht geoeffnet."
                 ),
             )
         )

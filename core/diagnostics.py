@@ -3,10 +3,24 @@ Diagnose-Aufzeichnung: schreibt im Hintergrund mit, wie es XRack und
 dem Netzwerk geht - gedacht für Fehler, die nur sporadisch auftreten
 und die man deshalb nicht "live" beobachten kann.
 
-Anlass war ein Aussetzer der Netzwerkverbindung, der ausschließlich
-während der Wiedergabe auftrat. Ein von Hand gestartetes Skript hätte
-bei jedem Neustart neu gestartet werden müssen, in der Hoffnung, dass
-der Fehler gerade dann auftritt.
+Anlass war ein Aussetzer der Netzwerkverbindung, der zunächst nur
+während der Wiedergabe aufzutreten schien. Ein von Hand gestartetes
+Skript hätte bei jedem Neustart neu gestartet werden müssen, in der
+Hoffnung, dass der Fehler gerade dann auftritt.
+
+Was die Aufzeichnung dann wirklich gezeigt hat (Protokoll vom
+12.09.2026): XRack war im Leerlauf, kühl und unbelastet - und mitten
+in der Zeitreihe stand eine zweite Startzeile. Der Prozess war
+ersetzt worden. Daraus sind drei Lehren in diese Datei eingebaut:
+
+  1. Ein Neustart muss als Neustart dastehen, nicht als unscheinbare
+     Kopfzeile mitten in der Datei. Dazu die Laufzeit des Systems: Sie
+     trennt "nur der Dienst war weg" von "der ganze Rechner war weg".
+  2. Ein Urteil erst, wenn es eines ist. "netz=WEG" stand nach EINEM
+     verlorenen Ping da - auf WLAN ist das Alltag. Jetzt braucht es
+     drei in Folge, und dazwischen steht ein Fragezeichen.
+  3. Ein Ausfall braucht einen Anfang und ein Ende mit Dauer. Zeilen
+     zu zählen ist keine Messung.
 
 Der entscheidende Vorteil gegenüber einem externen Skript: Von hier aus
 ist sichtbar, was XRack im Moment des Aussetzers *tat* - spielt es ab,
@@ -30,6 +44,7 @@ genaue Zeitstempel geschrieben, damit man sie von Hand mit
 
 import logging
 import logging.handlers
+import psutil
 import socket
 import ssl
 import subprocess
@@ -41,6 +56,14 @@ from pathlib import Path
 
 LOG_DIR = Path("logs")
 LOG_FILE = LOG_DIR / "diagnose.log"
+
+#
+# Wo die Funkdaten stehen. Als Konstanten, damit der Versuch sie
+# nachstellen kann - auf diesem Rechner gibt es kein WLAN, und ohne
+# Nachstellung waere der interessanteste Teil ungeprueft.
+#
+WIRELESS_PROC = Path("/proc/net/wireless")
+NET_SYS = Path("/sys/class/net")
 
 #
 # Drei Dateien à 4 MB reichen für mehrere Tage Aufzeichnung, ohne dass
@@ -64,6 +87,23 @@ GAP_THRESHOLD = 3.0
 HEARTBEAT = 30.0
 
 REQUEST_TIMEOUT = 2.0
+
+#
+# So viele verlorene Pings in Folge braucht es, bis das Netz als weg
+# gilt. Ein einzelnes verlorenes ICMP-Paket ist auf WLAN Alltag, und
+# manche Router beantworten ohnehin nicht jeden Ping - vorher steht
+# deshalb kein Urteil da, sondern ein Fragezeichen (dieselbe Regel wie
+# bei der Samplerate, siehe recorder/rate_check.py).
+#
+PING_VERSUCHE = 3
+
+#
+# Bis zu dieser Laufzeit gilt der Prozess als "gerade erst gestartet".
+# Darueber schreibt die Aufzeichnung eine ausdrueckliche Zeile: Ein
+# Neustart, den niemand bemerkt, ist der Fehler, den man am laengsten
+# sucht.
+#
+JUNG_S = 60.0
 
 
 class Diagnostics:
@@ -90,6 +130,21 @@ class Diagnostics:
 
         self._last_line = ""
         self._last_written = 0.0
+
+        #
+        # Fuer das Urteil ueber das Netz: wie viele Pings hintereinander
+        # gefehlt haben, seit wann, und ob daraus schon ein Befund
+        # geworden ist.
+        #
+        self._ping_fehl = 0
+        self._weg_seit = 0.0
+        self._weg_gemeldet = False
+
+        #
+        # Der Beacon-Zaehler der Funkschnittstelle beim letzten Mal -
+        # interessant ist nicht sein Wert, sondern sein Anstieg.
+        #
+        self._beacons = None
 
     # ------------------------------------------------------------
     # Start/Stopp
@@ -295,6 +350,194 @@ class Diagnostics:
         except (OSError, IndexError):
             return "?"
 
+    def _prozess_laufzeit(self) -> float:
+        """Wie lange DIESER Prozess schon laeuft, in Sekunden."""
+
+        try:
+            return max(0.0, time.time() - psutil.Process().create_time())
+        except Exception:
+            return -1.0
+
+    def _system_laufzeit(self) -> float:
+        """Wie lange das SYSTEM schon laeuft, in Sekunden."""
+
+        try:
+            with open("/proc/uptime", "r", encoding="utf-8") as datei:
+                return float(datei.read().split()[0])
+        except (OSError, ValueError, IndexError):
+            return -1.0
+
+    @staticmethod
+    def _dauer(sekunden: float) -> str:
+        """4h12m, 3m20s, 45s - kurz genug fuer eine Logzeile."""
+
+        if sekunden < 0:
+            return "?"
+
+        sekunden = int(sekunden)
+
+        if sekunden < 60:
+            return f"{sekunden}s"
+
+        if sekunden < 3600:
+            return f"{sekunden // 60}m{sekunden % 60:02d}s"
+
+        return f"{sekunden // 3600}h{(sekunden % 3600) // 60:02d}m"
+
+    def _vorherige_lief_weiter(self) -> bool:
+        """
+        Endete die vorhandene Aufzeichnung OHNE Abschlusszeile?
+
+        Dann wurde der Prozess nicht ordentlich beendet, sondern war
+        einfach weg. Genau das ist im Nachhinein sonst nicht mehr zu
+        sehen - die neue Aufzeichnung haengt ihre Startzeile einfach
+        darunter, und der Bruch dazwischen fiel niemandem auf.
+        """
+
+        if not LOG_FILE.is_file():
+            return False
+
+        try:
+
+            with open(LOG_FILE, "rb") as datei:
+
+                #
+                # Nur das Ende lesen. Die Datei darf 4 MB gross sein.
+                #
+                datei.seek(0, 2)
+                datei.seek(max(0, datei.tell() - 4096))
+
+                zeilen = [
+                    zeile for zeile in datei.read().decode(
+                        "utf-8", "replace"
+                    ).splitlines() if zeile.strip()
+                ]
+
+        except OSError:
+            return False
+
+        if not zeilen:
+            return False
+
+        return "Aufzeichnung beendet" not in zeilen[-1]
+
+    def _funk(self, interface: str) -> str:
+        """
+        Verbindungsguete, Pegel und verpasste Beacons der
+        Funkschnittstelle.
+
+        Gelesen aus /proc/net/wireless - kein Unterprozess, keine
+        Rechte, kein Netz. Der Beacon-Zaehler ist der eigentliche
+        Grund: Springt er, schlaeft die Karte oder verliert den
+        Anschluss.
+        """
+
+        if not interface:
+            return ""
+
+        if not (NET_SYS / interface / "wireless").exists():
+            return ""
+
+        try:
+
+            with open(WIRELESS_PROC, "r", encoding="utf-8") as datei:
+                zeilen = datei.read().splitlines()
+
+        except OSError:
+            return ""
+
+        for zeile in zeilen:
+
+            if not zeile.strip().startswith(f"{interface}:"):
+                continue
+
+            teile = zeile.replace(".", " ").split()
+
+            #
+            # Aufbau: name status link level noise nwid crypt frag
+            # retry misc beacon
+            #
+            if len(teile) < 11:
+                return ""
+
+            try:
+                guete = int(teile[2])
+                pegel = int(teile[3])
+                beacons = int(teile[10])
+            except ValueError:
+                return ""
+
+            zuwachs = ""
+
+            if self._beacons is not None and beacons >= self._beacons:
+                zuwachs = f"(+{beacons - self._beacons})"
+
+            self._beacons = beacons
+
+            return f" wlan={guete}/{pegel}dBm bcn={beacons}{zuwachs}"
+
+        return ""
+
+    def _stromsparen(self, interface: str) -> str:
+        """
+        Steht die Stromsparfunktion der Funkschnittstelle auf "on"?
+
+        Der Hauptverdaechtige bei Aussetzern im Leerlauf: Die Karte
+        schlaeft ein, und die ersten Pakete danach fallen weg. Der
+        Aufruf ist lokal (netlink), er braucht kein Netz.
+        """
+
+        if not interface:
+            return "?"
+
+        try:
+
+            lauf = subprocess.run(
+                ["iw", "dev", interface, "get", "power_save"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+
+            if lauf.returncode != 0:
+                return "?"
+
+            return "on" if "on" in lauf.stdout.lower() else "off"
+
+        except (subprocess.SubprocessError, OSError):
+            return "?"
+
+    def _adresse(self, interface: str) -> str:
+        """
+        Hat die Schnittstelle noch eine IPv4-Adresse?
+
+        Wird nur beim BEGINN eines Ausfalls gefragt, nicht im
+        Sekundentakt. Sie trennt zwei ganz verschiedene Fehler: Ist die
+        Adresse weg, ist es die Verbindung oder DHCP - ist sie da,
+        gehen nur Pakete verloren.
+        """
+
+        if not interface:
+            return "?"
+
+        try:
+
+            lauf = subprocess.run(
+                ["ip", "-4", "-o", "addr", "show", "dev", interface],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+
+            for teil in lauf.stdout.split():
+                if "/" in teil and teil[0].isdigit():
+                    return teil
+
+            return "KEINE"
+
+        except (subprocess.SubprocessError, OSError):
+            return "?"
+
     def _activity(self) -> str:
         """
         XRacks eigener Zustand - der Grund, warum diese Aufzeichnung
@@ -342,14 +585,60 @@ class Diagnostics:
             self.enabled = False
             return
 
+        #
+        # Erst nachsehen, DANN schreiben: Ob die vorherige Aufzeichnung
+        # abbrach, steht am Ende der vorhandenen Datei - sobald die
+        # neue Startzeile darunter haengt, ist es nicht mehr zu sehen.
+        #
+        abgebrochen = self._vorherige_lief_weiter()
+
         gateway, interface = self._default_route()
 
+        prozess = self._prozess_laufzeit()
+        system = self._system_laufzeit()
+
         writer.info(
-            "=== Aufzeichnung gestartet | host=%s | route=%s via %s ===",
+            "=== Aufzeichnung gestartet | host=%s | route=%s via %s | "
+            "prozess=%s system=%s ps=%s ===",
             socket.gethostname(),
             interface or "?",
             gateway or "?",
+            self._dauer(prozess),
+            self._dauer(system),
+            self._stromsparen(interface),
         )
+
+        #
+        # Der Befund, der am laengsten unentdeckt bleibt: XRack wurde
+        # ersetzt, und niemand hat es gemerkt. Zu sehen war das bisher
+        # nur daran, dass eine zweite Startzeile mitten in der Datei
+        # steht - das liest man nicht, wenn man es nicht sucht.
+        #
+        # Die Systemlaufzeit daneben trennt die zwei Faelle, die ganz
+        # verschiedene Ursachen haben: Ist auch das SYSTEM jung, war der
+        # ganze Rechner weg (Strom, Reset). Ist nur der Prozess jung,
+        # war es der Dienst allein (Absturz, systemctl restart, Update).
+        #
+        if 0 <= prozess < JUNG_S:
+
+            writer.warning(
+                "NEUSTART: XRack laeuft erst seit %s (System seit %s) - %s",
+                self._dauer(prozess),
+                self._dauer(system),
+                "die vorherige Aufzeichnung brach ohne Abschluss ab, der "
+                "Prozess wurde also nicht ordentlich beendet."
+                if abgebrochen
+                else "die vorherige Aufzeichnung wurde ordentlich beendet.",
+            )
+
+        elif abgebrochen:
+
+            writer.warning(
+                "ABBRUCH: Die vorherige Aufzeichnung endete ohne "
+                "Abschlusszeile, der Prozess laeuft aber schon %s - die "
+                "Aufzeichnung wurde also mitten im Betrieb neu gestartet.",
+                self._dauer(prozess),
+            )
 
         port = 8080
 
@@ -392,21 +681,87 @@ class Diagnostics:
 
         writer.info("=== Aufzeichnung beendet ===")
 
+    def _netz(self, writer: logging.Logger, gateway: str,
+              interface: str) -> tuple[str, bool]:
+        """
+        Das Urteil ueber das Netz - und ein Wort dazu, ob es auffaellig
+        ist.
+
+        Ein einzelner verlorener Ping ist kein Ausfall. Erst ab
+        PING_VERSUCHE Fehlschlaegen in Folge steht hier ein Befund;
+        davor ein Fragezeichen mit der Zahl der Versuche. Kommt das
+        Netz zurueck, schreibt diese Stelle die Zeile, die den Fall
+        abschliesst - mit der Dauer, die sonst niemand zaehlen kann.
+        """
+
+        if not gateway:
+            #
+            # Ohne Standardroute gibt es nichts zu pingen. Das ist kein
+            # Funkloch, sondern ein fehlendes Profil - und hiess bisher
+            # trotzdem "WEG".
+            #
+            return "KEIN-GATEWAY", True
+
+        if self._ping(gateway):
+
+            if self._weg_gemeldet:
+
+                writer.warning(
+                    "netz=WIEDER-DA nach %.1f s (%d Versuche)%s",
+                    max(0.0, time.monotonic() - self._weg_seit),
+                    self._ping_fehl,
+                    self._funk(interface),
+                )
+
+            self._ping_fehl = 0
+            self._weg_gemeldet = False
+
+            return "ok", False
+
+        self._ping_fehl += 1
+
+        if self._ping_fehl < PING_VERSUCHE:
+            return f"?({self._ping_fehl})", True
+
+        if not self._weg_gemeldet:
+
+            #
+            # Der Beginn des Ausfalls - hier lohnen die zwei teureren
+            # Fragen, die im Sekundentakt zu viel waeren.
+            #
+            self._weg_gemeldet = True
+            self._weg_seit = time.monotonic() - self._ping_fehl
+
+            writer.warning(
+                "netz=AUSFALL beginnt: %d Pings in Folge verloren, "
+                "adresse=%s ps=%s",
+                self._ping_fehl,
+                self._adresse(interface),
+                self._stromsparen(interface),
+            )
+
+        return f"WEG({self._ping_fehl})", True
+
     def _sample(self, writer: logging.Logger, port: int) -> None:
 
         gateway, interface = self._default_route()
 
         app = self._self_check(port)
-        net = "ok" if self._ping(gateway) else "WEG"
+        net, netz_auffaellig = self._netz(writer, gateway, interface)
         activity = self._activity()
 
+        ziel = f"{interface or '?'}"
+
+        if gateway:
+            ziel += f">{gateway}"
+
         line = (
-            f"xrack={app} netz={net} route={interface or '?'} "
+            f"xrack={app} netz={net} route={ziel} "
             f"last={self._load()} temp={self._temperature()} "
-            f"aktiv={activity}"
+            f"aktiv={activity}{self._funk(interface)}"
         )
 
-        abnormal = app != "ok" or net != "ok"
+        abnormal = app != "ok" or netz_auffaellig
 
         #
         # Nur schreiben, wenn die Zeile etwas aussagt: bei

@@ -357,10 +357,65 @@ class WlanControl:
 
         return address or None
 
+    def konsolen_lease_ip(self) -> str | None:
+        """
+        Nur die Adresse, die der Pi dem Pult vergeben hat - ohne den
+        ganzen Statusbericht.
+
+        Warum das getrennt steht: Die Kanalzug-Karte fragt jede Sekunde
+        nach dem Pult (siehe PultMixin._console_host_and_channels), und
+        dahinter lag bisher get_status(). Das sind rund acht Aufrufe
+        von nmcli und Hilfsskripten je Sekunde, darunter ein sudo-Lauf
+        mit eigener PAM-Sitzung. Im Journal des Geräts standen dadurch
+        zwölf sudo-Zeilen in sechs Sekunden - und in genau diesem
+        Journal haben wir dann einen Fehler gesucht.
+
+        Hier wird nur gefragt, was für die Adresse nötig ist. Und im
+        häufigsten Fall - Pult und Pi hängen an einem Router, keiner
+        der beiden Kabelwege läuft - passiert gar nichts weiter: kein
+        sudo, keine Lease-Datei.
+        """
+
+        if not self.available:
+            return None
+
+        #
+        # Der Kernel zuerst, der ist billig (ein Blick nach
+        # /sys/class/net) und genauer als NetworkManagers Buchführung.
+        #
+        bridged = self.console_port_bridged()
+
+        aktiv = None
+
+        if bridged is None:
+            aktiv = self.active_connection_names()
+            bridged = BRIDGE_PORT_CONNECTION in aktiv
+
+        if bridged:
+            return (
+                self.get_dhcp_lease_ip("br0")
+                or self.get_connected_client_ip("br0")
+            )
+
+        if aktiv is None:
+            aktiv = self.active_connection_names()
+
+        if SHARE_CONNECTION in aktiv:
+            return (
+                self.get_dhcp_lease_ip("eth0")
+                or self.get_connected_client_ip("eth0")
+            )
+
+        return None
+
     def get_status(self) -> dict:
         """
         Liefert den aktuellen (nicht-geheimen) WLAN-Status fürs
         Einstellungs-Modal.
+
+        Bewusst der volle Bericht mit allem, was dazugehört - er wird
+        beim Öffnen des Dialogs geholt, nicht im Takt. Wer nur die
+        Adresse des Pults braucht, nimmt konsolen_lease_ip().
         """
 
         if not self.available:

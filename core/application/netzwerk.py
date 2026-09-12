@@ -185,6 +185,12 @@ class NetzwerkMixin:
         #
         self.console_control.detect_reset()
 
+        #
+        # Der gepufferte Lease-Wert gilt nicht mehr: Gerade wurde die
+        # Verbindung getrennt, das Pult fragt neu per DHCP.
+        #
+        self._lease_puffer_leeren()
+
         host, channels, source = self._console_host_and_channels()
 
         if not host:
@@ -214,6 +220,12 @@ class NetzwerkMixin:
         Schaltet die Ethernet+Access-Point-Bridge an oder aus.
         """
 
+        #
+        # Der Weg zum Pult aendert sich - die gepufferte Adresse gilt
+        # nicht mehr (siehe PultMixin._konsolen_lease).
+        #
+        self._lease_puffer_leeren()
+
         return self.wlan_control.set_bridge(enabled)
 
 
@@ -229,6 +241,8 @@ class NetzwerkMixin:
         _reconcile_port_forward() holt das nach, sobald die IP auftaucht
         (genau der Fall, für den der Abgleich gebaut wurde).
         """
+
+        self._lease_puffer_leeren()
 
         if enabled:
             return self.wlan_control.set_share(True)
@@ -261,6 +275,8 @@ class NetzwerkMixin:
         """
 
         zustand = self.wlan_control.get_status()
+
+        self._lease_puffer_leeren()
 
         ergebnisse = []
 
