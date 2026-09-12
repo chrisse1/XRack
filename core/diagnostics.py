@@ -141,6 +141,12 @@ class Diagnostics:
         self._weg_gemeldet = False
 
         #
+        # Was beim BEGINN eines Ausfalls gemessen wurde - gebraucht
+        # fuer den Vergleich am Ende (siehe _vergleich).
+        #
+        self._befund_start: dict = {}
+
+        #
         # Der Beacon-Zaehler der Funkschnittstelle beim letzten Mal -
         # interessant ist nicht sein Wert, sondern sein Anstieg.
         #
@@ -301,6 +307,200 @@ class Diagnostics:
 
         except (subprocess.SubprocessError, OSError):
             return False
+
+    def _ping_grund(self, host: str) -> str:
+        """
+        Was der Ping SELBST sagt - in seinen eigenen Worten.
+
+        Der Unterschied ist der halbe Befund: "Destination Host
+        Unreachable" heisst, dass die Adressauflösung scheitert (ARP -
+        das Gegenüber antwortet nicht auf die Frage nach seiner
+        MAC-Adresse). Gar keine Ausgabe heisst, dass das Paket
+        hinausging und nichts zurückkam. Das eine ist ein Problem der
+        Nachbarschaft, das andere eines der Strecke dahinter.
+
+        Der Rückgabewert ist absichtlich der Rohtext: Was ping meldet,
+        soll unverändert im Protokoll stehen und nicht durch eine
+        Deutung ersetzt werden, die sich später als falsch erweist.
+        """
+
+        if not host:
+            return "?"
+
+        try:
+
+            lauf = subprocess.run(
+                ["ping", "-c", "1", "-W", "1", host],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+
+        except (subprocess.SubprocessError, OSError) as fehler:
+            return f"ping-fehler:{fehler}"
+
+        for zeile in (lauf.stdout + lauf.stderr).splitlines():
+
+            text = zeile.strip()
+
+            if "Unreachable" in text or "unreachable" in text:
+                return text
+
+        return "keine-antwort"
+
+    def _nachbar(self, gateway: str) -> str:
+        """
+        Was der Rechner über seinen Nachbarn weiss (ARP/NDP).
+
+        FAILED oder INCOMPLETE heisst: Die MAC-Adresse des Gateways ist
+        nicht zu ermitteln - dann liegt es nicht an der Strecke
+        dahinter, sondern an der Verbindung zum Nachbarn selbst.
+        REACHABLE bei gleichzeitig verlorenen Pings heisst das
+        Gegenteil: Der Nachbar ist bekannt und antwortet nur nicht.
+        """
+
+        if not gateway:
+            return "?"
+
+        try:
+
+            lauf = subprocess.run(
+                ["ip", "neigh", "show", gateway],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+
+        except (subprocess.SubprocessError, OSError):
+            return "?"
+
+        zeile = lauf.stdout.strip()
+
+        if not zeile:
+            return "unbekannt"
+
+        #
+        # Letztes Wort ist der Zustand (REACHABLE, STALE, FAILED, ...).
+        #
+        return zeile.split()[-1]
+
+    def _gegenstelle(self, interface: str) -> str:
+        """
+        An WELCHEM Zugangspunkt haengt die Karte gerade (BSSID) und auf
+        welcher Frequenz?
+
+        Der Grund: In einem Netz mit mehreren Zugangspunkten oder einem
+        Repeater wechselt die Karte von selbst. Der Wechsel dauert
+        Sekunden, und danach muss die Gegenseite die Station erst
+        wieder lernen. Von aussen sieht das aus wie ein Netzausfall bei
+        bestem Empfang - genau das Bild, das sonst niemand erklaeren
+        kann. Steht am Anfang und am Ende eines Ausfalls eine andere
+        BSSID, ist der Fall damit entschieden.
+        """
+
+        if not interface:
+            return "?"
+
+        try:
+
+            lauf = subprocess.run(
+                ["iw", "dev", interface, "link"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+
+        except (subprocess.SubprocessError, OSError, FileNotFoundError):
+            return "?"
+
+        bssid = ""
+        freq = ""
+
+        for zeile in lauf.stdout.splitlines():
+
+            text = zeile.strip()
+
+            if text.startswith("Connected to"):
+                bssid = text.split()[2]
+
+            elif text.startswith("freq:"):
+                freq = text.split()[1]
+
+        if not bssid:
+            return "nicht-verbunden"
+
+        return f"{bssid}@{freq}MHz" if freq else bssid
+
+    def _zaehler(self, interface: str) -> tuple[int, int]:
+        """
+        Wie viele Pakete die Schnittstelle empfangen und gesendet hat.
+
+        Interessant ist nicht der Wert, sondern der Zuwachs waehrend
+        eines Ausfalls: Steigt TX und RX nicht, geht etwas hinaus und
+        nichts kommt zurueck - die Karte sendet also, niemand
+        antwortet.
+        """
+
+        werte = []
+
+        for name in ("rx_packets", "tx_packets"):
+
+            try:
+                werte.append(
+                    int((NET_SYS / interface / "statistics" / name)
+                        .read_text().strip())
+                )
+            except (OSError, ValueError):
+                werte.append(-1)
+
+        return werte[0], werte[1]
+
+    def _konsole(self) -> str:
+        """
+        Ist wenigstens das Mischpult noch zu erreichen?
+
+        Die entscheidende Trennfrage bei einem Ausfall: Das Pult haengt
+        im selben Netz. Antwortet es, waehrend das Gateway schweigt,
+        dann ist die eigene Funkverbindung in Ordnung und das Problem
+        liegt hinter dem Zugangspunkt. Antwortet es auch nicht, ist es
+        die eigene Verbindung.
+
+        Gefragt wird nur die bereits bekannte Adresse - kein Suchlauf,
+        der mitten im Ausfall ohnehin nichts faende.
+        """
+
+        try:
+            adresse = self.application.console_control._discovered
+        except Exception:
+            return "?"
+
+        if not adresse:
+            return "unbekannt"
+
+        return f"{adresse}:{'erreichbar' if self._ping(adresse) else 'WEG'}"
+
+    def _befund(self, gateway: str, interface: str) -> str:
+        """
+        Die teuren Fragen - gestellt am Anfang und am Ende eines
+        Ausfalls, nicht im Sekundentakt.
+
+        Sie stehen hier zusammen, weil erst die KOMBINATION etwas sagt:
+        Adresse da, Nachbar REACHABLE, Pult erreichbar, TX steigt, RX
+        nicht - das ist ein anderes Bild als Adresse weg oder Nachbar
+        FAILED, und beide sehen in der Sekundenzeile gleich aus.
+        """
+
+        rx, tx = self._zaehler(interface)
+
+        return (
+            f"adresse={self._adresse(interface)} "
+            f"ps={self._stromsparen(interface)} "
+            f"nachbar={self._nachbar(gateway)} "
+            f"gegenstelle={self._gegenstelle(interface)} "
+            f"pult={self._konsole()} "
+            f"pakete=rx{rx}/tx{tx} "
+            f"ping={self._ping_grund(gateway)!r}"
+        )
 
     def _self_check(self, port: int) -> str:
         """
@@ -557,7 +757,20 @@ class Diagnostics:
                 )
 
             if self.application.music_player.playing:
-                parts.append("musik")
+
+                #
+                # Ueben laeuft ueber denselben Spieler wie Musik -
+                # im Protokoll stand deshalb "musik", auch wenn gerade
+                # zu einem Uebungsmix gespielt wurde. Fuer die Zuordnung
+                # eines Aussetzers ist das der Unterschied zwischen
+                # "lief nebenbei" und "genau dabei".
+                #
+                if getattr(self.application, "practice_active", False):
+                    parts.append(
+                        f"ueben:{self.application.music_player.current_track}"
+                    )
+                else:
+                    parts.append("musik")
 
             if self.application.bluetooth_player.streaming:
                 parts.append("bluetooth")
@@ -707,10 +920,11 @@ class Diagnostics:
             if self._weg_gemeldet:
 
                 writer.warning(
-                    "netz=WIEDER-DA nach %.1f s (%d Versuche)%s",
+                    "netz=WIEDER-DA nach %.1f s (%d Versuche)%s%s",
                     max(0.0, time.monotonic() - self._weg_seit),
                     self._ping_fehl,
                     self._funk(interface),
+                    self._vergleich(interface),
                 )
 
             self._ping_fehl = 0
@@ -732,15 +946,68 @@ class Diagnostics:
             self._weg_gemeldet = True
             self._weg_seit = time.monotonic() - self._ping_fehl
 
+            #
+            # Der Anfang des Ausfalls - hier lohnen die teureren
+            # Fragen, die im Sekundentakt zu viel waeren. Gemerkt wird
+            # das Ergebnis, damit es sich am Ende vergleichen laesst:
+            # Ein Wechsel des Zugangspunkts sieht man nur so.
+            #
+            self._befund_start = {
+                "gegenstelle": self._gegenstelle(interface),
+                "zaehler": self._zaehler(interface),
+            }
+
             writer.warning(
-                "netz=AUSFALL beginnt: %d Pings in Folge verloren, "
-                "adresse=%s ps=%s",
+                "netz=AUSFALL beginnt: %d Pings in Folge verloren, %s",
                 self._ping_fehl,
-                self._adresse(interface),
-                self._stromsparen(interface),
+                self._befund(gateway, interface),
             )
 
         return f"WEG({self._ping_fehl})", True
+
+    def _vergleich(self, interface: str) -> str:
+        """
+        Was sich waehrend des Ausfalls veraendert hat.
+
+        Zwei Fragen, die sich nur mit dem Anfang beantworten lassen:
+
+          1. Haengt die Karte noch am selben Zugangspunkt? Ein anderer
+             heisst, dass sie gewechselt hat - und dann ist der
+             "Netzausfall" ein Wechsel gewesen, kein Ausfall.
+          2. Sind waehrenddessen Pakete hinausgegangen und keine
+             zurueckgekommen? Dann hat die Karte gesendet und niemand
+             geantwortet - die eigene Seite war also nicht stumm.
+        """
+
+        if not self._befund_start:
+            return ""
+
+        teile = []
+
+        jetzt = self._gegenstelle(interface)
+
+        vorher = self._befund_start.get("gegenstelle", "?")
+
+        if jetzt != vorher:
+            teile.append(
+                f" GEGENSTELLE-GEWECHSELT: {vorher} -> {jetzt} "
+                f"(der Ausfall war ein Wechsel des Zugangspunkts)"
+            )
+        else:
+            teile.append(f" gegenstelle=unveraendert:{jetzt}")
+
+        rx_alt, tx_alt = self._befund_start.get("zaehler", (-1, -1))
+
+        rx_neu, tx_neu = self._zaehler(interface)
+
+        if min(rx_alt, tx_alt, rx_neu, tx_neu) >= 0:
+            teile.append(
+                f" pakete=+rx{rx_neu - rx_alt}/+tx{tx_neu - tx_alt}"
+            )
+
+        self._befund_start = {}
+
+        return "".join(teile)
 
     def _sample(self, writer: logging.Logger, port: int) -> None:
 

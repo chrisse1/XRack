@@ -771,6 +771,204 @@ try:
 
     print("OK: Geordnetes Herunterfahren schliesst die Aufzeichnung ab")
 
+    # ----------------------------------------------------------------
+    # 10. Ein Ausfall muss beim naechsten Mal entscheidbar sein
+    #
+    # Anlass: Ein Protokoll vom Geraet zeigte 53 Sekunden ohne Netz -
+    # bei bestem Empfang, ohne einen einzigen verpassten Beacon, mit
+    # antwortender Weboberflaeche und einer Last von 0,3. Also: Die
+    # App lief, die Funkstrecke stand, und trotzdem kam kein Paket zum
+    # Gateway durch.
+    #
+    # Genau da endete die Aufzeichnung mit einem Achselzucken. Die
+    # Fragen, die den Fall entscheiden, kosten je einen Aufruf und
+    # lohnen sich deshalb einmal am Anfang und einmal am Ende eines
+    # Ausfalls - nicht im Sekundentakt.
+    # ----------------------------------------------------------------
+
+    diagnostics = Diagnostics(FakeApplication())
+    diagnostics._close_writer()
+    diagnostics_module.LOG_FILE.unlink(missing_ok=True)
+
+    writer = diagnostics._open_writer()
+
+    diagnostics._ping = lambda host: False
+    diagnostics._adresse = lambda iface: "192.168.1.22/24"
+    diagnostics._stromsparen = lambda iface: "on"
+    diagnostics._nachbar = lambda gw: "REACHABLE"
+    diagnostics._gegenstelle = lambda iface: "aa:bb:cc:dd:ee:01@5180MHz"
+    diagnostics._zaehler = lambda iface: (1000, 2000)
+    diagnostics._konsole = lambda: "192.168.1.30:erreichbar"
+    diagnostics._ping_grund = lambda gw: "keine-antwort"
+
+    for _ in range(3):
+        diagnostics._netz(writer, "192.168.1.1", "wlan0")
+
+    for handler in writer.handlers:
+        handler.flush()
+
+    beginn = diagnostics_module.LOG_FILE.read_text(encoding="utf-8")
+
+    for teil, warum in (
+        ("adresse=192.168.1.22/24", "ist die Adresse ueberhaupt noch da"),
+        ("ps=on", "schlaeft die Karte"),
+        ("nachbar=REACHABLE", "kennt der Rechner die MAC des Gateways"),
+        ("gegenstelle=aa:bb:cc:dd:ee:01", "an welchem Zugangspunkt haengt sie"),
+        ("pult=192.168.1.30:erreichbar", "geht wenigstens das eigene Netz"),
+        ("pakete=rx1000/tx2000", "gehen Pakete hinaus"),
+        ("ping='keine-antwort'", "was sagt der Ping selbst"),
+    ):
+        assert teil in beginn, (
+            f"Im Ausfallbefund fehlt {teil!r} ({warum}):\n{beginn}"
+        )
+
+    print("OK: Der Beginn eines Ausfalls nennt alles, was ihn entscheidet")
+
+    # ----------------------------------------------------------------
+    # 10b. Ein Wechsel des Zugangspunkts wird als solcher benannt
+    #
+    # Das ist der Verdacht, den das Protokoll vom Geraet nahelegt: Bei
+    # bestem Empfang und ohne verpasste Beacons sieht ein Wechsel
+    # genauso aus wie ein Ausfall - nur dass es keiner ist. Von aussen
+    # ist das nicht zu unterscheiden, mit der BSSID von vorher schon.
+    # ----------------------------------------------------------------
+
+    diagnostics._ping = lambda host: True
+    diagnostics._gegenstelle = lambda iface: "aa:bb:cc:dd:ee:02@2437MHz"
+    diagnostics._zaehler = lambda iface: (1000, 2400)
+    diagnostics._funk = lambda iface: ""
+
+    diagnostics._netz(writer, "192.168.1.1", "wlan0")
+
+    for handler in writer.handlers:
+        handler.flush()
+
+    ende = diagnostics_module.LOG_FILE.read_text(encoding="utf-8")
+
+    assert "GEGENSTELLE-GEWECHSELT" in ende, (
+        f"Der Wechsel des Zugangspunkts steht nicht da - dann bleibt "
+        f"der Fall beim naechsten Mal genauso unklar:\n{ende}"
+    )
+
+    assert "aa:bb:cc:dd:ee:01@5180MHz -> aa:bb:cc:dd:ee:02@2437MHz" in ende, ende
+
+    #
+    # Und der Zuwachs: gesendet wurde, empfangen nicht.
+    #
+    assert "pakete=+rx0/+tx400" in ende, (
+        f"Der Paketzuwachs fehlt - er trennt 'die Karte sendet und "
+        f"niemand antwortet' von 'die Karte sendet gar nicht':\n{ende}"
+    )
+
+    print("OK: Ein Wechsel der Gegenstelle wird beim Namen genannt")
+
+    # ----------------------------------------------------------------
+    # 10c. Der Gegenfall: derselbe Zugangspunkt
+    #
+    # Eine Meldung, die immer "gewechselt" sagt, waere schlimmer als
+    # keine - dann sucht man beim naechsten Mal an der falschen Stelle.
+    # ----------------------------------------------------------------
+
+    diagnostics._close_writer()
+    diagnostics_module.LOG_FILE.unlink(missing_ok=True)
+    writer = diagnostics._open_writer()
+
+    diagnostics._ping_fehl = 0
+    diagnostics._weg_gemeldet = False
+    diagnostics._befund_start = {}
+
+    diagnostics._ping = lambda host: False
+    diagnostics._gegenstelle = lambda iface: "aa:bb:cc:dd:ee:01@5180MHz"
+
+    for _ in range(3):
+        diagnostics._netz(writer, "192.168.1.1", "wlan0")
+
+    diagnostics._ping = lambda host: True
+
+    diagnostics._netz(writer, "192.168.1.1", "wlan0")
+
+    for handler in writer.handlers:
+        handler.flush()
+
+    gleich = diagnostics_module.LOG_FILE.read_text(encoding="utf-8")
+
+    assert "GEGENSTELLE-GEWECHSELT" not in gleich, (
+        f"Derselbe Zugangspunkt wird als Wechsel gemeldet:\n{gleich}"
+    )
+
+    assert "gegenstelle=unveraendert" in gleich, gleich
+
+    print("OK: Derselbe Zugangspunkt wird nicht als Wechsel gemeldet")
+
+    # ----------------------------------------------------------------
+    # 10d. Ueben heisst Ueben
+    #
+    # Es laeuft ueber denselben Spieler wie Musik, und im Protokoll
+    # stand deshalb "musik". Fuer die Zuordnung eines Aussetzers ist
+    # das der Unterschied zwischen "lief nebenbei" und "genau dabei" -
+    # und beim Mitschneiden laeuft ausserdem eine Aufnahme mit.
+    # ----------------------------------------------------------------
+
+    app = FakeApplication()
+    app.music_player.playing = True
+    app.music_player.current_track = "Uebung-Bach_p.w64"
+    app.recorder.recording = True
+
+    diagnostics = Diagnostics(app)
+    diagnostics._close_writer()
+
+    app.practice_active = False
+
+    assert diagnostics._activity() == "aufnahme,musik", (
+        diagnostics._activity()
+    )
+
+    app.practice_active = True
+
+    assert diagnostics._activity() == "aufnahme,ueben:Uebung-Bach_p.w64", (
+        f"Beim Ueben steht {diagnostics._activity()!r} im Protokoll - "
+        f"dort gehoert hin, dass geuebt wurde und welcher Mix lief."
+    )
+
+    print("OK: Im Protokoll steht Üben als Üben, mit Dateinamen")
+
+    # ----------------------------------------------------------------
+    # 10e. Die Diagnose darf nie das Programm stoeren
+    #
+    # Die neuen Fragen rufen fremde Programme auf (ip, iw, ping). Ist
+    # eines davon nicht da oder antwortet es nicht, muss die Messung
+    # trotzdem weiterlaufen - eine Diagnose, die beim Diagnostizieren
+    # abbricht, fehlt genau dann, wenn es interessant wird.
+    # ----------------------------------------------------------------
+
+    echte_ausfuehrung = diagnostics_module.subprocess.run
+
+    def knallt(*args, **kwargs):
+        raise OSError("iw: not found")
+
+    diagnostics_module.subprocess.run = knallt
+
+    try:
+
+        blind = Diagnostics(FakeApplication())
+        blind._close_writer()
+
+        assert blind._nachbar("192.168.1.1") == "?"
+        assert blind._gegenstelle("wlan0") == "?"
+        assert blind._ping_grund("192.168.1.1").startswith("ping-fehler")
+
+        #
+        # Und der ganze Block ebenso - ohne Ausnahme nach aussen.
+        #
+        befund = blind._befund("192.168.1.1", "wlan0")
+
+        assert "nachbar=?" in befund and "gegenstelle=?" in befund, befund
+
+    finally:
+        diagnostics_module.subprocess.run = echte_ausfuehrung
+
+    print("OK: Fehlende Werkzeuge lassen die Aufzeichnung weiterlaufen")
+
     print("Alle Tests erfolgreich.")
 
 finally:
