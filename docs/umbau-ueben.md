@@ -285,11 +285,50 @@ Geprüft wird mit echten Dateien (`test_ueben_mitschnitt.py`): jeder
 Kanal trägt seinen eigenen Wert, eine Verschiebung um einen einzigen
 Kanal fällt sofort auf.
 
-Was offenbleibt: der Versatz durch das Pult. XRack gibt aus, das Pult
-schickt zurück, XRack nimmt auf — der Versuch liegt also einige
-Millisekunden hinter dem Mix. Ob das beim Hören stört, muss das Gerät
-zeigen; messen liesse es sich (ein Klick ausgeben, denselben Kanal
-aufnehmen, den Ausschlag suchen), das wäre aber eine eigene Funktion.
+### Der Gleichlauf: was sich rechnen lässt und was nicht (3.0.0-dev9)
+
+Der Versuch hinkt dem Mix hinterher. Die Verzögerung hat zwei Teile,
+und nur einer davon ist eine Zahl, die man ausrechnen kann.
+
+**Teil 1: die Anlaufzeit in XRack — beseitigt, nicht ausgerechnet.**
+Zwischen „Aufnahme starten" und „der erste Ton geht hinaus" liegen das
+Öffnen von ALSA, ein Threadstart und das Anlegen der Datei: zusammen
+einige zehn Millisekunden, und **jedes Mal unterschiedlich viele**.
+Dieser Zufall stand bisher im Mitschnitt und liess sich nachher durch
+nichts mehr herausrechnen — ein fester Korrekturwert wäre an ihm
+gescheitert. Jetzt beginnt die Aufnahme mit dem ERSTEN BLOCK, der zum
+Interface geht (`MusicPlayer._beim_ersten_block`). Damit ist der Teil
+weg, statt geschätzt zu sein.
+
+**Teil 2: die Laufzeit des Weges — messbar, nicht berechenbar.**
+XRack schreibt in den ALSA-Puffer, das Pult wandelt, mischt und
+schickt zurück, XRack liest wieder aus einem Puffer. Was davon
+feststeht:
+
+- Die Periodengrösse ist 1024 Rahmen — bei 48 kHz 21,3 ms je Periode.
+  Verzögert wird aber nicht um eine Periode, sondern um so viel, wie
+  der Puffer gerade trägt, und ALSA beginnt erst zu spielen, wenn er
+  voll genug ist. Wie voll, sagt ALSA nur auf Nachfrage, und
+  pyalsaaudio reicht diese Frage nicht durch.
+- Dazu die Strecke durch USB und durch das Pult: Wandlung, Mischung,
+  Routing. Sie hängt am Pultmodell, an der Samplerate und daran,
+  welchen Weg das Signal im Pult nimmt. XRack kann sie nicht wissen.
+
+Eine Zahl daraus zu rechnen hiesse raten. Deshalb ist es ein **Wert,
+den man setzt** (`practice_offset_ms`, gemerkt in `state.json`, Feld
+in der Üben-Karte): nach Gehör einstellbar, später aus einer Messung
+zu füllen. Angewandt wird er beim Zusammenhören — steht der Mix an
+Stelle p, wird der Mitschnitt ab p+Versatz gelesen. Nur der
+Mitschnitt, und nie negativ: Vorauseilen wäre Hellsehen.
+
+**Die Messung (noch nicht gebaut).** Weil Teil 1 jetzt fest ist, ist
+Teil 2 eine Konstante der Anlage — einmal messen genügt. Der
+ehrlichste Weg misst genau das, was nachher korrigiert wird: ein
+Übungslauf mit einem Klick-Mix, mitgeschnitten über den normalen Weg;
+die Stelle des Klicks im Mitschnitt IST der Versatz. Voraussetzung ist
+eine Schleife im Pult (der ausgegebene Kanal muss ins Aufnahmefenster
+zurückgeroutet sein) — die kann XRack nicht selbst herstellen und muss
+sie dazusagen.
 
 - Knopf **„Üben + mitschneiden"**: startet Übungsmix und Aufnahme in
   einem Zug (Aufnahmefenster aus Stufe 1 - beim Üben typisch zwei
