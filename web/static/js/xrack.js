@@ -633,16 +633,16 @@ function updateSoundcheckButton(data) {
         button.disabled = false;
     } else {
         //
-        // Beschriftung richtet sich nach der ausgewählten Datei:
-        // "Soundcheck" für eine Aufnahme, "Üben" für einen Übungsmix.
-        // Die Aktion selbst bleibt identisch - der Player spielt jede
-        // Datei auf den Kanälen ab, auf denen sie liegt.
+        // Der Knopf heisst Soundcheck und meint nur das.
         //
-        const label = selectedRecordingInfo && isPracticeMix(selectedRecordingInfo.kind)
-            ? I18N.btn_practice
-            : I18N.btn_soundcheck;
-
-        button.innerHTML = `<i class="bi bi-play-circle fs-3"></i><small>${label}</small>`;
+        // Er hiess einmal "Ueben", wenn ein Uebungsmix ausgewaehlt
+        // war, und spielte ihn dann ueber denselben Weg ab. Damit gab
+        // es den Weg zweimal - und dieser hier kann weniger: kein
+        // Anhalten, kein Spulen, keine Schleife. Zum Ueben ist genau
+        // das noetig, deshalb laeuft es ueber die Ueben-Karte.
+        //
+        button.innerHTML =
+            `<i class="bi bi-play-circle fs-3"></i><small>${I18N.btn_soundcheck}</small>`;
         button.classList.remove("btn-warning");
         button.classList.add("btn-success");
 
@@ -2123,9 +2123,15 @@ function createRecordingCard(recording) {
                 </small>
             </div>
             <div class="btn-group btn-group-sm">
+                ${isPracticeMix(recording.kind) ? `
+                <button class="btn btn-outline-info btn-sm" title="${I18N.title_choose_for_practice}" data-action="practice" data-filename="${recording.filename}">
+                    <i class="bi bi-repeat"></i>
+                </button>
+                ` : `
                 <button class="btn btn-outline-success btn-sm" title="${I18N.title_choose_for_soundcheck}" data-action="choose" data-filename="${recording.filename}">
                     <i class="bi bi-play-circle"></i>
                 </button>
+                `}
                 <button class="btn btn-outline-primary btn-sm" title="${I18N.title_download}" data-action="download" data-filename="${recording.filename}">
                     <i class="bi bi-download"></i>
                 </button>
@@ -2168,6 +2174,9 @@ async function handleRecordingAction(event) {
             break;
         case "choose":
             await chooseRecordingForPlayback(filename);
+            break;
+        case "practice":
+            await waehleUebungsmix(filename);
             break;
         case "copy-usb":
             await copyRecordingToUsb(filename);
@@ -2264,6 +2273,52 @@ async function chooseRecordingForPlayback(filename) {
     modal.hide();
 
     await refreshDashboard();
+}
+
+//
+// Einen Uebungsmix aus "Alle Dateien" zum Ueben waehlen.
+//
+// Der Knopf sass frueher am selben Platz und hiess "fuer den
+// Soundcheck auswaehlen" - er spielte den Mix dann ueber den
+// Soundcheck-Spieler ab, der weder anhalten noch spulen kann. Jetzt
+// fuehrt derselbe Griff dorthin, wo der Mix hingehoert: in die
+// Ueben-Karte.
+//
+async function waehleUebungsmix(filename) {
+
+    const antwort = await fetch("/api/player/mode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "practice" })
+    });
+
+    const ergebnis = await antwort.json();
+
+    if (!ergebnis.success) {
+        //
+        // Umgeschaltet wird nicht, solange etwas laeuft. Dann bleibt
+        // der Dialog stehen und sagt, warum.
+        //
+        if (ergebnis.message) alert(ergebnis.message);
+        return;
+    }
+
+    bootstrap.Modal
+        .getOrCreateInstance(document.getElementById("recordingsModal"))
+        .hide();
+
+    await refreshDashboard();
+
+    //
+    // Erst nach dem Auffrischen: Vorher steht der Mix noch gar nicht
+    // in der Auswahl.
+    //
+    const auswahl = document.getElementById("practice-mix");
+
+    if (auswahl) {
+        auswahl.value = filename;
+        updatePracticeCard(lastStatusData);
+    }
 }
 
 function downloadRecording(filename) {

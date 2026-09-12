@@ -178,6 +178,8 @@ class Anwendung(MusikMixin):
 
         self.practice_recording = False
 
+        self.practice_active = False
+
         self.record_name_prefix = "Soundcheck"
 
 
@@ -278,6 +280,7 @@ with tempfile.TemporaryDirectory() as tmp:
     assert anwendung.player_mode == "practice"
 
     anwendung.music_player.playing = False
+    anwendung.uebung_nachfuehren()
 
     print("OK: Umgeschaltet wird nur, wenn nichts läuft")
 
@@ -319,6 +322,7 @@ with tempfile.TemporaryDirectory() as tmp:
         )
         anwendung.music_player.aufrufe.clear()
         anwendung.music_player.playing = False
+        anwendung.uebung_nachfuehren()
 
     print("OK: Nur wirkliche Übungsmixe werden abgespielt")
 
@@ -396,6 +400,7 @@ with tempfile.TemporaryDirectory() as tmp:
     #
     anwendung.music_player.aufrufe.clear()
     anwendung.music_player.playing = False
+    anwendung.uebung_nachfuehren()
 
     erfolg, meldung = anwendung.start_practice("Uebung-2_p.w64")
 
@@ -440,6 +445,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # ----------------------------------------------------------------
 
     anwendung.music_player.playing = False
+    anwendung.uebung_nachfuehren()
     anwendung.music_player.aufrufe.clear()
     PROTOKOLL.clear()
 
@@ -521,6 +527,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
     anwendung.music_player.oeffnet = False
     anwendung.music_player.playing = False
+    anwendung.uebung_nachfuehren()
     PROTOKOLL.clear()
 
     erfolg, meldung = anwendung.start_practice(
@@ -551,6 +558,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
     anwendung.recorder.bereit = False
     anwendung.music_player.playing = False
+    anwendung.uebung_nachfuehren()
     PROTOKOLL.clear()
 
     erfolg, meldung = anwendung.start_practice(
@@ -579,6 +587,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
     anwendung.recorder.bereit = True
     anwendung.music_player.playing = False
+    anwendung.uebung_nachfuehren()
 
     print("OK: Ohne Gerät kein Mitschnitt - und trotzdem Üben")
 
@@ -607,6 +616,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # ----------------------------------------------------------------
 
     anwendung.music_player.playing = False
+    anwendung.uebung_nachfuehren()
     anwendung.music_player.aufrufe.clear()
 
     erfolg, meldung = anwendung.start_practice(
@@ -631,6 +641,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # Ohne Ziffer im Namen: Kanal 1, wie bei allen alten Aufnahmen.
     #
     anwendung.music_player.playing = False
+    anwendung.uebung_nachfuehren()
     anwendung.music_player.aufrufe.clear()
 
     erfolg, meldung = anwendung.start_practice(
@@ -653,6 +664,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # ----------------------------------------------------------------
 
     anwendung.music_player.playing = False
+    anwendung.uebung_nachfuehren()
     anwendung.music_player.aufrufe.clear()
 
     erfolg, meldung = anwendung.start_practice(
@@ -1549,6 +1561,108 @@ assert erstellen["spuren"] == erwartet, (
 )
 
 print("OK: Der Erstellen-Dialog wählt den Kanal und beschriftet danach")
+
+
+# ====================================================================
+# 19. In "Alle Dateien" führt der Übungsmix zum Üben
+#
+# Derselbe Griff wie früher, nur ans richtige Ziel: Der Knopf hiess
+# "für den Soundcheck auswählen" und spielte den Mix dann über den
+# Soundcheck-Spieler ab - der kann weder anhalten noch spulen. Zum
+# Üben ist genau das nötig.
+# ====================================================================
+
+LISTE = """function () {
+
+    //
+    // Die echte Anzeigefunktion mit einer Liste, wie sie der Server
+    // liefert.
+    //
+    renderRecordings([
+        { filename: 'Uebung-Bach_p.w64', kind: 'practice', channels: 8,
+          sample_rate: 48000, bits_per_sample: 24, duration: 60, size: 1 },
+        { filename: 'Soundcheck-7_s9.w64', kind: 'soundcheck', channels: 2,
+          sample_rate: 48000, bits_per_sample: 24, duration: 60, size: 1 }
+    ]);
+
+    const aktionen = (name) => Array.from(
+        document.querySelectorAll(
+            `#recordingsList [data-filename="${name}"]`)
+    ).map((k) => k.dataset.action);
+
+    return {
+        mix: aktionen('Uebung-Bach_p.w64'),
+        aufnahme: aktionen('Soundcheck-7_s9.w64')
+    };
+}"""
+
+liste = ausfuehren(
+    stand(player_mode="practice", practice_mixes=MIXE),
+    LISTE,
+)
+
+assert "practice" in liste["mix"], (
+    f"Am Übungsmix stehen die Aktionen {liste['mix']} - dort gehört "
+    f"'zum Üben auswählen' hin."
+)
+
+assert "choose" not in liste["mix"], (
+    f"Am Übungsmix steht weiterhin 'für den Soundcheck auswählen': "
+    f"{liste['mix']}. Damit gibt es den Weg zweimal, und der über den "
+    f"Soundcheck kann weder anhalten noch spulen."
+)
+
+assert "choose" in liste["aufnahme"], (
+    f"An der Aufnahme fehlt 'für den Soundcheck auswählen': "
+    f"{liste['aufnahme']}"
+)
+
+assert "practice" not in liste["aufnahme"], liste["aufnahme"]
+
+print("OK: Der Übungsmix führt zum Üben, die Aufnahme zum Soundcheck")
+
+
+# ====================================================================
+# 20. Und der Griff landet wirklich in der Üben-Karte
+#
+# Umschalten, Dialog zu, Mix vorgewählt - sonst stünde man vor einer
+# Karte und müsste die Datei noch einmal suchen.
+# ====================================================================
+
+ZIEL = """function () {
+    const auswahl = document.getElementById('practice-mix');
+    return {
+        gewaehlt: auswahl ? auswahl.value : null,
+        posts: window.__posts.filter(
+            (p) => p.url.indexOf('/api/status') !== 0),
+        dateien: document.getElementById('recordingsModal')
+            .classList.contains('show')
+    };
+}"""
+
+ziel = ausfuehren(
+    stand(player_mode="music", practice_mixes=MIXE),
+    ZIEL,
+    vorlauf="waehleUebungsmix('Uebung-Blues_p9.w64');",
+)
+
+moden = [p for p in ziel["posts"] if p["url"] == "/api/player/mode"]
+
+assert moden and moden[0]["body"] == {"mode": "practice"}, (
+    f"Der Griff schaltete nicht auf Üben um: {ziel['posts']}"
+)
+
+assert ziel["gewaehlt"] == "Uebung-Blues_p9.w64", (
+    f"In der Üben-Karte steht {ziel['gewaehlt']!r} - vorgewählt sein "
+    f"muss der Mix, den man gerade angetippt hat."
+)
+
+assert ziel["dateien"] is False, (
+    "Der Dialog 'Alle Dateien' steht noch offen - man sieht die Karte "
+    "gar nicht, in der es weitergeht."
+)
+
+print("OK: Der Griff schaltet um, wählt vor und schliesst den Dialog")
 
 
 print("Alle Tests der Üben-Karte erfolgreich.")

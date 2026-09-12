@@ -5,6 +5,7 @@ von Stereodateien zum Uebungsmix.
 
 import threading
 
+from core.recording_kind import KIND_PRACTICE, kind_from_filename
 from core.stem_combiner import combine_stems, StemCombineError
 from pathlib import Path
 
@@ -114,8 +115,18 @@ class AufnahmeMixin:
 
     def start_soundcheck(self, filename: str) -> bool:
         """
-        Spielt eine Aufnahme auf denselben Kanälen ab,
-        auf denen sie aufgenommen wurde ("virtueller Soundcheck").
+        Spielt eine AUFNAHME auf denselben Kanälen ab, auf denen sie
+        aufgenommen wurde ("virtueller Soundcheck").
+
+        Nur Aufnahmen: Übungsmixe laufen über die Üben-Karte, und zwar
+        über den Musikspieler - der kann anhalten, spulen und
+        wiederholen, und genau das braucht man zum Üben. Hier liefen
+        sie lange auch, weil es historisch derselbe Knopf war; damit
+        gab es den Weg zweimal, und einer davon konnte weniger.
+
+        Während einer Aufnahme nicht: Dieselbe Datei würde gelesen und
+        beschrieben. Während Musik oder einer Übung auch nicht - das
+        Interface nimmt einen Wiedergabestrom.
         """
 
         if self.selected_audio_device is None:
@@ -125,6 +136,16 @@ class AufnahmeMixin:
             return False
 
         if self.music_player.playing:
+            return False
+
+        if kind_from_filename(filename) == KIND_PRACTICE:
+
+            self.logger.warning(
+                "Übungsmix nicht über den Soundcheck: %s - dafür gibt "
+                "es die Üben-Karte.",
+                filename,
+            )
+
             return False
 
         path = self.recorder.writer.directory / filename

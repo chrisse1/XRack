@@ -6,7 +6,7 @@ weil der Umbau ueber mehrere Sitzungen laeuft: Wer hier weiterarbeitet
 - ich beim naechsten Mal oder jemand anderes -, soll den Stand und vor
 allem die BEGRUENDUNGEN vorfinden, nicht nur das Ergebnis.
 
-**Stand:** Stufen 1 bis 3b gebaut (3.0.0-dev6). Das Aufnahmefenster
+**Stand:** Alle Stufen bis 4 gebaut (3.0.0-dev7); Stufe 5 steht aus. Das Aufnahmefenster
 steht und ist am Geraet abgenommen; der Musikspieler kann Uebungsmixe
 mehrkanalig abspielen, mit Spulen und Schleife; die Karte hat den
 Umschalter Musik | Ueben. Stufen 3b, 4 und 5 stehen aus.
@@ -307,6 +307,33 @@ aufnehmen, den Ausschlag suchen), das wäre aber eine eigene Funktion.
 Übungsmix + Mitschnitt einen neuen Übungsmix zum Mitnehmen.
 
 ### Stufe 4 — Die Soundcheck-Karte wird wieder eine Sache
+
+**Gebaut (3.0.0-dev7).**
+
+- **Der Knopf heisst wieder „Soundcheck" und meint nur das.** Er hiess
+  „Üben", wenn ein Übungsmix ausgewählt war, und spielte ihn über den
+  Soundcheck-Spieler ab — der kann weder anhalten noch spulen noch
+  wiederholen. Damit gab es den Weg zweimal, und der eine konnte
+  weniger. `start_soundcheck()` lehnt Übungsmixe jetzt ab.
+- **In „Alle Dateien" führt der Übungsmix zum Üben.** Derselbe Griff
+  am selben Platz, nur ans richtige Ziel: Er schaltet die Karte auf
+  Üben, wählt den Mix vor und schliesst den Dialog.
+- **Die Sperrmatrix steht als Tabelle im Test**
+  (`test_sperrmatrix.py`), 17 Kombinationen mit Begründung. Eine
+  Tabelle ohne Begründung ist beim nächsten Umbau nur ein Hindernis,
+  das man wegräumt — und genau diese eine Zeile darf nicht
+  wegfallen:
+
+  > **Üben + Aufnahme ist erlaubt.** Ein Aufnahmestrom neben einem
+  > Wiedergabestrom, das kann das Interface. Wer hier
+  > „sicherheitshalber" sperrt, nimmt das Mitschneiden wieder weg.
+
+- **Neu dabei:** `practice_active` — läuft gerade eine Übung? Der
+  Musikspieler allein sagt das nicht, er spielt auch Musik. Daran
+  hängt, dass Musik eine laufende Übung nicht stillschweigend ablöst
+  (samt Mitschnitt, der weiterliefe). Endet ein Stück von selbst,
+  führt `uebung_nachfuehren()` den Zustand nach — sonst liesse sich
+  danach nie wieder Musik starten.
 
 - Der Wiedergabeknopf heißt wieder „Soundcheck" und meint nur das.
 - Die Liste zeigt weiterhin nur Aufnahmen (tut sie schon).

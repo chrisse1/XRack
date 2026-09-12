@@ -18,6 +18,67 @@ class MusikMixin:
     Teil von Application - siehe core/application/__init__.py.
     """
 
+    # ----------------------------------------------------------------
+    # Was sich ausschliesst - und was ausdruecklich nicht
+    #
+    # Die Regel dahinter ist keine Vorsicht, sondern die Hardware: Das
+    # Interface nimmt EINEN Wiedergabestrom an. Ein Aufnahmestrom
+    # daneben ist dagegen kein Problem - genau davon lebt XRack.
+    #
+    #   Aufnahme + Musik    erlaubt
+    #   Aufnahme + Ueben    erlaubt   <- darum geht es beim Mitschneiden
+    #   Aufnahme + Soundcheck  nein   (dieselbe Datei lesen und schreiben)
+    #   Soundcheck + Musik  nein      (zwei Wiedergabestroeme)
+    #   Soundcheck + Ueben  nein      (zwei Wiedergabestroeme)
+    #   Musik + Ueben       nein      (ein Spieler, eine Quelle)
+    #
+    # Die Sperren stehen HIER und nicht nur in der Oberflaeche: Was
+    # nur die Oberflaeche verhindert, verhindert sie nur, solange sie
+    # stimmt - danach scheitert ALSA, und zu sehen ist ein Knopf, der
+    # nichts tut. Geprueft wird die Tabelle in test_sperrmatrix.py.
+    # ----------------------------------------------------------------
+
+    def uebung_nachfuehren(self) -> None:
+        """
+        Merkt, wenn die Übung von selbst zu Ende gegangen ist.
+
+        Ein Stück endet, keine Schleife - dann hört der Spieler auf,
+        ohne dass jemand gestoppt hat. Bliebe XRack dabei auf "es läuft
+        eine Übung" stehen, liesse sich danach nie wieder Musik
+        starten; und bliebe es auf "wir schneiden mit" stehen, würde
+        das nächste Stoppen eine fremde Aufnahme beenden.
+
+        Wird bei jeder Statusabfrage gerufen (siehe
+        Application.update_status).
+        """
+
+        if not self.music_player.playing:
+            self.practice_active = False
+
+        if not self.recorder.recording:
+            self.practice_recording = False
+
+
+    def wiedergabe_laeuft(self) -> tuple[bool, str]:
+        """
+        Läuft gerade eine Wiedergabe - und welche?
+
+        Liefert (läuft, Grund). Der Grund ist für den Nutzer gedacht:
+        Eine Ablehnung, die nicht sagt, was im Weg steht, ist so gut
+        wie keine Auskunft.
+        """
+
+        if self.player.playing:
+            return True, "Es läuft gerade ein Soundcheck."
+
+        if self.practice_active:
+            return True, "Es läuft gerade eine Übung."
+
+        if self.music_player.playing:
+            return True, "Es läuft gerade Musik."
+
+        return False, ""
+
     def play_music_folder(
         self,
         relative_path: str,
@@ -32,7 +93,13 @@ class MusikMixin:
         if self.selected_audio_device is None:
             return False
 
-        if self.player.playing:
+        #
+        # Ein Titelwechsel ist erlaubt (laufende Musik loest sich
+        # selbst ab), eine laufende Uebung nicht: Die wuerde sonst
+        # stillschweigend verschwinden - samt Mitschnitt, der
+        # weiterliefe.
+        #
+        if self.player.playing or self.practice_active:
             return False
 
         folder = self.music_library.resolve(relative_path)
@@ -62,7 +129,7 @@ class MusikMixin:
         if self.selected_audio_device is None:
             return False
 
-        if self.player.playing:
+        if self.player.playing or self.practice_active:
             return False
 
         path = self.music_library.resolve(relative_path)
@@ -158,10 +225,12 @@ class MusikMixin:
         if self.selected_audio_device is None:
             return False, "Kein Audiogerät gewählt."
 
-        if self.player.playing:
+        laeuft, grund = self.wiedergabe_laeuft()
+
+        if laeuft:
             return False, (
-                "Es läuft gerade ein Soundcheck - zwei Wiedergaben "
-                "gleichzeitig kann das Interface nicht."
+                f"{grund} Zwei Wiedergaben gleichzeitig kann das "
+                f"Interface nicht - erst anhalten."
             )
 
         if kind_from_filename(filename) != KIND_PRACTICE:
@@ -245,6 +314,9 @@ class MusikMixin:
             mitschnitt_start=mitschnitt_start,
         )
 
+        if erfolg:
+            self.practice_active = True
+
         if not erfolg:
 
             #
@@ -278,6 +350,8 @@ class MusikMixin:
         """
 
         self.music_player.stop()
+
+        self.practice_active = False
 
         if self.practice_recording:
 

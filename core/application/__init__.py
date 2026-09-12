@@ -143,6 +143,13 @@ class Application(
         #
         self.practice_recording = False
 
+        #
+        # Laeuft gerade eine Uebung? Der Musikspieler allein sagt das
+        # nicht - er spielt auch Musik. Gebraucht wird es fuer die
+        # Sperren (siehe MusikMixin.wiedergabe_laeuft).
+        #
+        self.practice_active = False
+
         self.record_name_prefix = self.state_store.get(
             "record_name_prefix",
             "Soundcheck",
@@ -630,8 +637,11 @@ class Application(
         # selbst aufgehoert haben (voller Datentraeger) - dann gehoert
         # sie nicht mehr zum Ueben.
         #
-        if not self.recorder.recording:
-            self.practice_recording = False
+        #
+        # Uebung und Mitschnitt koennen von selbst zu Ende gegangen
+        # sein - siehe MusikMixin.uebung_nachfuehren().
+        #
+        self.uebung_nachfuehren()
 
         self.status.practice_recording = self.practice_recording
 
