@@ -46,6 +46,13 @@ class MusicPlayer:
         self._pause_event = threading.Event()
         self._pause_event.set()
 
+        #
+        # Eine Pause ist angefordert und vom Lesethread noch nicht
+        # bearbeitet. Das ist etwas anderes als self._paused, und genau
+        # daran hing ein Fehler - siehe _play_track().
+        #
+        self._pause_angefordert = False
+
         self._resume_position = 0.0
 
         self._thread: threading.Thread | None = None
@@ -66,7 +73,21 @@ class MusicPlayer:
 
         self._track_duration = 0.0
         self._track_offset = 0.0
-        self._track_start_time = monotonic()
+
+        #
+        # None heisst: Die Uhr des Titels laeuft noch nicht.
+        #
+        # Hier stand monotonic() - die Uhr lief also ab dem ERZEUGEN
+        # des Spielers. Zwischen "Abspielen" und dem Moment, in dem der
+        # Lesethread den Titel wirklich beginnt (und die Uhr neu
+        # stellt), wurde deshalb die Laufzeit des Spielers als Position
+        # gemeldet. Auf einem belasteten Pi sind das schnell
+        # Zehntelsekunden, nach einer Stunde Betrieb eine Stunde: Wer
+        # in diesem Moment pausiert, merkt sich eine Stelle, die es im
+        # Stueck nicht gibt - und beim Fortsetzen ist der Titel zu
+        # Ende, bevor er anfing.
+        #
+        self._track_start_time: float | None = None
 
         self._channels = CHANNELS
         self._start_channel = 0
@@ -119,6 +140,14 @@ class MusicPlayer:
 
         if self.paused:
             return self._resume_position
+
+        #
+        # Die Uhr laeuft noch nicht: Der Lesethread hat den Titel noch
+        # nicht begonnen. Dann ist die Position genau der Offset -
+        # nicht irgendeine Zeit, die woanders herkommt.
+        #
+        if self._track_start_time is None:
+            return self._track_offset
 
         return (
             self._track_offset +
@@ -226,6 +255,14 @@ class MusicPlayer:
         # ewig hängen bleiben (join() wartet auf den Thread).
         #
         self._paused = False
+
+        #
+        # Eine noch nicht abgeholte Pausen-Anforderung gilt nicht mehr:
+        # Gestoppt ist gestoppt, und der Lesethread soll nicht an einer
+        # gemerkten Stelle weitermachen wollen.
+        #
+        self._pause_angefordert = False
+
         self._pause_event.set()
 
         self.decoder.close()
@@ -295,6 +332,13 @@ class MusicPlayer:
         self._resume_position = self.track_position
 
         self._paused = True
+
+        #
+        # Die Anforderung bleibt stehen, bis der Lesethread sie
+        # gesehen hat - auch wenn inzwischen schon wieder
+        # fortgesetzt wurde.
+        #
+        self._pause_angefordert = True
 
         self._pause_event.clear()
 
@@ -368,6 +412,13 @@ class MusicPlayer:
 
         self._paused = False
         self._pause_event.set()
+
+        #
+        # Die Uhr des vorigen Titels gilt nicht mehr, und die neue
+        # stellt der Lesethread, wenn er wirklich beginnt.
+        #
+        self._track_offset = 0.0
+        self._track_start_time = None
 
         if not self.backend.open(
             device,
@@ -492,7 +543,6 @@ class MusicPlayer:
             self._seek_target = None
 
             self._track_offset = position
-            self._track_start_time = monotonic()
 
             if not self.decoder.open(
                 track,
@@ -501,6 +551,17 @@ class MusicPlayer:
                 start_position=position,
             ):
                 return opened_at_least_once
+
+            #
+            # Die Uhr laeuft erst JETZT - nach dem Oeffnen, nicht davor.
+            #
+            # decoder.open() startet ffmpeg, und das braucht seine Zeit.
+            # Stand die Uhr davor, zaehlte diese Anlaufzeit als
+            # gespielte Zeit mit: Die Anzeige lief dem Ton voraus, und
+            # eine Pause in dieser Spanne merkte sich eine Stelle, an
+            # der noch nichts gespielt war.
+            #
+            self._track_start_time = monotonic()
 
             opened_at_least_once = True
 
@@ -519,23 +580,33 @@ class MusicPlayer:
                 self.backend.write(data)
 
             #
-            # Den Pausen-Zustand merken, BEVOR geschlossen wird.
+            # War eine Pause im Spiel? Gefragt wird nach der
+            # ANFORDERUNG, nicht nach dem augenblicklichen Zustand.
             #
-            # close() beendet ffmpeg und wartet bis zu zwei Sekunden
-            # auf dessen Ende (player/track_decoder.py). Wuerde unten
-            # erneut self._paused gelesen, koennte in dieser Zeit
-            # "Fortsetzen" eingetroffen sein - dann stuende dort
-            # schon wieder False, die Pausen-Behandlung fiele aus,
-            # und _play_track liefe auf das break am Ende: naechster
-            # Titel statt Weiterspielen. Genau das ist im Betrieb
-            # passiert, je nachdem wie schnell jemand nach Pause auf
-            # Fortsetzen geklickt hat.
+            # Der Unterschied ist ein Fehler, der zweimal zugeschlagen
+            # hat. Frueher stand hier self._paused, gelesen nach dem
+            # Schliessen des Dekoders: Kam das Fortsetzen waehrend des
+            # Schliessens (close() wartet bis zu zwei Sekunden auf
+            # ffmpeg), stand dort schon wieder False - die
+            # Pausen-Behandlung fiel aus, und _play_track lief auf das
+            # break am Ende: naechster Titel statt Weiterspielen.
             #
-            # Kam das Fortsetzen waehrend des Schliessens, ist
-            # _pause_event bereits gesetzt - wait() kehrt sofort
-            # zurueck, und es geht an der gemerkten Stelle weiter.
+            # Das Lesen wanderte daraufhin vor das close(). Damit war
+            # der Fall geschlossen, aber nicht der Fehler: Kommen
+            # Pause UND Fortsetzen, waehrend der Lesethread gerade
+            # nicht dran ist - auf einem belasteten Pi sind das
+            # schnell zwei Zehntelsekunden -, steht hier wieder False.
+            # Der Titel fing dann von vorne an, mitten im Stueck. Im
+            # Versuch unter Last war das in einem von sechs Laeufen zu
+            # sehen (_track_offset 0.0 statt der gemerkten Stelle).
             #
-            war_pausiert = self._paused
+            # Eine Anforderung dagegen bleibt stehen, bis dieser Faden
+            # sie abholt. Sie kann nicht verloren gehen, egal wie die
+            # Zeiten fallen.
+            #
+            war_pausiert = self._pause_angefordert or self._paused
+
+            self._pause_angefordert = False
 
             self.decoder.close()
 

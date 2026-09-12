@@ -384,6 +384,220 @@ try:
     print("OK: Fortsetzen waehrend des Schliessens spielt denselben Titel "
           "weiter")
 
+    # ------------------------------------------------------------
+    # 5. Pause UND Fortsetzen, waehrend der Lesethread nicht dran ist
+    #
+    # Der Fall, der diesen Test lange flackern liess - und dahinter
+    # steckte ein echter Fehler: Auf einem belasteten Pi kommt der
+    # Lesethread schnell zwei Zehntelsekunden nicht zum Zug. Faellt
+    # Pause UND Fortsetzen in dieses Loch, war der Pausen-Zustand
+    # danach schon wieder False, die Pausen-Behandlung fiel aus - und
+    # der Titel fing MITTEN IM STUECK von vorne an.
+    #
+    # Unter Last war das in einem von sechs Laeufen zu sehen. Hier
+    # wird es nicht ausgewuerfelt, sondern erzwungen: Der Dekoder
+    # haelt den Lesethread an, bis der Versuch pausiert UND
+    # fortgesetzt hat.
+    # ------------------------------------------------------------
+
+    class SchlafenderDekoder:
+        """
+        Haelt im Lesen an, bis der Versuch ihn weiterlaesst - so liegt
+        der Lesethread nachweislich im Leerlauf, waehrend Pause und
+        Fortsetzen eintreffen.
+        """
+
+        def __init__(self):
+            self.haltepunkt = threading.Event()
+            self.liest = threading.Event()
+            self.positionen = []
+            self._open = False
+
+        def open(self, path, channels, rate, start_position=0.0):
+            self.positionen.append(start_position)
+            self._open = True
+            return True
+
+        def read(self, chunk_size):
+
+            if not self._open:
+                return None
+
+            #
+            # Beim ersten Lesen anhalten. Danach normal weiterliefern.
+            #
+            if not self.haltepunkt.is_set():
+                self.liest.set()
+                self.haltepunkt.wait(timeout=5)
+
+            if not self._open:
+                return None
+
+            time.sleep(0.01)
+            return b"\x00" * 64
+
+        def close(self):
+            self._open = False
+
+    schlaefer = SchlafenderDekoder()
+
+    player7 = MusicPlayer(FakeBackend(), library)
+    player7.decoder = schlaefer
+
+    assert player7.play_file(
+        device, with_dir / "song.mp3", start_channel=0, rate=48000
+    )
+
+    #
+    # Warten, bis der Lesethread wirklich im Lesen steht.
+    #
+    assert schlaefer.liest.wait(timeout=5), "Der Lesethread liest nicht."
+
+    time.sleep(0.05)
+
+    player7.pause()
+
+    stelle = player7.track_position
+
+    assert stelle > 0, stelle
+
+    player7.resume()
+
+    #
+    # Jetzt erst darf der Lesethread weiter - Pause und Fortsetzen
+    # sind beide in seinem Ruecken passiert.
+    #
+    schlaefer.haltepunkt.set()
+
+    time.sleep(0.3)
+
+    weiter = player7.track_position
+
+    offset = player7._track_offset
+
+    run_with_timeout(player7.stop, label="stop() nach dem Wettlauf")
+
+    assert offset > 0.0, (
+        f"Der Titel wurde von vorn begonnen (_track_offset={offset:.3f} "
+        f"statt der gemerkten Stelle {stelle:.3f}) - genau der Fehler, "
+        f"der unter Last auftrat."
+    )
+
+    assert weiter > stelle, (
+        f"Nach dem Fortsetzen laeuft die Position nicht weiter: "
+        f"{weiter:.3f} gegen {stelle:.3f} bei der Pause."
+    )
+
+    #
+    # Und der Dekoder wurde an der gemerkten Stelle geoeffnet, nicht
+    # bei null.
+    #
+    assert len(schlaefer.positionen) >= 2, schlaefer.positionen
+
+    assert schlaefer.positionen[1] > 0, (
+        f"Der Dekoder wurde erneut bei null geoeffnet: "
+        f"{schlaefer.positionen}"
+    )
+
+    print("OK: Pause und Fortsetzen im Ruecken des Lesethreads gehen nicht "
+          "verloren")
+
+    # ------------------------------------------------------------
+    # 6. Die Position gehoert dem Titel, nicht dem Spieler
+    #
+    # Der Grund, warum dieser Test unter Last flackerte - und dahinter
+    # ein Fehler mit einem haesslichen Ausgang:
+    #
+    # Die Uhr fuer die Position lief ab dem ERZEUGEN des Spielers.
+    # Zwischen "Abspielen" und dem Moment, in dem der Lesethread den
+    # Titel wirklich beginnt, wurde deshalb die Laufzeit des Spielers
+    # als Position gemeldet. Nach einer Stunde Betrieb ist das eine
+    # Stunde: Wer in diesem Moment pausiert, merkt sich eine Stelle,
+    # die es im Stueck nicht gibt - und beim Fortsetzen ist der Titel
+    # zu Ende, bevor er angefangen hat.
+    #
+    # Erzwungen wird der Fall, indem der Lesethread am Anfang
+    # festgehalten wird: Er ist dann nachweislich noch nicht beim
+    # Titel angekommen.
+    # ------------------------------------------------------------
+
+    class TorDekoder:
+        """Laesst den Lesethread erst nach dem Freigeben beginnen."""
+
+        def __init__(self):
+            self.tor = threading.Event()
+            self.wartet = threading.Event()
+            self._open = False
+
+        def open(self, path, channels, rate, start_position=0.0):
+            self.wartet.set()
+            self.tor.wait(timeout=5)
+            self._open = True
+            return True
+
+        def read(self, chunk_size):
+            if not self._open:
+                return None
+            time.sleep(0.01)
+            return b"\x00" * 64
+
+        def close(self):
+            self._open = False
+
+    tor = TorDekoder()
+
+    player8 = MusicPlayer(FakeBackend(), library)
+    player8.decoder = tor
+
+    #
+    # Der Spieler steht eine Weile herum, bevor jemand etwas
+    # abspielt - wie im Betrieb, wo XRack stundenlang laeuft.
+    #
+    time.sleep(0.3)
+
+    assert player8.play_file(
+        device, with_dir / "song.mp3", start_channel=0, rate=48000
+    )
+
+    assert tor.wartet.wait(timeout=5), "Der Lesethread kam nicht bis zum Oeffnen."
+
+    #
+    # Hier hat der Titel noch nicht begonnen. Die Position darf NICHT
+    # die Laufzeit des Spielers sein.
+    #
+    vor_dem_beginn = player8.track_position
+
+    assert vor_dem_beginn == 0.0, (
+        f"Vor dem Beginn des Titels meldet der Spieler {vor_dem_beginn:.3f} "
+        f"Sekunden Position - das ist seine eigene Laufzeit. Wer jetzt "
+        f"pausiert, merkt sich eine Stelle, die es im Stueck nicht gibt."
+    )
+
+    #
+    # Und eine Pause in diesem Moment merkt sich die Null, nicht die
+    # Laufzeit.
+    #
+    player8.pause()
+
+    assert player8.track_position == 0.0, player8.track_position
+
+    player8.resume()
+
+    tor.tor.set()
+
+    time.sleep(0.2)
+
+    laeuft = player8.track_position
+
+    run_with_timeout(player8.stop, label="stop() nach dem Uhren-Fall")
+
+    assert 0.0 < laeuft < 0.3, (
+        f"Nach dem Beginn laeuft die Position nicht plausibel: {laeuft:.3f}"
+    )
+
+    print("OK: Vor dem Beginn des Titels ist die Position null, nicht die "
+          "Laufzeit des Spielers")
+
 
 finally:
     import shutil
