@@ -98,7 +98,9 @@ class FakeWriter:
         #
         self.blocks = []
 
-    def open(self, channels, sample_rate, bits_per_sample, name_prefix="Soundcheck"):
+    def open(self, channels, sample_rate, bits_per_sample,
+             name_prefix="Soundcheck", start_channel=1):
+        self.start_channel = start_channel
         self.filename = "fake.w64"
         self.opened = True
 

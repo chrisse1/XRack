@@ -99,22 +99,25 @@ class AudioCore:
         device: AudioDevice,
         channels: int | None = None,
         rate: int | None = None,
+        start_channel: int = 0,
     ) -> bool:
 
         if not self.backend.open(
             device,
             channels,
             rate,
+            start_channel,
         ):
             return False
 
         self.device = device
 
         self.logger.info(
-            "Audio Core geöffnet: %s | %s | %d Kanäle | %d Hz",
+            "Audio Core geöffnet: %s | %s | %d Kanäle ab %d | %d Hz",
             self.name,
             self.alsa_name,
             self.max_channels,
+            self.backend.start_channel + 1,
             self.sample_rate,
         )
         

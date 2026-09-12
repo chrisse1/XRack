@@ -66,7 +66,8 @@ TEXTE = get_translations("de")
 # --------------------------------------------------------------------
 
 def stand(audio: bool, recording=False, monitoring=False,
-          playback=False) -> dict:
+          playback=False, channels=18, start_channel=1,
+          disk_seconds=0.0) -> dict:
     """
     So sieht /api/status aus.
 
@@ -102,7 +103,8 @@ def stand(audio: bool, recording=False, monitoring=False,
         "audio_formats": ["S24_LE"],
         "selected_audio_device": "hw:1,0" if audio else "",
 
-        "record_channels": 18,
+        "record_channels": channels,
+        "record_start_channel": start_channel,
         "record_sample_rate": 48000,
         "record_bits_per_sample": 24,
         "recordings": ["Soundcheck-1.w64"],
@@ -114,7 +116,7 @@ def stand(audio: bool, recording=False, monitoring=False,
         "rate_plausible": None,
         "rate_measured": 0.0,
         "rate_likely": 0,
-        "disk_seconds_left": 0.0,
+        "disk_seconds_left": disk_seconds,
         "disk_stopped": False,
 
         "cpu": 3.0, "ram": 20.0, "disk": 40.0,
@@ -355,6 +357,82 @@ assert deutsch == englisch, (
 )
 
 print(f"OK: Beide Sprachfassungen tragen dieselben {len(deutsch)} Schlüssel")
+
+
+# ====================================================================
+# 5. Das Aufnahmefenster: ab Kanal X, so viele Kanäle
+#
+# Zwei Dinge, die man der Vorlage nicht ansieht:
+#
+#   - Angeboten werden nur ungerade Startkanäle. Aufgenommen wird in
+#     Stereopaaren; ein Fenster, das mitten in einem Paar beginnt,
+#     zerreisst jedes Stereosignal des Pults.
+#   - Die Anzahl richtet sich nach dem, was ab dem Startkanal noch da
+#     ist. Mehr anzubieten hiesse, über das Interface hinaus
+#     aufzunehmen - die überzähligen Spuren blieben still.
+# ====================================================================
+
+FENSTER = """function () {
+
+    const feld = (id) => {
+        const e = document.getElementById(id);
+        if (!e) return null;
+        return {
+            werte: Array.from(e.options || []).map((o) => Number(o.value)),
+            gewaehlt: Number(e.value)
+        };
+    };
+
+    return {
+        platz: (document.getElementById('record-space').textContent || '').trim(),
+        start: feld('record-start-channel'),
+        anzahl: feld('record-channels')
+    };
+}"""
+
+fenster = ausfuehren(
+    stand(audio=True, channels=4, start_channel=9, disk_seconds=14 * 3600),
+    FENSTER,
+)
+
+assert fenster["start"], "Das Feld für den ersten Kanal fehlt."
+
+assert fenster["start"]["werte"] == [1, 3, 5, 7, 9, 11, 13, 15, 17], (
+    f"Angeboten werden {fenster['start']['werte']} - erwartet waren nur "
+    f"ungerade Kanäle: Ein Fenster mitten in einem Stereopaar zerreisst "
+    f"jedes Stereosignal des Pults."
+)
+
+assert fenster["start"]["gewaehlt"] == 9, fenster["start"]
+
+assert fenster["anzahl"]["werte"] == [2, 4, 6, 8, 10], (
+    f"Ab Kanal 9 sind von 18 noch zehn übrig - angeboten werden aber "
+    f"{fenster['anzahl']['werte']}."
+)
+
+assert fenster["anzahl"]["gewaehlt"] == 4, fenster["anzahl"]
+
+print("OK: Das Fenster bietet nur an, was es wirklich gibt")
+
+
+# ====================================================================
+# 6. Die Restzeit sagt, woraus sie entsteht
+#
+# Sie sprang einmal von 14 auf 21 Stunden, und es kostete eine
+# Rechnung, um zu sehen, dass sich nicht die Kanalzahl, sondern der
+# freie Platz geändert hatte. Eine Zahl ohne ihre Grundlage ist nicht
+# nachprüfbar.
+# ====================================================================
+
+assert "14:00:00" in fenster["platz"], fenster["platz"]
+
+for teil in ("4", "9", "2.8"):
+    assert teil in fenster["platz"], (
+        f"In der Restzeit fehlt {teil!r} - dort sollen Kanalzahl, "
+        f"erster Kanal und GB je Stunde stehen: {fenster['platz']}"
+    )
+
+print(f"OK: Die Restzeit nennt ihre Grundlage ({fenster['platz']})")
 
 
 print("Alle Tests der Soundcheck-Karte erfolgreich.")

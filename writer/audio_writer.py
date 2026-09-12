@@ -5,7 +5,11 @@ Basisklasse für Audio-Dateischreiber.
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from core.recording_kind import MARKER_SOUNDCHECK, strip_marker
+from core.recording_kind import (
+    MARKER_SOUNDCHECK,
+    marker_mit_kanal,
+    strip_marker,
+)
 
 
 class AudioWriter(ABC):
@@ -28,6 +32,7 @@ class AudioWriter(ABC):
         extension: str,
         prefix: str = "Soundcheck",
         marker: str = MARKER_SOUNDCHECK,
+        start_channel: int = 1,
     ) -> str:
         """
         Erstellt Dateiname und Verzeichnis. Der Dateiname besteht aus
@@ -48,7 +53,15 @@ class AudioWriter(ABC):
 
         index = self._next_index(safe_prefix, extension)
 
-        filename = f"{safe_prefix}-{index}_{marker}"
+        #
+        # War der erste aufgenommene Kanal nicht die 1, steht er mit im
+        # Namen - sonst landet die Aufnahme beim Soundcheck wieder auf
+        # Kanal 1 (siehe core/recording_kind.py).
+        #
+        filename = (
+            f"{safe_prefix}-{index}_"
+            f"{marker_mit_kanal(marker, start_channel)}"
+        )
 
         self.filename = str(
             self.directory / f"{filename}.{extension}"
@@ -94,10 +107,12 @@ class AudioWriter(ABC):
         bits_per_sample: int,
         name_prefix: str = "Soundcheck",
         marker: str = MARKER_SOUNDCHECK,
+        start_channel: int = 1,
     ):
         """
         Öffnet die Ausgabedatei. `marker` kennzeichnet die Art der
-        Datei im Dateinamen, siehe core/recording_kind.py.
+        Datei im Dateinamen, `start_channel` den ersten aufgenommenen
+        Kanal - siehe core/recording_kind.py.
         """
         pass
 

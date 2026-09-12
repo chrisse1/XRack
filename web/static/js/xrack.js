@@ -361,7 +361,15 @@ function updateRecordChannels(data) {
     const select = document.getElementById("record-channels");
     select.innerHTML = "";
 
-    for (let channels = 2; channels <= data.audio_channels; channels += 2) {
+    //
+    // Wie viele Kanaele ab dem gewaehlten Startkanal ueberhaupt noch
+    // da sind. Mehr anzubieten hiesse, ueber das Interface hinaus
+    // aufzunehmen - die ueberzaehligen Spuren blieben still.
+    //
+    const ersterKanal = data.record_start_channel || 1;
+    const uebrig = Math.max(0, (data.audio_channels || 0) - ersterKanal + 1);
+
+    for (let channels = 2; channels <= uebrig; channels += 2) {
         const option = document.createElement("option");
         option.value = channels;
         option.textContent = I18N.channels_option.replace("{n}", channels);
@@ -376,6 +384,52 @@ function updateRecordChannels(data) {
     };
 
     select.disabled = isAudioBusy(data);
+
+    updateRecordStartChannel(data);
+}
+
+//
+// Ab welchem Kanal aufgenommen wird.
+//
+// Angeboten werden nur ungerade Kanaele: Aufgenommen wird in
+// Stereopaaren, und ein Fenster, das mitten in einem Paar beginnt,
+// zerreisst jedes Stereosignal des Pults.
+//
+function updateRecordStartChannel(data) {
+
+    const select = document.getElementById("record-start-channel");
+
+    if (!select) return;
+
+    select.innerHTML = "";
+
+    const vorhanden = data.audio_channels || 0;
+
+    for (let kanal = 1; kanal <= vorhanden; kanal += 2) {
+        const option = document.createElement("option");
+        option.value = kanal;
+        option.textContent = kanal;
+        if (kanal === (data.record_start_channel || 1)) {
+            option.selected = true;
+        }
+        select.appendChild(option);
+    }
+
+    select.onchange = () => {
+        setRecordStartChannel(Number(select.value));
+    };
+
+    select.disabled = isAudioBusy(data);
+}
+
+async function setRecordStartChannel(startChannel) {
+    const response = await fetch("/api/recorder/start-channel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start_channel: startChannel })
+    });
+    await response.json();
+    await refreshDashboard();
 }
 
 //
@@ -423,8 +477,21 @@ function updateRecordWarnings(data) {
         : "0";
 
     if (platz) {
+
+        //
+        // Die Zahl allein ist nicht nachpruefbar. Sie sprang einmal von
+        // 14 auf 21 Stunden, und es kostete eine Rechnung, um zu sehen,
+        // dass sich nicht die Kanalzahl, sondern der freie Platz
+        // geaendert hatte. Also steht die Grundlage daneben.
+        //
+        const grundlage = I18N.record_space_basis
+            .replace("{channels}", data.record_channels)
+            .replace("{start}", data.record_start_channel || 1)
+            .replace("{gb}", gb);
+
         platz.textContent = rest > 0
             ? I18N.record_space_left.replace("{time}", formatDuration(rest))
+                + " (" + grundlage + ")"
             : "";
     }
 

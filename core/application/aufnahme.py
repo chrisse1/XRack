@@ -35,8 +35,45 @@ class AufnahmeMixin:
         if manuell:
             self.state_store.set("record_channels_manual", True)
 
+        return self._aufnahmefenster_anwenden()
+
+
+    def set_record_start_channel(self, start_channel: int) -> bool:
+        """
+        Setzt den ersten aufgenommenen Kanal (1-basiert).
+
+        Aufgenommen wird ein Fenster, nicht immer der Anfang: Am X32
+        braucht man vielleicht nur die Kanäle 17-24, und beim Üben nur
+        das eigene Instrument.
+        """
+
+        self.record_start_channel = max(1, int(start_channel))
+
+        return self._aufnahmefenster_anwenden()
+
+
+    def _aufnahmefenster_anwenden(self) -> bool:
+        """
+        Das Fenster (erster Kanal, Anzahl) auf das Interface anwenden
+        und merken.
+
+        Beides zusammen, weil beides dasselbe Öffnen braucht - und
+        weil ein halb angewandtes Fenster hiesse, dass die Anzeige
+        etwas anderes sagt als die Aufnahme tut.
+        """
+
         if self.selected_audio_device is None:
             return False
+
+        #
+        # Das Fenster muss ins Interface passen. Ist es zu weit rechts,
+        # wird es hierher gezogen statt daneben zu greifen.
+        #
+        vorhanden = self.selected_audio_device.channels
+
+        self.record_start_channel = max(
+            1, min(self.record_start_channel, vorhanden)
+        )
 
         self.audio_core.close()
 
@@ -44,11 +81,17 @@ class AufnahmeMixin:
             self.selected_audio_device,
             self.record_channels,
             self.mixer_sample_rate,
+            start_channel=self.record_start_channel - 1,
         )
 
         self.state_store.set(
             "record_channels",
             self.record_channels,
+        )
+
+        self.state_store.set(
+            "record_start_channel",
+            self.record_start_channel,
         )
 
         return True

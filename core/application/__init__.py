@@ -105,6 +105,16 @@ class Application(
             18,
         )
 
+        #
+        # Der erste aufgenommene Kanal (1-basiert). Aufgenommen wird
+        # ein Fenster, nicht immer der Anfang - siehe
+        # set_record_start_channel().
+        #
+        self.record_start_channel = self.state_store.get(
+            "record_start_channel",
+            1,
+        )
+
         self.music_channel_preference = self.state_store.get(
             "music_channel",
             1,
@@ -631,6 +641,10 @@ class Application(
         
         self.status.record_channels = (
             self.record_channels
+        )
+
+        self.status.record_start_channel = (
+            self.record_start_channel
         )
         
         self.status.record_sample_rate = (

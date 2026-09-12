@@ -9,6 +9,7 @@ from time import monotonic
 
 from audio.audio_playback_backend import AudioPlaybackBackend
 from audio.models import AudioDevice
+from core.recording_kind import start_channel_from_filename
 from reader.w64_reader import W64Reader
 
 
@@ -16,6 +17,11 @@ class Player:
     """
     Spielt eine Wave64-Aufnahme auf denselben Kanälen ab,
     auf denen sie aufgenommen wurde ("virtueller Soundcheck").
+
+    "Denselben Kanälen" ist seit dem Aufnahmefenster mehr als eine
+    Redewendung: Wurde ab Kanal 9 aufgenommen, muss die Datei auch
+    wieder ab Kanal 9 herauskommen. Woher der Kanal kommt, steht im
+    Dateinamen - siehe core/recording_kind.py.
     """
 
     CHUNK_FRAMES = 1024
@@ -37,6 +43,11 @@ class Player:
 
         self._current_filename = ""
 
+        #
+        # Der erste Kanal, auf dem die laufende Datei liegt (0-basiert).
+        #
+        self._start_channel = 0
+
         self._start_time = None
 
         self._last_duration = 0.0
@@ -49,6 +60,12 @@ class Player:
     @property
     def current_filename(self) -> str:
         return self._current_filename
+
+    @property
+    def start_channel(self) -> int:
+        """Der erste Kanal der laufenden Wiedergabe (0-basiert)."""
+
+        return self._start_channel
 
     @property
     def channels(self) -> int:
@@ -86,13 +103,23 @@ class Player:
 
         self.reader.open(path)
 
+        #
+        # Der erste Kanal steht im Namen der Datei. Ohne ihn landete
+        # eine Aufnahme der Kanäle 9-12 wieder auf 1-4 - der Ton käme
+        # aus den falschen Wegen des Pults, und zwar ohne Fehlermeldung.
+        #
+        start_channel = start_channel_from_filename(path.name) - 1
+
         if not self.backend.open(
             device,
             channels=self.reader.channels,
             rate=self.reader.sample_rate,
+            start_channel=start_channel,
         ):
             self.reader.close()
             return False
+
+        self._start_channel = start_channel
 
         self._current_filename = path.name
 
@@ -108,8 +135,10 @@ class Player:
         self._thread.start()
 
         self.logger.info(
-            "Soundcheck gestartet: %s",
+            "Soundcheck gestartet: %s (%d Kanäle ab Kanal %d)",
             self._current_filename,
+            self.reader.channels,
+            start_channel + 1,
         )
 
         return True

@@ -72,6 +72,7 @@ class AudioBackend:
         self._rate = 0
         self._channels = 0
         self._native_channels = 0
+        self._start_channel = 0
         self._period_size = 0
         self._format = None
         self._extractor: ChannelExtractor | None = None
@@ -107,6 +108,17 @@ class AudioBackend:
         return self._native_channels
 
     @property
+    def start_channel(self) -> int:
+        """
+        Der erste aufgenommene Kanal (0-basiert).
+
+        Aufgenommen wird ein Fenster, nicht immer der Anfang: Am X32
+        will man vielleicht nur die Kanäle 17-24, und beim Üben nur
+        das eigene Instrument (siehe ChannelExtractor).
+        """
+        return self._start_channel
+
+    @property
     def period_size(self) -> int:
         return self._period_size
 
@@ -132,6 +144,7 @@ class AudioBackend:
         device: AudioDevice,
         channels: int | None = None,
         rate: int | None = None,
+        start_channel: int = 0,
     ) -> bool:
         """
         Öffnet das Audiogerät.
@@ -168,9 +181,14 @@ class AudioBackend:
 
         self._format = WUNSCHFORMAT
 
+        self._start_channel = max(
+            0, min(start_channel, self._native_channels - 1)
+        )
+
         self._extractor = ChannelExtractor(
             input_channels=self._native_channels,
             output_channels=self._channels,
+            start_channel=self._start_channel,
         )
 
         try:
@@ -233,10 +251,12 @@ class AudioBackend:
             )
 
             self.logger.info(
-                "ALSA geöffnet: %s | Hardware: %d Ch | Aufnahme: %d Ch | %d Hz",
+                "ALSA geöffnet: %s | Hardware: %d Ch | Aufnahme: %d Ch "
+                "ab Kanal %d | %d Hz",
                 device.id,
                 self._native_channels,
                 self._channels,
+                self._start_channel + 1,
                 self._rate,
             )
 

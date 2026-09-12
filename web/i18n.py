@@ -26,6 +26,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "soundcheck_title": "Soundcheck & Üben",
         "status_label": "Status:",
         "record_channels_label": "Aufnahmekanäle:",
+
+        #
+        # Das Aufnahmefenster: "Aufnahme ab Kanal [9] , [4] Kanäle"
+        #
+        "record_window_label": "Aufnahme ab Kanal",
+        "record_window_count": "Anzahl:",
+        "record_space_basis": "{channels} Ch ab {start} · {gb} GB/h",
         "record_space_left": "Verbleibend: {time}",
         "record_space_warning": (
             "Der Speicher reicht nur noch für {time}. Bei {gb} GB je Stunde "
@@ -783,6 +790,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "soundcheck_title": "Soundcheck & Practice",
         "status_label": "Status:",
         "record_channels_label": "Recording channels:",
+        "record_window_label": "Record from channel",
+        "record_window_count": "Count:",
+        "record_space_basis": "{channels} ch from {start} · {gb} GB/h",
         "record_space_left": "Remaining: {time}",
         "record_space_warning": (
             "Only {time} of recording space left. At {gb} GB per hour the "

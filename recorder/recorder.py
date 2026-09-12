@@ -242,11 +242,18 @@ class Recorder:
         self.platz_stopp = False
         self._platz_geprueft = 0.0
 
+        #
+        # Der erste aufgenommene Kanal wandert in den Dateinamen: Ohne
+        # ihn landet die Aufnahme beim virtuellen Soundcheck wieder auf
+        # Kanal 1, also auf den falschen Wegen des Pults (siehe
+        # core/recording_kind.py).
+        #
         self.writer.open(
             channels=self.backend.channels,
             sample_rate=self.backend.rate,
             bits_per_sample=24,
             name_prefix=name_prefix,
+            start_channel=getattr(self.backend, "start_channel", 0) + 1,
         )
 
         self._current_filename = self.writer.filename

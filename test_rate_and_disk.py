@@ -250,7 +250,9 @@ class StillerWriter:
         self.write_count = 0
         self.closed = 0
 
-    def open(self, channels, sample_rate, bits_per_sample, name_prefix=""):
+    def open(self, channels, sample_rate, bits_per_sample,
+             name_prefix="", start_channel=1):
+        self.start_channel = start_channel
         self.filename = "fake.w64"
 
     def write(self, data):
@@ -480,6 +482,12 @@ class AudioApp(AudioMixin, AufnahmeMixin):
 
         self.record_channels = gemerkt
 
+        #
+        # Der erste aufgenommene Kanal - aufgenommen wird ein Fenster,
+        # nicht immer der Anfang (siehe test_aufnahmefenster.py).
+        #
+        self.record_start_channel = 1
+
         self.selected_audio_device = None
 
         self.geraete = {}
@@ -495,7 +503,7 @@ class AudioApp(AudioMixin, AufnahmeMixin):
                 "opened": False,
                 "max_channels": 32,
                 "close": lambda selbst: None,
-                "open": lambda selbst, *args: True,
+                "open": lambda selbst, *args, **kwargs: True,
             },
         )()
 

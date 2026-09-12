@@ -101,7 +101,9 @@ class Schreiber:
         self.geschrieben = 0
         self.geschlossen = 0
 
-    def open(self, channels, sample_rate, bits_per_sample, name_prefix=""):
+    def open(self, channels, sample_rate, bits_per_sample,
+             name_prefix="", start_channel=1):
+        self.start_channel = start_channel
         self.geoeffnet += 1
         self.filename = f"attrappe-{channels}ch-{sample_rate}hz.w64"
 

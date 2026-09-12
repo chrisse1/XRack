@@ -104,7 +104,28 @@ try:
     player.decoder = FakeDecoder()
 
     assert player.play_file(device, with_dir / "song.mp3", start_channel=0, rate=48000)
-    time.sleep(0.1)
+
+    #
+    # Warten, bis der Titel WIRKLICH laeuft - nicht bloss eine
+    # Zehntelsekunde lang hoffen.
+    #
+    # Seit die Uhr dem Titel gehoert und nicht dem Spieler (2.10.1),
+    # meldet track_position vor dem Beginn ehrlich 0.0. Unter Last
+    # kommt der Lesethread schon mal erst nach einer halben Sekunde
+    # dazu - dann stand hier 0.0, und die Pruefung "nach dem
+    # Fortsetzen laeuft es weiter" verglich 0.0 mit 0.0 und fiel.
+    # Das war die Zeitannahme des Versuchs, nicht ein Fehler im
+    # Spieler.
+    #
+    frist = time.monotonic() + 5.0
+
+    while player.track_position <= 0 and time.monotonic() < frist:
+        time.sleep(0.01)
+
+    assert player.track_position > 0, (
+        "Der Titel hat nach fünf Sekunden noch nicht begonnen."
+    )
+
     assert player.playing
     assert not player.paused
     print("OK: Wiedergabe gestartet")

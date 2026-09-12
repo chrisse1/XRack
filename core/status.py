@@ -40,6 +40,12 @@ class SystemStatus(BaseModel):
     uptime: str = ""
     audio_device: str = "Kein Audio-Interface"
     record_channels: int = 18
+
+    #
+    # Der erste aufgenommene Kanal (1-basiert). Aufgenommen wird ein
+    # Fenster, nicht immer der Anfang.
+    #
+    record_start_channel: int = 1
     record_sample_rate: int = 0
     record_bits_per_sample: int = 0
 

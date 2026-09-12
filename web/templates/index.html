@@ -90,20 +90,29 @@
 
             {% set body %}
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-              <div class="d-flex align-items-center gap-2">
-                  <span>
-                      {{ t.record_channels_label }}
+              {#
+                  Das Aufnahmefenster: ab welchem Kanal, wie viele.
+
+                  Aufgenommen wurde frueher immer ab Kanal 1. Am X32
+                  schleppte man dadurch sechzehn leere Spuren mit, wenn
+                  man nur die Kanaele 17-24 brauchte - und beim Ueben
+                  laesst sich so nur das eigene Instrument
+                  mitschneiden.
+              #}
+              <div class="d-flex align-items-center gap-2 flex-wrap">
+                  <span class="text-nowrap">
+                      {{ t.record_window_label }}
                   </span>
 
-                  {#
-                      Wie viele Kanaele das Interface hergibt, stand
-                      hier frueher daneben ("von 18 des Interfaces").
-                      Es steht schon in der Audio-Karte darueber, und
-                      der Anlass ist weg: Die Aufnahmebreite folgt
-                      inzwischen dem Interface (siehe
-                      select_audio_device), statt stillschweigend bei
-                      der XR18-Vorgabe zu bleiben.
-                  #}
+                  <select
+                      id="record-start-channel"
+                      class="form-select form-select-sm w-auto">
+                  </select>
+
+                  <span class="text-nowrap">
+                      {{ t.record_window_count }}
+                  </span>
+
                   <select
                       id="record-channels"
                       class="form-select form-select-sm w-auto">
@@ -114,6 +123,15 @@
                   Wie lange der Platz noch reicht. Am X32 sind es rund
                   22 GB je Stunde - das will man VOR der Aufnahme
                   wissen, nicht mittendrin.
+              #}
+              {#
+                  Die Restzeit - und daneben, woraus sie entsteht.
+
+                  Ohne die Grundlage ist die Zahl nicht nachpruefbar:
+                  Sie sprang einmal von 14 auf 21 Stunden, und es
+                  kostete eine Rechnung, um zu sehen, dass nicht die
+                  Kanalzahl, sondern der freie Platz sich geaendert
+                  hatte.
               #}
               <span id="record-space" class="small text-body-secondary"></span>
             </div>

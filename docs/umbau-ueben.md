@@ -6,7 +6,8 @@ weil der Umbau ueber mehrere Sitzungen laeuft: Wer hier weiterarbeitet
 - ich beim naechsten Mal oder jemand anderes -, soll den Stand und vor
 allem die BEGRUENDUNGEN vorfinden, nicht nur das Ergebnis.
 
-**Stand:** geplant, noch nichts gebaut.
+**Stand:** Stufe 1 gebaut (3.0.0-dev1) - das Aufnahmefenster steht,
+Stufen 2 bis 5 stehen aus.
 
 **Versionen:** Auf diesem Zweig 3.0.0-dev1, -dev2 ... je Stufe. Wer
 so eine Fassung auf dem Geraet hat, sieht am Namen, dass es eine

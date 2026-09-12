@@ -18,6 +18,10 @@ from pydantic import BaseModel
 router = APIRouter()
 
     
+class RecorderStartChannel(BaseModel):
+    start_channel: int
+
+
 class RecorderChannels(BaseModel):
     channels: int
 
@@ -95,6 +99,30 @@ def recorder_channels(
     success = application.set_record_channels(
         selection.channels,
         manuell=True,
+    )
+
+    return {
+        "success": success
+    }
+
+
+@router.post("/api/recorder/start-channel")
+def recorder_start_channel(
+    selection: RecorderStartChannel,
+    request: Request,
+):
+    """
+    Der erste aufgenommene Kanal.
+
+    Aufgenommen wird ein Fenster, nicht immer der Anfang - am X32
+    vielleicht nur die Kanaele 17-24, beim Ueben nur das eigene
+    Instrument.
+    """
+
+    application = request.app.state.application
+
+    success = application.set_record_start_channel(
+        selection.start_channel
     )
 
     return {
