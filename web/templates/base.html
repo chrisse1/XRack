@@ -939,6 +939,40 @@
                                     class="alert alert-warning py-2 px-3 small d-none"
                                 ></div>
 
+                                {#
+                                    Zwei Zeilen, weil es zwei
+                                    verschiedene Zwecke sind.
+
+                                    Hier: die Rueckfrage des Browsers
+                                    ganz loswerden. Dafuer geht nur der
+                                    OEFFENTLICHE Teil heraus - kein
+                                    Kennwort, keine PIN. Er steht bei
+                                    jedem Verbindungsaufbau ohnehin auf
+                                    der Leitung.
+                                #}
+                                <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                                    <a
+                                        id="btn-tls-download"
+                                        class="btn btn-outline-secondary btn-sm text-nowrap"
+                                        href="/api/tls/certificate"
+                                        download
+                                    >
+                                        <i class="bi bi-download"></i>
+                                        {{ t.settings_tls_download }}
+                                    </a>
+
+                                    <small class="text-body-secondary">
+                                        {{ t.settings_tls_download_hint }}
+                                    </small>
+                                </div>
+
+                                {#
+                                    Und hier: dasselbe Zertifikat auf
+                                    alle Racks, damit es fuer den
+                                    Browser ein Ziel ist. Dafuer geht
+                                    der private Schluessel mit - mit
+                                    Kennwort und nur gegen die PIN.
+                                #}
                                 <div class="d-flex flex-wrap gap-2 align-items-center">
                                     <input
                                         type="password"

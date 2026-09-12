@@ -66,6 +66,24 @@ choosing, XRack only hands it out once a PIN is set, and it ships with no
 certificate of its own. A certificate shipped with the software would put
 its private key in everyone's hands.
 
+To get rid of the question entirely, *Download certificate* in the same
+place gives you the certificate on its own — public part only, no
+password, nothing secret. Add that file to the device's certificate store
+and it stops warning:
+
+- **Android:** Settings → Security → Encryption & credentials → Install a
+  certificate → CA certificate
+- **iPhone/iPad:** open the file, install the profile, then switch it on
+  under Settings → General → About → Certificate Trust Settings
+- **Windows/macOS:** import it among the trusted root certificates
+- **Firefox** keeps its own store: Settings → Certificates → Authorities
+  → Import
+
+Whether a device then accepts it without any warning is up to the device —
+Apple in particular has its own rules about how long a TLS certificate may
+be valid, and XRack issues its own for ten years. That part is untested
+here, so try it and see rather than expecting a guarantee.
+
 At the end the installer says whether lighting could be set up. If it
 failed, the reason is right there — and it can be caught up on its own,
 without the whole installer:
@@ -348,6 +366,26 @@ gewählten Kennwort verschlüsselt, XRack gibt sie nur heraus, wenn eine
 PIN vergeben ist, und ein eigenes Zertifikat liefert XRack bewusst nicht
 mit. Ein mitgeliefertes läge mit seinem privaten Schlüssel in aller
 Hände.
+
+Damit die Frage ganz verschwindet, gibt *Zertifikat herunterladen* an
+derselben Stelle das Zertifikat allein heraus — nur den öffentlichen
+Teil, ohne Kennwort, ohne etwas Geheimes. Diese Datei legt man auf dem
+Gerät in den Zertifikatsspeicher, und die Warnung bleibt weg:
+
+- **Android:** Einstellungen → Sicherheit → Verschlüsselung &
+  Anmeldedaten → Zertifikat installieren → CA-Zertifikat
+- **iPhone/iPad:** Datei öffnen, Profil installieren, danach unter
+  Einstellungen → Allgemein → Info →
+  Zertifikatsvertrauenseinstellungen freigeben
+- **Windows/macOS:** unter den vertrauenswürdigen Stammzertifikaten
+  importieren
+- **Firefox** bringt seinen eigenen Speicher mit: Einstellungen →
+  Zertifikate → Zertifizierungsstellen → Importieren
+
+Ob das Gerät danach wirklich ohne jede Warnung arbeitet, hängt am Gerät —
+Apple stellt eigene Anforderungen an die Laufzeit von TLS-Zertifikaten,
+und XRack stellt seine auf zehn Jahre aus. Das ist hier nicht geprüft:
+ausprobieren, nicht darauf verlassen.
 
 Am Ende sagt der Installer, ob die Lichtsteuerung eingerichtet werden
 konnte. Ist sie ausgefallen, steht der Grund dabei — nachholen lässt

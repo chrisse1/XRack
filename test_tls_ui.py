@@ -62,11 +62,12 @@ TEXTE = get_translations("de")
 
 
 def zustand(present=True, imported=False, alias="xrack", alias_covered=True,
-            pin_required=False, names=None) -> dict:
+            pin_required=False, names=None, installable=True) -> dict:
 
     return {
         "present": present,
         "imported": imported,
+        "installable": installable,
         "names": names or ["rack-a", "rack-a.local", "xrack.local", "localhost"],
         "valid_until": "2035-09-12",
         "days_left": 3650,
@@ -199,7 +200,12 @@ ABLESEN = """function () {
 
     const warnung = document.getElementById('settings-tls-warning');
 
+    const holen = document.getElementById('btn-tls-download');
+
     return {
+        holen_da: !!holen,
+        holen_ziel: holen ? holen.getAttribute('href') : '',
+        holen_download: holen ? holen.hasAttribute('download') : false,
         zustand: (document.getElementById('settings-tls-state').textContent || '').trim(),
         warnung_sichtbar: !warnung.classList.contains('d-none'),
         warnung: (warnung.textContent || '').trim(),
@@ -347,6 +353,52 @@ assert "img src=x" in boese["zustand"], (
 )
 
 print("OK: Namen aus dem Zertifikat stehen als Text da, nicht als HTML")
+
+
+# ====================================================================
+# 6. Der Knopf zum Herunterladen
+#
+# Er holt nur den oeffentlichen Teil - deshalb ein einfacher Verweis
+# ohne PIN und ohne Kennwort. Dass er wirklich auf die Route zeigt und
+# ein "download" traegt, sieht man der Vorlage nicht an: Ohne
+# "download" oeffnet der Browser die Datei statt sie zu speichern, und
+# am Tablet passiert dann gar nichts Nuetzliches.
+# ====================================================================
+
+assert gut["holen_da"], "Der Knopf zum Herunterladen fehlt im Dialog."
+
+assert gut["holen_ziel"] == "/api/tls/certificate", gut["holen_ziel"]
+
+assert gut["holen_download"], (
+    "Dem Verweis fehlt das download-Attribut - der Browser zeigt die "
+    "Datei dann an, statt sie zu speichern."
+)
+
+print("OK: Der Download-Verweis zeigt auf die Route und speichert")
+
+
+# ====================================================================
+# 7. Ein Zertifikat, das sich nicht eintragen lässt, sagt es
+#
+# Ohne CA:TRUE nimmt Android die Datei nicht an. Ohne Hinweis waere
+# der Download ein Knopf, der etwas Unbrauchbares liefert - und der
+# Nutzer suchte den Fehler bei seinem Tablet.
+# ====================================================================
+
+nicht_eintragbar = ausfuehren(
+    zustand(installable=False), ABLESEN, vorher=OEFFNEN + "loadTls();"
+)
+
+assert nicht_eintragbar["warnung_sichtbar"], (
+    "Ein Zertifikat, das sich nicht eintragen lässt, wird stillschweigend "
+    "zum Herunterladen angeboten."
+)
+
+assert nicht_eintragbar["warnung"] == TEXTE["settings_tls_not_installable"], (
+    nicht_eintragbar["warnung"]
+)
+
+print("OK: Ein nicht eintragbares Zertifikat wird als solches gemeldet")
 
 
 print("Alle Tests des Zertifikats-Dialogs erfolgreich.")

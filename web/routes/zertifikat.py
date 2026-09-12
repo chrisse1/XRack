@@ -32,6 +32,36 @@ def get_tls(request: Request):
     return application.get_zertifikat()
 
 
+@router.get("/api/tls/certificate")
+def download_tls(request: Request):
+    """
+    Das Zertifikat als Datei - zum Einrichten auf einem Geraet.
+
+    Ohne PIN, mit Absicht: Hier geht nur der oeffentliche Teil heraus,
+    und der steht bei jedem Verbindungsaufbau ohnehin auf der Leitung.
+    Wer ihn auf seinem Tablet in den Zertifikatsspeicher legt, wird die
+    Rueckfrage des Browsers ganz los.
+    """
+
+    application = request.app.state.application
+
+    daten, name = application.zertifikat_datei()
+
+    if daten is None:
+        return {
+            "success": False,
+            "message": name,
+        }
+
+    return Response(
+        content=daten,
+        media_type="application/x-x509-ca-cert",
+        headers={
+            "Content-Disposition": f'attachment; filename="{name}"',
+        },
+    )
+
+
 @router.post("/api/tls/renew")
 def renew_tls(auswahl: ZertifikatPin, request: Request):
     """Ein neues Zertifikat fuer die aktuellen Namen."""

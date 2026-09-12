@@ -582,6 +582,144 @@ assert Rack("4711", hier).zertifikat_namen() == [
 print("OK: Die Oberfläche erfährt, ob der gemeinsame Name mit drinsteht")
 
 
+# ====================================================================
+# 12. Die Datei zum Herunterladen: Zertifikat ja, Schlüssel nein
+#
+# Das ist die wichtigste Zusicherung der zweiten Stufe. Diese Datei
+# geht OHNE PIN und OHNE Kennwort heraus - der öffentliche Teil steht
+# bei jedem Verbindungsaufbau ohnehin auf der Leitung. Käme dort aber
+# versehentlich der Schlüssel mit, wäre er für jeden im Netz abholbar,
+# und XRack hätte genau das eingebaut, wogegen es kein mitgeliefertes
+# Zertifikat gibt.
+# ====================================================================
+
+oeffentlich = hier.oeffentlich()
+
+assert oeffentlich, "Es kommt keine Datei zum Herunterladen heraus."
+
+assert b"-----BEGIN CERTIFICATE-----" in oeffentlich, oeffentlich[:80]
+
+assert b"PRIVATE KEY" not in oeffentlich, (
+    "In der Datei zum Herunterladen steckt der private Schlüssel - sie "
+    "geht ohne PIN und ohne Kennwort heraus, damit wäre er verschenkt."
+)
+
+#
+# Und die Probe, die UNS prüft. Zwei Fälle, und der zweite ist der
+# gefährliche:
+#
+#   1. Der Store zeigt auf die Schlüsseldatei - da steht kein
+#      Zertifikat drin, das fällt schon dadurch auf.
+#
+#   2. Zertifikat UND Schlüssel stehen in einer Datei. Das ist eine
+#      verbreitete Schreibweise (ein PEM mit beidem), und hier hilft
+#      nur noch die Suche nach "PRIVATE KEY": Ein Zertifikat steht ja
+#      drin, alles sieht richtig aus - und ausgeliefert würde der
+#      Schlüssel gleich mit, ohne PIN, an jeden im Netz.
+#
+verwechselt = TlsStore(hier.schluessel, hier.schluessel)
+
+assert verwechselt.oeffentlich() is None, (
+    "Der Store liefert eine Schlüsseldatei als 'öffentliches' "
+    "Zertifikat aus."
+)
+
+zusammen = WURZEL / "beides.pem"
+
+zusammen.write_bytes(
+    hier.schluessel.read_bytes() + hier.zertifikat.read_bytes()
+)
+
+gebuendelt = TlsStore(zusammen, hier.schluessel)
+
+assert gebuendelt.oeffentlich() is None, (
+    "Aus einer Datei mit Zertifikat UND Schlüssel wird der Schlüssel "
+    "mitgeliefert - ohne PIN, an jeden im Netz."
+)
+
+print("OK: Die Datei zum Herunterladen enthält das Zertifikat, nicht den Schlüssel")
+
+
+#
+# Der Dateiname trägt den Namen des Racks - zwei Zertifikate im
+# Download-Ordner müssen unterscheidbar sein.
+#
+mit_alias = Rack("4711", hier, alias="proberaum")
+
+daten_dl, name_dl = mit_alias.zertifikat_datei()
+
+assert daten_dl == oeffentlich, "Die Route liefert etwas anderes als der Store."
+assert name_dl == "xrack-proberaum.crt", name_dl
+
+ohne_alias = Rack("4711", hier)
+
+assert ohne_alias.zertifikat_datei()[1] == "xrack-rack-im-versuch.crt", (
+    ohne_alias.zertifikat_datei()[1]
+)
+
+print(f"OK: Die Datei heisst nach dem Rack ({name_dl})")
+
+
+# ====================================================================
+# 13. Das Zertifikat lässt sich auf einem Gerät eintragen
+#
+# Dafür muss es sich selbst als Zertifizierungsstelle ausweisen
+# (CA:TRUE). Android nimmt es sonst gar nicht an, und dann ist der
+# Download-Knopf ein Knopf, der eine unbrauchbare Datei liefert.
+#
+# openssl setzt das von sich aus - genau deshalb steht es hier: Fällt
+# es einmal weg, merkt es niemand ausser dem Nutzer am Tablet, und der
+# kann es nicht einordnen. Geprüft werden BEIDE Wege, ein Zertifikat
+# zu erzeugen.
+# ====================================================================
+
+assert hier.installierbar(), (
+    "Das von XRack erzeugte Zertifikat trägt kein CA:TRUE - es lässt sich "
+    "auf einem Android-Gerät nicht in den Zertifikatsspeicher legen."
+)
+
+assert hier.zustand()["installable"] is True, hier.zustand()
+
+with tempfile.TemporaryDirectory() as ordner:
+
+    #
+    # Der zweite Weg: das Zertifikat, das install.sh erzeugt.
+    #
+    ziel = Path(ordner)
+    (ziel / "certs").mkdir()
+
+    skript = ziel / "lauf.sh"
+    skript.write_text(
+        "export XRACK_INSTALL_SOURCE_ONLY=1\n"
+        f"source {INSTALL}\n"
+        f'INSTALL_DIR="{ziel}"\n'
+        'XRACK_HOSTNAME="rack-vom-installer"\n'
+        "generate_tls_certificate\n",
+        encoding="utf-8",
+    )
+
+    lauf = subprocess.run(
+        ["bash", str(skript)], capture_output=True, text=True, timeout=120
+    )
+
+    vom_installer = store(ziel / "certs")
+
+    assert vom_installer.vorhanden(), (
+        f"install.sh hat kein Zertifikat erzeugt:\n{lauf.stdout}\n{lauf.stderr}"
+    )
+
+    assert vom_installer.installierbar(), (
+        "Das Zertifikat aus install.sh trägt kein CA:TRUE - der "
+        "Download-Knopf liefert dann eine Datei, die Android ablehnt."
+    )
+
+    assert "rack-vom-installer" in vom_installer.namen(), vom_installer.namen()
+
+    assert (vom_installer.schluessel.stat().st_mode & 0o777) == 0o600
+
+print("OK: Beide Wege erzeugen ein Zertifikat, das sich eintragen lässt")
+
+
 arbeit.cleanup()
 
 print("Alle Zertifikats-Tests erfolgreich.")
