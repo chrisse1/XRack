@@ -355,6 +355,40 @@ class Application(
             self.diagnostics.start()
 
 
+    def _recorder_zustand(self) -> None:
+        """
+        Welcher Zustand in der Soundcheck-Karte steht.
+
+        Die laufenden Zustaende zuerst, "kein Geraet" davor, "bereit"
+        zuletzt. Die Reihenfolge ist die eigentliche Aussage:
+
+          - Faellt das Geraet mitten in einer Aufnahme zu, soll die
+            Karte weiter sagen, was laeuft - es wird ja noch in eine
+            offene Datei geschrieben, und die muss beendet werden.
+          - "bereit" steht ganz hinten, denn genau das stand hier
+            lange zu oft: ohne angeschlossene Konsole "bereit", mit
+            einem Aufnahmeknopf, der eine unbrauchbare Datei anlegte.
+
+        Steht als eigene Methode da, damit die Reihenfolge geprueft
+        werden kann, ohne psutil, ALSA und ein Pult mitzubringen -
+        siehe test_recorder_kein_geraet.py.
+        """
+
+        if self.recorder.recording:
+            self.status.recorder = RecorderState.RECORDING
+
+        elif self.player.playing:
+            self.status.recorder = RecorderState.PLAYBACK
+
+        elif self.recorder.monitoring:
+            self.status.recorder = RecorderState.MONITORING
+
+        elif not self.status.audio:
+            self.status.recorder = RecorderState.NO_DEVICE
+
+        else:
+            self.status.recorder = RecorderState.IDLE
+
     def update_status(self) -> None:
         """Aktualisiert den aktuellen Systemstatus."""
         
@@ -378,6 +412,23 @@ class Application(
             self.status.audio_sample_bits = 0
             self.status.audio_formats = []
             self.status.audio_core_open = self.audio_core.opened
+
+        #
+        # Ist der Audioweg wirklich benutzbar? Zweierlei muss stimmen:
+        # ein gewaehltes Geraet UND ein offenes PCM-Handle. Das Zweite
+        # allein reicht nicht, denn das Oeffnen kann scheitern, ohne
+        # dass die Auswahl verschwindet (siehe
+        # audio/audio_backend.py).
+        #
+        # Stand frueher weiter unten und hiess nur "status.audio".
+        # Hier oben, weil der Recorder-Zustand dieselbe Antwort
+        # braucht - zweimal geschrieben koennten die beiden
+        # auseinanderlaufen.
+        #
+        self.status.audio = (
+            self.status.audio_connected
+            and self.status.audio_core_open
+        )
 
         self.status.hostname = platform.node()
 
@@ -413,14 +464,7 @@ class Application(
             1,
         )
         
-        if self.recorder.recording:
-            self.status.recorder = RecorderState.RECORDING
-        elif self.player.playing:
-            self.status.recorder = RecorderState.PLAYBACK
-        elif self.recorder.monitoring:
-            self.status.recorder = RecorderState.MONITORING
-        else:
-            self.status.recorder = RecorderState.IDLE
+        self._recorder_zustand()
 
         self.status.recording = (
             self.recorder.recording
@@ -547,11 +591,6 @@ class Application(
         self.status.music_duration = round(
             self.music_player.track_duration,
             1,
-        )
-
-        self.status.audio = (
-            self.status.audio_connected
-            and self.status.audio_core_open
         )
 
         self.status.usb_connected = self.usb_storage.connected

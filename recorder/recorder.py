@@ -155,6 +155,26 @@ class Recorder:
         return self._active
 
     @property
+    def bereit(self) -> bool:
+        """
+        Ist ein Strom offen, aus dem gelesen werden kann?
+
+        Gefragt wird nach dem PCM-Handle, nicht nach der Geräteliste:
+        Der Recorder liest aus dem Handle. Ein Gerät kann gewählt
+        sein, während das Öffnen gescheitert ist (siehe
+        audio/audio_backend.py) - dann ist nichts zu holen, obwohl
+        oben ein Gerätename steht.
+
+        Ohne diese Frage lief Folgendes: Der Lesethread startete,
+        read() lieferte sofort None, die Schleife drehte leer bei
+        voller Last, und im Aufnahmeverzeichnis lag eine Datei mit
+        einem Kopf über 0 Kanäle und 0 Hz - während die Oberfläche
+        "nimmt auf" meldete.
+        """
+
+        return self.backend.opened
+
+    @property
     def levels(self) -> list[float]:
         """
         Aktuelle Pegel je Kanal (0.0 - 1.0+, leer wenn inaktiv).
@@ -173,6 +193,21 @@ class Recorder:
         """
 
         if self.recording:
+            return False
+
+        #
+        # Ohne offenen Strom gibt es nichts aufzunehmen. Die Prüfung
+        # steht VOR dem Öffnen der Datei - sonst läge die unbrauchbare
+        # Aufnahme schon im Verzeichnis, mit Nummer und Eintrag in der
+        # Liste.
+        #
+        if not self.bereit:
+
+            self.logger.warning(
+                "Aufnahme nicht gestartet: Es ist kein Audiogerät "
+                "geöffnet."
+            )
+
             return False
 
         #
@@ -313,6 +348,19 @@ class Recorder:
         if self.monitoring:
             return False
 
+        #
+        # Ohne offenen Strom bliebe die Anzeige leer, während der
+        # Lesethread leer dreht.
+        #
+        if not self.bereit:
+
+            self.logger.warning(
+                "Pegelprüfung nicht gestartet: Es ist kein Audiogerät "
+                "geöffnet."
+            )
+
+            return False
+
         self._write_to_file = False
 
         self._ensure_thread_running(self.GRUND_PEGEL)
@@ -342,13 +390,28 @@ class Recorder:
     # Mithoeren fuer die Lichtsteuerung
     # ----------------------------------------------------------------
 
-    def start_analysis(self) -> None:
+    def start_analysis(self) -> bool:
         """
         Den Strom offen halten, ohne aufzunehmen oder Pegel zu
         zeigen - fuer die musikgesteuerte Lichtshow.
+
+        Liefert False, wenn kein Gerät offen ist. Der Aufrufer muss
+        das auswerten: Eine Show, die nie einen Block sieht, stünde
+        sonst als "läuft" da.
         """
 
+        if not self.bereit:
+
+            self.logger.warning(
+                "Mithören nicht gestartet: Es ist kein Audiogerät "
+                "geöffnet."
+            )
+
+            return False
+
         self._ensure_thread_running(self.GRUND_LICHT)
+
+        return True
 
     def stop_analysis(self) -> None:
         """Das Mithoeren wieder abmelden."""

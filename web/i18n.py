@@ -48,6 +48,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Das passt zu keiner üblichen Samplerate und deutet auf "
             "Aussetzer beim Lesen hin (Kabel, USB-Anschluss, Last)."
         ),
+        "record_no_device": (
+            "Es ist kein Audio-Interface geöffnet - ohne Soundkarte gibt es "
+            "nichts aufzunehmen und nichts zu hören. Pult anschließen, "
+            "einschalten und oben auf ↻ drücken."
+        ),
         "btn_recording_start": "Aufnahme starten",
         "btn_recording_stop": "Aufnahme stoppen",
         "btn_soundcheck": "Soundcheck",
@@ -87,6 +92,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
 
         # Recorder-Zustände (core/status.py RecorderState)
         "state_idle": "bereit",
+        "state_no_device": "kein Interface",
         "state_recording": "nimmt auf",
         "state_playback": "Wiedergabe",
         "state_monitoring": "Pegel testen",
@@ -729,6 +735,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "matches no usual sample rate and points to dropouts while "
             "reading (cable, USB port, load)."
         ),
+        "record_no_device": (
+            "No audio interface is open - without a sound card there is "
+            "nothing to record and nothing to hear. Connect the console, "
+            "switch it on and press ↻ above."
+        ),
         "btn_recording_start": "Start recording",
         "btn_recording_stop": "Stop recording",
         "btn_soundcheck": "Soundcheck",
@@ -768,6 +779,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
 
         # Recorder states (core/status.py RecorderState)
         "state_idle": "ready",
+        "state_no_device": "no interface",
         "state_recording": "recording",
         "state_playback": "playback",
         "state_monitoring": "checking levels",

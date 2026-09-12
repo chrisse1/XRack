@@ -19,6 +19,14 @@ class RecorderState(str, Enum):
     PLAYBACK = "playback"
     MONITORING = "monitoring"
 
+    #
+    # Kein Audiogerät offen. Eigener Zustand, weil IDLE als "bereit"
+    # angezeigt wird - und bereit ist XRack dann gerade nicht. Die
+    # Karte meldete das lange trotzdem, samt Knopf, der eine Aufnahme
+    # ohne Soundkarte startete.
+    #
+    NO_DEVICE = "no_device"
+
 
 class SystemStatus(BaseModel):
     """Current XRack system status."""

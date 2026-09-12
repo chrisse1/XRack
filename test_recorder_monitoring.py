@@ -42,6 +42,13 @@ class FakeBackend:
     BYTES = 4
     RAHMEN = 32
 
+    #
+    # Wie das echte Backend: Ein Strom ist offen. Der Recorder
+    # weigert sich ohne das (siehe Recorder.bereit) - zu Recht, ohne
+    # Interface gibt es nichts zu lesen.
+    #
+    opened = True
+
     def __init__(self, channels=2, rate=48000, native_channels=None):
 
         self.channels = channels

@@ -219,6 +219,12 @@ class TaktBackend:
 
     RAHMEN = 512
 
+    #
+    # Wie das echte Backend: Ein Strom ist offen (siehe
+    # Recorder.bereit).
+    #
+    opened = True
+
     def __init__(self, channels=2, rate=48000, echte_rate=None):
 
         self.channels = channels

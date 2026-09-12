@@ -450,6 +450,12 @@ class RecorderAttrappe:
         native_channels = 18
         rate = 48000
 
+        #
+        # Ein Strom ist offen - sonst lehnt die Show ab (siehe
+        # Recorder.bereit).
+        #
+        opened = True
+
     backend = Backend()
 
     #
@@ -461,7 +467,12 @@ class RecorderAttrappe:
         pass
 
     def start_analysis(self):
-        pass
+        #
+        # True wie der echte Recorder, wenn ein Strom offen ist. Die
+        # Show wertet das aus: Ohne Strom wird sie abgelehnt, statt zu
+        # laufen, ohne je einen Block zu sehen.
+        #
+        return True
 
     def remove_consumer(self, verbraucher):
         pass

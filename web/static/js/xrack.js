@@ -24,6 +24,19 @@ function isAudioBusy(data) {
     return data.recording || data.recorder_monitoring || data.playback_active || data.music_playing || data.bluetooth_streaming;
 }
 
+//
+// Ist ein Audiogeraet offen? Das Feld kommt aus dem Status und meint
+// beides zusammen: gewaehlt UND wirklich geoeffnet (siehe
+// Application.update_status).
+//
+// Ohne das melde die Soundcheck-Karte "bereit", auch wenn keine
+// Konsole angeschlossen war - und der Aufnahmeknopf liess sich
+// druecken.
+//
+function isAudioReady(data) {
+    return Boolean(data.audio);
+}
+
 let lastStatusData = {};
 
 // Verbindungsüberwachung: Ein Modal poppt auf, sobald das Statuspoll
@@ -183,12 +196,23 @@ function updateRecorderToggleButton(data) {
         button.innerHTML = `<i class="bi bi-record-circle fs-3"></i><small>${I18N.btn_recording_start}</small>`;
         button.classList.remove("btn-secondary");
         button.classList.add("btn-danger");
-        button.disabled = data.playback_active;
+
+        //
+        // Ohne offenes Interface bleibt der Knopf zu. Der Recorder
+        // lehnt ohnehin ab (siehe recorder/recorder.py) - ein Knopf,
+        // der sich druecken laesst und dann nichts tut, ist aber
+        // schlimmer als einer, der gesperrt ist und sagt, warum.
+        //
+        const bereit = isAudioReady(data);
+
+        button.disabled = data.playback_active || !bereit;
+        button.title = bereit ? "" : I18N.record_no_device;
     }
 }
 
 const RECORDER_STATE_LABELS = {
     idle: () => I18N.state_idle,
+    no_device: () => I18N.state_no_device,
     recording: () => I18N.state_recording,
     playback: () => I18N.state_playback,
     monitoring: () => I18N.state_monitoring,
@@ -364,6 +388,23 @@ function updateRecordChannels(data) {
 // gegen die Uhr.
 //
 function updateRecordWarnings(data) {
+
+    //
+    // Kein Interface offen? Dann steht das zuerst da, denn es
+    // erledigt alles andere: Restzeit und Samplerate sind ohne
+    // Soundkarte gegenstandslos.
+    //
+    const geraetWarnung = document.getElementById("record-device-warning");
+
+    if (geraetWarnung) {
+
+        if (isAudioReady(data)) {
+            geraetWarnung.classList.add("d-none");
+        } else {
+            geraetWarnung.textContent = I18N.record_no_device;
+            geraetWarnung.classList.remove("d-none");
+        }
+    }
 
     //
     // Wie viele Kanaele das Interface ueberhaupt hergibt.
@@ -548,7 +589,19 @@ function updateSoundcheckButton(data) {
         button.innerHTML = `<i class="bi bi-play-circle fs-3"></i><small>${label}</small>`;
         button.classList.remove("btn-warning");
         button.classList.add("btn-success");
-        button.disabled = !selectedRecording || data.recording || data.music_playing;
+
+        //
+        // Abgespielt wird auf denselben Kanaelen, auf denen
+        // aufgenommen wurde - ohne Interface gibt es die nicht.
+        // Application.start_soundcheck lehnt das schon ab, der Knopf
+        // sah es bisher nur nicht.
+        //
+        const bereit = isAudioReady(data);
+
+        button.disabled = !selectedRecording || data.recording
+            || data.music_playing || !bereit;
+
+        button.title = bereit ? "" : I18N.record_no_device;
     }
 
     updateRecorderKindBadge();
@@ -602,7 +655,16 @@ function updateLevelCheckButton(data) {
         button.innerHTML = `<i class="bi bi-soundwave me-2"></i>${I18N.btn_level_check}`;
         button.classList.remove("btn-info");
         button.classList.add("btn-outline-info");
-        button.disabled = false;
+
+        //
+        // Wie beim Aufnahmeknopf: ohne offenes Interface gesperrt.
+        // Die Pegelpruefung startete sonst einen Lesethread, der nie
+        // einen Block bekam - Anzeige leer, Grund nirgends.
+        //
+        const bereit = isAudioReady(data);
+
+        button.disabled = !bereit;
+        button.title = bereit ? "" : I18N.record_no_device;
     }
 }
 

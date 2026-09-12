@@ -441,8 +441,23 @@ class LichtMixin:
         # Den Audiostrom offen halten, ohne als Pegelprüfung zu
         # gelten (siehe recorder/recorder.py).
         #
+        # Der Rückgabewert zählt: Ein Gerät kann gewählt sein, ohne
+        # dass es sich öffnen ließ (die Prüfung oben sieht das nicht).
+        # Dann wird der Mithörer wieder abgemeldet, statt eine Show zu
+        # starten, die nie einen Block bekommt.
+        #
         self.recorder.add_consumer(self.light_engine.block_empfangen)
-        self.recorder.start_analysis()
+
+        if not self.recorder.start_analysis():
+
+            self.recorder.remove_consumer(
+                self.light_engine.block_empfangen
+            )
+
+            return False, (
+                "Das Audiogerät ist nicht geöffnet - ohne Eingang gibt es "
+                "nichts zu hören."
+            )
 
         self._show_uebernahme = True
 
