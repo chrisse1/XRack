@@ -114,9 +114,11 @@ class SystemStatus(BaseModel):
     practice_recording: bool = False
 
     #
-    # Die Aufnahmen, die sich zum Uebungsmix dazulegen lassen.
+    # Zu jedem Uebungsmix seine Mitschnitte. Eine Abbildung und keine
+    # Liste: In "Dazu hoeren" stehen nur die Versuche zum gerade
+    # gewaehlten Stueck.
     #
-    practice_takes: list[str] = []
+    practice_takes: dict[str, list[str]] = {}
 
     #
     # Um wie viel der Mitschnitt beim Zusammenhoeren vorgezogen wird.

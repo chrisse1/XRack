@@ -251,7 +251,8 @@ class StillerWriter:
         self.closed = 0
 
     def open(self, channels, sample_rate, bits_per_sample,
-             name_prefix="", start_channel=1):
+             name_prefix="", start_channel=1,
+             trenner="-"):
         self.start_channel = start_channel
         self.filename = "fake.w64"
 

@@ -12,7 +12,11 @@ from core.laufzeit_messung import MESSDAUER_S, klick_datei, versatz_ms
 from core.recording_kind import (
     KIND_PRACTICE,
     kind_from_filename,
+    mix_von_take,
     start_channel_from_filename,
+    take_basis,
+    take_nummer,
+    take_praefix,
 )
 
 
@@ -315,8 +319,16 @@ class MusikMixin:
 
         if mitschneiden:
 
+            #
+            # Der Mitschnitt traegt den Namen des Stuecks, zu dem er
+            # entstanden ist: "Umbrella-1-Take1_s9.w64". Damit findet
+            # er spaeter zu seinem Mix zurueck, ohne dass XRack Buch
+            # fuehrt (siehe core/recording_kind.py).
+            #
+            praefix = take_praefix(filename)
+
             def beim_start():
-                if self.recorder.start(self.record_name_prefix):
+                if self.recorder.start(praefix, trenner=""):
                     self.practice_recording = True
                 else:
                     self.logger.error(
@@ -387,20 +399,58 @@ class MusikMixin:
         return True
 
 
-    def practice_takes(self) -> list[str]:
+    def practice_takes(self) -> dict[str, list[str]]:
         """
-        Die Aufnahmen, die sich zum Übungsmix dazulegen lassen.
+        Zu jedem Übungsmix seine Mitschnitte.
 
-        Alles ausser Übungsmixen: Ein Mitschnitt ist eine Aufnahme wie
-        jede andere (so entschieden, damit es keine dritte Art gibt) -
-        erkennbar ist er ohnehin am Kanal, auf dem er liegt.
+        Die Zuordnung steht im Dateinamen: Zum Mix "Umbrella-1_p.w64"
+        gehören "Umbrella-1-Take1_s9.w64" und so fort. Gedacht ist das
+        für die Auswahl "Dazu hören" - dort gehören nur die Versuche
+        zum gerade gewählten Stück hin, alles andere wäre eine Liste,
+        die mit jedem Üben länger wird und in der man sucht.
+
+        Ein Mitschnitt, dessen Übungsmix gelöscht wurde, taucht hier
+        nicht auf. Er ist dann wieder eine Aufnahme wie jede andere
+        und über die Soundcheck-Karte erreichbar - verloren ist er
+        nicht.
         """
 
-        return [
-            name
-            for name in self.recorder.recordings
-            if kind_from_filename(name) != KIND_PRACTICE
-        ]
+        mixe = {take_basis(name): name for name in self.practice_mixes()}
+
+        zuordnung: dict[str, list[str]] = {
+            name: [] for name in mixe.values()
+        }
+
+        for name in self.recorder.recordings:
+
+            basis = mix_von_take(name)
+
+            if basis in mixe:
+                zuordnung[mixe[basis]].append(name)
+
+        for liste in zuordnung.values():
+            liste.sort(key=take_nummer)
+
+        return zuordnung
+
+
+    def ist_mitschnitt(self, filename: str) -> bool:
+        """
+        Gehört diese Aufnahme zu einem vorhandenen Übungsmix?
+
+        Gebraucht von den beiden Dateiverwaltungen: Was hier wahr ist,
+        gehört in die der Üben-Karte und nicht in die der
+        Soundcheck-Karte.
+        """
+
+        basis = mix_von_take(filename)
+
+        if basis is None:
+            return False
+
+        return basis in {
+            take_basis(name) for name in self.practice_mixes()
+        }
 
 
     # ----------------------------------------------------------------

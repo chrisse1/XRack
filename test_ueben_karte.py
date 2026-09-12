@@ -138,14 +138,15 @@ class Aufnehmer:
         self.recording = False
         self.praefixe = []
 
-    def start(self, name_prefix="Soundcheck"):
+    def start(self, name_prefix="Soundcheck", trenner="-"):
 
         PROTOKOLL.append("aufnahme-an")
+
+        self.praefixe.append(name_prefix)
 
         if not self.bereit or self.recording:
             return False
 
-        self.praefixe.append(name_prefix)
         self.recording = True
         return True
 
@@ -211,6 +212,21 @@ with tempfile.TemporaryDirectory() as tmp:
         # gebaut und gehoert beim Ueben wieder dorthin.
         #
         "Uebung-3_p9.w64",
+
+        #
+        # Mitschnitte zum Ueben: Sie tragen den Namen ihres
+        # Uebungsmixes und finden so zu ihm zurueck.
+        #
+        "Uebung-1-Take1_s9.w64",
+        "Uebung-1-Take2_s9.w64",
+        "Uebung-3-Take1_s.w64",
+
+        #
+        # Und einer, dessen Uebungsmix es nicht gibt - er ist damit
+        # eine Aufnahme wie jede andere.
+        #
+        "Verwaist-Take1_s.w64",
+
         "Alt-ohne-Marke.w64",
     ]
 
@@ -486,10 +502,11 @@ with tempfile.TemporaryDirectory() as tmp:
         "gestartet hat - beim Stoppen bliebe sie laufen."
     )
 
-    assert anwendung.recorder.praefixe == ["Soundcheck"], (
+    assert anwendung.recorder.praefixe == ["Uebung-1-Take"], (
         f"Der Mitschnitt heisst nach {anwendung.recorder.praefixe} - "
-        f"er ist eine Aufnahme wie jede andere und trägt denselben "
-        f"Namen."
+        f"er soll den Namen des Stücks tragen, zu dem er entstanden "
+        f"ist (\"Uebung-1-Take1_s9.w64\"). Nur so findet er später "
+        f"zu seinem Übungsmix zurück."
     )
 
     print("OK: Mitgeschnitten wird ab dem ersten Ton, nicht danach")
@@ -639,14 +656,14 @@ with tempfile.TemporaryDirectory() as tmp:
     anwendung.music_player.aufrufe.clear()
 
     erfolg, meldung = anwendung.start_practice(
-        "Uebung-1_p.w64", mitschnitt="Soundcheck-2_s9.w64"
+        "Uebung-1_p.w64", mitschnitt="Uebung-1-Take2_s9.w64"
     )
 
     assert erfolg, meldung
 
     ruf = anwendung.music_player.aufrufe[0]
 
-    assert ruf["mitschnitt"] == ordner / "Soundcheck-2_s9.w64", (
+    assert ruf["mitschnitt"] == ordner / "Uebung-1-Take2_s9.w64", (
         f"Der Spieler bekam {ruf['mitschnitt']} als Mitschnitt."
     )
 
@@ -664,7 +681,7 @@ with tempfile.TemporaryDirectory() as tmp:
     anwendung.music_player.aufrufe.clear()
 
     erfolg, meldung = anwendung.start_practice(
-        "Uebung-1_p.w64", mitschnitt="Soundcheck-1_s.w64"
+        "Uebung-3_p9.w64", mitschnitt="Uebung-3-Take1_s.w64"
     )
 
     assert erfolg, meldung
@@ -709,18 +726,61 @@ with tempfile.TemporaryDirectory() as tmp:
     print("OK: Nur wirkliche Aufnahmen werden dazugelegt")
 
     # ----------------------------------------------------------------
-    # 7i. In der Auswahl stehen die Aufnahmen, nicht die Mixe
+    # 7i. Jeder Mitschnitt gehört zu SEINEM Übungsmix
+    #
+    # Die Zuordnung steht im Dateinamen: Zu "Uebung-1_p.w64" gehören
+    # "Uebung-1-Take1_s9.w64" und so fort. In der Auswahl "Dazu hören"
+    # sollen nur die Versuche zum gerade gewählten Stück stehen -
+    # alles andere wäre eine Liste, die mit jedem Üben länger wird und
+    # in der man sucht.
     # ----------------------------------------------------------------
 
-    takes = anwendung.practice_takes()
+    zuordnung = anwendung.practice_takes()
 
-    assert "Soundcheck-1_s.w64" in takes and "Soundcheck-2_s9.w64" in takes
-
-    assert not [n for n in takes if n.endswith(("_p.w64", "_p9.w64"))], (
-        f"In der Mitschnitt-Auswahl stehen Übungsmixe: {takes}"
+    assert set(zuordnung) == {
+        "Uebung-1_p.w64", "Uebung-2_p.w64", "Uebung-3_p9.w64"
+    }, (
+        f"Die Zuordnung kennt die Mixe {sorted(zuordnung)} - erwartet "
+        f"waren alle drei."
     )
 
-    print("OK: Zum Dazuhören stehen die Aufnahmen bereit, nicht die Mixe")
+    assert zuordnung["Uebung-1_p.w64"] == [
+        "Uebung-1-Take1_s9.w64", "Uebung-1-Take2_s9.w64"
+    ], zuordnung["Uebung-1_p.w64"]
+
+    assert zuordnung["Uebung-3_p9.w64"] == ["Uebung-3-Take1_s.w64"], (
+        f"Der Mitschnitt zu Uebung-3 fehlt oder ist beim falschen Mix: "
+        f"{zuordnung}"
+    )
+
+    assert zuordnung["Uebung-2_p.w64"] == [], (
+        f"Zu Uebung-2 gibt es keinen Mitschnitt - trotzdem steht dort "
+        f"{zuordnung['Uebung-2_p.w64']}."
+    )
+
+    #
+    # Und was zu keinem Mix gehoert, gehoert in keine dieser Listen.
+    #
+    alle = [name for liste in zuordnung.values() for name in liste]
+
+    for fremd in ("Soundcheck-1_s.w64", "Verwaist-Take1_s.w64",
+                  "Alt-ohne-Marke.w64"):
+        assert fremd not in alle, (
+            f"{fremd} steht bei einem Übungsmix, obwohl es nicht dazu "
+            f"gehört."
+        )
+
+    #
+    # Ein Mitschnitt, dessen Mix geloescht wurde, ist wieder eine
+    # gewoehnliche Aufnahme - erreichbar ueber die Soundcheck-Karte,
+    # nicht verloren.
+    #
+    assert anwendung.ist_mitschnitt("Uebung-1-Take1_s9.w64") is True
+    assert anwendung.ist_mitschnitt("Verwaist-Take1_s.w64") is False
+    assert anwendung.ist_mitschnitt("Soundcheck-1_s.w64") is False
+    assert anwendung.ist_mitschnitt("Uebung-1_p.w64") is False
+
+    print("OK: Jeder Mitschnitt steht bei seinem Übungsmix - und nur dort")
 
     # ----------------------------------------------------------------
     # 7j. Der Versatz wird gemerkt und erreicht den Spieler
@@ -1054,7 +1114,17 @@ KARTE = """function () {
 
 MIXE = ["Uebung-Bach_p.w64", "Uebung-Blues_p9.w64"]
 
-TAKES = ["Soundcheck-7_s9.w64", "Soundcheck-8_s.w64"]
+#
+# Die Mitschnitte gehoeren zu ihrem Mix - so kommt die Zuordnung auch
+# aus dem Status (siehe Application.practice_takes).
+#
+TAKES = {
+    "Uebung-Bach_p.w64": ["Uebung-Bach-Take1_s9.w64"],
+    "Uebung-Blues_p9.w64": [
+        "Uebung-Blues-Take1_s.w64",
+        "Uebung-Blues-Take2_s.w64",
+    ],
+}
 
 
 # ====================================================================
@@ -1275,10 +1345,17 @@ geschickt = ausfuehren(
     stand(player_mode="practice", practice_mixes=MIXE, practice_takes=TAKES),
     KARTE,
     vorlauf=(
-        "document.getElementById('practice-mix').value = 'Uebung-Blues_p9.w64';"
+        #
+        # Erst das Stueck, DANN der Versuch: Die Liste der Versuche
+        # haengt am gewaehlten Stueck und wird erst dabei aufgebaut.
+        #
+        "const m = document.getElementById('practice-mix');"
+        "m.value = 'Uebung-Blues_p9.w64';"
+        "m.dispatchEvent(new Event('change'));"
         "document.getElementById('practice-repeat').checked = true;"
         "document.getElementById('practice-record').checked = true;"
-        "document.getElementById('practice-take').value = 'Soundcheck-7_s9.w64';"
+        "document.getElementById('practice-take').value ="
+        "  'Uebung-Blues-Take2_s.w64';"
         "document.getElementById('btn-music-stop').click();"
     ),
 )
@@ -1294,7 +1371,7 @@ assert starts[0]["body"] == {
     "filename": "Uebung-Blues_p9.w64",
     "repeat": True,
     "record": True,
-    "take": "Soundcheck-7_s9.w64",
+    "take": "Uebung-Blues-Take2_s.w64",
 }, (
     f"Geschickt wurde {starts[0]['body']} - das ist nicht, was in den "
     f"Feldern stand. (Ein Kanal gehört NICHT dazu: Der steht im Namen.)"
@@ -1384,9 +1461,34 @@ dazu = ausfuehren(
     KARTE,
 )
 
-assert dazu["takes"]["werte"] == [""] + TAKES, (
+assert dazu["takes"]["werte"] == [""] + TAKES[MIXE[0]], (
     f"In der Auswahl stehen {dazu['takes']['werte']} - erwartet waren "
-    f"'nichts' und danach die Aufnahmen."
+    f"'nichts' und danach die Versuche zum ERSTEN Stück."
+)
+
+#
+# Und beim Wechsel des Stuecks wechselt die Liste mit. Das ist der
+# Kern der Sache: Ein Versuch zu einem anderen Stueck ergibt beim
+# Zusammenhoeren nur Unsinn.
+#
+gewechselt = ausfuehren(
+    stand(
+        player_mode="practice",
+        practice_mixes=MIXE,
+        practice_takes=TAKES,
+    ),
+    KARTE,
+    vorlauf=(
+        "const m = document.getElementById('practice-mix');"
+        "m.value = 'Uebung-Blues_p9.w64';"
+        "m.dispatchEvent(new Event('change'));"
+    ),
+)
+
+assert gewechselt["takes"]["werte"] == [""] + TAKES["Uebung-Blues_p9.w64"], (
+    f"Nach dem Wechsel des Stücks stehen in der Auswahl "
+    f"{gewechselt['takes']['werte']} - dort gehören die Versuche zum "
+    f"NEUEN Stück hin."
 )
 
 assert dazu["takes"]["gewaehlt"] == "", (
@@ -1406,13 +1508,13 @@ gewaehlt = ausfuehren(
     KARTE,
     vorlauf=(
         "const f = document.getElementById('practice-take');"
-        "f.value = 'Soundcheck-7_s9.w64';"
+        "f.value = 'Uebung-Bach-Take1_s9.w64';"
         "f.dispatchEvent(new Event('change'));"
     ),
 )
 
 assert TEXTE["practice_take_hint"].replace(
-    "{name}", "Soundcheck-7_s9"
+    "{name}", TEXTE["practice_take_short"].replace("{nr}", "1")
 ) in gewaehlt["hinweis"], (
     f"Im Hinweis steht {gewaehlt['hinweis']!r} - dort gehört hin, "
     f"welcher Versuch mitläuft."
@@ -1439,7 +1541,7 @@ mit_versatz = ausfuehren(
     KARTE,
     vorlauf=(
         "const f = document.getElementById('practice-take');"
-        "f.value = 'Soundcheck-7_s9.w64';"
+        "f.value = 'Uebung-Bach-Take1_s9.w64';"
         "f.dispatchEvent(new Event('change'));"
     ),
 )
@@ -1657,13 +1759,12 @@ print("OK: Der Positionsregler bleibt in allen Fällen in der Karte")
 
 
 # ====================================================================
-# 17. Der Übungsmix-Dialog kehrt nicht in einen Dialog zurück,
-#     den man nie geöffnet hat
+# 17. "Übungsmix erstellen" kehrt in die Dateiverwaltung zurück
 #
-# "Übungsmix erstellen" saß früher nur im Dialog "Alle Dateien" und
-# ging beim Schließen dorthin zurück. Jetzt steht der Knopf auch in
-# der Üben-Karte - von dort zurückzukehren hieße, dass sich
-# unvermittelt die Dateiliste öffnet.
+# Der Knopf sitzt dort, wo die Übungsmixe stehen - ein Übungsmix ist
+# eine Datei, und Dateien macht man in der Dateiverwaltung.
+# Geschlossen führt der Weg dorthin zurück: Der nächste Griff gilt
+# fast immer dem eben erzeugten Mix.
 # ====================================================================
 
 DIALOG = """function () {
@@ -1673,10 +1774,12 @@ DIALOG = """function () {
     };
 
     const kanal = document.getElementById('stem-combine-start-channel');
+    const titel = document.getElementById('recordingsModalTitle');
 
     return {
         stems: offen('stemCombineModal'),
         dateien: offen('recordingsModal'),
+        titel: titel ? titel.textContent.trim() : '',
         kanalwerte: kanal
             ? Array.from(kanal.options).map((o) => o.value) : null,
         spuren: Array.from(
@@ -1689,18 +1792,27 @@ dialog = ausfuehren(
     stand(player_mode="practice", practice_mixes=MIXE),
     DIALOG,
     vorlauf=(
-        "document.getElementById('btn-practice-create').click();"
-        "setTimeout(() => bootstrap.Modal.getOrCreateInstance("
-        "document.getElementById('stemCombineModal')).hide(), 200);"
+        "document.getElementById('btn-practice-files').click();"
+        "setTimeout(() => {"
+        "  document.getElementById('btn-open-stem-combine').click();"
+        "  setTimeout(() => bootstrap.Modal.getOrCreateInstance("
+        "    document.getElementById('stemCombineModal')).hide(), 200);"
+        "}, 200);"
     ),
 )
 
-assert dialog["dateien"] is False, (
-    "Nach dem Schließen des Übungsmix-Dialogs steht die Dateiliste "
-    "offen - die hatte man von der Üben-Karte aus nie geöffnet."
+assert dialog["dateien"] is True, (
+    "Nach dem Schliessen des Übungsmix-Dialogs steht die "
+    "Dateiverwaltung nicht wieder offen - von dort kam man, und dort "
+    "steht der eben erzeugte Mix."
 )
 
-print("OK: Der Übungsmix-Dialog kehrt dorthin zurück, wo er herkam")
+assert dialog["titel"] == TEXTE["modal_practice_files_title"], (
+    f"Der Dialog kehrt in die falsche Betriebsart zurück: "
+    f"{dialog['titel']!r}"
+)
+
+print("OK: Der Übungsmix-Dialog kehrt in die Dateiverwaltung zurück")
 
 
 # ====================================================================
@@ -1719,10 +1831,13 @@ erstellen = ausfuehren(
     stand(player_mode="practice", practice_mixes=MIXE, audio_channels=18),
     DIALOG,
     vorlauf=(
-        "document.getElementById('btn-practice-create').click();"
-        "const k = document.getElementById('stem-combine-start-channel');"
-        "k.value = '9';"
-        "k.dispatchEvent(new Event('change'));"
+        "document.getElementById('btn-practice-files').click();"
+        "setTimeout(() => {"
+        "  document.getElementById('btn-open-stem-combine').click();"
+        "  const k = document.getElementById('stem-combine-start-channel');"
+        "  k.value = '9';"
+        "  k.dispatchEvent(new Event('change'));"
+        "}, 250);"
     ),
 )
 
@@ -1757,54 +1872,142 @@ print("OK: Der Erstellen-Dialog wählt den Kanal und beschriftet danach")
 # Üben ist genau das nötig.
 # ====================================================================
 
-LISTE = """function () {
+#
+# Ein Dialog, zwei Betriebsarten: Von der Soundcheck-Karte aus die
+# Aufnahmen, von der Üben-Karte aus die Übungsmixe samt ihren
+# Mitschnitten. Was in der einen steht, hat in der anderen nichts zu
+# suchen - sonst sucht man jedes Mal in einer Liste, die zur Hälfte
+# aus dem Falschen besteht.
+#
 
+DATEIEN = ["""
     //
     // Die echte Anzeigefunktion mit einer Liste, wie sie der Server
     // liefert.
     //
-    renderRecordings([
+    const liste = [
         { filename: 'Uebung-Bach_p.w64', kind: 'practice', channels: 8,
           sample_rate: 48000, bits_per_sample: 24, duration: 60, size: 1 },
+        { filename: 'Uebung-Bach-Take1_s9.w64', kind: 'soundcheck',
+          channels: 2, sample_rate: 48000, bits_per_sample: 24,
+          duration: 60, size: 1 },
         { filename: 'Soundcheck-7_s9.w64', kind: 'soundcheck', channels: 2,
           sample_rate: 48000, bits_per_sample: 24, duration: 60, size: 1 }
-    ]);
-
+    ];
+""", """
     const aktionen = (name) => Array.from(
         document.querySelectorAll(
             `#recordingsList [data-filename="${name}"]`)
     ).map((k) => k.dataset.action);
 
+    const eingerueckt = (name) => {
+        const k = document.querySelector(
+            `#recordingsList [data-filename="${name}"]`);
+        const karte = k ? k.closest('.card') : null;
+        return karte ? karte.classList.contains('ms-4') : null;
+    };
+
     return {
         mix: aktionen('Uebung-Bach_p.w64'),
-        aufnahme: aktionen('Soundcheck-7_s9.w64')
+        take: aktionen('Uebung-Bach-Take1_s9.w64'),
+        aufnahme: aktionen('Soundcheck-7_s9.w64'),
+        take_eingerueckt: eingerueckt('Uebung-Bach-Take1_s9.w64'),
+        titel: document.getElementById('recordingsModalTitle')
+                   .textContent.trim()
     };
-}"""
+"""]
 
-liste = ausfuehren(
-    stand(player_mode="practice", practice_mixes=MIXE),
-    LISTE,
+UEBEN_LISTE = (
+    "function () {"
+    + DATEIEN[0]
+    + "dateienModus = 'practice'; renderRecordings(liste);"
+    + DATEIEN[1]
+    + "}"
 )
 
-assert "practice" in liste["mix"], (
-    f"Am Übungsmix stehen die Aktionen {liste['mix']} - dort gehört "
-    f"'zum Üben auswählen' hin."
+SOUNDCHECK_LISTE = (
+    "function () {"
+    + DATEIEN[0]
+    + "dateienModus = 'soundcheck'; renderRecordings(liste);"
+    + DATEIEN[1]
+    + "}"
 )
 
-assert "choose" not in liste["mix"], (
+ZUORDNUNG = {"Uebung-Bach_p.w64": ["Uebung-Bach-Take1_s9.w64"]}
+
+ueben_liste = ausfuehren(
+    stand(
+        player_mode="practice",
+        practice_mixes=["Uebung-Bach_p.w64"],
+        practice_takes=ZUORDNUNG,
+    ),
+    UEBEN_LISTE,
+)
+
+assert "practice" in ueben_liste["mix"], (
+    f"Am Übungsmix stehen die Aktionen {ueben_liste['mix']} - dort "
+    f"gehört 'zum Üben auswählen' hin."
+)
+
+assert "choose" not in ueben_liste["mix"], (
     f"Am Übungsmix steht weiterhin 'für den Soundcheck auswählen': "
-    f"{liste['mix']}. Damit gibt es den Weg zweimal, und der über den "
-    f"Soundcheck kann weder anhalten noch spulen."
+    f"{ueben_liste['mix']}. Damit gäbe es den Weg zweimal, und der "
+    f"über den Soundcheck kann weder anhalten noch spulen."
 )
 
-assert "choose" in liste["aufnahme"], (
+assert "listen" in ueben_liste["take"], (
+    f"Am Mitschnitt stehen die Aktionen {ueben_liste['take']} - dort "
+    f"gehört 'zum Dazuhören auswählen' hin."
+)
+
+assert ueben_liste["take_eingerueckt"] is True, (
+    "Der Mitschnitt steht nicht eingerückt unter seinem Übungsmix - "
+    "dass er dazugehört, müsste man am Namen ablesen."
+)
+
+assert ueben_liste["aufnahme"] == [], (
+    f"In der Üben-Verwaltung steht eine gewöhnliche Aufnahme: "
+    f"{ueben_liste['aufnahme']}"
+)
+
+print("OK: Die Üben-Verwaltung zeigt Mixe mit ihren Mitschnitten")
+
+
+# ====================================================================
+# 19b. Und die Soundcheck-Verwaltung zeigt weder das eine noch das
+#      andere
+#
+# Der Gegenfall zählt: Eine Verwaltung, die weiterhin alles zeigt,
+# wäre keine Trennung.
+# ====================================================================
+
+soundcheck_liste = ausfuehren(
+    stand(
+        player_mode="practice",
+        practice_mixes=["Uebung-Bach_p.w64"],
+        practice_takes=ZUORDNUNG,
+    ),
+    SOUNDCHECK_LISTE,
+)
+
+assert "choose" in soundcheck_liste["aufnahme"], (
     f"An der Aufnahme fehlt 'für den Soundcheck auswählen': "
-    f"{liste['aufnahme']}"
+    f"{soundcheck_liste['aufnahme']}"
 )
 
-assert "practice" not in liste["aufnahme"], liste["aufnahme"]
+assert soundcheck_liste["mix"] == [], (
+    f"Der Übungsmix steht weiterhin in der Soundcheck-Verwaltung: "
+    f"{soundcheck_liste['mix']}"
+)
 
-print("OK: Der Übungsmix führt zum Üben, die Aufnahme zum Soundcheck")
+assert soundcheck_liste["take"] == [], (
+    f"Der Mitschnitt steht in der Soundcheck-Verwaltung: "
+    f"{soundcheck_liste['take']}. Nach ein paar Übungsabenden wären "
+    f"die Versuche dort die Mehrheit, und der Soundcheck fände sich "
+    f"zwischen ihnen nicht wieder."
+)
+
+print("OK: Die Soundcheck-Verwaltung zeigt weder Mixe noch Mitschnitte")
 
 
 # ====================================================================

@@ -185,11 +185,17 @@ class Recorder:
 
         return self.meter.levels
 
-    def start(self, name_prefix: str = "Soundcheck") -> bool:
+    def start(self, name_prefix: str = "Soundcheck",
+              trenner: str = "-") -> bool:
         """
         Startet die Aufnahme. Läuft bereits eine reine
         Pegelprüfung, wird sie nahtlos zur Aufnahme erweitert.
         `name_prefix` bestimmt den Dateinamen ("<Präfix>-<Nummer>").
+
+        `trenner` steht zwischen Präfix und Nummer. Für Mitschnitte
+        beim Üben ist er leer - dort trägt das Präfix schon einen
+        Bindestrich ("Umbrella-1-Take" + "1"), siehe
+        core/recording_kind.py.
         """
 
         if self.recording:
@@ -254,6 +260,7 @@ class Recorder:
             bits_per_sample=24,
             name_prefix=name_prefix,
             start_channel=getattr(self.backend, "start_channel", 0) + 1,
+            trenner=trenner,
         )
 
         self._current_filename = self.writer.filename

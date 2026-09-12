@@ -406,7 +406,8 @@ class Namensmerker:
         self.aufrufe = []
 
     def open(self, channels, sample_rate, bits_per_sample,
-             name_prefix="Soundcheck", start_channel=1):
+             name_prefix="Soundcheck", start_channel=1,
+             trenner="-"):
         self.aufrufe.append(start_channel)
         self.filename = f"{name_prefix}-1_s{start_channel}.w64"
 

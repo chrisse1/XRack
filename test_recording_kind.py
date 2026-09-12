@@ -19,7 +19,12 @@ from core.recording_kind import (
     MARKER_PRACTICE,
     MARKER_SOUNDCHECK,
     kind_from_filename,
+    mix_von_take,
+    start_channel_from_filename,
     strip_marker,
+    take_basis,
+    take_nummer,
+    take_praefix,
 )
 from writer.audio_writer import AudioWriter
 
@@ -196,6 +201,120 @@ try:
     assert kind_from_filename(roundtrip) == KIND_PRACTICE
 
     print("OK: Kürzel übersteht Download/Upload - die Art bleibt erhalten")
+
+    # ----------------------------------------------------------------
+    # 8. Ein Mitschnitt findet zu seinem Übungsmix zurück
+    #
+    # Die Zuordnung steht im Dateinamen, aus denselben Gründen wie das
+    # Kürzel: Sie reist über USB, Download und Backup mit, und XRack
+    # führt nirgends Buch. Zum Mix "Umbrella-1_p.w64" heissen die
+    # Versuche "Umbrella-1-Take1_s9.w64" und so fort.
+    # ----------------------------------------------------------------
+
+    MIX = "Umbrella-1_p.w64"
+
+    assert take_basis(MIX) == "Umbrella-1", take_basis(MIX)
+
+    assert take_praefix(MIX) == "Umbrella-1-Take", take_praefix(MIX)
+
+    for nummer, name in (
+        (1, "Umbrella-1-Take1_s9.w64"),
+        (2, "Umbrella-1-Take2_s9.w64"),
+        (17, "Umbrella-1-Take17_s.w64"),
+    ):
+        assert mix_von_take(name) == "Umbrella-1", (
+            f"{name} findet nicht zu seinem Übungsmix zurück: "
+            f"{mix_von_take(name)}"
+        )
+
+        assert take_nummer(name) == nummer, (
+            f"{name} trägt die Nummer {take_nummer(name)} statt {nummer}"
+        )
+
+        #
+        # Und die Angaben aus Stufe 1 bleiben lesbar - der Name traegt
+        # jetzt dreierlei, und keines davon darf das andere
+        # verdecken.
+        #
+        assert kind_from_filename(name) == KIND_SOUNDCHECK, name
+
+    assert start_channel_from_filename("Umbrella-1-Take2_s9.w64") == 9
+
+    assert start_channel_from_filename("Umbrella-1-Take17_s.w64") == 1
+
+    print("OK: Ein Mitschnitt trägt Stück, Nummer, Art und Kanal im Namen")
+
+    # ----------------------------------------------------------------
+    # 9. Was kein Mitschnitt ist, wird auch nicht dafür gehalten
+    #
+    # Besonders der Fall, der sonst still danebengriffe: Ein
+    # ÜBUNGSMIX, der zufällig "Song-Take5" hiesse, wäre sonst der
+    # Versuch eines Mixes namens "Song".
+    # ----------------------------------------------------------------
+
+    for kein_take in (
+        "Soundcheck-3_s.w64",
+        "Umbrella-1_p.w64",
+        "Song-Take5_p.w64",
+        "Umbrella-1-Takeover-1_s.w64",
+        "Alt-ohne-Marke.w64",
+    ):
+        assert mix_von_take(kein_take) is None, (
+            f"{kein_take} wird für einen Mitschnitt gehalten: "
+            f"{mix_von_take(kein_take)}"
+        )
+
+        assert take_nummer(kein_take) == 0 or "Take" in kein_take, kein_take
+
+    print("OK: Nur Aufnahmen mit Take-Nummer gelten als Mitschnitt")
+
+    # ----------------------------------------------------------------
+    # 10. Der Schreiber zählt die Versuche hoch - ohne Bindestrich
+    #
+    # "Umbrella-1-Take-1" läse sich wie ein Abzug. Der Trenner ist
+    # deshalb wählbar, und für Mitschnitte ist er leer.
+    # ----------------------------------------------------------------
+
+    class Zaehlschreiber(AudioWriter):
+        def open(self, *args, **kwargs):
+            pass
+
+        def write(self, data):
+            pass
+
+        def close(self):
+            pass
+
+    schreiber = Zaehlschreiber()
+    schreiber.directory = Path(scratch)
+
+    namen = []
+
+    for _ in range(3):
+        name = schreiber.create_filename(
+            "w64",
+            prefix=take_praefix(MIX),
+            marker=MARKER_SOUNDCHECK,
+            start_channel=9,
+            trenner="",
+        )
+        Path(name).write_bytes(b"x")
+        namen.append(Path(name).name)
+
+    assert namen == [
+        "Umbrella-1-Take1_s9.w64",
+        "Umbrella-1-Take2_s9.w64",
+        "Umbrella-1-Take3_s9.w64",
+    ], namen
+
+    #
+    # Und der Rundlauf: Jeder dieser Namen findet zu seinem Mix
+    # zurück. Genau das ist der Zweck.
+    #
+    for name in namen:
+        assert mix_von_take(name) == take_basis(MIX), name
+
+    print("OK: Der Schreiber zählt die Versuche hoch, und alle finden zurück")
 
     print("Alle Tests erfolgreich.")
 

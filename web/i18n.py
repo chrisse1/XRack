@@ -85,6 +85,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "practice_hint": "Liegt ab Kanal {a}",
         "practice_record": "Mitschneiden",
         "title_choose_for_practice": "Zum Üben auswählen",
+        "btn_practice_files": "Dateien",
+        "modal_practice_files_title": "Übungsmixe und Mitschnitte",
+        "practice_no_files": (
+            "Noch kein Übungsmix da. \"Übungsmix erstellen\" legt aus "
+            "zwei bis acht Stereodateien einen an."
+        ),
+        "practice_take_short": "Versuch {nr}",
+        "practice_no_takes": "noch kein Mitschnitt",
+        "title_listen_along": "Zum Dazuhören auswählen",
         "practice_take_label": "Dazu hören:",
         "practice_offset_label": "Versatz:",
         "practice_offset_hint": "Versatz {ms} ms",
@@ -889,6 +898,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "practice_hint": "Starts at channel {a}",
         "practice_record": "Record along",
         "title_choose_for_practice": "Select for practising",
+        "btn_practice_files": "Files",
+        "modal_practice_files_title": "Practice mixes and takes",
+        "practice_no_files": (
+            "No practice mix yet. \"Create practice mix\" builds one "
+            "from two to eight stereo files."
+        ),
+        "practice_take_short": "Take {nr}",
+        "practice_no_takes": "no take yet",
+        "title_listen_along": "Select to play along",
         "practice_take_label": "Play along with:",
         "practice_offset_label": "Offset:",
         "practice_offset_hint": "offset {ms} ms",

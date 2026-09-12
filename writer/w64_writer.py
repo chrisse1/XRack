@@ -47,6 +47,7 @@ class W64Writer(AudioWriter):
         name_prefix: str = "Soundcheck",
         marker: str = MARKER_SOUNDCHECK,
         start_channel: int = 1,
+        trenner: str = "-",
     ):
 
         self.channels = channels
@@ -58,6 +59,7 @@ class W64Writer(AudioWriter):
             prefix=name_prefix,
             marker=marker,
             start_channel=start_channel,
+            trenner=trenner,
         )
 
         self.file = open(

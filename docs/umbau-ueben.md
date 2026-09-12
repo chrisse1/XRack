@@ -7,7 +7,8 @@ weil der Umbau ueber mehrere Sitzungen laeuft: Wer hier weiterarbeitet
 allem die BEGRUENDUNGEN vorfinden, nicht nur das Ergebnis.
 
 **Stand:** Stufen 1 bis 4 gebaut, dazu der Gleichlauf beim
-Zusammenhoeren samt Messung (3.0.0-dev10). Das Aufnahmefenster steht und ist am
+Zusammenhoeren samt Messung und die getrennte Dateiverwaltung
+(3.0.0-dev11). Das Aufnahmefenster steht und ist am
 Geraet abgenommen; der Musikspieler spielt Uebungsmixe mehrkanalig mit
 Spulen und Schleife; die Karte hat den Umschalter Musik | Ueben; das
 Geuebte laesst sich mitschneiden und zusammen mit dem Mix wieder
@@ -230,6 +231,46 @@ Vier Dinge, die erst an der fertigen Karte auffielen:
 
 Was noch offen ist: Die Soundcheck-Karte spielt Übungsmixe weiterhin
 selbst ab. Es gibt den Weg also zweimal — das räumt Stufe 4 auf.
+
+### Die Dateiverwaltung: getrennt, und die Versuche beim Stück (dev11)
+
+Übungsmixe und Mitschnitte sind aus der Dateiverwaltung der
+Soundcheck-Karte verschwunden; die Üben-Karte hat ihre eigene.
+
+**Es ist aber derselbe Dialog**, nur in einer anderen Betriebsart
+(`dateienModus`). Hochladen, Herunterladen, auf USB kopieren,
+Löschen, mehrere auf einmal löschen — das ist zweimal dieselbe
+Verwaltung. Zweimal gebaut hiesse, jede künftige Änderung zweimal zu
+machen und beim zweiten Mal die eine Hälfte zu vergessen.
+
+**Die Zuordnung steht im Dateinamen** — aus denselben Gründen wie das
+Kürzel und der Startkanal: Sie reist über USB, Download und Backup
+mit, und XRack führt nirgends Buch. Zum Übungsmix `Umbrella-1_p.w64`
+heissen die Versuche `Umbrella-1-Take1_s9.w64`, `-Take2` und so fort.
+Der Name trägt damit vier Dinge, und keines verdeckt das andere:
+Stück, Nummer des Versuchs, Art (`_s`) und erster Kanal (`9`).
+
+Damit `Take-1` nicht wie ein Abzug aussieht, ist der Trenner vor der
+laufenden Nummer wählbar (`AudioWriter.create_filename(trenner=...)`);
+für Mitschnitte ist er leer, das Präfix trägt den Bindestrich schon.
+
+**„Dazu hören" zeigt nur die Versuche zum gewählten Stück.** Alles
+andere wäre eine Liste, die mit jedem Üben länger wird und in der man
+sucht — und ein Versuch zu einem anderen Stück ergibt beim
+Zusammenhören ohnehin nur Unsinn.
+
+Zwei Entscheidungen dabei:
+
+- **Mitschnitte fehlen auch in der Soundcheck-Liste.** Sie sind
+  Aufnahmen und heissen auch so, ergeben aber nur neben ihrem Mix
+  einen Sinn; nach ein paar Übungsabenden wären sie dort die Mehrheit,
+  und der Soundcheck fände sich zwischen ihnen nicht wieder.
+- **Ein Versuch ohne Mix ist wieder eine gewöhnliche Aufnahme.** Wird
+  ein Übungsmix gelöscht, tauchen seine Versuche in der
+  Soundcheck-Verwaltung auf — erreichbar, löschbar, nicht verloren.
+
+„Übungsmix erstellen" sitzt jetzt in dieser Verwaltung: Ein Übungsmix
+ist eine Datei, und Dateien macht man in der Dateiverwaltung.
 
 ### Stufe 3b — Mitschneiden und Zusammenhören
 

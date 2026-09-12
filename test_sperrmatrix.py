@@ -97,7 +97,7 @@ class Aufnehmer:
         self.bereit = True
         self.recording = False
 
-    def start(self, name_prefix="Soundcheck"):
+    def start(self, name_prefix="Soundcheck", trenner="-"):
         if not self.bereit or self.recording:
             return False
         self.recording = True

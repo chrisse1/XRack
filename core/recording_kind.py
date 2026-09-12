@@ -46,6 +46,23 @@ KUERZEL = re.compile(r"_([" + "".join(MARKERS) + r"])(\d*)$")
 KIND_SOUNDCHECK = "soundcheck"
 KIND_PRACTICE = "practice"
 
+#
+# Mitschnitte gehoeren zu einem Uebungsmix - und auch DAS steht im
+# Dateinamen, aus denselben Gruenden wie das Kuerzel: Die Zuordnung
+# reist ueber USB, Download und Backup mit, und XRack fuehrt nirgends
+# Buch.
+#
+# Zum Uebungsmix "Umbrella-1_p.w64" heissen die Mitschnitte
+# "Umbrella-1-Take1_s9.w64", "Umbrella-1-Take2_s9.w64" und so fort.
+# Der Teil vor "-Take" ist der Name des Mixes ohne Kuerzel; daran
+# finden sich beide wieder.
+#
+TAKE_MARKE = "Take"
+
+TAKE_MUSTER = re.compile(
+    r"^(?P<mix>.+)-" + TAKE_MARKE + r"(?P<nr>\d+)$"
+)
+
 
 def kind_from_filename(filename: str) -> str:
     """
@@ -94,6 +111,61 @@ def start_channel_from_filename(filename: str) -> int:
         return max(1, int(treffer.group(2)))
     except ValueError:
         return 1
+
+
+def take_basis(mix_dateiname: str) -> str:
+    """
+    Der Namensteil, auf den die Mitschnitte eines Übungsmixes hören.
+
+    Das ist sein Name ohne Kürzel und ohne Endung: Aus
+    "Umbrella-1_p.w64" wird "Umbrella-1", und die Mitschnitte heissen
+    "Umbrella-1-Take1_s9.w64" und so fort.
+    """
+
+    return strip_marker(Path(mix_dateiname).stem)
+
+
+def take_praefix(mix_dateiname: str) -> str:
+    """
+    Womit ein Mitschnitt zu diesem Übungsmix anfängt - das, was der
+    Schreiber als Präfix bekommt.
+    """
+
+    return f"{take_basis(mix_dateiname)}-{TAKE_MARKE}"
+
+
+def mix_von_take(filename: str) -> str | None:
+    """
+    Zu welchem Übungsmix gehört dieser Mitschnitt?
+
+    Geliefert wird der Basisname des Mixes (ohne Kürzel), oder None,
+    wenn der Name nicht nach einem Mitschnitt aussieht.
+
+    Nur Aufnahmen kommen in Frage: Ein Übungsmix, der zufällig
+    "Song-Take5" hiesse, wäre sonst der Mitschnitt eines Mixes namens
+    "Song". Am Kürzel sind die beiden sicher zu trennen.
+    """
+
+    if kind_from_filename(filename) != KIND_SOUNDCHECK:
+        return None
+
+    treffer = TAKE_MUSTER.match(strip_marker(Path(filename).stem))
+
+    return treffer.group("mix") if treffer is not None else None
+
+
+def take_nummer(filename: str) -> int:
+    """Die laufende Nummer eines Mitschnitts - 0, wenn es keiner ist."""
+
+    treffer = TAKE_MUSTER.match(strip_marker(Path(filename).stem))
+
+    if treffer is None:
+        return 0
+
+    try:
+        return int(treffer.group("nr"))
+    except ValueError:
+        return 0
 
 
 def marker_mit_kanal(marker: str, start_channel: int = 1) -> str:

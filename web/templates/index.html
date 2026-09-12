@@ -238,10 +238,17 @@
             </div>
             <div class="d-grid mt-3">
 
+              {#
+                  Derselbe Dialog wie in der Ueben-Karte, nur in der
+                  anderen Betriebsart: Hier die Aufnahmen, dort die
+                  Uebungsmixe samt Mitschnitten. Geoeffnet wird er
+                  deshalb ueber die Funktion und nicht ueber
+                  data-bs-target - die Betriebsart muss vorher
+                  feststehen.
+              #}
               <button
                   class="btn btn-outline-secondary btn-sm"
-                  data-bs-toggle="modal"
-                  data-bs-target="#recordingsModal"
+                  onclick="oeffneDateien('soundcheck')"
               >
                   {{ t.btn_all_recordings }}
               </button>
@@ -341,17 +348,21 @@
                   </select>
 
                   {#
-                      Steht jetzt hier statt im Dialog "Alle Dateien":
-                      Wer einen Uebungsmix sucht, sucht ihn dort, wo er
-                      ihn benutzt.
+                      Die Dateiverwaltung der Ueben-Karte: dieselbe wie
+                      in der Soundcheck-Karte, aber nur mit
+                      Uebungsmixen und ihren Mitschnitten. Dort wird
+                      auch ein neuer Uebungsmix angelegt - er ist eine
+                      Datei, und Dateien macht man in der
+                      Dateiverwaltung.
                   #}
                   <button
                       type="button"
-                      id="btn-practice-create"
+                      id="btn-practice-files"
                       class="btn btn-outline-secondary btn-sm text-nowrap"
+                      onclick="oeffneDateien('practice')"
                   >
-                      <i class="bi bi-layers me-1"></i>
-                      {{ t.btn_stem_combine_open }}
+                      <i class="bi bi-folder2-open me-1"></i>
+                      {{ t.btn_practice_files }}
                   </button>
               </div>
 

@@ -290,8 +290,18 @@ function updateRecordingList(recordings) {
     // ausgewählt ist. Übungsmixe gehören dort nicht hin - sie sind
     // über "Alle Dateien" erreichbar.
     //
+    //
+    // Weder Uebungsmixe noch Mitschnitte: Beide gehoeren in die
+    // Dateiverwaltung der Ueben-Karte. Ein Mitschnitt ist zwar eine
+    // Aufnahme, aber er ergibt nur neben seinem Uebungsmix einen
+    // Sinn - hier waere er nach ein paar Uebungsabenden die Mehrheit,
+    // und der Soundcheck faende sich zwischen ihnen nicht wieder.
+    //
+    const mitschnitte = alleMitschnitte();
+
     const soundchecks = recordings.filter(
         (recording) => !isPracticeMix(kindFromFilename(recording))
+            && !mitschnitte.has(recording)
     );
 
     if (soundchecks.length === 0) {
@@ -2055,50 +2065,242 @@ async function loadRecordings()
         );
     }
 }
+// ============================================================
+// Die Dateiverwaltung - ein Dialog, zwei Betriebsarten
 //
-// Getrennt nach Art, nicht gemischt: Soundcheck-Aufnahmen und
-// Übungsmixe entstehen bei verschiedenen Gelegenheiten und werden
-// auch verschieden gebraucht. Durcheinander muss man jede Zeile
-// einzeln am Kennzeichen prüfen.
+// "soundcheck" zeigt die Aufnahmen, "practice" die Uebungsmixe samt
+// ihren Mitschnitten. Es ist bewusst DERSELBE Dialog: Hochladen,
+// Herunterladen, auf USB kopieren, Loeschen, mehrere auf einmal
+// loeschen - das ist zweimal dieselbe Verwaltung. Zweimal gebaut
+// hiesse, jede kuenftige Aenderung zweimal zu machen und beim zweiten
+// Mal die eine Haelfte zu vergessen.
 //
-// Leere Abschnitte werden weggelassen - eine Überschrift ohne Inhalt
-// sieht aus, als fehle etwas.
+// Die Zuordnung Mitschnitt -> Uebungsmix kommt aus dem Status
+// (practice_takes) und wird hier NICHT aus den Dateinamen gelesen:
+// Die Regel dafuer steht in core/recording_kind.py, und sie soll dort
+// stehen bleiben.
+// ============================================================
+
+let dateienModus = "soundcheck";
+
+function mitschnittZuordnung() {
+    return (lastStatusData && lastStatusData.practice_takes) || {};
+}
+
+function alleMitschnitte() {
+
+    const namen = new Set();
+
+    Object.values(mitschnittZuordnung()).forEach((liste) => {
+        (liste || []).forEach((name) => namen.add(name));
+    });
+
+    return namen;
+}
+
 //
+// Der Anzeigename: ohne Endung und ohne Kuerzel. "Umbrella-1_p.w64"
+// heisst fuer den Nutzer "Umbrella-1" - das Kuerzel ist XRacks
+// Buchhaltung und nicht sein Problem.
+//
+function anzeigeName(dateiname) {
+    return String(dateiname || "")
+        .replace(/\.w64$/i, "")
+        .replace(/_[sp]\d*$/, "");
+}
+
+async function oeffneDateien(modus) {
+
+    dateienModus = modus;
+
+    const ueben = modus === "practice";
+
+    const titel = document.getElementById("recordingsModalTitle");
+
+    if (titel) {
+        titel.textContent = ueben
+            ? I18N.modal_practice_files_title
+            : I18N.modal_recordings_title;
+    }
+
+    //
+    // Hochladen gehoert zu den Aufnahmen: Eine hochgeladene Datei ist
+    // erst einmal eine Aufnahme, kein Uebungsmix. Und "Uebungsmix
+    // erstellen" gehoert dorthin, wo die Uebungsmixe stehen.
+    //
+    const hochladen = document.getElementById("recording-upload-label");
+    const erstellen = document.getElementById("btn-open-stem-combine");
+
+    if (hochladen) hochladen.classList.toggle("d-none", ueben);
+    if (erstellen) erstellen.classList.toggle("d-none", !ueben);
+
+    await loadRecordings();
+
+    bootstrap.Modal
+        .getOrCreateInstance(document.getElementById("recordingsModal"))
+        .show();
+}
+
 function renderRecordings(recordings) {
+
     const container = document.getElementById("recordingsList");
     container.innerHTML = "";
 
-    const abschnitte = [
-        {
-            titel: I18N.section_soundchecks,
-            dateien: recordings.filter((r) => !isPracticeMix(r.kind)),
-        },
-        {
-            titel: I18N.section_practice_mixes,
-            dateien: recordings.filter((r) => isPracticeMix(r.kind)),
-        },
-    ];
+    if (dateienModus === "practice") {
+        renderUebungsdateien(container, recordings);
+    } else {
+        renderAufnahmen(container, recordings);
+    }
+}
 
-    abschnitte.forEach((abschnitt, index) => {
+//
+// Soundcheck: alles, was weder Uebungsmix noch Mitschnitt ist.
+//
+// Die Mitschnitte fehlen hier mit Absicht. Sie sind zwar Aufnahmen
+// (und heissen auch so), aber sie ergeben nur neben ihrem Uebungsmix
+// einen Sinn - in dieser Liste waeren sie nach ein paar Uebungsabenden
+// die Mehrheit, und der Soundcheck faende sich zwischen ihnen nicht
+// wieder.
+//
+function renderAufnahmen(container, recordings) {
 
-        if (abschnitt.dateien.length === 0) return;
+    const mitschnitte = alleMitschnitte();
+
+    const dateien = recordings.filter(
+        (r) => !isPracticeMix(r.kind) && !mitschnitte.has(r.filename)
+    );
+
+    if (dateien.length === 0) {
+        container.innerHTML =
+            `<div class="text-muted text-center py-3">${I18N.no_recordings}</div>`;
+        return;
+    }
+
+    for (const recording of dateien) {
+        container.appendChild(createRecordingCard(recording));
+    }
+}
+
+//
+// Ueben: jeder Uebungsmix mit seinen Mitschnitten darunter.
+//
+function renderUebungsdateien(container, recordings) {
+
+    const zuordnung = mitschnittZuordnung();
+
+    const nachName = {};
+    recordings.forEach((r) => { nachName[r.filename] = r; });
+
+    const mixe = recordings.filter((r) => isPracticeMix(r.kind));
+
+    if (mixe.length === 0) {
+        container.innerHTML =
+            `<div class="text-muted text-center py-3">${I18N.practice_no_files}</div>`;
+        return;
+    }
+
+    mixe.forEach((mix, index) => {
 
         const ueberschrift = document.createElement("h6");
         ueberschrift.className =
             "text-body-secondary" + (index === 0 ? " mb-2" : " mt-4 mb-2");
-        ueberschrift.textContent =
-            `${abschnitt.titel} (${abschnitt.dateien.length})`;
+        ueberschrift.textContent = anzeigeName(mix.filename);
 
         container.appendChild(ueberschrift);
 
-        for (const recording of abschnitt.dateien) {
-            container.appendChild(createRecordingCard(recording));
+        container.appendChild(
+            createRecordingCard(mix, ["practice", "download", "copy-usb", "delete"])
+        );
+
+        const takes = (zuordnung[mix.filename] || [])
+            .map((name) => nachName[name])
+            .filter((r) => !!r);
+
+        if (takes.length === 0) {
+
+            const leer = document.createElement("div");
+            leer.className = "text-body-secondary small ms-4 mb-2";
+            leer.textContent = I18N.practice_no_takes;
+
+            container.appendChild(leer);
+
+            return;
         }
+
+        takes.forEach((take) => {
+
+            const karte = createRecordingCard(
+                take, ["listen", "download", "copy-usb", "delete"]
+            );
+
+            //
+            // Eingerueckt: Der Mitschnitt gehoert zum Stueck darueber,
+            // und das soll man sehen, ohne den Namen zu lesen.
+            //
+            karte.classList.add("ms-4");
+
+            container.appendChild(karte);
+        });
     });
 }
 
-function createRecordingCard(recording) {
+//
+// Die Knoepfe je Datei. Welche es gibt, haengt davon ab, was die Datei
+// IST - deshalb als Liste uebergeben und nicht in der Karte
+// entschieden: Ein Uebungsmix wird zum Ueben gewaehlt, ein Mitschnitt
+// zum Dazuhoeren, eine Aufnahme fuer den Soundcheck.
+//
+const DATEI_AKTIONEN = {
+    choose: {
+        stil: "btn-outline-success",
+        symbol: "bi-play-circle",
+        titel: () => I18N.title_choose_for_soundcheck,
+    },
+    practice: {
+        stil: "btn-outline-info",
+        symbol: "bi-repeat",
+        titel: () => I18N.title_choose_for_practice,
+    },
+    listen: {
+        stil: "btn-outline-info",
+        symbol: "bi-headphones",
+        titel: () => I18N.title_listen_along,
+    },
+    download: {
+        stil: "btn-outline-primary",
+        symbol: "bi-download",
+        titel: () => I18N.title_download,
+    },
+    "copy-usb": {
+        stil: "btn-outline-secondary",
+        symbol: "bi-usb-drive",
+        titel: () => I18N.title_copy_to_usb,
+    },
+    delete: {
+        stil: "btn-outline-danger",
+        symbol: "bi-trash",
+        titel: () => I18N.title_delete,
+    },
+};
+
+function createRecordingCard(recording, aktionen) {
     const isSelected = recording.filename === selectedRecording;
+
+    if (!aktionen) {
+        aktionen = ["choose", "download", "copy-usb", "delete"];
+    }
+
+    const knoepfe = aktionen
+        .filter((name) => name !== "copy-usb" || usbConnected)
+        .map((name) => {
+            const a = DATEI_AKTIONEN[name];
+            if (!a) return "";
+            return `
+                <button class="btn ${a.stil} btn-sm" title="${a.titel()}" data-action="${name}" data-filename="${recording.filename}">
+                    <i class="bi ${a.symbol}"></i>
+                </button>`;
+        })
+        .join("");
 
     const card = document.createElement("div");
     card.className = "card mb-2" + (isSelected ? " border-primary" : "");
@@ -2110,8 +2312,7 @@ function createRecordingCard(recording) {
             <div class="flex-grow-1">
                 <h6 class="card-title mb-2">
                     <i class="bi bi-music-note-beamed me-2"></i>
-                    ${recording.filename}
-                    <span class="ms-2">${kindBadge(recording.kind)}</span>
+                    ${anzeigeName(recording.filename)}
                     ${isSelected ? `<span class="badge text-bg-primary ms-2">${I18N.badge_selected_for_soundcheck}</span>` : ''}
                 </h6>
                 <small class="text-body-secondary">
@@ -2123,26 +2324,7 @@ function createRecordingCard(recording) {
                 </small>
             </div>
             <div class="btn-group btn-group-sm">
-                ${isPracticeMix(recording.kind) ? `
-                <button class="btn btn-outline-info btn-sm" title="${I18N.title_choose_for_practice}" data-action="practice" data-filename="${recording.filename}">
-                    <i class="bi bi-repeat"></i>
-                </button>
-                ` : `
-                <button class="btn btn-outline-success btn-sm" title="${I18N.title_choose_for_soundcheck}" data-action="choose" data-filename="${recording.filename}">
-                    <i class="bi bi-play-circle"></i>
-                </button>
-                `}
-                <button class="btn btn-outline-primary btn-sm" title="${I18N.title_download}" data-action="download" data-filename="${recording.filename}">
-                    <i class="bi bi-download"></i>
-                </button>
-                ${usbConnected ? `
-                <button class="btn btn-outline-secondary btn-sm" title="${I18N.title_copy_to_usb}" data-action="copy-usb" data-filename="${recording.filename}">
-                    <i class="bi bi-usb-drive"></i>
-                </button>
-                ` : ''}
-                <button class="btn btn-outline-danger btn-sm" title="${I18N.title_delete}" data-action="delete" data-filename="${recording.filename}">
-                    <i class="bi bi-trash"></i>
-                </button>
+                ${knoepfe}
             </div>
         </div>
     `;
@@ -2177,6 +2359,9 @@ async function handleRecordingAction(event) {
             break;
         case "practice":
             await waehleUebungsmix(filename);
+            break;
+        case "listen":
+            waehleMitschnitt(filename);
             break;
         case "copy-usb":
             await copyRecordingToUsb(filename);
@@ -2276,7 +2461,7 @@ async function chooseRecordingForPlayback(filename) {
 }
 
 //
-// Einen Uebungsmix aus "Alle Dateien" zum Ueben waehlen.
+// Einen Uebungsmix aus der Dateiverwaltung zum Ueben waehlen.
 //
 // Der Knopf sass frueher am selben Platz und hiess "fuer den
 // Soundcheck auswaehlen" - er spielte den Mix dann ueber den
@@ -2319,6 +2504,41 @@ async function waehleUebungsmix(filename) {
         auswahl.value = filename;
         updatePracticeCard(lastStatusData);
     }
+}
+
+//
+// Einen Mitschnitt aus der Dateiverwaltung zum Dazuhoeren waehlen.
+//
+// Er gehoert zu einem bestimmten Uebungsmix - also wird der gleich
+// mitgewaehlt. Sonst stuende in der Karte ein Versuch, der zu einem
+// anderen Stueck gehoert, und beim Abspielen kaeme Unsinn heraus.
+//
+function waehleMitschnitt(filename) {
+
+    const zuordnung = mitschnittZuordnung();
+
+    const mix = Object.keys(zuordnung).find(
+        (name) => (zuordnung[name] || []).includes(filename)
+    );
+
+    const mixAuswahl = document.getElementById("practice-mix");
+    const takeAuswahl = document.getElementById("practice-take");
+
+    if (mix && mixAuswahl) mixAuswahl.value = mix;
+
+    //
+    // Die Liste der Versuche haengt am gewaehlten Stueck - erst
+    // aufbauen, dann darin waehlen.
+    //
+    updatePracticeCard(lastStatusData);
+
+    if (takeAuswahl) takeAuswahl.value = filename;
+
+    updatePracticeCard(lastStatusData);
+
+    bootstrap.Modal
+        .getOrCreateInstance(document.getElementById("recordingsModal"))
+        .hide();
 }
 
 function downloadRecording(filename) {
@@ -2605,24 +2825,18 @@ function showStemCombineError(message) {
 document.getElementById("btn-stem-combine-add-file").addEventListener("click", addStemCombineRow);
 
 //
-// Woher der Uebungsmix-Dialog geoeffnet wurde.
+// "Uebungsmix erstellen" sitzt in der Dateiverwaltung - dort, wo die
+// Uebungsmixe stehen. Ein Uebungsmix ist eine Datei, und Dateien macht
+// man in der Dateiverwaltung.
 //
-// Er sass frueher nur im Dialog "Alle Dateien" und kehrte beim
-// Schliessen dorthin zurueck. Jetzt steht er auch in der Ueben-Karte -
-// von dort zurueckzukehren waere falsch: Man haette einen Dialog vor
-// sich, den man nie geoeffnet hat.
+// Geschlossen kehrt der Dialog dorthin zurueck, woher er kam: Der
+// naechste Griff gilt fast immer dem eben erzeugten Mix.
 //
-let stemCombineHerkunft = "recordings";
+function oeffneStemCombine() {
 
-function oeffneStemCombine(herkunft) {
-
-    stemCombineHerkunft = herkunft;
-
-    if (herkunft === "recordings") {
-        bootstrap.Modal
-            .getOrCreateInstance(document.getElementById("recordingsModal"))
-            .hide();
-    }
+    bootstrap.Modal
+        .getOrCreateInstance(document.getElementById("recordingsModal"))
+        .hide();
 
     resetStemCombineModal();
 
@@ -2632,19 +2846,11 @@ function oeffneStemCombine(herkunft) {
 }
 
 document.getElementById("btn-open-stem-combine").addEventListener("click", () => {
-    oeffneStemCombine("recordings");
-});
-
-document.getElementById("btn-practice-create").addEventListener("click", () => {
-    oeffneStemCombine("practice");
+    oeffneStemCombine();
 });
 
 document.getElementById("stemCombineModal").addEventListener("hidden.bs.modal", () => {
-
-    if (stemCombineHerkunft !== "recordings") return;
-
-    const recordingsModalElement = document.getElementById("recordingsModal");
-    bootstrap.Modal.getOrCreateInstance(recordingsModalElement).show();
+    oeffneDateien("practice");
 });
 
 document.getElementById("btn-stem-combine-submit").addEventListener("click", submitStemCombine);
@@ -2870,7 +3076,7 @@ function updatePracticeCard(data) {
         mixe.forEach((name) => {
             const eintrag = document.createElement("option");
             eintrag.value = name;
-            eintrag.textContent = name.replace(/\.w64$/i, "");
+            eintrag.textContent = anzeigeName(name);
             auswahl.appendChild(eintrag);
         });
 
@@ -2880,16 +3086,21 @@ function updatePracticeCard(data) {
     }
 
     //
-    // Was sich dazuhoeren laesst: alle Aufnahmen ausser Uebungsmixen.
-    // Zwei Mixe uebereinander waeren Brei.
+    // Was sich dazuhoeren laesst: die Mitschnitte ZU DIESEM Stueck.
+    //
+    // Nicht alle Aufnahmen: Nach ein paar Uebungsabenden waere das
+    // eine Liste, in der man sucht - und ein Versuch zu einem anderen
+    // Stueck ergibt beim Zusammenhoeren ohnehin nur Unsinn. Die
+    // Zuordnung steht im Dateinamen (siehe core/recording_kind.py)
+    // und kommt fertig aus dem Status.
     //
     const mitspielen = document.getElementById("practice-take");
 
     if (mitspielen) {
 
-        const takes = data.practice_takes || [];
+        const takes = (data.practice_takes || {})[auswahl.value] || [];
 
-        const kennung = takes.join("|");
+        const kennung = auswahl.value + "|" + takes.join("|");
 
         if (mitspielen.dataset.built !== kennung) {
 
@@ -2905,7 +3116,7 @@ function updatePracticeCard(data) {
             takes.forEach((name) => {
                 const eintrag = document.createElement("option");
                 eintrag.value = name;
-                eintrag.textContent = name.replace(/\.w64$/i, "");
+                eintrag.textContent = takeName(name);
                 mitspielen.appendChild(eintrag);
             });
 
@@ -3015,7 +3226,7 @@ function updatePracticeCard(data) {
 
                 teile.push(
                     I18N.practice_take_hint.replace(
-                        "{name}", mitspielen.value.replace(/\.w64$/i, ""))
+                        "{name}", takeName(mitspielen.value))
                 );
 
                 teile.push(
@@ -3035,6 +3246,20 @@ function updatePracticeCard(data) {
 // core/recording_kind.py - sie steht hier ein zweites Mal, weil der
 // Browser den Namen liest, bevor er den Server fragt.
 //
+//
+// "Umbrella-1-Take2_s9.w64" heisst in der Auswahl "Versuch 2". Der
+// Name des Stuecks steht schon darueber - ihn zu wiederholen macht
+// die Liste nur breit.
+//
+function takeName(dateiname) {
+
+    const treffer = /-Take(\d+)$/.exec(anzeigeName(dateiname));
+
+    return treffer
+        ? I18N.practice_take_short.replace("{nr}", treffer[1])
+        : anzeigeName(dateiname);
+}
+
 function startkanalAusName(name) {
 
     const treffer = /_[sp](\d+)\.[^.]+$/i.exec(String(name || ""));
