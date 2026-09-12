@@ -579,14 +579,22 @@
                                 >
                                     {{ t.settings_wifi_country_title }}
                                 </label>
+                                {#
+                                    Gebaut wie die Samplerate-Zeile
+                                    weiter oben: kleines Auswahlfeld,
+                                    blauer Knopf daneben, beide gleich
+                                    hoch. Blau, weil jeder Knopf in
+                                    diesem Dialog, der eine Zeile
+                                    bestätigt, blau ist.
+                                #}
                                 <div class="d-flex gap-2">
                                     <select
                                         id="settings-wifi-country"
-                                        class="form-select"
+                                        class="form-select form-select-sm"
                                     ></select>
                                     <button
                                         type="button"
-                                        class="btn btn-outline-secondary text-nowrap"
+                                        class="btn btn-primary btn-sm text-nowrap"
                                         id="btn-save-wifi-country"
                                     >
                                         {{ t.settings_wifi_country_save }}
@@ -1106,10 +1114,18 @@
                             <div class="input-group input-group-sm mb-1">
                                 <select id="settings-light-port" class="form-select"></select>
 
+                                {#
+                                    Blaue Flaeche, kein Umriss - der
+                                    Knopf bestaetigt die Zeile, wie
+                                    "Speichern" ueberall sonst im
+                                    Dialog. Kein btn-sm: Die
+                                    input-group-sm gibt die Groesse
+                                    schon vor.
+                                #}
                                 <button
                                     type="button"
                                     id="btn-light-port-patch"
-                                    class="btn btn-outline-primary"
+                                    class="btn btn-primary"
                                 >
                                     {{ t.light_output_assign }}
                                 </button>

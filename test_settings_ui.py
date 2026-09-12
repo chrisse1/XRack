@@ -461,13 +461,19 @@ print(f"OK: Der Speichern-Knopf ist da, {ergebnis['breite']} px breit "
 
 
 # ====================================================================
-# 3. Alle Speichern-Knöpfe sehen gleich aus
+# 3. Die Knöpfe, die eine Zeile bestätigen, sehen alle gleich aus
 #
-# Sichtbar allein genügt nicht. Der neue Knopf war nach der ersten
-# Reparatur zwar zu sehen, stand aber als grauer Umriss zwischen acht
-# blauen - man sucht dann trotzdem, weil er nicht aussieht wie das,
-# was man sucht. Zwei weitere (Pult-Adresse, Kanalzug-Sperre) standen
-# aus demselben Grund grau da, nur hatte sich daran niemand gestört.
+# Sichtbar allein genügt nicht. Der Knopf beim gemeinsamen Namen war
+# nach der ersten Reparatur zwar zu sehen, stand aber als grauer
+# Umriss zwischen acht blauen - man sucht dann trotzdem, weil er
+# nicht aussieht wie das, was man sucht. Vier weitere standen aus
+# demselben Grund anders da (Pult-Adresse, Kanalzug-Sperre, Land,
+# DMX-Zuordnung), nur hatte sich daran niemand gestört.
+#
+# Die Familie ist nicht "wo Speichern draufsteht", sondern: Knöpfe,
+# die die Zeile neben sich bestätigen. "Land speichern" und
+# "Zuordnen" gehören dazu, obwohl sie anders heißen - der Nutzer
+# sucht dort dieselbe Sache.
 #
 # Verglichen werden die GERECHNETEN Farben, nicht die Klassennamen:
 # Geprüft wird das Aussehen. Ob jemand dieselbe Wirkung über eine
@@ -479,6 +485,8 @@ print(f"OK: Der Speichern-Knopf ist da, {ergebnis['breite']} px breit "
 BESCHRIFTUNGEN = {
     TEXTE["btn_save"],
     TEXTE["settings_mdns_alias_save"],
+    TEXTE["settings_wifi_country_save"],
+    TEXTE["light_output_assign"],
 }
 
 alle = knoepfe_pruefen("settingsModal", 1024)
@@ -488,9 +496,9 @@ speichern = [
     if knopf["text"] in BESCHRIFTUNGEN
 ]
 
-assert len(speichern) >= 10, (
-    f"Nur {len(speichern)} Speichern-Knöpfe gefunden - da war wohl nicht "
-    f"alles aufgeklappt, der Vergleich sagt dann nichts."
+assert len(speichern) >= 12, (
+    f"Nur {len(speichern)} bestätigende Knöpfe gefunden - da war wohl "
+    f"nicht alles aufgeklappt, der Vergleich sagt dann nichts."
 )
 
 aussehen = {
@@ -498,7 +506,8 @@ aussehen = {
 }
 
 assert len(aussehen) == 1, (
-    "Die Speichern-Knöpfe im Einstellungen-Dialog sehen verschieden aus. "
+    "Die bestätigenden Knöpfe im Einstellungen-Dialog sehen verschieden "
+    "aus. "
     "Einer fällt auf, und zwar als der falsche:\n"
     + "\n".join(
         f"  {knopf['schriftfarbe']:>18} auf {knopf['grund']:>18}  "
@@ -509,8 +518,8 @@ assert len(aussehen) == 1, (
 
 grund, schriftfarbe = aussehen.pop()
 
-print(f"OK: Alle {len(speichern)} Speichern-Knöpfe sind gleich gestaltet "
-      f"({schriftfarbe} auf {grund})")
+print(f"OK: Alle {len(speichern)} bestätigenden Knöpfe sind gleich "
+      f"gestaltet ({schriftfarbe} auf {grund})")
 
 
 print("Alle Einstellungs-Knopf-Tests erfolgreich.")
