@@ -6,10 +6,15 @@ weil der Umbau ueber mehrere Sitzungen laeuft: Wer hier weiterarbeitet
 - ich beim naechsten Mal oder jemand anderes -, soll den Stand und vor
 allem die BEGRUENDUNGEN vorfinden, nicht nur das Ergebnis.
 
-**Stand:** Alle Stufen bis 4 gebaut (3.0.0-dev7); Stufe 5 steht aus. Das Aufnahmefenster
-steht und ist am Geraet abgenommen; der Musikspieler kann Uebungsmixe
-mehrkanalig abspielen, mit Spulen und Schleife; die Karte hat den
-Umschalter Musik | Ueben. Stufen 3b, 4 und 5 stehen aus.
+**Stand:** Stufen 1 bis 4 gebaut, dazu der Gleichlauf beim
+Zusammenhoeren (3.0.0-dev9). Das Aufnahmefenster steht und ist am
+Geraet abgenommen; der Musikspieler spielt Uebungsmixe mehrkanalig mit
+Spulen und Schleife; die Karte hat den Umschalter Musik | Ueben; das
+Geuebte laesst sich mitschneiden und zusammen mit dem Mix wieder
+abspielen; die Sperrmatrix steht als Tabelle im Versuch. Offen: die
+Messung der Laufzeit durch das Pult. Stufe 5 (aus Mix und Versuch eine
+Datei schreiben) ist zurueckgestellt - beim Testen war sie nicht
+wichtig.
 
 **Versionen:** Auf diesem Zweig 3.0.0-dev1, -dev2 ... je Stufe. Wer
 so eine Fassung auf dem Geraet hat, sieht am Namen, dass es eine
