@@ -135,6 +135,14 @@ class Application(
         #
         self._port_forward_applied_ip: str | None = None
 
+        #
+        # Die gepufferte Adresse des Pults aus der DHCP-Vergabeliste
+        # (siehe PultMixin._konsolen_lease). Die Kanalzug-Karte fragt
+        # jede Sekunde, und dahinter steckt ein sudo-Lauf.
+        #
+        self._lease_ip: str | None = None
+        self._lease_geprueft = 0.0
+
         self.recorder = Recorder(
             self.audio_core.backend
         )

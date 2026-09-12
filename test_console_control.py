@@ -937,7 +937,8 @@ try:
     zuruecksetzungen = []
 
     def stub(manual="", lease=None, discovered=None, channels=18):
-        return types.SimpleNamespace(
+
+        attrappe = types.SimpleNamespace(
             #
             # Steht hier bewusst noch drin, obwohl die Kanalzahl es
             # nicht mehr benutzt: So faellt auf, falls sie je wieder
@@ -946,7 +947,12 @@ try:
             selected_audio_device=None,
             state_store=FakeStore({"console_ip_manual": manual}),
             wlan_control=types.SimpleNamespace(
-                get_status=lambda: {"console_ip": lease}
+                #
+                # Die schmale Abfrage. Der volle Statusbericht lag
+                # hinter jeder Sekunde Kanalzug-Karte - samt sudo-Lauf
+                # (siehe WlanControl.konsolen_lease_ip).
+                #
+                konsolen_lease_ip=lambda: lease,
             ),
             console_control=types.SimpleNamespace(
                 discover=lambda: discovered,
@@ -963,6 +969,24 @@ try:
             ),
             logger=logging.getLogger("XRack-Test"),
         )
+
+        #
+        # Die Pufferung der Pult-Adresse gehoert zum echten Ablauf -
+        # deshalb die echten Methoden, nur an der Attrappe.
+        #
+        attrappe._lease_ip = None
+        attrappe._lease_geprueft = 0.0
+        attrappe.LEASE_PUFFER_S = Application.LEASE_PUFFER_S
+
+        attrappe._konsolen_lease = types.MethodType(
+            Application._konsolen_lease, attrappe
+        )
+
+        attrappe._lease_puffer_leeren = types.MethodType(
+            Application._lease_puffer_leeren, attrappe
+        )
+
+        return attrappe
 
     #
     # Von Hand schlaegt alles andere - wer sie eintraegt, hat einen Grund.
@@ -1096,7 +1120,7 @@ try:
     kopplung = types.SimpleNamespace(
         selected_audio_device=types.SimpleNamespace(channels=18),
         state_store=FakeStore({"console_ip_manual": "127.0.0.1"}),
-        wlan_control=types.SimpleNamespace(get_status=lambda: {"console_ip": None}),
+        wlan_control=types.SimpleNamespace(konsolen_lease_ip=lambda: None),
         console_control=types.SimpleNamespace(
             set_link=lambda host, channels, start, linked: (
                 gesetzt.append((start, linked)) or True
@@ -1110,6 +1134,12 @@ try:
     # Die Aufloesung der Pult-IP ist hier nicht der Pruefgegenstand -
     # sie hat ihren eigenen Abschnitt weiter oben.
     #
+    kopplung._lease_ip = None
+    kopplung._lease_geprueft = 0.0
+    kopplung._konsolen_lease = types.MethodType(
+        Application._konsolen_lease, kopplung
+    )
+
     kopplung._console_host_and_channels = (
         lambda: Application._console_host_and_channels(kopplung)
     )
@@ -1346,10 +1376,16 @@ try:
             ),
             state_store=FakeStoreKanaele(),
             wlan_control=types.SimpleNamespace(
-                get_status=lambda: {"console_ip": "127.0.0.1"}
+                konsolen_lease_ip=lambda: "127.0.0.1"
             ),
             console_control=control,
             logger=logging.getLogger("XRack-Test"),
+        )
+
+        zeug._lease_ip = None
+        zeug._lease_geprueft = 0.0
+        zeug._konsolen_lease = types.MethodType(
+            Application._konsolen_lease, zeug
         )
 
         zeug._console_host_and_channels = (

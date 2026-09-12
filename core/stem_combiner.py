@@ -13,15 +13,14 @@ im Gegensatz zu extern (z.B. per ffmpeg-Remux) erzeugten .w64-
 Dateien, die XRacks eigener, auf die selbstgeschriebene Struktur
 festgelegter Reader nicht zuverlässig lesen kann.
 
-Zum Sample-Format: XRacks Dateien enthalten real volle S32_LE-Samples.
-audio/audio_backend.py fordert zwar PCM_FORMAT_S24_LE an, wertet den
-Rückgabewert von setformat() aber nicht aus - die X-Serie bietet dieses
-Format über USB offenbar nicht an, sodass ALSA S32_LE liefert. Da
-Aufnahme und Wiedergabe dasselbe anfordern und dasselbe bekommen, hebt
-sich das im Betrieb auf und fällt nicht auf. ffmpeg liefert ebenfalls
-S32_LE, hier ist also gar keine Umrechnung nötig - die Rohblöcke werden
-direkt interleaved. (Eine Umrechnung auf 24 Bit war der Grund, warum
-frühere Übungsmixe rund 48 dB zu leise waren.)
+Zum Sample-Format: XRacks Dateien enthalten volle S32_LE-Samples, und
+genau das fordern Aufnahme und Wiedergabe inzwischen auch an (siehe
+audio/audio_backend.py - früher stand dort S24_LE, was nur deshalb
+richtig herauskam, weil die X-Serie dieses Format über USB nicht
+anbietet). ffmpeg liefert ebenfalls S32_LE, hier ist also gar keine
+Umrechnung nötig - die Rohblöcke werden direkt interleaved. (Eine
+Umrechnung auf 24 Bit war der Grund, warum frühere Übungsmixe rund
+48 dB zu leise waren.)
 """
 
 from pathlib import Path

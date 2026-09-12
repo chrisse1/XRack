@@ -6,6 +6,7 @@ import logging
 
 import alsaaudio
 
+from audio.audio_backend import WUNSCHFORMAT, formatname
 from audio.channel_inserter import ChannelInserter
 from audio.models import AudioDevice
 
@@ -40,7 +41,7 @@ class AudioPlaybackBackend:
         channels: int,
         rate: int,
         start_channel: int = 0,
-        sample_format: int = alsaaudio.PCM_FORMAT_S24_LE,
+        sample_format: int = WUNSCHFORMAT,
     ) -> bool:
         """
         Öffnet das Audiogerät für die Wiedergabe.
@@ -56,9 +57,21 @@ class AudioPlaybackBackend:
         (z.B. start_channel=16 für Kanal 17+18).
 
         `sample_format` ist wählbar (aber immer 4 Byte pro Sample,
-        siehe BYTES_PER_SAMPLE), da Musikdateien über ffmpeg als
-        volles S32_LE dekodiert werden, während Aufnahmen im
-        S24_LE-Format (24 Bit in einem 32-Bit-Container) vorliegen.
+        siehe BYTES_PER_SAMPLE). Die Vorgabe ist S32_LE, und zwar für
+        alle drei Quellen: Musik kommt über ffmpeg als volles S32_LE,
+        und die Aufnahmen liegen genauso vor - XRack schreibt in die
+        Datei, was das Interface liefert, und das ist S32_LE
+        (32-Bit-Container, siehe audio/audio_backend.py und
+        writer/w64_writer.py).
+
+        Hier stand als Vorgabe lange S24_LE, und nur der Soundcheck
+        benutzte sie (Musik und Bluetooth geben S32_LE ausdrücklich
+        mit). Das war falsch für die Daten, die dabei gespielt werden,
+        und fiel nur nicht auf, weil die X-Serie S24_LE über USB
+        ohnehin nicht anbietet: ALSA nahm S32_LE, und es klang richtig.
+        Auf einem Interface, das S24_LE annimmt, hätte derselbe
+        Soundcheck aus den unteren 24 Bit gelesen - also aus dem
+        Rauschen.
         """
 
         self.device = device
@@ -107,11 +120,19 @@ class AudioPlaybackBackend:
             )
 
             if actual_format is not None and actual_format != self._format:
-                self.logger.warning(
-                    "ALSA hat ein anderes Sampleformat akzeptiert als "
-                    "angefordert: gefordert %s, gemeldet %s.",
-                    self._format,
-                    actual_format,
+
+                gefordert = formatname(self._format)
+
+                self._format = actual_format
+
+                self.logger.error(
+                    "Das Interface spielt %s statt %s. XRack liefert vier "
+                    "Byte je Wert mit 2^31 Vollausschlag - die Wiedergabe "
+                    "ist damit nicht verlaesslich. Das Geraet bietet an: "
+                    "%s.",
+                    formatname(actual_format),
+                    gefordert,
+                    ", ".join(device.formats) or "unbekannt",
                 )
 
             self._pcm.setperiodsize(1024)

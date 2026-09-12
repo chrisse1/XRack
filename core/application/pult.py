@@ -6,6 +6,8 @@ ueberhaupt erreichbar ist.
 
 import ipaddress
 
+from time import monotonic
+
 from core.console_control import MIN_DB
 
 #
@@ -25,6 +27,50 @@ class PultMixin:
 
     Teil von Application - siehe core/application/__init__.py.
     """
+
+    #
+    # So lange gilt eine einmal ermittelte Adresse aus der
+    # Vergabeliste. Die Kanalzug-Karte fragt jede Sekunde nach dem
+    # Pult, und dahinter stehen mehrere nmcli-Aufrufe und ein sudo-Lauf
+    # mit eigener PAM-Sitzung - zehn Sekunden spaeter ist die Adresse
+    # noch dieselbe.
+    #
+    # Im Journal des Geraets standen dadurch zwoelf sudo-Zeilen in
+    # sechs Sekunden. Das funktioniert, macht das Journal aber
+    # unlesbar - und genau darin haben wir dann einen Fehler gesucht.
+    #
+    # Der Puffer ist nur das Netz darunter: Alles, was die Adresse
+    # aendern kann, verwirft ihn ausdruecklich (_lease_puffer_leeren).
+    #
+    LEASE_PUFFER_S = 10.0
+
+    def _lease_puffer_leeren(self) -> None:
+        """
+        Den gepufferten Wert verwerfen.
+
+        Aufzurufen, wenn sich der Weg zum Pult geaendert haben kann -
+        Bridge, Freigabe, LAN-Modus, Suchlauf. Ohne das stuende nach
+        dem Umschalten bis zu zehn Sekunden die alte Adresse in der
+        Karte, und das sieht aus wie ein Fehler.
+        """
+
+        self._lease_geprueft = 0.0
+
+    def _konsolen_lease(self) -> str | None:
+        """Die vom Pi vergebene Adresse des Pults - gepuffert."""
+
+        jetzt = monotonic()
+
+        if (
+            self._lease_geprueft
+            and jetzt - self._lease_geprueft < self.LEASE_PUFFER_S
+        ):
+            return self._lease_ip
+
+        self._lease_ip = self.wlan_control.konsolen_lease_ip()
+        self._lease_geprueft = jetzt
+
+        return self._lease_ip
 
     def _console_host_and_channels(self) -> tuple[str | None, int, str]:
         """
@@ -51,7 +97,7 @@ class PultMixin:
 
         else:
 
-            lease = self.wlan_control.get_status().get("console_ip")
+            lease = self._konsolen_lease()
 
             if lease:
                 host, source = lease, "lease"
@@ -320,6 +366,12 @@ class PultMixin:
                 return False, "Das ist keine gültige IPv4-Adresse."
 
         self.state_store.set("console_ip_manual", ip)
+
+        #
+        # Auch hier: Wer die Adresse von Hand leert, will sofort sehen,
+        # was die Automatik findet - nicht den Wert von vorhin.
+        #
+        self._lease_puffer_leeren()
 
         #
         # Gemerkte Familie verwerfen: Eine neue Adresse kann ein

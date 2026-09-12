@@ -15,13 +15,13 @@ class LevelMeter:
     egal ob am Interface 18 (XR18) oder z.B. 32 Kanäle (X32)
     gewählt wurden.
 
-    Hinweis zum Format: AudioBackend fordert PCM_FORMAT_S24_LE an,
-    wertet den Rückgabewert von setformat() aber nicht aus - die
-    X-Serie bietet dieses Format über USB offenbar nicht an, sodass
-    ALSA tatsächlich S32_LE liefert. Diese Anzeige rechnete früher
-    mit 24-Bit-Vollausschlag und maskierte auf die unteren 24 Bit;
-    bei 32-Bit-Daten sind das die untersten, quasi zufälligen Bits,
-    weshalb die Anzeige schon bei leisem Signal fast voll ausschlug.
+    Hinweis zum Format: AudioBackend fordert S32_LE an und wertet aus,
+    was ALSA tatsächlich akzeptiert (siehe audio/audio_backend.py) -
+    kommt etwas anderes zurück, sagt es das deutlich. Diese Anzeige
+    rechnete früher mit 24-Bit-Vollausschlag und maskierte auf die
+    unteren 24 Bit; bei 32-Bit-Daten sind das die untersten, quasi
+    zufälligen Bits, weshalb die Anzeige schon bei leisem Signal fast
+    voll ausschlug.
     """
 
     BYTES_PER_SAMPLE = 4
