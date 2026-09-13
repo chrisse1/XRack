@@ -44,7 +44,9 @@ genaue Zeitstempel geschrieben, damit man sie von Hand mit
 
 import logging
 import logging.handlers
+import os
 import psutil
+import signal
 import socket
 import ssl
 import subprocess
@@ -152,6 +154,12 @@ class Diagnostics:
         #
         self._beacons = None
 
+        #
+        # Welches Signal den Prozess beendet hat - gesetzt vom
+        # Handler, geschrieben in die Schlusszeile.
+        #
+        self._signal = None
+
     # ------------------------------------------------------------
     # Start/Stopp
     # ------------------------------------------------------------
@@ -167,10 +175,63 @@ class Diagnostics:
         self.enabled = True
         self._stop.clear()
 
+        self._signale_abfangen()
+
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
 
         self.logger.info("Diagnose-Aufzeichnung gestartet: %s", LOG_FILE)
+
+    def _signale_abfangen(self) -> None:
+        """
+        Merken, WELCHES Signal XRack beendet - und es dann weiterreichen.
+
+        Ein sauberes Herunterfahren sieht im Protokoll immer gleich aus,
+        ganz gleich, wer es ausgelöst hat. Das Signal unterscheidet die
+        Fälle, die dahinterstecken können:
+
+          SIGTERM  systemd - "systemctl stop/restart", ein Update, oder
+                   etwas anderes, das den Dienst anfasst.
+          SIGINT   jemand sitzt an der Konsole und hat Strg-C gedrückt.
+          SIGHUP   die Sitzung, aus der XRack gestartet wurde, ist weg.
+
+        Weitergereicht wird an den vorherigen Handler - uvicorn hat
+        seinen bereits gesetzt, und der beendet den Dienst ordentlich.
+        Diese Stelle darf nur mitschreiben, nichts übernehmen.
+        """
+
+        for nummer in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+
+            try:
+                vorher = signal.getsignal(nummer)
+            except (ValueError, OSError):
+                continue
+
+            def merken(sig, rahmen, vorher=vorher):
+
+                self._signal = sig
+
+                if callable(vorher):
+                    vorher(sig, rahmen)
+
+                elif vorher == signal.SIG_DFL:
+                    #
+                    # Vorgabe wiederherstellen und noch einmal
+                    # schicken: Sonst haette dieses Mitschreiben das
+                    # Signal verschluckt.
+                    #
+                    signal.signal(sig, signal.SIG_DFL)
+                    os.kill(os.getpid(), sig)
+
+            try:
+                signal.signal(nummer, merken)
+            except (ValueError, OSError):
+                #
+                # Signale lassen sich nur im Hauptfaden setzen. Wo das
+                # nicht geht, fehlt eben diese eine Angabe - die
+                # Aufzeichnung laeuft trotzdem.
+                #
+                continue
 
     def stop(self) -> None:
         """
@@ -678,6 +739,64 @@ class Diagnostics:
 
         return ""
 
+    def _signalname(self) -> str:
+        """Der Name des Signals, das XRack beendet hat."""
+
+        try:
+            return signal.Signals(self._signal).name
+        except (ValueError, TypeError):
+            return str(self._signal)
+
+    def _dienst_auskunft(self) -> str:
+        """
+        Was systemd über den eigenen Dienst sagt.
+
+        Zwei Angaben, die einen ungeklärten Neustart auseinanderhalten:
+
+          `neustarts` ist systemds Zähler der AUTOMATISCHEN Neustarts
+          (Restart=on-failure). Er steigt, wenn der Dienst abgestürzt
+          ist und systemd ihn wiederbelebt hat - und er steigt NICHT
+          bei einem ausdrücklichen "systemctl restart". Damit trennt
+          diese eine Zahl "XRack ist gefallen" von "jemand hat XRack
+          neu gestartet", und das war bei den bisherigen Vorfällen
+          genau die offene Frage.
+
+          `seit` ist der Zeitpunkt, an dem der Dienst zuletzt aktiv
+          wurde - damit lässt sich der Vorfall im Journal wiederfinden
+          (`journalctl -u xrack.service --since ...`).
+
+        Gefragt wird nur lesend; `systemctl show` braucht keine Rechte.
+        """
+
+        werte = []
+
+        for eigenschaft, name in (
+            ("NRestarts", "neustarts"),
+            ("ActiveEnterTimestamp", "seit"),
+        ):
+
+            try:
+
+                lauf = subprocess.run(
+                    [
+                        "systemctl", "show", "xrack.service",
+                        "-p", eigenschaft, "--value",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
+                )
+
+                wert = lauf.stdout.strip()
+
+            except (subprocess.SubprocessError, OSError, FileNotFoundError):
+                wert = ""
+
+            if wert:
+                werte.append(f"{name}={wert.replace(' ', '_')}")
+
+        return " ".join(werte)
+
     def _stromsparen(self, interface: str) -> str:
         """
         Steht die Stromsparfunktion der Funkschnittstelle auf "on"?
@@ -787,16 +906,16 @@ class Diagnostics:
     # Schleife
     # ------------------------------------------------------------
 
-    def _loop(self) -> None:
+    def _kopfzeile(self, writer: logging.Logger) -> None:
+        """
+        Die Kopfzeile jeder Aufzeichnung - und das Urteil darüber,
+        ob XRack gerade neu gestartet wurde.
 
-        try:
-            writer = self._open_writer()
-        except OSError as exc:
-            self.logger.warning(
-                "Diagnose-Datei konnte nicht angelegt werden: %s", exc
-            )
-            self.enabled = False
-            return
+        Steht als eigene Methode, weil sie der Teil ist, der einen
+        ungeklärten Neustart erklären soll: Sie gehört geprüft,
+        und zwar ohne dass dafür eine ganze Messschleife laufen
+        muss.
+        """
 
         #
         # Erst nachsehen, DANN schreiben: Ob die vorherige Aufzeichnung
@@ -812,13 +931,16 @@ class Diagnostics:
 
         writer.info(
             "=== Aufzeichnung gestartet | host=%s | route=%s via %s | "
-            "prozess=%s system=%s ps=%s ===",
+            "prozess=%s system=%s ps=%s | pid=%d ppid=%d %s ===",
             socket.gethostname(),
             interface or "?",
             gateway or "?",
             self._dauer(prozess),
             self._dauer(system),
             self._stromsparen(interface),
+            os.getpid(),
+            os.getppid(),
+            self._dienst_auskunft(),
         )
 
         #
@@ -852,6 +974,20 @@ class Diagnostics:
                 "Aufzeichnung wurde also mitten im Betrieb neu gestartet.",
                 self._dauer(prozess),
             )
+
+
+    def _loop(self) -> None:
+
+        try:
+            writer = self._open_writer()
+        except OSError as exc:
+            self.logger.warning(
+                "Diagnose-Datei konnte nicht angelegt werden: %s", exc
+            )
+            self.enabled = False
+            return
+
+        self._kopfzeile(writer)
 
         port = 8080
 
@@ -892,7 +1028,10 @@ class Diagnostics:
 
             self._stop.wait(INTERVAL)
 
-        writer.info("=== Aufzeichnung beendet ===")
+        writer.info(
+            "=== Aufzeichnung beendet%s ===",
+            f" | signal={self._signalname()}" if self._signal else "",
+        )
 
     def _netz(self, writer: logging.Logger, gateway: str,
               interface: str) -> tuple[str, bool]:

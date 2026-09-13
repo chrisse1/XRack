@@ -969,6 +969,165 @@ try:
 
     print("OK: Fehlende Werkzeuge lassen die Aufzeichnung weiterlaufen")
 
+    # ----------------------------------------------------------------
+    # 11. Ein Neustart muss sagen, WER ihn ausgelöst hat
+    #
+    # Anlass: Zum zweiten Mal stand mitten im Protokoll ein Neustart -
+    # sauber beendet, im selben Sekundentakt wieder da, System seit
+    # 21 Stunden oben. Das Protokoll hielt fest, DASS XRack ersetzt
+    # wurde, und liess offen, von wem.
+    #
+    # Zwei Angaben entscheiden das, und beide kosten einen Aufruf:
+    #
+    #   signal=     SIGTERM heisst systemd (stop/restart/Update),
+    #               SIGINT heisst Strg-C an der Konsole.
+    #   neustarts=  systemds Zaehler der AUTOMATISCHEN Neustarts. Er
+    #               steigt beim Absturz, nicht bei "systemctl restart".
+    # ----------------------------------------------------------------
+
+    import signal as signal_modul  # noqa: E402
+
+    diagnostics = Diagnostics(FakeApplication())
+    diagnostics._close_writer()
+    diagnostics_module.LOG_FILE.unlink(missing_ok=True)
+
+    writer = diagnostics._open_writer()
+
+    diagnostics._self_check = lambda port: "ok"
+    diagnostics._ping = lambda host: True
+    diagnostics._default_route = lambda: ("192.168.1.1", "wlan0")
+    diagnostics._temperature = lambda: "45C"
+    diagnostics._load = lambda: "0.10"
+    diagnostics._funk = lambda iface: ""
+    diagnostics._stromsparen = lambda iface: "on"
+    diagnostics._dienst_auskunft = lambda: "neustarts=3 seit=Sa_2026-09-13"
+
+    diagnostics._kopfzeile(writer)
+
+    for handler in writer.handlers:
+        handler.flush()
+
+    kopf = diagnostics_module.LOG_FILE.read_text(encoding="utf-8")
+
+    for teil, warum in (
+        ("neustarts=3", "war es ein Absturz oder ein Befehl"),
+        ("seit=Sa_2026-09-13", "wo im Journal ist der Vorfall"),
+        ("pid=", "welcher Prozess schreibt hier"),
+        ("ppid=", "systemd (1) oder eine Sitzung"),
+    ):
+        assert teil in kopf, (
+            f"In der Kopfzeile fehlt {teil!r} ({warum}):\n{kopf}"
+        )
+
+    #
+    # Und das Signal: Es steht in der Schlusszeile, wenn eines kam.
+    #
+    diagnostics._signal = signal_modul.SIGTERM
+
+    diagnostics.enabled = True
+    diagnostics._stop.set()
+    diagnostics._loop()
+
+    for handler in diagnostics._writer.handlers:
+        handler.flush()
+
+    ende = diagnostics_module.LOG_FILE.read_text(encoding="utf-8")
+
+    assert "signal=SIGTERM" in ende, (
+        f"Die Schlusszeile nennt das Signal nicht - dann sieht ein "
+        f"Neustart durch systemd genauso aus wie ein Strg-C an der "
+        f"Konsole:\n{ende[-400:]}"
+    )
+
+    print("OK: Neustart und Ende nennen Signal, Zähler und Prozess")
+
+    # ----------------------------------------------------------------
+    # 11b. Ohne Signal steht auch keines da
+    #
+    # Eine Zeile, die immer "signal=" sagt, wäre keine Auskunft.
+    # ----------------------------------------------------------------
+
+    diagnostics = Diagnostics(FakeApplication())
+    diagnostics._close_writer()
+    diagnostics_module.LOG_FILE.unlink(missing_ok=True)
+
+    writer = diagnostics._open_writer()
+
+    diagnostics._self_check = lambda port: "ok"
+    diagnostics._ping = lambda host: True
+    diagnostics._default_route = lambda: ("192.168.1.1", "wlan0")
+    diagnostics._temperature = lambda: "45C"
+    diagnostics._load = lambda: "0.10"
+    diagnostics._funk = lambda iface: ""
+    diagnostics._stromsparen = lambda iface: "on"
+
+    diagnostics.enabled = True
+    diagnostics._stop.set()
+    diagnostics._loop()
+
+    for handler in diagnostics._writer.handlers:
+        handler.flush()
+
+    ohne = diagnostics_module.LOG_FILE.read_text(encoding="utf-8")
+
+    assert "Aufzeichnung beendet" in ohne, ohne
+
+    assert "signal=" not in ohne, (
+        f"Es steht ein Signal da, obwohl keines kam:\n{ohne[-300:]}"
+    )
+
+    print("OK: Ohne Signal bleibt die Schlusszeile schlicht")
+
+    # ----------------------------------------------------------------
+    # 11c. Das Mitschreiben darf das Herunterfahren nicht verschlucken
+    #
+    # Der Handler merkt sich das Signal und reicht es weiter. Täte er
+    # das nicht, liesse sich XRack nicht mehr beenden - und aus einer
+    # Diagnose würde ein Fehler.
+    # ----------------------------------------------------------------
+
+    gerufen = []
+
+    def vorheriger(sig, rahmen):
+        gerufen.append(sig)
+
+    echte_signal_funktion = signal_modul.signal
+    gesetzt = {}
+
+    def merken(nummer, handler):
+        gesetzt[nummer] = handler
+        return vorheriger
+
+    signal_modul.signal = merken
+    signal_modul_getsignal = signal_modul.getsignal
+    signal_modul.getsignal = lambda nummer: vorheriger
+
+    try:
+
+        wach = Diagnostics(FakeApplication())
+        wach._close_writer()
+        wach._signale_abfangen()
+
+        assert signal_modul.SIGTERM in gesetzt, (
+            "Fuer SIGTERM wurde gar kein Handler gesetzt."
+        )
+
+        gesetzt[signal_modul.SIGTERM](signal_modul.SIGTERM, None)
+
+        assert wach._signal == signal_modul.SIGTERM, wach._signal
+
+        assert gerufen == [signal_modul.SIGTERM], (
+            "Der vorherige Handler wurde nicht gerufen - uvicorn "
+            "erfaehrt vom Signal nichts mehr, und XRack laesst sich "
+            "nicht mehr ordentlich beenden."
+        )
+
+    finally:
+        signal_modul.signal = echte_signal_funktion
+        signal_modul.getsignal = signal_modul_getsignal
+
+    print("OK: Das Signal wird gemerkt UND weitergereicht")
+
     print("Alle Tests erfolgreich.")
 
 finally:
