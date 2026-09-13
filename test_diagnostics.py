@@ -1687,6 +1687,89 @@ try:
 
     print("OK: Die Befunde stehen auch ohne Aufzeichnung in den Einstellungen")
 
+    # ----------------------------------------------------------------
+    # 13f. Jede längere Gerätearbeit steht im Protokoll
+    #
+    # Vom Gerät: Die Aufzeichnung lief mehrere Stunden mit, und der
+    # Fehler kam nicht. Ohne diese Zeile hätten die Stunden nichts
+    # ergeben - dabei fällt die interessante Zahl bei JEDEM Starten und
+    # Stoppen an: Wie lange hält das Öffnen eines Geräts den Prozess
+    # auf?
+    #
+    # Ein Stillstand ist dafür nicht nötig; er ist nur der Fall, in dem
+    # es weh tut.
+    # ----------------------------------------------------------------
+
+    diagnostics_module.LOG_FILE.unlink(missing_ok=True)
+
+    #
+    # Die Wache ist für den ganzen Prozess eine - aus den Abschnitten
+    # oben liegen dort noch Arbeiten. Sie gehören nicht in diesen
+    # Versuch, also erst einmal abräumen.
+    #
+    GERAETEWACHE.abholen()
+
+    melder = Diagnostics(FakeApplication())
+
+    try:
+
+        writer = melder._open_writer()
+
+        #
+        # Eine lange und eine kurze Arbeit. Nachgestellt wird die Dauer
+        # über die Uhr der Wache selbst - hier wird nichts behauptet,
+        # sondern wirklich gewartet.
+        #
+        with GERAETEWACHE.arbeit("Wiedergabegerät öffnen: hw:2,0"):
+            time.sleep(diagnostics_module.GERAETEZEIT_SCHWELLE + 0.1)
+
+        with GERAETEWACHE.arbeit("Aufnahmegerät schließen: hw:2,0"):
+            pass
+
+        melder._geraetezeit_melden(writer)
+
+        for handler in writer.handlers:
+            handler.flush()
+
+        inhalt = diagnostics_module.LOG_FILE.read_text(encoding="utf-8")
+
+        assert "GERÄTEARBEIT" in inhalt, (
+            f"Die Dauer des Öffnens steht nicht im Protokoll:\n"
+            f"{inhalt[-500:]}"
+        )
+
+        assert "Wiedergabegerät öffnen" in inhalt, inhalt[-500:]
+
+        #
+        # Die kurze nicht: Sonst stünde bei jedem Titelwechsel eine
+        # Zeile über zwei Millisekunden da, und die lange ginge darin
+        # unter.
+        #
+        assert "Aufnahmegerät schließen" not in inhalt, (
+            f"Auch belanglos kurze Arbeiten werden geschrieben:\n"
+            f"{inhalt[-500:]}"
+        )
+
+        #
+        # Und jede nur einmal - abgeholt ist abgeholt.
+        #
+        melder._geraetezeit_melden(writer)
+
+        for handler in writer.handlers:
+            handler.flush()
+
+        zweitens = diagnostics_module.LOG_FILE.read_text(encoding="utf-8")
+
+        assert zweitens.count("GERÄTEARBEIT") == 1, (
+            f"Die Zeile steht {zweitens.count('GERÄTEARBEIT')}-mal da."
+        )
+
+    finally:
+        melder._wache_stop.set()
+        melder._close_writer()
+
+    print("OK: Wie lange das Öffnen dauert, steht im Protokoll")
+
     print("Alle Tests erfolgreich.")
 
 finally:

@@ -128,6 +128,19 @@ gesetzten Seiten: einmal hält eine Schleife den GIL fest (nichts läuft),
 einmal verschläft die Wache ihren Takt, während ein zweiter Thread
 munter Blöcke schreibt.
 
+**Die Dauer selbst steht im Protokoll**, auch ohne Stillstand: Jede
+Gerätearbeit über 0,2 s schreibt eine Zeile
+
+```
+GERÄTEARBEIT: Wiedergabegerät öffnen: hw:2,0 dauerte 0.42 s - so lange
+lief in dieser Zeit kein Python (pyalsaaudio hält dabei den GIL).
+```
+
+Das ist die Zahl, um die es eigentlich geht, und sie fällt bei *jedem*
+Starten und Stoppen an — nicht nur im Fehlerfall. Ohne diese Zeile
+hätten mehrere Stunden Mitschnitt nichts ergeben, solange der Fehler
+ausblieb. Erscheint sie nie, ist der GIL-Verdacht damit erledigt.
+
 **Die Wache läuft immer**, auch wenn die Aufzeichnung ausgeschaltet ist,
 und ihre Funde stehen in den Einstellungen — nicht nur in einer
 Protokolldatei, die erst jemand holen muss. Der Grund ist der

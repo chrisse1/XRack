@@ -121,6 +121,22 @@ STILLSTAND_SCHWELLE = 0.5
 STILLSTAND_MERKE_MAX = 10
 
 #
+# Ab dieser Dauer wird eine abgeschlossene Gerätearbeit aufgeschrieben,
+# auch ohne gemessenen Stillstand.
+#
+# Der Grund ist ein Bericht vom Gerät: Die Aufzeichnung lief mehrere
+# Stunden mit, und der Fehler kam nicht. Ohne diese Zeile hätten die
+# Stunden gar nichts ergeben - dabei fällt die interessante Zahl bei
+# JEDEM Starten und Stoppen an: Wie lange hält das Öffnen eines Geräts
+# den Prozess auf?
+#
+# 0,2 s ist bewusst niedrig. Ein Öffnen, das so lange braucht, ist noch
+# kein Fehler, aber es ist der Anfang der Antwort - und wenn nie eine
+# solche Zeile erscheint, ist der GIL-Verdacht damit erledigt.
+#
+GERAETEZEIT_SCHWELLE = 0.2
+
+#
 # Solange nichts auffällt, genügt ein Lebenszeichen - sonst wäre die
 # Datei voller identischer Zeilen.
 #
@@ -1270,6 +1286,33 @@ class Diagnostics:
 
             del self._stillstand_verlauf[:-STILLSTAND_MERKE_MAX]
 
+    def _geraetezeit_melden(self, writer: logging.Logger) -> None:
+        """
+        Aufschreiben, wie lange das Öffnen und Schließen gedauert hat.
+
+        Unabhängig von einem Stillstand: Diese Zahl fällt bei jedem
+        Starten und Stoppen an, und sie ist die Grundlage für die
+        Entscheidung, ob die fünf Hardware-Aushandlungen beim Öffnen zu
+        einer zusammengefasst werden sollten.
+
+        Abgeholt wird immer, geschrieben nur, was lange genug gedauert
+        hat - sonst stünde bei jedem Titelwechsel eine Zeile über zwei
+        Millisekunden da.
+        """
+
+        for was, dauer in GERAETEWACHE.abholen():
+
+            if dauer < GERAETEZEIT_SCHWELLE:
+                continue
+
+            writer.info(
+                "GERÄTEARBEIT: %s dauerte %.2f s - so lange lief in "
+                "dieser Zeit kein Python (pyalsaaudio hält dabei den "
+                "GIL).",
+                was,
+                dauer,
+            )
+
     def _tonurteil(self, verspaetung: float, bloecke: int) -> str:
         """
         Ist während des Stillstands Ton geflossen?
@@ -1375,6 +1418,8 @@ class Diagnostics:
             last_tick = now
 
             self._stillstand_melden(writer)
+
+            self._geraetezeit_melden(writer)
 
             self._dienste_melden(writer, now)
 

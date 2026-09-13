@@ -54,6 +54,12 @@ import threading
 import time
 from contextlib import contextmanager
 
+#
+# So viele abgeschlossene Arbeiten warten höchstens darauf, ins
+# Protokoll geschrieben zu werden.
+#
+OFFEN_MAX = 50
+
 
 class Geraetewache:
     """
@@ -106,6 +112,21 @@ class Geraetewache:
         self._bloecke = 0
         self._blockdauer = 0.0
 
+        #
+        # Abgeschlossene Arbeiten, die noch niemand ins Protokoll
+        # geschrieben hat: (Beschreibung, Dauer).
+        #
+        # Ohne diese Liste stand die Dauer nur dann irgendwo, wenn
+        # zufällig auch ein Stillstand gemessen wurde. Dabei ist sie
+        # die Zahl, um die es geht: Wie lange hält das Öffnen eines
+        # Geräts den Prozess auf? Sie fällt bei JEDEM Start und Stopp
+        # an, nicht nur im Fehlerfall - man muss sie nur aufschreiben.
+        #
+        # Gedeckelt, weil niemand sie abholt, solange die Aufzeichnung
+        # aus ist.
+        #
+        self._offen: list[tuple[str, float]] = []
+
     @contextmanager
     def arbeit(self, was: str):
         """
@@ -136,6 +157,10 @@ class Geraetewache:
 
                 if self._laengste is None or dauer > self._laengste[1]:
                     self._laengste = (was, dauer)
+
+                self._offen.append((was, dauer))
+
+                del self._offen[:-OFFEN_MAX]
 
     def block_geschrieben(self) -> None:
         """
@@ -206,6 +231,21 @@ class Geraetewache:
             return None
 
         return f"{was} ({dauer:.1f} s, gerade beendet)"
+
+    def abholen(self) -> list[tuple[str, float]]:
+        """
+        Die abgeschlossenen Arbeiten, und danach ist die Liste leer.
+
+        Gedacht für die Aufzeichnung: Sie holt sie in ihrem Takt ab und
+        schreibt auf, was lange genug gedauert hat.
+        """
+
+        with self._sperre:
+
+            fertig = self._offen
+            self._offen = []
+
+        return fertig
 
     def laengste(self) -> str | None:
         """Die längste je gemessene Dauer - für die Schlusszeile."""
