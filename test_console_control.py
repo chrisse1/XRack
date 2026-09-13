@@ -1435,6 +1435,99 @@ try:
 finally:
     console.stop()
 
+# ====================================================================
+# Das Pruefprogramm laeuft mit dem Python, das man im Terminal hat
+#
+# scripts/xrack-pult-fragen.py fragt das Pult, welche Adressen es kennt.
+# Am Geraet endete der erste Aufruf so:
+#
+#     pi@x18rack:~/XRack $ python3 scripts/xrack-pult-fragen.py
+#     ModuleNotFoundError: No module named 'psutil'
+#
+# XRack laeuft in einer virtuellen Umgebung, psutil steckt dort. Wer im
+# Terminal "python3" tippt, hat sie nicht - und ein Pruefprogramm, das
+# man nur mit dem langen Pfad starten kann, wird im Ernstfall nicht
+# gestartet. Es sucht sich das richtige Python deshalb selbst.
+#
+# Geprueft wird mit einer Adresse, die nie antwortet: Es geht hier nicht
+# um das Pult, sondern darum, dass das Programm ueberhaupt bis zu seiner
+# Frage kommt.
+# ====================================================================
+
+import os        # noqa: E402
+import subprocess  # noqa: E402
+import sys       # noqa: E402
+
+WURZEL = Path(__file__).resolve().parent
+
+PRUEFPROGRAMM = WURZEL / "scripts" / "xrack-pult-fragen.py"
+
+#
+# Ein Python OHNE psutil suchen - also das des Systems, nicht das von
+# XRack. Gibt es keins, ist an dieser Pruefung nichts zu sehen (dann
+# waere jeder Aufruf ohnehin vollstaendig ausgestattet).
+#
+blank = None
+
+for kandidat in ("/usr/bin/python3", "python3"):
+
+    try:
+        fehlt = subprocess.run(
+            [kandidat, "-c", "import psutil"],
+            capture_output=True,
+            timeout=30,
+        ).returncode != 0
+
+    except (OSError, subprocess.SubprocessError):
+        continue
+
+    if fehlt:
+        blank = kandidat
+        break
+
+if blank is None:
+    print("(übersprungen: kein Python ohne psutil zur Hand)")
+
+else:
+
+    umgebung = {
+        schluessel: wert for schluessel, wert in os.environ.items()
+        #
+        # Ein gesetzter Merker wuerde den Wechsel unterdruecken - genau
+        # den soll der Versuch ja sehen.
+        #
+        if schluessel != "XRACK_PULT_FRAGEN_GEWECHSELT"
+    }
+
+    lauf = subprocess.run(
+        [blank, str(PRUEFPROGRAMM), "192.0.2.1"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=str(WURZEL),
+        env=umgebung,
+    )
+
+    assert "ModuleNotFoundError" not in lauf.stderr, (
+        "Das Prüfprogramm stirbt am fehlenden psutil, statt XRacks "
+        "Python-Umgebung zu nehmen:\n" + lauf.stderr[-800:]
+    )
+
+    #
+    # Und es ist wirklich bis zur Frage gekommen: Die Meldung ueber das
+    # stumme Pult steht erst hinter dem ganzen Aufbau.
+    #
+    assert "antwortet kein Pult" in lauf.stdout, (
+        f"Das Prüfprogramm ist nicht bis zur Abfrage gekommen.\n"
+        f"stdout: {lauf.stdout[-400:]}\nstderr: {lauf.stderr[-800:]}"
+    )
+
+    assert lauf.returncode == 1, (
+        f"Ohne Pult muss es mit 1 enden, nicht mit {lauf.returncode}."
+    )
+
+    print("OK: Das Prüfprogramm holt sich XRacks Python-Umgebung selbst")
+
 #
 # Bewusst ausserhalb des finally: Im finally wuerde die Meldung auch
 # dann erscheinen, wenn gerade eine Pruefung fehlgeschlagen ist.

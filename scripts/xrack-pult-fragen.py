@@ -39,10 +39,75 @@ sollte. Antwortet sie doch, antwortet das Pult auf alles, und das
 ganze Programm beweist nichts.
 """
 
+import importlib.util
+import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+WURZEL = Path(__file__).resolve().parent.parent
+
+sys.path.insert(0, str(WURZEL))
+
+#
+# Merker gegen einen Kreislauf beim Wechsel der Python-Umgebung (siehe
+# in_eigene_umgebung_wechseln).
+#
+SCHON_GEWECHSELT = "XRACK_PULT_FRAGEN_GEWECHSELT"
+
+
+def in_eigene_umgebung_wechseln() -> None:
+    """
+    Notfalls mit XRacks eigenem Python neu starten.
+
+    XRack laeuft in einer virtuellen Umgebung (.venv, siehe install.sh),
+    und psutil steckt dort - nicht im System-Python. Ein "python3
+    scripts/xrack-pult-fragen.py" endete deshalb mit
+    "ModuleNotFoundError: No module named 'psutil'", noch bevor
+    ueberhaupt eine Frage ans Pult gegangen waere. Am Geraet genau so
+    passiert.
+
+    Der Ausweg waere, den langen Pfad zu tippen. Nur merkt sich den
+    niemand, und ein Pruefprogramm, das man nur mit Handbuch starten
+    kann, wird im Ernstfall nicht gestartet. Also sucht es sich das
+    richtige Python selbst.
+
+    Gegen einen Kreislauf steht eine Umgebungsvariable und NICHT ein
+    Vergleich der Pfade. Der Vergleich lag naemlich nahe und war falsch:
+    ".venv/bin/python3" ist oft nur ein Verweis auf denselben
+    Interpreter, und aufgeloest ("resolve") sind beide Pfade gleich - die
+    Sperre haette dann immer zugeschlagen und nie gewechselt. Genau so
+    beim ersten Versuch passiert. Eine virtuelle Umgebung wirkt ueber den
+    Pfad, mit dem man sie AUFRUFT, nicht ueber den, auf den er zeigt.
+
+    Und fehlt psutil auch dort, bleibt es beim gewohnten Fehler - lieber
+    eine klare Meldung als ein stiller Umweg.
+    """
+
+    if os.environ.get(SCHON_GEWECHSELT):
+        return
+
+    try:
+        if importlib.util.find_spec("psutil") is not None:
+            return
+    except (ImportError, ValueError):
+        pass
+
+    eigen = WURZEL / ".venv" / "bin" / "python3"
+
+    if not eigen.exists():
+        return
+
+    print(f"(XRacks Python-Umgebung wird benutzt: {eigen})")
+
+    os.environ[SCHON_GEWECHSELT] = "1"
+
+    os.execv(
+        str(eigen),
+        [str(eigen), str(Path(__file__).resolve()), *sys.argv[1:]],
+    )
+
+
+in_eigene_umgebung_wechseln()
 
 from core.console_control import (  # noqa: E402
     ConsoleControl,
@@ -79,7 +144,7 @@ def pult_finden() -> str | None:
     steuerung = ConsoleControl()
 
     try:
-        laden = StateStore(Path(__file__).resolve().parent.parent / "config" / "state.json")
+        laden = StateStore(WURZEL / "config" / "state.json")
         eingetragen = (laden.get("console_ip_manual") or "").strip()
     except Exception:
         eingetragen = ""
