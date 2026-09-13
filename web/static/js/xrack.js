@@ -3247,6 +3247,19 @@ function updatePracticeCard(data) {
         }
 
         mitspielen.disabled = data.music_playing;
+
+        //
+        // Zusammenfuehren geht nur mit einem gewaehlten Mitschnitt -
+        // und nicht, waehrend etwas laeuft: Die neue Datei entsteht
+        // aus beiden Quellen, und wer sie dabei umschaltet, bekaeme
+        // eine andere als die, die er gerade hoert.
+        //
+        const zusammen = document.getElementById("btn-practice-merge");
+
+        if (zusammen) {
+            zusammen.disabled =
+                !mitspielen.value || data.music_playing || data.recording;
+        }
     }
 
     //
@@ -3438,6 +3451,110 @@ async function stopPractice() {
 // selbst herstellen, und eine Messung ohne sie findet nichts.
 //
 let laufzeitLaeuft = false;
+
+//
+// Stufe 5: aus Uebungsmix und Mitschnitt eine Datei schreiben.
+//
+// Der Name wird vorgeschlagen und nicht erfragt-und-vergessen: Er
+// setzt sich aus dem Stueck und der Nummer des Versuchs zusammen
+// ("Umbrella-1 mit Take 2"), denn genau daran erkennt man die Datei
+// spaeter auf dem Stick wieder.
+//
+async function takeZusammenfuehren() {
+
+    const mix = document.getElementById("practice-mix");
+    const take = document.getElementById("practice-take");
+    const knopf = document.getElementById("btn-practice-merge");
+
+    if (!mix || !take || !take.value) return;
+
+    const vorschlag = `${anzeigeName(mix.value)} + ${takeName(take.value)}`;
+
+    const name = prompt(I18N.practice_merge_name, vorschlag);
+
+    //
+    // Abbrechen heisst abbrechen - ein leerer Name waere sonst ein
+    // stillschweigendes "Soundcheck".
+    //
+    if (name === null || !name.trim()) return;
+
+    if (knopf) knopf.disabled = true;
+
+    try {
+
+        const antwort = await fetch("/api/recordings/combine-take", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                mix: mix.value,
+                take: take.value,
+                name: name.trim(),
+            }),
+        });
+
+        const ergebnis = await antwort.json();
+
+        if (!ergebnis.success) {
+            alert(ergebnis.message || I18N.practice_merge_failed);
+            return;
+        }
+
+        //
+        // Die Arbeit laeuft im Hintergrund - gewartet wird auf
+        // dieselbe Statusabfrage wie beim Erstellen eines Uebungsmixes
+        // aus Stems. Es ist dieselbe Arbeit: Am Ende steht ein
+        // Uebungsmix.
+        //
+        const fertig = await warteAufZusammenfuehrung();
+
+        if (fertig.success) {
+            alert(
+                I18N.practice_merge_done.replace("{name}", fertig.filename)
+            );
+
+            //
+            // Die neue Datei gehoert sofort in die Auswahl - sonst
+            // sucht man sie dort vergeblich und haelt es fuer einen
+            // Fehlschlag.
+            //
+            await updateStatus();
+        } else {
+            alert(fertig.error || I18N.practice_merge_failed);
+        }
+
+    } catch (fehler) {
+        console.error("Zusammenführen fehlgeschlagen:", fehler);
+        alert(I18N.practice_merge_failed);
+
+    } finally {
+        if (knopf) knopf.disabled = false;
+    }
+}
+
+//
+// Nachfragen, bis die Zusammenfuehrung fertig ist.
+//
+// Die Frist ist grosszuegig: Geschrieben wird eine ganze Datei, und
+// eine Stunde Uebungsmix sind Gigabytes. Sie ist trotzdem da - ohne
+// sie warte die Oberflaeche ewig, wenn der Hintergrundlauf stirbt.
+//
+async function warteAufZusammenfuehrung(frist_s = 1800) {
+
+    const ende = Date.now() + frist_s * 1000;
+
+    while (Date.now() < ende) {
+
+        await new Promise((weiter) => setTimeout(weiter, 500));
+
+        const stand = await (
+            await fetch("/api/recordings/combine/status")
+        ).json();
+
+        if (!stand.active) return stand;
+    }
+
+    return { success: false, error: I18N.practice_merge_failed };
+}
 
 async function messeLaufzeit() {
 

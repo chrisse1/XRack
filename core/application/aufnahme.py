@@ -6,7 +6,11 @@ von Stereodateien zum Uebungsmix.
 import threading
 
 from core.recording_kind import KIND_PRACTICE, kind_from_filename
-from core.stem_combiner import combine_stems, StemCombineError
+from core.stem_combiner import (
+    StemCombineError,
+    combine_stems,
+    uebungsmix_mit_take,
+)
 from pathlib import Path
 
 
@@ -289,6 +293,128 @@ class AufnahmeMixin:
         thread.start()
 
         return True, "started"
+
+
+    def start_take_zusammenfuehren(
+        self,
+        mix: str,
+        take: str,
+        name: str,
+    ) -> tuple[bool, str]:
+        """
+        Schreibt aus einem Übungsmix und einem Mitschnitt eine neue
+        Datei - Stufe 5 des Üben-Umbaus.
+
+        Beim Üben legt XRack beides nur in denselben Wiedergabestrom,
+        ohne etwas zu schreiben: Für "mal eben anhören" ist das der
+        richtige Weg, und ein missratener Versuch ist einfach gelöscht.
+        Sitzt ein Versuch aber, will man ihn mitnehmen - auf den Stick,
+        ins Backup, auf ein anderes XRack. Dafür muss aus zweien eine
+        Datei werden.
+
+        Der gemessene Versatz wird dabei angewandt, und zwar derselbe,
+        mit dem auch abgespielt wird (practice_offset_ms). Sonst klänge
+        die neue Datei anders als das, was man beim Üben gehört hat -
+        und genau dafür wurde die Messung gebaut.
+
+        Läuft im Hintergrund, über denselben Zustand wie die
+        Stem-Zusammenführung: Beide schreiben eine Übungsmix-Datei, und
+        zwei davon gleichzeitig gibt es nicht.
+        """
+
+        name = name.strip()
+
+        if (
+            not name
+            or len(name) > 40
+            or "/" in name
+            or "\\" in name
+            or name in (".", "..")
+        ):
+            return False, "Ungültiger Name."
+
+        verzeichnis = Path(self.recorder.writer.directory)
+
+        #
+        # Nur Dateinamen, keine Pfade: Was von aussen kommt, darf nicht
+        # bestimmen, WO gelesen wird (dieselbe Regel wie beim Loeschen
+        # und Herunterladen von Aufnahmen).
+        #
+        for teil in (mix, take):
+
+            if not teil or "/" in teil or "\\" in teil or teil in (".", ".."):
+                return False, "Ungültiger Dateiname."
+
+        mix_pfad = verzeichnis / mix
+        take_pfad = verzeichnis / take
+
+        for pfad in (mix_pfad, take_pfad):
+            if not pfad.is_file():
+                return False, f"Datei nicht gefunden: {pfad.name}"
+
+        with self._stem_combine_lock:
+
+            if self.stem_combine_state["active"]:
+                return False, "Es läuft bereits eine Zusammenführung."
+
+            self.stem_combine_state = {
+                "active": True,
+                "success": None,
+                "error": "",
+                "filename": "",
+            }
+
+        thread = threading.Thread(
+            target=self._run_take_zusammenfuehren,
+            args=(mix_pfad, take_pfad, name),
+            daemon=True,
+        )
+        thread.start()
+
+        return True, "started"
+
+
+    def _run_take_zusammenfuehren(
+        self,
+        mix: Path,
+        take: Path,
+        name: str,
+    ) -> None:
+
+        try:
+
+            filename = uebungsmix_mit_take(
+                mix,
+                take,
+                name,
+                versatz_ms=self.practice_offset_ms,
+            )
+
+            with self._stem_combine_lock:
+                self.stem_combine_state["success"] = True
+                self.stem_combine_state["filename"] = filename
+
+        except StemCombineError as exc:
+
+            with self._stem_combine_lock:
+                self.stem_combine_state["success"] = False
+                self.stem_combine_state["error"] = str(exc)
+
+        except Exception as exc:
+
+            self.logger.exception(
+                "Zusammenführen von Mix und Mitschnitt fehlgeschlagen: %s",
+                exc,
+            )
+
+            with self._stem_combine_lock:
+                self.stem_combine_state["success"] = False
+                self.stem_combine_state["error"] = "Unerwarteter Fehler."
+
+        finally:
+
+            with self._stem_combine_lock:
+                self.stem_combine_state["active"] = False
 
 
     def _run_stem_combine(

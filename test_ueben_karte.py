@@ -976,9 +976,22 @@ def seite_bauen(daten: dict, vorlauf: str, pruefung: str) -> str:
         + json.dumps(daten) + ") };\n"
         "  if (String(url).indexOf('/api/audio/devices') === 0)\n"
         "    return { ok: true, json: async () => ([]) };\n"
+        #
+        # Die Zusammenfuehrung laeuft im Hintergrund; die Oberflaeche
+        # fragt nach, bis sie fertig ist. Hier ist sie sofort fertig -
+        # sonst wartete der Versuch bis zur Frist.
+        #
+        "  if (String(url).indexOf('/api/recordings/combine/status') === 0)\n"
+        "    return { ok: true, json: async () => ({ active: false,\n"
+        "      success: true, filename: 'Fertig-1_p.w64', error: '' }) };\n"
         "  return { ok: true, json: async () => ({ success: true }) };\n"
         "};\n"
         "window.alert = (text) => { window.__alert = String(text); };\n"
+        "window.prompt = (text, vorschlag) => {\n"
+        "  window.__prompt = String(text);\n"
+        "  window.__vorschlag = String(vorschlag);\n"
+        "  return window.__antwort === undefined\n"
+        "    ? String(vorschlag) : window.__antwort; };\n"
         "window.confirm = (text) => { window.__frage = String(text);\n"
         "  return true; };\n"
         "</script>"
@@ -988,8 +1001,14 @@ def seite_bauen(daten: dict, vorlauf: str, pruefung: str) -> str:
     # Der Vorlauf drückt Knöpfe, nachdem die Karte einmal gefüllt
     # wurde; geprüft wird danach.
     #
+    #
+    # Der Vorlauf laeuft in einer ASYNC-Funktion: Manche Knoepfe warten
+    # auf eine Antwort (etwa das Zusammenfuehren von Mix und
+    # Mitschnitt), und ohne "await" muesste der Versuch raten, wann er
+    # messen darf.
+    #
     nachspann = (
-        "<script>setTimeout(() => { try { " + vorlauf + " }\n"
+        "<script>setTimeout(async () => { try { " + vorlauf + " }\n"
         "  catch (e) { window.__vorlauffehler = String(e); } }, 500);\n"
         "setTimeout(() => {\n"
         "  const ergebnis = (() => { try { return (" + pruefung + ")(); }\n"
@@ -2084,6 +2103,120 @@ assert ziel["dateien"] is False, (
 )
 
 print("OK: Der Griff schaltet um, wählt vor und schliesst den Dialog")
+
+
+# ====================================================================
+# Stufe 5: aus Mix und Mitschnitt eine Datei
+#
+# Zum Anhören braucht es das nicht - dafür legt XRack beides in
+# denselben Wiedergabestrom, ohne etwas zu schreiben. Sitzt ein Versuch
+# aber, will man ihn mitnehmen: auf den Stick, ins Backup, auf ein
+# anderes XRack.
+#
+# Der Knopf gehört deshalb neben die Auswahl des Mitschnitts, und er
+# darf nur dann gehen, wenn einer gewählt ist.
+# ====================================================================
+
+ZUSAMMEN = """function () {
+
+    const knopf = document.getElementById('btn-practice-merge');
+
+    return {
+        da: !!knopf,
+        gesperrt: knopf ? knopf.disabled : null,
+        frage: window.__prompt || '',
+        vorschlag: window.__vorschlag || '',
+        alarm: window.__alert || '',
+        posts: window.__posts.filter(
+            (p) => p.url.indexOf('/api/status') !== 0)
+    };
+}"""
+
+#
+# a) Ohne gewählten Mitschnitt gibt es nichts zusammenzuführen.
+#
+ohne = ausfuehren(
+    stand(player_mode="practice", practice_mixes=MIXE, practice_takes=TAKES),
+    ZUSAMMEN,
+)
+
+assert ohne["da"] is True, "Der Knopf zum Zusammenführen fehlt."
+
+assert ohne["gesperrt"] is True, (
+    "Ohne gewählten Mitschnitt lässt sich zusammenführen - was denn?"
+)
+
+#
+# b) Mit Mitschnitt: Der Knopf geht, fragt nach einem Namen und
+#    schickt beide Dateien.
+#
+zusammen = ausfuehren(
+    stand(player_mode="practice", practice_mixes=MIXE, practice_takes=TAKES),
+    ZUSAMMEN,
+    vorlauf=(
+        "const m = document.getElementById('practice-mix');"
+        "m.value = 'Uebung-Blues_p9.w64';"
+        "m.dispatchEvent(new Event('change'));"
+        "document.getElementById('practice-take').value ="
+        "  'Uebung-Blues-Take2_s.w64';"
+        #
+        # Der Knopf wird beim Auffrischen freigegeben - also erst
+        # auffrischen lassen, dann druecken.
+        #
+        "await updateStatus();"
+        "document.getElementById('btn-practice-merge').click();"
+    ),
+)
+
+fuehrungen = [
+    p for p in zusammen["posts"]
+    if p["url"] == "/api/recordings/combine-take"
+]
+
+assert len(fuehrungen) == 1, (
+    f"Der Knopf schickte {len(fuehrungen)} Aufrufe an "
+    f"/api/recordings/combine-take: {zusammen['posts']}"
+)
+
+geschickt = fuehrungen[0]["body"]
+
+assert geschickt["mix"] == "Uebung-Blues_p9.w64", geschickt
+
+assert geschickt["take"] == "Uebung-Blues-Take2_s.w64", (
+    f"Geschickt wurde der Mitschnitt {geschickt['take']!r} - gewählt "
+    f"war ein anderer."
+)
+
+#
+# Der Name wird VORGESCHLAGEN, nicht erfragt-und-vergessen: Er nennt
+# Stück und Versuch, denn genau daran erkennt man die Datei später auf
+# dem Stick wieder.
+#
+assert "Uebung-Blues" in zusammen["vorschlag"], (
+    f"Der Namensvorschlag nennt das Stück nicht: "
+    f"{zusammen['vorschlag']!r}"
+)
+
+assert "2" in zusammen["vorschlag"], (
+    f"Der Namensvorschlag nennt den Versuch nicht: "
+    f"{zusammen['vorschlag']!r}"
+)
+
+assert geschickt["name"] == zusammen["vorschlag"], (
+    f"Geschickt wurde {geschickt['name']!r}, im Feld stand "
+    f"{zusammen['vorschlag']!r}."
+)
+
+#
+# Und am Ende steht da, wie die neue Datei heißt - sonst sucht man sie
+# in der Liste.
+#
+assert "Fertig-1_p.w64" in zusammen["alarm"], (
+    f"Nach dem Zusammenführen steht kein Ergebnis da: "
+    f"{zusammen['alarm']!r}"
+)
+
+print("OK: Mix und Mitschnitt lassen sich zu einer Datei zusammenführen")
 
 
 print("Alle Tests der Üben-Karte erfolgreich.")

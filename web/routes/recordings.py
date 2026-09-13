@@ -472,6 +472,41 @@ def combine_recordings(
     }
 
 
+class TakeZusammenfuehren(BaseModel):
+    mix: str
+    take: str
+    name: str
+
+
+@router.post("/api/recordings/combine-take")
+def combine_take(
+    auswahl: TakeZusammenfuehren,
+    request: Request,
+):
+    """
+    Schreibt aus einem Übungsmix und einem seiner Mitschnitte eine neue
+    Datei (Stufe 5).
+
+    Anders als /api/recordings/combine werden hier keine Dateien
+    hochgeladen - beide liegen schon auf dem Gerät. Den Fortschritt
+    liefert dieselbe Statusabfrage, denn es ist dieselbe Arbeit: Am
+    Ende steht ein Übungsmix.
+    """
+
+    application = request.app.state.application
+
+    success, message = application.start_take_zusammenfuehren(
+        auswahl.mix,
+        auswahl.take,
+        auswahl.name,
+    )
+
+    return {
+        "success": success,
+        "message": message,
+    }
+
+
 @router.get("/api/recordings/combine/status")
 def combine_recordings_status(request: Request):
 

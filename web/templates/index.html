@@ -384,6 +384,26 @@
                   </select>
 
                   {#
+                      Stufe 5: aus Mix und Mitschnitt EINE Datei.
+
+                      Zum Anhoeren braucht es das nicht - dafuer legt
+                      XRack beides in denselben Wiedergabestrom, ohne
+                      etwas zu schreiben. Sitzt ein Versuch aber, will
+                      man ihn mitnehmen: auf den Stick, ins Backup, auf
+                      ein anderes XRack.
+                  #}
+                  <button
+                      type="button"
+                      id="btn-practice-merge"
+                      class="btn btn-outline-secondary btn-sm text-nowrap"
+                      onclick="takeZusammenfuehren()"
+                      disabled
+                  >
+                      <i class="bi bi-file-earmark-plus me-1"></i>
+                      {{ t.practice_merge }}
+                  </button>
+
+                  {#
                       Die Laufzeit des Weges XRack -> Pult -> XRack.
                       Sie laesst sich von hier aus nicht ausrechnen -
                       sie haengt am Pult, an der Route durch das Pult

@@ -456,10 +456,48 @@ Ausreisser zöge den Durchschnitt mit sich.
   Musikspieler ist das die vorhandene Schleife über die Titelliste,
   angewandt auf einen Titel - deshalb billig.
 
-### Stufe 5 (später) — Aus Versuch und Mix eine Datei
+### Stufe 5 — Aus Versuch und Mix eine Datei
 
-`combine_stems` lernt Quellen mit eigener Kanalzahl und schreibt aus
-Übungsmix + Mitschnitt einen neuen Übungsmix zum Mitnehmen.
+**Gebaut (3.0.0-dev29).**
+
+Zum Anhören braucht es das nicht: Beim Üben legt XRack Mix und
+Mitschnitt in denselben Wiedergabestrom, ohne etwas zu schreiben — und
+das ist für „mal eben den letzten Versuch hören" der richtige Weg
+(nichts zu warten, ein missratener Versuch ist einfach gelöscht).
+
+Sitzt ein Versuch aber, will man ihn mitnehmen: auf den Stick, ins
+Backup, auf ein anderes XRack. Dafür muss aus zweien eine Datei werden,
+und das tut `uebungsmix_mit_take()` in `core/stem_combiner.py`. Heraus
+kommt wieder ein Übungsmix (`_p`), der sich abspielen lässt wie jeder
+andere.
+
+Drei Dinge müssen dabei stimmen, sonst klingt die neue Datei anders als
+das, was man beim Üben gehört hat — und jedes davon ist im Versuch
+festgenagelt:
+
+1. **Die Kanäle.** Jede Quelle behält die Kanäle, auf denen sie lag.
+   Wo sie liegt, steht in ihrem Namen (`Umbrella-1_p` ab Kanal 1,
+   `Umbrella-1-Take1_s9` ab Kanal 9) — dieselbe Quelle wie beim Üben,
+   keine zweite Wahrheit daneben. Dazwischen bleibt es still.
+2. **Der Versatz.** Der Mitschnitt hinkt dem Mix um die Laufzeit durch
+   das Pult hinterher. Beim Üben wird er vorgezogen; hier geschieht
+   dasselbe, mit demselben gemessenen Wert (`practice_offset_ms`).
+   Sonst wäre die Datei um diese Millisekunden verschoben — und genau
+   dafür wurde die Messung gebaut.
+3. **Die Länge.** Sie richtet sich nach dem Mix. Eine Aufnahme, die
+   nach dem Ende noch weiterlief, verlängert die Datei nicht; ein
+   kürzerer Mitschnitt wird mit Stille aufgefüllt.
+
+Gelesen wird mit XRacks eigenem `W64Reader`, nicht über ffmpeg: Beide
+Quellen sind XRacks eigene Wave64-Dateien, und ffmpeg liest deren Kopf
+nicht zuverlässig (es rät `pcm_s24le`, wo 32-Bit-Behälter mit 24
+gültigen Bits stehen).
+
+In der Oberfläche steht der Knopf neben der Auswahl des Mitschnitts —
+dort, wo man ihn gerade angehört hat. Er geht nur mit gewähltem
+Mitschnitt und nicht, während etwas läuft. Der Name wird
+vorgeschlagen (`Umbrella-1 + Versuch 2`), denn genau daran erkennt man
+die Datei später auf dem Stick wieder.
 
 ### Stufe 4 — Die Soundcheck-Karte wird wieder eine Sache
 

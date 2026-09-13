@@ -131,6 +131,16 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "sondern auf einem kürzeren Weg."
         ),
         "practice_take_none": "nichts",
+        #
+        # Stufe 5: aus Mix und Mitschnitt eine Datei. Zum Anhören
+        # braucht es das nicht - zum Mitnehmen schon.
+        #
+        "practice_merge": "Zusammenführen",
+        "practice_merge_name": (
+            "Name für den neuen Übungsmix aus Mix und Mitschnitt:"
+        ),
+        "practice_merge_done": "Fertig: {name}",
+        "practice_merge_failed": "Zusammenführen fehlgeschlagen.",
         "practice_take_hint": "mit {name}",
         "practice_record_hint": "Mitschnitt: Kanal {a}-{b}",
         "practice_record_no_device": (
@@ -979,6 +989,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "console but by a shorter route."
         ),
         "practice_take_none": "nothing",
+        "practice_merge": "Merge",
+        "practice_merge_name": (
+            "Name for the new practice mix from mix and take:"
+        ),
+        "practice_merge_done": "Done: {name}",
+        "practice_merge_failed": "Merging failed.",
         "practice_take_hint": "with {name}",
         "practice_record_hint": "Recording: channels {a}-{b}",
         "practice_record_no_device": (
