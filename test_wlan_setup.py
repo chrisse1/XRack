@@ -156,6 +156,11 @@ FAKE_STILL = """#!/usr/bin/env bash
 exit 0
 """
 
+FAKE_UDEVADM = """#!/usr/bin/env bash
+echo "$*" >> "$AP_STATE/udevadm"
+exit 0
+"""
+
 #
 # Auszuege echter "iw phy"-Ausgaben. Der Unterschied zwischen den
 # beiden ersten ist genau der Fehler, um den es oben geht.
@@ -206,6 +211,7 @@ def lauf(ordner: Path, befehl: str, phy_info: str = "",
         ("iw", FAKE_IW),
         ("rfkill", FAKE_STILL),
         ("sleep", FAKE_STILL),
+        ("udevadm", FAKE_UDEVADM),
     ):
         datei = binordner / name
         datei.write_text(inhalt, encoding="utf-8")
@@ -225,12 +231,29 @@ def lauf(ordner: Path, befehl: str, phy_info: str = "",
     # Die Pfade, die auf dem echten System unter /etc lägen, hier in
     # den Testordner umbiegen - alles andere bleibt unverändert.
     #
+    #
+    # Die Variablen aus dem Kopf des Skripts: Uebernommen werden nur
+    # seine FUNKTIONEN (sein Hauptteil wuerde beim Einlesen sofort
+    # losrichten), und damit fehlen die Definitionen darueber. Sie
+    # gehoeren gesetzt, sonst schreibt die Unit leere Werte - und
+    # genau die faende dieser Versuch dann in Ordnung.
+    #
+    unit_version = ""
+
+    for zeile in AP_SETUP.splitlines():
+        if zeile.startswith("XRACK_UNIT_VERSION="):
+            unit_version = zeile.split("=", 1)[1].strip().strip('"')
+
     vorbereitung = "\n".join([
         "L() { printf '%s' \"$1\"; }",
         FUNKTIONEN,
         f'XRACK_HOSTAPD_CONF="{ordner}/xrack.conf"',
         f'XRACK_HOSTAPD_UNIT="{ordner}/xrack-hostapd.service"',
         f'XRACK_NM_UNMANAGED="{ordner}/nm-unmanaged.conf"',
+        f'XRACK_UNIT_VERSION="{unit_version}"',
+        f'XRACK_BIND_SKRIPT="{WURZEL}/scripts/xrack-wifi-bind.sh"',
+        f'XRACK_BEREIT_SKRIPT="{WURZEL}/scripts/xrack-ap-bereit.sh"',
+        f'XRACK_AP_UDEV_RULE="{ordner}/udev/99-xrack-ap.rules"',
     ])
 
     return subprocess.run(
@@ -368,12 +391,192 @@ try:
     assert "Restart=always" in unit, unit
     assert "WantedBy=multi-user.target" in unit, unit
 
+    #
+    # Die Bedingung MUSS vor den ExecStartPre-Zeilen stehen: Sie soll
+    # verhindern, dass die ueberhaupt laufen. Stuende sie danach,
+    # haette NetworkManager die Bruecke schon angefasst.
+    #
+    assert "ExecCondition=" in unit, (
+        f"Der Unit fehlt die Bedingung. Ohne sie versucht hostapd es "
+        f"alle fuenf Sekunden auch dann, wenn gar kein Funkgeraet da "
+        f"ist - und zieht jedes Mal eine Neuaktivierung der Bruecke "
+        f"nach sich:\n{unit}"
+    )
+
+    assert unit.index("ExecCondition=") < unit.index("ExecStartPre="), (
+        f"Die Bedingung steht hinter den Vorbereitungen - dann laufen "
+        f"die trotzdem:\n{unit}"
+    )
+
+    assert "xrack-ap-bereit.sh" in unit, unit
+
+    #
+    # Und die Marke, an der XRack eine veraltete Unit erkennt (siehe
+    # core/wlan_control.py). Sie stand hier bisher leer da, weil der
+    # Versuch die Variablen des Skriptkopfes nicht gesetzt hat - eine
+    # Unit ohne Marke waere auf dem Geraet nie aufgefrischt worden.
+    #
+    assert "# XRack-Unit-Version: 3" in unit, unit
+
     systemctl_aufrufe = (ordner / "systemctl").read_text(encoding="utf-8")
 
     assert "enable xrack-hostapd.service" in systemctl_aufrufe, systemctl_aufrufe
     assert "daemon-reload" in systemctl_aufrufe
 
     print("OK: Der Access Point kommt nach einem Neustart von selbst wieder")
+
+    # ----------------------------------------------------------------
+    # 5b. Ohne Funkgerät wird gar nicht erst gestartet
+    #
+    # Der Anlass steht in einem Journal vom Gerät: Der Access Point
+    # war eingerichtet, der USB-Stick aber nicht eingesteckt, weil er
+    # in diesem Szenario nicht gebraucht wurde. Damit lief alle fünf
+    # Sekunden dasselbe, einundzwanzig Stunden lang - 14.469
+    # Fehlstarts, und JEDER zog ein "nmcli connection up
+    # XRack-Bridge" nach sich. Alle fünf Sekunden ein Eingriff ins
+    # Netz, rund um die Uhr; daneben im Protokoll die Netzaussetzer.
+    #
+    # Das Skript entscheidet an derselben Quelle wie der Rest
+    # (xrack-wifi-iface.sh): kein USB-Funkgerät, kein Access Point.
+    # ----------------------------------------------------------------
+
+    bereit = WURZEL / "scripts" / "xrack-ap-bereit.sh"
+
+    prueforte = Path(tempfile.mkdtemp())
+
+    try:
+
+        def baum(name, geraete):
+            """
+            Ein nachgestelltes /sys. Erkannt wird am ZIEL des
+            "device"-Verweises: Zeigt es in den USB-Zweig, ist es ein
+            Stick - genau so entscheidet xrack-wifi-iface.sh.
+            """
+
+            wurzel = prueforte / name
+
+            (wurzel / "devices" / "usb1").mkdir(parents=True, exist_ok=True)
+            (wurzel / "devices" / "mmc1").mkdir(parents=True, exist_ok=True)
+
+            for geraet, art in geraete.items():
+                (wurzel / geraet / "wireless").mkdir(parents=True)
+                (wurzel / geraet / "device").symlink_to(
+                    wurzel / "devices" / ("usb1" if art == "usb" else "mmc1")
+                )
+
+            return wurzel
+
+        def fragen(wurzel):
+            return subprocess.run(
+                [str(bereit)],
+                env={**os.environ, "XRACK_SYS_NET": str(wurzel)},
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+        #
+        # Nur eingebautes WLAN: Das gehoert dem Heimnetz, der Access
+        # Point bekommt es nicht.
+        #
+        antwort = fragen(baum("nur-intern", {"wlan0": "intern"}))
+
+        assert antwort.returncode != 0, (
+            "Ohne USB-Funkgerät meldet die Bedingung 'bereit' - dann "
+            "versucht hostapd es weiter alle fünf Sekunden, und die "
+            "Brücke wird jedes Mal neu aktiviert."
+        )
+
+        #
+        # Gar kein Funkgeraet: ebenso.
+        #
+        assert fragen(baum("gar-nichts", {})).returncode != 0
+
+        #
+        # Und der Gegenfall: Steckt der Stick, muss der Access Point
+        # kommen. Eine Bedingung, die immer ablehnt, waere schlimmer
+        # als keine.
+        #
+        antwort = fragen(
+            baum("mit-stick", {"wlan0": "intern", "wlan1": "usb"})
+        )
+
+        assert antwort.returncode == 0, (
+            f"Mit eingestecktem Stick lehnt die Bedingung ab - dann "
+            f"kommt der Access Point nie: {antwort.stderr}"
+        )
+
+    finally:
+        shutil.rmtree(prueforte, ignore_errors=True)
+
+    print("OK: Ohne Funkgerät kein Startversuch - mit Stick schon")
+
+    # ----------------------------------------------------------------
+    # 5c. Der später eingesteckte Stick bringt den Access Point
+    #
+    # Das gehört zur Bedingung von 5b wie die Rückseite zur Münze.
+    # Vorher hatte das Hämmern eine angenehme Nebenwirkung: Wurde der
+    # Stick im Betrieb eingesteckt, fand ihn der nächste Versuch, und
+    # der Access Point kam von selbst. Ein übersprungener Start wird
+    # aber NICHT wiederholt - auch bei Restart=always nicht
+    # (systemd, service_shall_restart: "return s->result !=
+    # SERVICE_SKIP_CONDITION"). Ohne Ersatz hätte die Bedingung diese
+    # Fähigkeit stillschweigend mitgenommen, und der eingesteckte
+    # Stick hätte bis zum nächsten Neustart nichts bewirkt.
+    #
+    # Der Ersatz ist eine udev-Regel. Sie stößt den Dienst bei jedem
+    # auftauchenden Funkgerät an; ob es das richtige ist, entscheidet
+    # dann die Bedingung aus 5b.
+    # ----------------------------------------------------------------
+
+    regel_datei = ordner / "udev" / "99-xrack-ap.rules"
+
+    assert regel_datei.exists(), (
+        "Die udev-Regel wurde nicht geschrieben - dann bleibt ein "
+        "später eingesteckter Stick bis zum Neustart wirkungslos."
+    )
+
+    regel = regel_datei.read_text(encoding="utf-8")
+
+    for pflicht, warum in (
+        ('ACTION=="add"', "nur das Auftauchen ist gemeint"),
+        ('SUBSYSTEM=="net"', "es geht um ein Netzwerkgeraet"),
+        ('ENV{DEVTYPE}=="wlan"', "und zwar um ein Funkgeraet"),
+        ('TAG+="systemd"', "ohne das Kennzeichen sieht systemd das Geraet nicht"),
+        ("xrack-hostapd.service", "angestossen wird der Access Point"),
+    ):
+        assert pflicht in regel, (
+            f"In der udev-Regel fehlt {pflicht} ({warum}):\n{regel}"
+        )
+
+    #
+    # Angestossen, nicht gestartet: SYSTEMD_WANTS geht ueber die
+    # normale Abhaengigkeit und damit durch die Bedingung. Ein
+    # "systemctl start" aus der Regel heraus umgeht sie nicht, waere
+    # aber ein zweiter Weg neben der Unit - und wuerde bei jedem
+    # Funkgeraet einen Startversuch erzwingen.
+    #
+    assert "SYSTEMD_WANTS" in regel, regel
+
+    #
+    # Und udev muss die Regel auch zu sehen bekommen: Ohne das Neuladen
+    # gilt sie erst nach dem naechsten Neustart - also gerade dann
+    # nicht, wenn sie gebraucht wird.
+    #
+    udevadm_spur = ordner / "udevadm"
+
+    udevadm_aufrufe = (
+        udevadm_spur.read_text(encoding="utf-8")
+        if udevadm_spur.exists() else "(udevadm wurde nie aufgerufen)"
+    )
+
+    assert "control --reload-rules" in udevadm_aufrufe, (
+        f"udev hat die Regel nicht neu gelesen - dann gilt sie erst "
+        f"nach dem naechsten Neustart, also gerade dann nicht, wenn "
+        f"sie gebraucht wird:\n{udevadm_aufrufe}"
+    )
+
+    print("OK: Ein später eingesteckter Stick bringt den Access Point")
 
     # ----------------------------------------------------------------
     # 6. Kommt 5 GHz nicht hoch, wird auf 2,4 GHz zurückgefallen

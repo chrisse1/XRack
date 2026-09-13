@@ -74,9 +74,17 @@ XRACK_HOSTAPD_UNIT="${XRACK_HOSTAPD_UNIT:-/etc/systemd/system/xrack-hostapd.serv
 #
 # 1 = urspruengliche Unit
 # 2 = mit ExecStartPre fuer xrack-wifi-bind.sh (Namensabgleich)
+# 3 = mit ExecCondition: kein Funkgeraet, kein Startversuch,
+#     dazu die udev-Regel, die das Einstecken bemerkt
 #
-XRACK_UNIT_VERSION="2"
+XRACK_UNIT_VERSION="3"
 XRACK_NM_UNMANAGED="${XRACK_NM_UNMANAGED:-/etc/NetworkManager/conf.d/99-xrack-hostapd.conf}"
+
+#
+# Die udev-Regel, die den Access Point beim Einstecken des Sticks
+# anstoesst. Begruendung bei write_hostapd_udev_rule.
+#
+XRACK_AP_UDEV_RULE="${XRACK_AP_UDEV_RULE:-/etc/udev/rules.d/99-xrack-ap.rules}"
 
 #
 # Der Abgleich der Geraetenamen, den die Unit vor jedem Start
@@ -84,6 +92,7 @@ XRACK_NM_UNMANAGED="${XRACK_NM_UNMANAGED:-/etc/NetworkManager/conf.d/99-xrack-ho
 # mitbringt.
 #
 XRACK_BIND_SKRIPT="$(cd "$(dirname "$0")" && pwd)/xrack-wifi-bind.sh"
+XRACK_BEREIT_SKRIPT="$(cd "$(dirname "$0")" && pwd)/xrack-ap-bereit.sh"
 
 if [ "${NUR_UNIT}" = "nein" ]; then
 
@@ -256,6 +265,22 @@ Wants=NetworkManager.service
 
 [Service]
 Type=simple
+# Ohne Funkgeraet gibt es nichts aufzuspannen.
+#
+# Als Bedingung und nicht als ExecStartPre: Eine gescheiterte
+# Bedingung laesst systemd den Dienst UEBERSPRINGEN - kein Fehlschlag,
+# und vor allem laeuft keine der Zeilen darunter. Ohne das versuchte
+# hostapd es alle fuenf Sekunden vergeblich, und JEDER Versuch liess
+# NetworkManager die Bruecke neu aktivieren. Am Geraet standen so
+# 14.469 Fehlstarts in einundzwanzig Stunden - und daneben im
+# Protokoll die Netzaussetzer.
+#
+# Damit endet auch der Fuenfsekundentakt: Ein uebersprungener Start
+# wird von systemd NICHT wiederholt, auch bei Restart=always nicht
+# (service_shall_restart: "return s->result != SERVICE_SKIP_CONDITION").
+# Das Einstecken des Sticks bemerkt deshalb nicht mehr die Unit,
+# sondern die udev-Regel 99-xrack-ap.rules.
+ExecCondition=${XRACK_BEREIT_SKRIPT}
 # Ein per rfkill gesperrtes Funkgeraet ist der haeufigste Grund,
 # warum hostapd direkt nach dem Booten nicht startet.
 ExecStartPre=-/usr/sbin/rfkill unblock wlan
@@ -279,6 +304,41 @@ EOF
     systemctl daemon-reload
     systemctl disable hostapd.service >/dev/null 2>&1 || true
     systemctl enable xrack-hostapd.service >/dev/null 2>&1 || true
+
+    write_hostapd_udev_rule
+}
+
+#
+# Die udev-Regel: Access Point, sobald ein Funkgeraet auftaucht.
+#
+# Sie ersetzt etwas, das vorher nebenbei mit erledigt war. Solange
+# hostapd alle fuenf Sekunden neu versuchte zu starten, kam der
+# Access Point nach dem Einstecken des Sticks von selbst hoch - der
+# naechste Versuch fand ihn ja. Mit der ExecCondition ist das vorbei:
+# Einen uebersprungenen Start wiederholt systemd nicht, auch nicht
+# mit Restart=always. Ohne Ersatz haette der eingesteckte Stick bis
+# zum naechsten Neustart nichts bewirkt - eine Faehigkeit, die
+# stillschweigend verloren gegangen waere.
+#
+# Also uebernimmt udev das Bemerken, und zwar fuer jedes
+# Funkgeraet - ob es der richtige ist, entscheidet die Bedingung der
+# Unit (xrack-ap-bereit.sh). Beim eingebauten WLAN wird der Start
+# damit uebersprungen, was nichts kostet.
+#
+write_hostapd_udev_rule() {
+
+    mkdir -p "$(dirname "${XRACK_AP_UDEV_RULE}")"
+
+    tee "${XRACK_AP_UDEV_RULE}" > /dev/null <<'EOF'
+# Von XRack erzeugt (scripts/xrack-ap-setup.sh) - nicht von Hand
+# aendern.
+#
+# Taucht ein Funkgeraet auf, wird der Access Point angestossen. Ob
+# es das richtige Geraet ist, prueft die ExecCondition der Unit.
+ACTION=="add", SUBSYSTEM=="net", ENV{DEVTYPE}=="wlan", TAG+="systemd", ENV{SYSTEMD_WANTS}+="xrack-hostapd.service"
+EOF
+
+    udevadm control --reload-rules >/dev/null 2>&1 || true
 }
 
 #

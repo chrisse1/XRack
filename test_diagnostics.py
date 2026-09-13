@@ -1246,6 +1246,41 @@ try:
 
     print("OK: Ein Dienst, der laeuft, wird nicht gemeldet")
 
+    # ----------------------------------------------------------------
+    # 12c. Ein übersprungener Dienst ist kein Defekt
+    #
+    # xrack-hostapd.service hat seit Version 3 eine ExecCondition: Ohne
+    # USB-Funkgerät gibt es keinen Access Point aufzuspannen, und dann
+    # soll gar nicht erst gestartet werden (genau das Hämmern aus 12
+    # war die Folge davon, dass es die Bedingung nicht gab).
+    #
+    # systemd nennt diesen Zustand Result=exec-condition,
+    # ActiveState=inactive. Das ist der GEWOLLTE Zustand für jeden
+    # Betrieb ohne Stick - der Normalfall des Users, der den Stick nur
+    # in manchen Szenarien braucht. Würde die Aufzeichnung ihn melden,
+    # stünde in jedem Protokoll ein Defekt, den es nicht gibt; und eine
+    # Warnung, die im Normalfall angeht, liest bald niemand mehr.
+    #
+    # Der Zähler steht dabei weiter auf den 14.469 Fehlstarts von
+    # damals: NRestarts wird nicht zurückgesetzt. Auch deshalb darf er
+    # die Meldung nicht auslösen.
+    # ----------------------------------------------------------------
+
+    diagnostics_module.subprocess.run = lambda *a, **k: Lauf(
+        "inactive\nexec-condition\n14469\n"
+    )
+
+    try:
+        assert diagnostics._dienste_pruefen() == "", (
+            "Ein uebersprungener Dienst wird als Defekt gemeldet - dann "
+            "steht in jedem Protokoll ohne USB-Stick eine Warnung, die "
+            "nichts bedeutet."
+        )
+    finally:
+        diagnostics_module.subprocess.run = echte_ausfuehrung
+
+    print("OK: Ein uebersprungener Dienst ist kein Defekt")
+
     print("Alle Tests erfolgreich.")
 
 finally:

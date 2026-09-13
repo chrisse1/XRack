@@ -131,7 +131,15 @@ DIENSTE_INTERVALL = 60.0
 # nichts zu sehen; sichtbar war nur, dass gelegentlich das Netz
 # wegblieb.
 #
-ERGEBNIS_OK = ("success", "")
+# "exec-condition" gehoert ausdruecklich dazu, also zum Unauffaelligen:
+# So sagt systemd, dass eine ExecCondition den Start UEBERSPRUNGEN hat
+# (xrack-hostapd.service tut das, wenn der USB-Stick nicht steckt -
+# siehe scripts/xrack-ap-bereit.sh). Das ist der gewollte Zustand und
+# kein Fehler. Stuende er hier nicht, meldete die Aufzeichnung jedem
+# Betrieb ohne Stick einen Defekt - und eine Warnung, die im
+# Normalfall angeht, ist bald keine mehr.
+#
+ERGEBNIS_OK = ("success", "exec-condition", "")
 
 #
 # Bis zu dieser Laufzeit gilt der Prozess als "gerade erst gestartet".

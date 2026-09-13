@@ -61,6 +61,47 @@ Vorhandene WLAN-Profile (etwa das vom Raspberry Pi Imager angelegte
 `preconfigured`) werden stillgelegt, damit sie XRacks Profil nicht das
 Funkgerät streitig machen. Gelöscht wird nichts.
 
+### Kein Stick, kein Startversuch
+
+Ein eingerichteter Access Point und ein nicht eingesteckter USB-Stick sind
+kein Widerspruch: Der Stick wird nur in manchen Szenarien gebraucht, die
+Einrichtung soll dafür nicht jedes Mal fallen. Bis Version 3 hatte diese
+Lage aber Folgen, die niemand vermutet hätte. `xrack-hostapd.service` läuft
+mit `Restart=always`, hostapd fand kein Gerät, und so stand im Journal
+eines Geräts:
+
+```
+xrack-hostapd.service: Scheduled restart job, restart counter is at 14453.
+nmcli connection up XRack-Bridge          (ExecStartPre)
+hostapd: Main process exited, code=exited, status=1/FAILURE
+```
+
+14.469 Fehlstarts in einundzwanzig Stunden — und weil jeder Versuch über
+`ExecStartPre` die NetworkManager-Brücke neu aktivierte, alle fünf Sekunden
+ein Eingriff ins Netz, rund um die Uhr. Daneben im Protokoll: die
+Netzaussetzer, hinter denen wir tagelang her waren.
+
+Seither fragt die Unit erst, ob es überhaupt etwas aufzuspannen gibt
+(`ExecCondition=scripts/xrack-ap-bereit.sh`, entscheidet an derselben Quelle
+wie alles andere: `xrack-wifi-iface.sh`). Eine gescheiterte Bedingung lässt
+systemd den Dienst **überspringen** — kein Fehlschlag, und vor allem läuft
+keine der Zeilen darunter.
+
+Damit endet auch der Fünfsekundentakt, denn einen übersprungenen Start
+wiederholt systemd nicht, auch bei `Restart=always` nicht. Genau das war
+aber die einzige Stelle, an der ein später eingesteckter Stick bisher
+bemerkt wurde — der nächste Versuch fand ihn ja. Diese Fähigkeit hätte die
+Bedingung stillschweigend mitgenommen; sie liegt deshalb jetzt bei einer
+udev-Regel (`/etc/udev/rules.d/99-xrack-ap.rules`), die den Dienst bei jedem
+auftauchenden Funkgerät anstößt. Ob es das richtige ist, entscheidet dann
+wieder die Bedingung.
+
+Die Aufzeichnung (`core/diagnostics.py`) wacht seither über die
+Nebendienste — sie hätte das Hämmern von innen gemeldet. `exec-condition`
+zählt dort ausdrücklich als unauffällig: Der übersprungene Dienst ist der
+gewollte Zustand, und eine Warnung, die im Normalfall angeht, liest bald
+niemand mehr.
+
 ### Name und Zertifikat
 
 XRack installiert `avahi-daemon` mit, damit `<hostname>.local` im Netz
