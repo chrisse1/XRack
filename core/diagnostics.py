@@ -46,6 +46,8 @@ import logging
 import logging.handlers
 import os
 import psutil
+
+from audio.geraetewache import GERAETEWACHE
 import signal
 import socket
 import ssl
@@ -81,6 +83,42 @@ INTERVAL = 1.0
 # wird das ausdrücklich vermerkt.
 #
 GAP_THRESHOLD = 3.0
+
+#
+# ------------------------------------------------------------------
+# Die Stillstands-Wache
+# ------------------------------------------------------------------
+#
+# Der Takt oben ist eine Sekunde, die Lücke oben zählt ab drei - für
+# einen Prozess, der stehen bleibt, ist das grob: Ein Einfrierer von
+# anderthalb Sekunden hinterlässt damit gar nichts, obwohl er im
+# Browser schon als "nicht erreichbar" ankommt.
+#
+# Genau davon gibt es einen Bericht vom Gerät: "Das Interface war
+# wieder kurz nicht erreichbar, als ich einen Übemix starten wollte.
+# Ich habe das Gefühl, es passiert immer, wenn ich eine Wiedergabe
+# starten oder stoppen will." Ohne Protokoll, ohne Absturz.
+#
+# Deshalb eine eigene Wache mit feinem Takt. Sie tut nichts, als zu
+# schlafen und zu messen, wie spät sie aufgewacht ist. Das ist der
+# eine Befund, den ein Prozess über sich selbst erheben kann: Kommt
+# sie zu spät, lief in dieser Zeit KEIN Python - und das trifft dann
+# auch den Webserver.
+#
+# Der häufigste Grund dafür in XRack ist das Öffnen oder Schließen
+# eines Audiogeräts: pyalsaaudio hält dabei den GIL (Quellenlage in
+# audio/geraetewache.py). Genau deshalb fragt die Wache dort nach,
+# was gerade lief - eine Zahl allein sagt nur, DASS es stand.
+#
+STILLSTAND_TAKT = 0.2
+STILLSTAND_SCHWELLE = 0.5
+
+#
+# Wie viele Befunde höchstens warten, bis der Haupttakt sie schreibt.
+# Mehr braucht niemand: Wer fünfzig Einfrierer in einer Sekunde hat,
+# erfährt aus den ersten zehn dasselbe.
+#
+STILLSTAND_MERKE_MAX = 10
 
 #
 # Solange nichts auffällt, genügt ein Lebenszeichen - sonst wäre die
@@ -176,6 +214,16 @@ class Diagnostics:
         self._last_written = 0.0
 
         #
+        # Befunde der Stillstands-Wache, die noch geschrieben werden
+        # müssen: (Dauer, was gerade lief). Geschrieben wird im
+        # Haupttakt, damit alle Dateizugriffe in einem Thread bleiben.
+        #
+        self._stillstaende: list[tuple[float, str]] = []
+        self._stillstand_sperre = threading.Lock()
+        self._stillstand_thread: threading.Thread | None = None
+        self._stillstand_laengster = 0.0
+
+        #
         # Fuer das Urteil ueber das Netz: wie viele Pings hintereinander
         # gefehlt haben, seit wann, und ob daraus schon ein Befund
         # geworden ist.
@@ -230,6 +278,11 @@ class Diagnostics:
 
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
+
+        self._stillstand_thread = threading.Thread(
+            target=self._stillstand_wachen, daemon=True
+        )
+        self._stillstand_thread.start()
 
         self.logger.info("Diagnose-Aufzeichnung gestartet: %s", LOG_FILE)
 
@@ -1106,6 +1159,74 @@ class Diagnostics:
             )
 
 
+    def _stillstand_wachen(self) -> None:
+        """
+        Schlafen und messen, wie spät man aufwacht.
+
+        Mehr ist es nicht - und mehr darf es auch nicht sein: Was diese
+        Wache selbst an Arbeit täte, verfälschte ihre Messung. Sie
+        schreibt deshalb nichts in die Datei, sondern legt ihre Befunde
+        ab; der Haupttakt nimmt sie mit.
+
+        Die Nachfrage bei der Gerätewache steht bewusst UNMITTELBAR nach
+        dem Aufwachen: Ein Öffnen, das zwei Sekunden gedauert hat, ist
+        eine Sekunde später schon nicht mehr "laufend", und dann wäre
+        der Zusammenhang verloren.
+        """
+
+        while not self._stop.is_set():
+
+            vorher = time.monotonic()
+
+            self._stop.wait(STILLSTAND_TAKT)
+
+            verspaetung = time.monotonic() - vorher - STILLSTAND_TAKT
+
+            if verspaetung < STILLSTAND_SCHWELLE:
+                continue
+
+            self._stillstand_merken(verspaetung)
+
+    def _stillstand_merken(self, verspaetung: float) -> None:
+        """Einen Befund ablegen, samt dem, was gerade lief."""
+
+        was = GERAETEWACHE.laufend()
+
+        if was is None:
+            #
+            # Schon vorbei? Dann war es vielleicht das Öffnen, das
+            # gerade fertig geworden ist - aber nur, wenn es zeitlich
+            # überhaupt passt.
+            #
+            was = GERAETEWACHE.letzte(nicht_aelter_als=verspaetung + 1.0)
+
+        with self._stillstand_sperre:
+
+            if verspaetung > self._stillstand_laengster:
+                self._stillstand_laengster = verspaetung
+
+            if len(self._stillstaende) < STILLSTAND_MERKE_MAX:
+                self._stillstaende.append(
+                    (verspaetung, was or "nichts am Audiogerät")
+                )
+
+    def _stillstand_melden(self, writer: logging.Logger) -> None:
+        """Die abgelegten Befunde schreiben."""
+
+        with self._stillstand_sperre:
+
+            befunde = self._stillstaende
+            self._stillstaende = []
+
+        for verspaetung, was in befunde:
+
+            writer.warning(
+                "STILLSTAND: %.1f s lang lief kein Python - der Webserver "
+                "war in dieser Zeit nicht erreichbar. Dabei lief: %s",
+                verspaetung,
+                was,
+            )
+
     def _loop(self) -> None:
 
         try:
@@ -1146,6 +1267,8 @@ class Diagnostics:
 
             last_tick = now
 
+            self._stillstand_melden(writer)
+
             self._dienste_melden(writer, now)
 
             try:
@@ -1160,9 +1283,23 @@ class Diagnostics:
 
             self._stop.wait(INTERVAL)
 
+        #
+        # Die Befunde, die noch warten, gehören noch in die Datei - sonst
+        # fehlt gerade der letzte, und der ist oft der interessante.
+        #
+        self._stillstand_melden(writer)
+
         writer.info(
-            "=== Aufzeichnung beendet%s ===",
+            "=== Aufzeichnung beendet%s%s%s ===",
             f" | signal={self._signalname()}" if self._signal else "",
+            (
+                f" | längster Stillstand={self._stillstand_laengster:.1f}s"
+                if self._stillstand_laengster else ""
+            ),
+            (
+                f" | längste Gerätearbeit: {GERAETEWACHE.laengste()}"
+                if GERAETEWACHE.laengste() else ""
+            ),
         )
 
     def _netz(self, writer: logging.Logger, gateway: str,

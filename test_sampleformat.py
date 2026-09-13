@@ -284,4 +284,103 @@ assert wiedergabe._pcm.gesetzt == fake_alsaaudio.PCM_FORMAT_S16_LE, (
 print("OK: Die Wiedergabe fordert S32_LE an, eigene Angaben gelten weiter")
 
 
+# ====================================================================
+# Öffnen und Schließen werden gemessen
+#
+# Beides hält den GIL (pyalsaaudio gibt ihn weder in snd_pcm_open noch
+# in der Aushandlung der Hardware-Parameter frei, siehe
+# audio/geraetewache.py). Während dieser Zeit läuft im ganzen Prozess
+# kein Python - auch der Webserver nicht. Am Gerät sah das so aus: "Das
+# Interface war kurz nicht erreichbar, als ich einen Übemix starten
+# wollte."
+#
+# Die Aufzeichnung kann einen solchen Stillstand messen, aber nur dann
+# benennen, wenn diese Stellen ihn auch melden. Deshalb steht das hier
+# und nicht nur in test_diagnostics.py: Dort wird die Wache geprüft,
+# hier, dass der echte Weg sie überhaupt betritt.
+# ====================================================================
+
+from audio.geraetewache import GERAETEWACHE  # noqa: E402
+
+
+class LangsamePCM(FakePCM):
+    """Ein Gerät, dessen Öffnen dauert - wie eines am USB."""
+
+    def __init__(self, *args, **kwargs):
+        #
+        # Die Wache wird VOR dem Konstruktor betreten; hier muss also
+        # schon zu sehen sein, dass etwas läuft.
+        #
+        LangsamePCM.gesehen = GERAETEWACHE.laufend()
+        super().__init__(*args, **kwargs)
+
+
+LangsamePCM.gesehen = None
+
+fake_alsaaudio.PCM = LangsamePCM
+
+try:
+
+    wiedergabe = AudioPlaybackBackend()
+
+    assert wiedergabe.open(GERAET, channels=2, rate=48000)
+
+    assert LangsamePCM.gesehen is not None, (
+        "Während des Öffnens weiß die Gerätewache von nichts - dann "
+        "kann die Aufzeichnung einen Stillstand zwar messen, aber nicht "
+        "sagen, was ihn verursacht hat."
+    )
+
+    assert "Wiedergabegerät öffnen" in LangsamePCM.gesehen, (
+        f"Die Gerätewache nennt etwas anderes: {LangsamePCM.gesehen!r}"
+    )
+
+    assert GERAET.id in LangsamePCM.gesehen, (
+        f"Das Gerät wird nicht benannt: {LangsamePCM.gesehen!r}"
+    )
+
+    #
+    # Nach dem Öffnen läuft nichts mehr - sonst stünde bei jedem
+    # späteren Stillstand dieselbe alte Meldung.
+    #
+    assert GERAETEWACHE.laufend() is None, GERAETEWACHE.laufend()
+
+    assert "Wiedergabegerät öffnen" in (GERAETEWACHE.letzte() or ""), (
+        "Das abgeschlossene Öffnen wurde nicht festgehalten."
+    )
+
+    #
+    # Und das Schließen ebenso - es ist die zweite Hälfte des Befunds.
+    #
+    class SchliessendePCM(LangsamePCM):
+
+        def close(self):
+            SchliessendePCM.beim_schliessen = GERAETEWACHE.laufend()
+
+    SchliessendePCM.beim_schliessen = None
+
+    wiedergabe._pcm = SchliessendePCM(
+        type=fake_alsaaudio.PCM_PLAYBACK,
+        mode=fake_alsaaudio.PCM_NORMAL,
+        device=GERAET.id,
+    )
+
+    wiedergabe.close()
+
+    assert SchliessendePCM.beim_schliessen is not None, (
+        "Das Schließen wird nicht gemessen - dabei klemmt es am Gerät "
+        "beim Stoppen genauso wie beim Starten."
+    )
+
+    assert "schließen" in SchliessendePCM.beim_schliessen, (
+        f"Beim Schließen meldet die Wache etwas anderes: "
+        f"{SchliessendePCM.beim_schliessen!r}"
+    )
+
+finally:
+    fake_alsaaudio.PCM = FakePCM
+
+print("OK: Öffnen und Schließen melden sich bei der Gerätewache")
+
+
 print("Alle Sampleformat-Tests erfolgreich.")

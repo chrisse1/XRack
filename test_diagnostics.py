@@ -14,6 +14,7 @@ der Messung darf die Aufzeichnung nicht beenden.
 import shutil
 import sys
 import tempfile
+import threading
 import time
 import types
 from pathlib import Path
@@ -1280,6 +1281,175 @@ try:
         diagnostics_module.subprocess.run = echte_ausfuehrung
 
     print("OK: Ein uebersprungener Dienst ist kein Defekt")
+
+    # ----------------------------------------------------------------
+    # 13. Stillstand: Wenn kein Python mehr läuft
+    #
+    # Der Bericht vom Gerät: "Das Interface war wieder kurz nicht
+    # erreichbar, als ich einen Übemix starten wollte. Ich habe das
+    # Gefühl, es passiert immer, wenn ich eine Wiedergabe starten oder
+    # stoppen will." Kein Absturz, kein Protokoll, geht von selbst
+    # vorbei.
+    #
+    # Der Verdacht steht in audio/geraetewache.py: pyalsaaudio hält
+    # beim Öffnen und Schließen eines Geräts den GIL. Dann läuft im
+    # ganzen Prozess kein Python mehr - auch der Webserver nicht.
+    #
+    # Hier wird dieser Zustand NACHGESTELLT und nicht behauptet: Mit
+    # einem großen Umschaltintervall hält eine gewöhnliche
+    # Python-Schleife den GIL genauso fest wie eine C-Funktion, die ihn
+    # nicht freigibt. Was die Wache dabei misst, ist echte Verspätung.
+    # ----------------------------------------------------------------
+
+    from audio.geraetewache import GERAETEWACHE  # noqa: E402
+
+    diagnostics = Diagnostics(FakeApplication())
+    diagnostics._close_writer()
+    diagnostics_module.LOG_FILE.unlink(missing_ok=True)
+
+    writer = diagnostics._open_writer()
+
+    #
+    # Feiner Takt, damit der Versuch kurz bleibt. Die Schwelle bleibt
+    # deutlich über dem Takt - sonst meldete schon eine belastete
+    # Maschine einen Stillstand.
+    #
+    diagnostics_module.STILLSTAND_TAKT = 0.05
+    diagnostics_module.STILLSTAND_SCHWELLE = 0.3
+
+    alte_schaltzeit = sys.getswitchinterval()
+
+    diagnostics._stop.clear()
+
+    wache = threading.Thread(
+        target=diagnostics._stillstand_wachen, daemon=True
+    )
+    wache.start()
+
+    #
+    # Ein Öffnen, das hängt: Der Thread betritt die Gerätewache und
+    # bleibt darin, während der GIL festgehalten wird. Genau so sieht
+    # es am Gerät aus.
+    #
+    losgehts = threading.Event()
+    fertig = threading.Event()
+
+    def geraet_oeffnen():
+        with GERAETEWACHE.arbeit("Wiedergabegerät öffnen: hw:2,0"):
+            losgehts.set()
+            fertig.wait(10)
+
+    oeffner = threading.Thread(target=geraet_oeffnen, daemon=True)
+    oeffner.start()
+
+    losgehts.wait(5)
+
+    try:
+
+        #
+        # Ab hier bekommt kein anderer Thread mehr den GIL: Das
+        # Umschaltintervall ist größer als die Dauer der Schleife.
+        #
+        sys.setswitchinterval(5.0)
+
+        ende = time.monotonic() + 1.0
+        zaehler = 0
+
+        while time.monotonic() < ende:
+            zaehler += 1
+
+    finally:
+        sys.setswitchinterval(alte_schaltzeit)
+
+    fertig.set()
+
+    #
+    # Der Wache Zeit geben, ihren Befund abzulegen.
+    #
+    frist = time.monotonic() + 5
+
+    while time.monotonic() < frist:
+
+        with diagnostics._stillstand_sperre:
+            if diagnostics._stillstaende:
+                break
+
+        time.sleep(0.05)
+
+    diagnostics._stop.set()
+    wache.join(timeout=5)
+
+    with diagnostics._stillstand_sperre:
+        befunde = list(diagnostics._stillstaende)
+
+    assert befunde, (
+        "Ein Stillstand von einer Sekunde blieb unbemerkt - dann steht "
+        "beim nächsten Mal wieder nichts im Protokoll."
+    )
+
+    dauer, was = befunde[0]
+
+    assert dauer >= 0.3, f"Die gemessene Verspätung ist zu klein: {dauer}"
+
+    assert "Wiedergabegerät öffnen" in was, (
+        f"Der Befund sagt nicht, was in dieser Zeit lief: {was!r}. Genau "
+        f"das ist der Unterschied zwischen 'es stand' und 'das Öffnen "
+        f"des Audiogeräts stand'."
+    )
+
+    diagnostics._stillstand_melden(writer)
+
+    for handler in writer.handlers:
+        handler.flush()
+
+    inhalt = diagnostics_module.LOG_FILE.read_text(encoding="utf-8")
+
+    assert "STILLSTAND" in inhalt, inhalt[-400:]
+    assert "hw:2,0" in inhalt, inhalt[-400:]
+
+    #
+    # Und danach ist die Liste leer - ein Befund gehört einmal ins
+    # Protokoll, nicht bei jedem Takt erneut.
+    #
+    diagnostics._stillstand_melden(writer)
+
+    for handler in writer.handlers:
+        handler.flush()
+
+    zweitens = diagnostics_module.LOG_FILE.read_text(encoding="utf-8")
+
+    assert zweitens.count("STILLSTAND") == 1, (
+        f"Die Meldung steht {zweitens.count('STILLSTAND')}-mal da."
+    )
+
+    print(f"OK: Ein Stillstand wird gemessen und benannt ({dauer:.1f} s, {was})")
+
+    # ----------------------------------------------------------------
+    # 13b. Ein ruhiger Prozess meldet nichts
+    #
+    # Eine Wache, die immer etwas findet, ist keine.
+    # ----------------------------------------------------------------
+
+    diagnostics._stillstaende = []
+    diagnostics._stop.clear()
+
+    ruhig = threading.Thread(
+        target=diagnostics._stillstand_wachen, daemon=True
+    )
+    ruhig.start()
+
+    time.sleep(1.0)
+
+    diagnostics._stop.set()
+    ruhig.join(timeout=5)
+
+    with diagnostics._stillstand_sperre:
+        assert diagnostics._stillstaende == [], (
+            f"Im ruhigen Betrieb meldet die Wache Stillstände: "
+            f"{diagnostics._stillstaende}"
+        )
+
+    print("OK: Ohne Stillstand meldet die Wache nichts")
 
     print("Alle Tests erfolgreich.")
 

@@ -43,6 +43,58 @@ mit neuen Werten nicht hoch, stellt XRack die alten wieder her, statt einen
 stummen Access Point zu hinterlassen. Aus demselben Grund filtert der
 Netzwerk-Selbsttest diese Datei, statt sie durchzureichen.
 
+### Wenn kein Python mehr läuft
+
+Nicht jedes „nicht erreichbar" ist ein Netzproblem. Vom Gerät kam dieser
+Bericht: *„Das Interface war wieder kurz nicht erreichbar, als ich einen
+Übemix starten wollte. Ich habe das Gefühl, es passiert immer, wenn ich
+eine Wiedergabe starten oder stoppen will."* Kein Absturz, kein
+Protokolleintrag, geht von selbst vorbei.
+
+Der Verdacht liegt im GIL. Nachgesehen im Quelltext von pyalsaaudio
+0.11.0 (`alsaaudio.c`):
+
+| Stelle | gibt den GIL frei? |
+|---|---|
+| `snd_pcm_open` im Konstruktor | **nein** |
+| `alsapcm_setup` (hw-params, hinter `setrate`/`setchannels`/`setformat`/`setperiodsize`) | **nein** |
+| `snd_pcm_close` in `close()` | **nein** (`snd_pcm_drain` davor schon) |
+| `snd_pcm_readi` / `snd_pcm_writei` | ja |
+
+Im laufenden Betrieb ist also alles gut — aber solange ein Gerät
+geöffnet oder geschlossen wird, läuft in diesem Prozess **kein Python**:
+kein Webserver, keine Statusabfrage, nichts. Und XRack löst pro Öffnen
+nicht eine, sondern fünf Aushandlungen aus (`PCM()` plus die vier
+Setter). Das passt auf jedes Merkmal des Berichts: beim Starten und beim
+Stoppen, selbstheilend, ohne Spur.
+
+Bewiesen ist damit noch nichts — deshalb wird jetzt gemessen statt
+vermutet. Zwei Teile:
+
+- **`audio/geraetewache.py`** hält fest, was gerade am Audiogerät getan
+  wird und wie lange es gedauert hat. Öffnen und Schließen melden sich
+  dort an, in beiden Richtungen.
+- **Die Stillstands-Wache** in `core/diagnostics.py` schläft in Takten
+  von 0,2 s und misst, wie spät sie aufwacht. Mehr tut sie nicht, und
+  mehr darf sie nicht tun — was sie selbst an Arbeit täte, verfälschte
+  die Messung. Kommt sie über eine halbe Sekunde zu spät, lief in dieser
+  Zeit kein Python; dann fragt sie sofort bei der Gerätewache nach und
+  schreibt beides zusammen ins Protokoll:
+
+  ```
+  STILLSTAND: 2.3 s lang lief kein Python - der Webserver war in dieser
+  Zeit nicht erreichbar. Dabei lief: Wiedergabegerät öffnen: hw:2,0
+  ```
+
+Die bisherige „LÜCKE"-Zeile bleibt, taugt für diesen Fall aber nicht:
+Sie zählt im Sekundentakt und meldet erst ab drei Sekunden, und sie kann
+nicht sagen, was in der Zeit lief.
+
+Geprüft wird das nicht mit einer Attrappe, sondern am echten Vorgang:
+Mit einem großen Umschaltintervall (`sys.setswitchinterval`) hält eine
+gewöhnliche Python-Schleife den GIL genauso fest wie eine C-Funktion,
+die ihn nicht freigibt. Die Wache misst dabei echte Verspätung.
+
 ### Welches Funkgerät wofür
 
 `wlan0` und `wlan1` werden in der Reihenfolge vergeben, in der die Geräte

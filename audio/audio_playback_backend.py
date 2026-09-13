@@ -7,6 +7,7 @@ import logging
 import alsaaudio
 
 from audio.audio_backend import WUNSCHFORMAT, formatname
+from audio.geraetewache import GERAETEWACHE
 from audio.channel_inserter import ChannelInserter
 from audio.models import AudioDevice
 
@@ -87,76 +88,88 @@ class AudioPlaybackBackend:
             start_channel=start_channel,
         )
 
-        try:
+        #
+        # Das Öffnen hält den GIL: Weder snd_pcm_open noch die
+        # Aushandlung der Hardware-Parameter geben ihn frei, und
+        # XRack löst fünf solcher Aushandlungen aus (PCM() und
+        # die vier Setter). Solange das läuft, läuft in diesem
+        # Prozess KEIN Python - auch der Webserver nicht.
+        # Begründung und Quellenlage: audio/geraetewache.py.
+        #
+        # Gemessen wird es deshalb, statt es zu vermuten.
+        #
+        with GERAETEWACHE.arbeit(f"Wiedergabegerät öffnen: {device.id}"):
 
-            self._pcm = alsaaudio.PCM(
+            try:
 
-                type=alsaaudio.PCM_PLAYBACK,
+                self._pcm = alsaaudio.PCM(
 
-                mode=alsaaudio.PCM_NORMAL,
+                    type=alsaaudio.PCM_PLAYBACK,
 
-                device=device.id,
+                    mode=alsaaudio.PCM_NORMAL,
 
-            )
+                    device=device.id,
 
-            actual_rate = self._pcm.setrate(
-                self._rate
-            )
+                )
 
-            if actual_rate and actual_rate != self._rate:
-                self.logger.warning(
-                    "ALSA hat eine andere Samplerate akzeptiert als "
-                    "angefordert: gefordert %d Hz, gemeldet %d Hz.",
+                actual_rate = self._pcm.setrate(
+                    self._rate
+                )
+
+                if actual_rate and actual_rate != self._rate:
+                    self.logger.warning(
+                        "ALSA hat eine andere Samplerate akzeptiert als "
+                        "angefordert: gefordert %d Hz, gemeldet %d Hz.",
+                        self._rate,
+                        actual_rate,
+                    )
+
+                self._pcm.setchannels(
+                    self._native_channels
+                )
+
+                actual_format = self._pcm.setformat(
+                    self._format
+                )
+
+                if actual_format is not None and actual_format != self._format:
+
+                    gefordert = formatname(self._format)
+
+                    self._format = actual_format
+
+                    self.logger.error(
+                        "Das Interface spielt %s statt %s. XRack liefert vier "
+                        "Byte je Wert mit 2^31 Vollausschlag - die Wiedergabe "
+                        "ist damit nicht verlaesslich. Das Geraet bietet an: "
+                        "%s.",
+                        formatname(actual_format),
+                        gefordert,
+                        ", ".join(device.formats) or "unbekannt",
+                    )
+
+                self._pcm.setperiodsize(1024)
+
+                self.logger.info(
+                    "ALSA Wiedergabe geöffnet: %s | Hardware: %d Ch | Datei: %d Ch | %d Hz",
+                    device.id,
+                    self._native_channels,
+                    self._channels,
                     self._rate,
-                    actual_rate,
                 )
 
-            self._pcm.setchannels(
-                self._native_channels
-            )
+                return True
 
-            actual_format = self._pcm.setformat(
-                self._format
-            )
+            except Exception as exc:
 
-            if actual_format is not None and actual_format != self._format:
-
-                gefordert = formatname(self._format)
-
-                self._format = actual_format
-
-                self.logger.error(
-                    "Das Interface spielt %s statt %s. XRack liefert vier "
-                    "Byte je Wert mit 2^31 Vollausschlag - die Wiedergabe "
-                    "ist damit nicht verlaesslich. Das Geraet bietet an: "
-                    "%s.",
-                    formatname(actual_format),
-                    gefordert,
-                    ", ".join(device.formats) or "unbekannt",
+                self.logger.exception(
+                    "ALSA Wiedergabe konnte nicht geöffnet werden: %s",
+                    exc,
                 )
 
-            self._pcm.setperiodsize(1024)
+                self._pcm = None
 
-            self.logger.info(
-                "ALSA Wiedergabe geöffnet: %s | Hardware: %d Ch | Datei: %d Ch | %d Hz",
-                device.id,
-                self._native_channels,
-                self._channels,
-                self._rate,
-            )
-
-            return True
-
-        except Exception as exc:
-
-            self.logger.exception(
-                "ALSA Wiedergabe konnte nicht geöffnet werden: %s",
-                exc,
-            )
-
-            self._pcm = None
-
-            return False
+                return False
 
     def write(self, data: bytes) -> None:
         """
@@ -175,9 +188,25 @@ class AudioPlaybackBackend:
         Schließt das Wiedergabegerät.
         """
 
+        #
+        # Der Gerätename muss VOR dem Schließen gesichert werden -
+        # danach ist self.device leer.
+        #
+        geraetename = self.device.id if self.device else "?"
+
         if self._pcm is not None:
 
-            self._pcm.close()
+            #
+            # Auch das Schließen hält den GIL: close() gibt ihn zwar für
+            # snd_pcm_drain() frei, für snd_pcm_close() aber nicht
+            # (siehe audio/geraetewache.py). Das ist die zweite Hälfte
+            # des Befunds vom Gerät - es klemmt beim Starten UND beim
+            # Stoppen.
+            #
+            with GERAETEWACHE.arbeit(
+                f"Wiedergabegerät schließen: {geraetename}"
+            ):
+                self._pcm.close()
 
             self._pcm = None
 
