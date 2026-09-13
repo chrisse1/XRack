@@ -23,7 +23,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "alert_usb_eject_busy": "Es läuft noch ein Kopiervorgang - bitte warten.",
 
         # Soundcheck-Karte
-        "soundcheck_title": "Soundcheck & Üben",
+        #
+        # Nur noch Soundcheck: Das Ueben hat seit 3.0 eine eigene
+        # Karte, und der Name hier meinte zuletzt etwas, was hier
+        # nicht mehr stattfindet.
+        #
+        "soundcheck_title": "Soundcheck",
         "status_label": "Status:",
         "record_channels_label": "Aufnahmekanäle:",
 
@@ -134,7 +139,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "label_size": "Größe",
         "recent_recordings": "Letzte Dateien",
         "no_recordings": "Keine Aufnahmen vorhanden.",
-        "btn_all_recordings": "Alle Dateien...",
+        "btn_all_recordings": "Aufnahmen...",
         "channels_option": "{n} Kanäle",
 
         # Musikspieler-Karte
@@ -185,9 +190,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
 
         # Aufnahmen-Modal
-        "modal_recordings_title": "Alle Dateien",
-        "section_soundchecks": "Soundchecks",
-        "section_practice_mixes": "Übungsmixe",
+        "modal_recordings_title": "Aufnahmen",
         "btn_delete_selected": "Ausgewählte löschen",
         "btn_close": "Schließen",
         "badge_selected_for_soundcheck": "Für Wiedergabe ausgewählt",
@@ -845,7 +848,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "alert_usb_eject_busy": "A copy is still in progress - please wait.",
 
         # Soundcheck card
-        "soundcheck_title": "Soundcheck & Practice",
+        "soundcheck_title": "Soundcheck",
         "status_label": "Status:",
         "record_channels_label": "Recording channels:",
         "record_window_label": "Record from channel",
@@ -947,7 +950,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "label_size": "Size",
         "recent_recordings": "Recent files",
         "no_recordings": "No recordings yet.",
-        "btn_all_recordings": "All files...",
+        "btn_all_recordings": "Recordings...",
         "channels_option": "{n} channels",
 
         # Music player card
@@ -998,9 +1001,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
 
         # Recordings modal
-        "modal_recordings_title": "All files",
-        "section_soundchecks": "Soundchecks",
-        "section_practice_mixes": "Practice mixes",
+        "modal_recordings_title": "Recordings",
         "btn_delete_selected": "Delete selected",
         "btn_close": "Close",
         "badge_selected_for_soundcheck": "Selected for playback",

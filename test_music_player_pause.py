@@ -28,6 +28,25 @@ from audio.models import AudioDevice
 from player.music_library import MusicLibrary
 from player.music_player import MusicPlayer
 
+import player.music_player as music_player_modul
+
+#
+# Kein ffprobe in diesem Versuch.
+#
+# Der Lesethread fragt fuer jeden Titel Laenge und Titelangaben ab -
+# zwei Unterprozesse mit je zehn Sekunden Frist. Auf einer belasteten
+# Maschine dauert allein ihr Start laenger, als dieser Versuch auf den
+# Beginn des Titels wartet; in der vollen Testreihe ist er daran
+# zweimal gefallen, einzeln nie. Das war die Zeitannahme des
+# Versuchs, nicht ein Fehler im Spieler.
+#
+# Geprueft werden hier Pause, Position und Fortsetzen. Was ffprobe
+# meldet, spielt dafuer keine Rolle - der echte Weg dorthin steht in
+# test_music_library.py und test_uebungsmix_spieler.py.
+#
+music_player_modul.probe_duration = lambda pfad: 12.0
+music_player_modul.probe_tags = lambda pfad: {"title": "", "artist": ""}
+
 
 class FakeDecoder:
     """Liefert endlos Chunks, bis close() aufgerufen wird."""
