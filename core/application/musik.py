@@ -582,7 +582,18 @@ class MusikMixin:
                 )
                 return
 
-            mitschnitt = self.recorder.writer.directory / gestartet[0]
+            #
+            # current_filename ist bereits der VOLLSTAENDIGE Pfad
+            # (siehe AudioWriter.create_filename) - hier stand einmal
+            # "directory / current_filename", und das ging gut, solange
+            # das Verzeichnis absolut war: Ein absoluter Pfad rechts
+            # gewinnt, die Verdopplung fiel nicht auf. Am Geraet ist
+            # das Verzeichnis relativ ("./recordings"), und daraus
+            # wurde "recordings/recordings/..." - die Messung nahm auf,
+            # fand danach ihre eigene Datei nicht und meldete, der
+            # Mitschnitt fehle.
+            #
+            mitschnitt = Path(gestartet[0])
 
             if not mitschnitt.is_file():
                 self._laufzeit_fertig(

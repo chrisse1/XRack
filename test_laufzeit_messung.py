@@ -12,6 +12,7 @@ Der Weg selbst (Interface, USB, Pult) lässt sich hier nicht
 nachstellen. Genau deshalb gibt es die Messung ja.
 """
 
+import os
 import struct
 import sys
 import tempfile
@@ -462,7 +463,28 @@ pult = Pult(kanaele_aus=Geraet.channels, kanaele_ein=Geraet.channels,
 spieler = MusicPlayer(Ausgang(pult), MusicLibrary(LAUF))
 
 aufnehmer = Recorder(Eingang(pult, Geraet.channels, RATE))
-aufnehmer.writer.directory = LAUF
+
+#
+# Ein RELATIVES Aufnahmeverzeichnis - genau wie am Geraet
+# ("./recordings", siehe config/default.yaml), und dafuer ins
+# Arbeitsverzeichnis gewechselt.
+#
+# Das ist kein Detail: Hier stand einmal ein absoluter Pfad, und damit
+# blieb ein Fehler unsichtbar, der am Geraet jede Messung scheitern
+# liess. XRack baute den Pfad zum Mitschnitt aus Verzeichnis UND
+# Dateiname zusammen, obwohl der Dateiname den Pfad schon enthaelt.
+# Bei einem absoluten Verzeichnis gewinnt der absolute Pfad rechts und
+# die Verdopplung faellt nicht auf; bei "./recordings" wird
+# "recordings/recordings/..." daraus.
+#
+# Ein Pfad wie "../../tmp/xyz" taugt dafuer uebrigens auch nicht: Er
+# kuerzt sich beim Verdoppeln selbst wieder weg. Es muss ein Name
+# ohne Aufstieg sein, so wie am Geraet.
+#
+altes_verzeichnis = os.getcwd()
+os.chdir(LAUF)
+
+aufnehmer.writer.directory = Path("recordings")
 
 anwendung = Anwendung(LAUF, spieler, aufnehmer)
 
@@ -512,7 +534,7 @@ print(f"OK: Der ganze Ablauf misst die Laufzeit ({stand['ms']} ms)")
 # stünden sie in der Aufnahmenliste, und niemand wüsste, wozu.
 # ====================================================================
 
-geblieben = sorted(p.name for p in LAUF.glob("*.w64"))
+geblieben = sorted(p.name for p in (LAUF / "recordings").glob("*.w64"))
 
 assert geblieben == [], (
     f"Nach der Messung liegen noch Dateien herum: {geblieben}"
@@ -557,6 +579,8 @@ anwendung.music_player._playing = False
 
 print("OK: Die Messung startet nicht gegen etwas Laufendes")
 
+
+os.chdir(altes_verzeichnis)
 
 lauf_ordner.cleanup()
 
