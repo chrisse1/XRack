@@ -985,6 +985,52 @@ function renderMuteButton(button, muted) {
 }
 
 //
+// Der Eingang eines Kanals: A/D oder USB.
+//
+// Beschriftet wird mit dem Zustand, nicht mit der Wirkung des Drucks -
+// "USB" heisst also "dieser Kanal hoert gerade USB". Ein Knopf, auf
+// dem steht, was er tun WUERDE, ist beim Hinsehen aus zwei Metern
+// nicht zu unterscheiden, und hier haengt daran, ob das Pult die
+// Mikrofone hoert.
+//
+// Farbig ist deshalb nur USB: Das ist der Zustand, den man nicht
+// vergessen darf. Steht am Ende der Probe noch irgendwo Farbe in der
+// Karte, ist ein Kanal noch auf der Aufnahme.
+//
+function renderUsbButton(button, usb) {
+    if (!button) return;
+
+    button.textContent = usb ? I18N.faders_usb_on : I18N.faders_usb_off;
+
+    button.classList.toggle("btn-warning", usb === true);
+    button.classList.toggle("btn-outline-secondary", usb !== true);
+}
+
+async function toggleUsbInput(channel) {
+    const button = document.querySelector(
+        `.fader-usb[data-channel="${channel}"]`
+    );
+
+    if (!button) return;
+
+    const usb = !button.classList.contains("btn-warning");
+
+    resetFaderAutolock();
+
+    //
+    // Sofort umschalten, damit die Rueckmeldung nicht erst beim
+    // naechsten Auffrischen kommt.
+    //
+    renderUsbButton(button, usb);
+
+    await sendToConsole(
+        "/api/console/usb-input",
+        { channel, usb },
+        "Eingangsquelle"
+    );
+}
+
+//
 // Ein Befehl ans Pult. Faellt er aus, ist das kein Grund, die
 // Oberflaeche anzuhalten: Beim naechsten Auffrischen steht ohnehin
 // wieder der echte Wert vom Pult da.
@@ -1702,8 +1748,13 @@ function renderFaders(channels) {
     // Pegelanzeige). Die Ausrichtung waagerecht/senkrecht macht allein
     // das CSS, hier gibt es dafür keine Fallunterscheidung.
     //
+    //
+    // Ob es den USB-Schalter GIBT, gehoert zur Struktur (null heisst:
+    // dieses Pult kennt ihn nicht). Seine Stellung dagegen nicht - die
+    // wird unten wie Fader und Stummschaltung nur gesetzt.
+    //
     const signature = channels
-        .map((c) => `${c.label}|${c.name}|${c.is_main}`)
+        .map((c) => `${c.label}|${c.name}|${c.is_main}|${c.usb === null || c.usb === undefined ? "-" : "s"}`)
         .join(";");
 
     if (grid.dataset.signature !== signature) {
@@ -1721,6 +1772,15 @@ function renderFaders(channels) {
                 <span class="fader-name" title="${channel.name || ""}">
                     <span class="fader-number">${channel.label}</span>${channel.name || ""}
                 </span>
+                ${channel.usb === null || channel.usb === undefined ? "" : `
+                <button
+                    type="button"
+                    class="btn btn-outline-secondary fader-usb"
+                    data-channel="${channel.channel}"
+                    title="${I18N.faders_usb_title}"
+                    ${fadersUnlocked ? "" : "disabled"}
+                ></button>
+                `}
                 <button
                     type="button"
                     class="btn btn-outline-secondary fader-mute"
@@ -1742,6 +1802,9 @@ function renderFaders(channels) {
 
             cell.querySelector(".fader-mute")
                 .addEventListener("click", () => toggleMute(channel.channel));
+
+            cell.querySelector(".fader-usb")
+                ?.addEventListener("click", () => toggleUsbInput(channel.channel));
 
             const input = cell.querySelector(".fader-input");
             input.addEventListener("input", onFaderInput);
@@ -1779,6 +1842,8 @@ function renderFaders(channels) {
         readout.textContent = formatDb(channel.db);
 
         renderMuteButton(mute, channel.muted);
+
+        renderUsbButton(cell.querySelector(".fader-usb"), channel.usb);
     });
 }
 

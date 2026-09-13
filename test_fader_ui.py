@@ -57,12 +57,17 @@ from web.i18n import get_translations  # noqa: E402
 TEXTE = get_translations("de")
 
 
-def kanaele(anzahl: int) -> list[dict]:
+def kanaele(anzahl: int, usb=False) -> list[dict]:
     """
     So viele Kanalzüge, wie das Pult hätte - der letzte ist die Summe.
 
     Beim XR18 sind es 17 (16 Kanäle, Aux-Rückweg, Summe - der
     Rückweg zählt als einer), beim X32 33.
+
+    `usb` ist die Stellung des Eingangsschalters, die jeder Kanal
+    bekommt: False = A/D, True = USB, None = dieses Pult kennt den
+    Schalter nicht (dann darf keiner erscheinen). Die Summe hat ihn
+    nie.
     """
 
     zuege = [
@@ -73,6 +78,7 @@ def kanaele(anzahl: int) -> list[dict]:
             "is_main": False,
             "muted": False,
             "db": -10.0,
+            "usb": usb,
         }
         for nummer in range(1, anzahl)
     ]
@@ -84,6 +90,7 @@ def kanaele(anzahl: int) -> list[dict]:
         "is_main": True,
         "muted": False,
         "db": 0.0,
+        "usb": None,
     })
 
     return zuege
@@ -311,6 +318,232 @@ assert "px" not in ergebnis["spalten"] or ergebnis["spalten"] == "none", (
 )
 
 print("OK: Auf schmalen Geräten steht weiter ein Zug je Zeile")
+
+
+# ====================================================================
+# 5. Der Eingangsschalter A/D <-> USB
+#
+# Er gehört zum virtuellen Soundcheck: XRack spielt die Aufnahme ins
+# Pult, und der Kanal muss sie hören statt seines Mikrofons. Bisher war
+# das der einzige Handgriff, für den man noch nach X-AIR-Edit wechseln
+# musste.
+#
+# Zwei Dinge stehen hier auf dem Spiel. Erstens die Beschriftung: Auf
+# dem Knopf steht der ZUSTAND ("USB" heißt "hört gerade USB"), nicht
+# die Wirkung des Drucks - aus zwei Metern ist das nicht zu
+# unterscheiden, und hier hängt daran, ob das Pult die Mikrofone hört.
+# Zweitens, dass ein Pult OHNE diesen Schalter auch keinen angezeigt
+# bekommt: Ein Knopf, der sich nicht bewegen lässt, ist schlimmer als
+# keiner.
+# ====================================================================
+
+SCHALTER = """function () {
+    const grid = document.getElementById('faders-grid');
+
+    const knoepfe = Array.from(grid.querySelectorAll('.fader-usb'));
+
+    return {
+        anzahl: knoepfe.length,
+        zellen: grid.children.length,
+        beschriftung: knoepfe.map((k) => k.textContent.trim()),
+        farbig: knoepfe.filter(
+            (k) => k.classList.contains('btn-warning')
+        ).length,
+        // Der Schalter der Summe - den darf es nicht geben.
+        summe: !!grid.lastElementChild.querySelector('.fader-usb'),
+        gesperrt: knoepfe.filter((k) => k.disabled).length
+    };
+}"""
+
+
+def zeigen_mit(anzahl: int, usb) -> str:
+
+    return (
+        "document.getElementById('faders-grid').classList.remove('d-none');\n"
+        "renderFaders(" + json.dumps(kanaele(anzahl, usb)) + ");"
+    )
+
+
+#
+# a) Alle auf A/D.
+#
+ergebnis = ausfuehren(SCHALTER, vorher=zeigen_mit(17, False))
+
+assert ergebnis["anzahl"] == 16, (
+    f"Erwartet 16 Schalter (16 Eingangszüge, nicht die Summe), "
+    f"gefunden {ergebnis['anzahl']}: {ergebnis}"
+)
+
+assert ergebnis["summe"] is False, (
+    "Die Summe hat einen Eingangsschalter bekommen - sie hat keinen "
+    "Eingang, den man umschalten könnte."
+)
+
+assert set(ergebnis["beschriftung"]) == {TEXTE["faders_usb_off"]}, (
+    f"Auf A/D stehende Kanäle sind falsch beschriftet: "
+    f"{ergebnis['beschriftung']}"
+)
+
+assert ergebnis["farbig"] == 0, (
+    "Auf A/D ist nichts farbig - Farbe ist für den Zustand da, den man "
+    "nicht vergessen darf."
+)
+
+#
+# Die Karte ist im Grundzustand gesperrt (damit ein Tablet in der Tasche
+# nichts verstellt). Der Eingangsschalter gehört in dieselbe Sperre wie
+# die Fader - er greift tiefer ein als jeder Regler.
+#
+assert ergebnis["gesperrt"] == 16, (
+    f"Bei gesperrter Karte sind nur {ergebnis['gesperrt']} von 16 "
+    f"Eingangsschaltern gesperrt - hier wird umgelegt, was ein Kanal "
+    f"hört."
+)
+
+#
+# b) Alle auf USB: andere Beschriftung, und sichtbar.
+#
+ergebnis = ausfuehren(SCHALTER, vorher=zeigen_mit(17, True))
+
+assert set(ergebnis["beschriftung"]) == {TEXTE["faders_usb_on"]}, (
+    f"Auf USB stehende Kanäle sind falsch beschriftet: "
+    f"{ergebnis['beschriftung']}"
+)
+
+assert ergebnis["farbig"] == 16, (
+    f"Nur {ergebnis['farbig']} von 16 Kanälen auf USB sind hervorgehoben. "
+    f"Bleibt ein Kanal nach der Probe auf USB stehen, hört er beim "
+    f"nächsten Auftritt sein Mikrofon nicht - das muss man sehen."
+)
+
+#
+# c) Ein Pult, das den Schalter nicht kennt: gar kein Knopf.
+#
+ergebnis = ausfuehren(SCHALTER, vorher=zeigen_mit(17, None))
+
+assert ergebnis["zellen"] == 17, ergebnis
+
+assert ergebnis["anzahl"] == 0, (
+    f"Ein Pult ohne diesen Schalter bekommt {ergebnis['anzahl']} "
+    f"Schalter angezeigt - sie ließen sich nicht bewegen."
+)
+
+print("OK: Der Eingangsschalter steht da, wo er hingehört")
+
+
+# ====================================================================
+# 5b. Der Knopf bleibt in seiner Zelle
+#
+# Er ist Breite, die es vorher nicht gab, und der engste Fall ist das
+# X32: 33 Züge nebeneinander, jede Spalte knapp 3rem. Zu messen ist
+# dabei NICHT die Zeilenzahl - die hängt am Mindestmaß der Spalten im
+# CSS (2.75rem) und ändert sich durch einen breiteren Knopf gar nicht.
+# Er ragt dann einfach über seine Spalte hinaus, in den Nachbarzug
+# hinein. Genau das wird hier gemessen.
+#
+# (Der erste Entwurf hatte 2.9rem, und diese Prüfung in ihrer ersten
+# Fassung hätte das durchgelassen.)
+# ====================================================================
+
+RAGT_HERAUS = """function () {
+    const grid = document.getElementById('faders-grid');
+
+    let ueberstand = 0;
+    let geprueft = 0;
+
+    Array.from(grid.children).forEach((zelle) => {
+        const knopf = zelle.querySelector('.fader-usb');
+        if (!knopf) return;
+
+        geprueft += 1;
+
+        const z = zelle.getBoundingClientRect();
+        const k = knopf.getBoundingClientRect();
+
+        const raus = Math.max(0, k.right - z.right, z.left - k.left);
+
+        ueberstand = Math.max(ueberstand, Math.round(raus));
+    });
+
+    return { ueberstand: ueberstand, geprueft: geprueft };
+}"""
+
+ergebnis = ausfuehren(RAGT_HERAUS, vorher=zeigen_mit(33, True))
+
+assert ergebnis["geprueft"] == 32, ergebnis
+
+assert ergebnis["ueberstand"] <= 1, (
+    f"Der Eingangsschalter ragt {ergebnis['ueberstand']}px aus seinem "
+    f"Kanalzug heraus - am X32 liegt er damit über dem Nachbarn."
+)
+
+#
+# Und die Zeilenaufteilung bleibt, was sie war.
+#
+ergebnis = ausfuehren(MESSUNG, vorher=zeigen_mit(17, True))
+
+assert ergebnis["zeilen"] == [17], (
+    "Mit dem Eingangsschalter passen die XR18-Züge nicht mehr in eine "
+    "Zeile: " + str(ergebnis)
+)
+
+print("OK: Der Knopf bleibt in seiner Zelle, auch am X32")
+
+
+# ====================================================================
+# 5c. Auf dem Handy bleibt der Regler bedienbar
+#
+# Der Eingangsschalter kostet Platz in der Zeile, und der war auf einem
+# schmalen Gerät schon vorher knapp: Name 8rem, Mute, Regler, Zahl.
+# Nachgemessen bei 400px Fensterbreite blieben dem Regler mit dem neuen
+# Knopf nur noch 43px - vorher 87. Mit dem Finger ist das nichts.
+#
+# Deshalb gibt jetzt der NAME nach (flex: 0 1 statt 0 0) und der Regler
+# hat eine Untergrenze. Ein abgeschnittener Name bleibt lesbar, die
+# Nummer steht vorn; ein zu kurzer Regler ist einfach unbrauchbar.
+# ====================================================================
+
+REGLERBREITE = """function () {
+    const zelle = document.getElementById('faders-grid').children[0];
+
+    return {
+        zelle: Math.round(zelle.getBoundingClientRect().width),
+        regler: Math.round(
+            zelle.querySelector('.fader-input').getBoundingClientRect().width
+        ),
+        ueberlauf: Math.round(zelle.scrollWidth - zelle.clientWidth)
+    };
+}"""
+
+#
+# Drei Breiten, weil die Grenze dazwischen liegt: Unter 360px bricht
+# der Zug um (der Regler bekommt dann die ganze zweite Zeile), darüber
+# gibt der Name nach. Beides muss stimmen - und in KEINEM Fall darf
+# etwas über den Rand ragen.
+#
+gemessen = {}
+
+for breite in (320, 360, 400):
+
+    ergebnis = ausfuehren(
+        REGLERBREITE, vorher=zeigen_mit(17, True), breite=breite
+    )
+
+    gemessen[breite] = ergebnis["regler"]
+
+    assert ergebnis["regler"] >= 100, (
+        f"Bei {breite}px Fensterbreite bleiben dem Fader nur "
+        f"{ergebnis['regler']}px (Zelle {ergebnis['zelle']}px) - mit dem "
+        f"Finger nicht zu treffen."
+    )
+
+    assert ergebnis["ueberlauf"] <= 1, (
+        f"Bei {breite}px ist der Kanalzug breiter als sein Platz "
+        f"({ergebnis['ueberlauf']}px zu viel) - dann ragt der Knopf über "
+        f"den Rand."
+    )
+
+print(f"OK: Auf dem Handy bleibt der Fader bedienbar ({gemessen})")
 
 
 print("Alle Fader-Tests erfolgreich.")

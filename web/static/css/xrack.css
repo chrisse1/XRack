@@ -206,10 +206,50 @@ body {
     align-items: center;
     gap: 0.5rem;
     min-width: 0;
+
+}
+
+/*
+   Unter 360px darf der Zug umbrechen.
+
+   Dort geht die Zeile nicht mehr auf: Name, Eingangsschalter, Mute,
+   Regler und Zahl brauchen zusammen mehr Platz, als da ist. Ohne
+   Umbruch bleiben nur zwei schlechte Enden - ein Regler von 60px, mit
+   dem Finger nicht zu treffen, oder ein Knopf, der ueber den Rand
+   haengt. Beides nachgemessen (test_fader_ui.py, Abschnitt 5c).
+
+   Umgebrochen rutscht der Regler in die zweite Zeile und hat sie fuer
+   sich, also die volle Breite.
+
+   Und nur dort: Flexbox bricht nach der GEWUENSCHTEN Groesse um, nicht
+   nach der geschrumpften - mit flex-wrap ueberall waere jeder Zug auch
+   auf einem 400px-Handy zweizeilig, und man muesste doppelt so weit
+   scrollen. Ab 360px reicht es, wenn der Name nachgibt.
+*/
+@media (max-width: 359px) {
+
+    .fader-cell,
+    .pair-fader {
+        flex-wrap: wrap;
+    }
 }
 
 .fader-name {
-    flex: 0 0 8rem;
+    /*
+       Darf schrumpfen (0 1 statt 0 0), und zwar VOR dem Regler.
+
+       Bis der Eingangsschalter dazukam, ging das Rechenspiel auf: Name
+       8rem, Mute, Regler, Zahl. Mit dem Schalter blieben auf einem
+       400px breiten Handy nur noch 43px fuer den Regler uebrig -
+       vorher 87. Nachgemessen, nicht geschaetzt (test_fader_ui.py,
+       Abschnitt 5c).
+
+       Ein Regler von 43px ist mit dem Finger nicht zu bedienen, ein
+       abgeschnittener Name dagegen bleibt lesbar: Die Nummer steht
+       vorn, und den Rest sagen drei Punkte. Deshalb gibt der Name
+       nach.
+    */
+    flex: 0 1 8rem;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -226,7 +266,16 @@ body {
 .fader-input,
 .pair-input {
     flex: 1 1 auto;
-    min-width: 0;
+
+    /*
+       Untergrenze statt 0: Was hier fehlt, holt sich der Regler beim
+       Namen zurueck (siehe .fader-name). 7rem sind auf dem Handy
+       gemessen gut 112px - damit laesst sich zielen.
+
+       Ab 992px stehen die Regler senkrecht und sind 12rem lang; dort
+       aendert diese Grenze nichts.
+    */
+    min-width: 7rem;
     margin: 0;
 
     /*
@@ -242,11 +291,25 @@ body {
 }
 
 .fader-mute,
+.fader-usb,
 .pair-mute {
     flex: 0 0 auto;
     padding: 0.05rem 0.4rem;
     font-size: 0.7rem;
     line-height: 1.4;
+}
+
+/*
+   Der Eingangsschalter traegt Text ("A/D" oder "USB") und nicht nur
+   ein Zeichen wie der Mute-Knopf. Eine feste Breite haelt die
+   Kanalzuege trotzdem in einer Linie - ohne sie huepfen die Regler
+   beim Umschalten um die Breite des Wortes zur Seite.
+*/
+.fader-usb {
+    width: 2.2rem;
+    text-align: center;
+    padding-left: 0;
+    padding-right: 0;
 }
 
 /*

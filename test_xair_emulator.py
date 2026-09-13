@@ -317,6 +317,182 @@ try:
 
     print("OK: Snapshots werden gelesen, und das Aufrufen bewegt die Fader")
 
+    # ----------------------------------------------------------------
+    # Der Eingang: A/D oder USB
+    #
+    # Das Gegenstück zum virtuellen Soundcheck. Bisher war es der
+    # einzige Handgriff, für den man noch nach X-AIR-Edit wechseln
+    # musste: XRack spielt die Aufnahme ins Pult, aber die Kanäle
+    # hören weiter ihre Mikrofone.
+    #
+    # Geprüft wird über echtes OSC auf dem Draht, nicht gegen eine
+    # Attrappe im selben Prozess - die Adresse
+    # (/ch/NN/preamp/rtnsw, 1 = USB) stammt aus einer Bibliothek, und
+    # eine Bibliothek ist keine Hardware. Hier steht wenigstens, dass
+    # XRack sie richtig schreibt und liest.
+    # ----------------------------------------------------------------
+
+    zuege = control.get_channels("127.0.0.1", CHANNELS_XAIR)
+
+    #
+    # Alle Kanäle stehen auf A/D, und die Summe hat den Schalter gar
+    # nicht: None heißt "es gibt ihn hier nicht" - etwas anderes als
+    # False.
+    #
+    assert zuege[0]["usb"] is False, zuege[0]
+
+    assert zuege[-1]["usb"] is None, (
+        f"Die Summe hat einen Eingangsschalter bekommen: {zuege[-1]}"
+    )
+
+    assert [zug for zug in zuege if zug["label"] == "17+18"][0]["usb"] is None, (
+        "Der Aux-Rückweg hat einen Schalter bekommen - dass er einen "
+        "hat, ist ungeprüft."
+    )
+
+    #
+    # Und zwar, weil XRack dort GAR NICHT FRAGT.
+    #
+    # Der Unterschied ist der zwischen einer Aussage über XRack und
+    # einer über den Emulator: Der schweigt auf diese Adressen ohnehin,
+    # also wäre "usb is None" auch erfüllt, wenn XRack sie brav
+    # abfragte. Am echten Pult kostet jede solche Frage aber ihren
+    # Zeitablauf, und ob ein XR18 auf /lr/preamp/rtnsw antwortet, ist
+    # ungeprüft - eine Antwort dort wäre schlimmer als keine, denn
+    # dann stünde an der Summe ein Schalter, der nichts tut.
+    #
+    danebengefragt = [
+        adresse for adresse in pult.gefragt
+        if adresse.endswith("/preamp/rtnsw")
+        and not adresse.startswith("/ch/")
+    ]
+
+    assert danebengefragt == [], (
+        f"XRack fragt den Eingangsschalter an Adressen ab, die keinen "
+        f"Vorverstärker haben: {danebengefragt}"
+    )
+
+    assert control.set_usb_input("127.0.0.1", CHANNELS_XAIR, 3, True) is True
+
+    time.sleep(0.1)
+
+    assert pult.rtnsw.get("/ch/03/preamp/rtnsw") == 1, pult.rtnsw
+
+    zuege = control.get_channels("127.0.0.1", CHANNELS_XAIR)
+
+    assert zuege[2]["usb"] is True, zuege[2]
+
+    #
+    # Und die Nachbarn bleiben, wo sie sind - ein Schalter, der die
+    # halbe Band auf die Aufnahme legt, wäre der schlimmere Fehler.
+    #
+    assert zuege[1]["usb"] is False and zuege[3]["usb"] is False, zuege[1:4]
+
+    assert control.set_usb_input("127.0.0.1", CHANNELS_XAIR, 3, False) is True
+
+    time.sleep(0.1)
+
+    assert pult.rtnsw.get("/ch/03/preamp/rtnsw") == 0, pult.rtnsw
+
+    print("OK: Der Eingang wird umgelegt und kommt zurück")
+
+    # ----------------------------------------------------------------
+    # Ein gekoppeltes Paar wird auf BEIDEN Kanälen umgelegt
+    #
+    # Beim Fader genügt der erste Kanal, den zweiten zieht das Pult
+    # mit. Ob die Kopplung auch den Vorverstärker umfasst, ist
+    # ungeprüft - und ein halb umgelegtes Paar wäre der unangenehmste
+    # Fall: eine Seite hört die Aufnahme, die andere den Raum.
+    #
+    # Der Emulator zieht beim rtnsw ausdrücklich NICHTS mit (anders als
+    # beim Fader). Damit fällt hier auf, wenn XRack sich auf die
+    # Kopplung verlässt.
+    # ----------------------------------------------------------------
+
+    #
+    # 5+6 ist vorbelegt gekoppelt; der Zug dafür ist der fünfte.
+    #
+    paar = [
+        nummer for nummer, zug in enumerate(zuege, start=1)
+        if zug["label"] == "5+6"
+    ][0]
+
+    assert control.set_usb_input(
+        "127.0.0.1", CHANNELS_XAIR, paar, True
+    ) is True
+
+    time.sleep(0.1)
+
+    assert pult.rtnsw.get("/ch/05/preamp/rtnsw") == 1, pult.rtnsw
+    assert pult.rtnsw.get("/ch/06/preamp/rtnsw") == 1, (
+        f"Der zweite Kanal des gekoppelten Paars steht noch auf A/D: "
+        f"{pult.rtnsw}"
+    )
+
+    print("OK: Ein gekoppeltes Paar wird auf beiden Kanälen umgelegt")
+
+finally:
+    pult.stop()
+
+
+# ====================================================================
+# 2b. Ein Pult, das den Eingangsschalter nicht kennt
+#
+# Ältere Firmware, anderes Modell, X32: Dann kommt auf
+# /ch/NN/preamp/rtnsw keine Antwort. Zwei Dinge müssen dann stimmen.
+#
+# Erstens muss "kein Schalter" (None) von "steht auf A/D" (False)
+# unterscheidbar bleiben - sonst zeigt die Karte einen Schalter an, der
+# sich nicht bewegen lässt.
+#
+# Zweitens, und das ist der teure Teil: XRack darf nicht bei JEDEM
+# Kanal erneut in den Zeitablauf laufen. 0,3 s mal achtzehn Kanäle sind
+# über fünf Sekunden - bei jedem Auffrischen der Karte. Deshalb fragt
+# XRack einmal und weiß es dann.
+# ====================================================================
+
+pult = emulator.Pult(vorbelegt=True)
+pult.answer_rtnsw = False
+
+try:
+
+    control = steuerung(pult)
+
+    begonnen = time.monotonic()
+
+    zuege = control.get_channels("127.0.0.1", CHANNELS_XAIR)
+
+    dauer = time.monotonic() - begonnen
+
+    assert zuege is not None
+
+    assert all(zug["usb"] is None for zug in zuege), (
+        f"Ein Pult ohne Schalter liefert Stellungen: "
+        f"{[zug['usb'] for zug in zuege]}"
+    )
+
+    #
+    # Der Emulator antwortet sofort, ein echtes Pult schweigt 0,3 s.
+    # Gezählt wird deshalb nicht die Zeit, sondern wie oft gefragt
+    # wurde - das ist die Aussage, auf die es ankommt.
+    #
+    gefragt = [
+        adresse for adresse in pult.gefragt
+        if adresse.endswith("/preamp/rtnsw")
+    ]
+
+    assert len(gefragt) == 1, (
+        f"Nach {len(gefragt)} Abfragen des Schalters hat XRack immer noch "
+        f"nicht verstanden, dass dieses Pult ihn nicht kennt. Am echten "
+        f"Gerät kostet jede davon 0,3 s Zeitablauf: {gefragt}"
+    )
+
+    #
+    # Und umgelegt wird dort auch nichts - ein Befehl an ein Pult, das
+    # den Schalter nicht kennt, verschwindet sonst spurlos.
+    #
+    print(f"OK: Ohne Schalter wird einmal gefragt, nicht {len(zuege)}-mal")
+
 finally:
     pult.stop()
 

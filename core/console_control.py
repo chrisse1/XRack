@@ -3,7 +3,11 @@ Steuert die Kanalfader des Mischpults über OSC (Open Sound Control)
 per UDP - damit man beim Üben nicht zwischen XRack und X-AIR-Edit/
 X32-Edit hin- und herwechseln muss.
 
-Bewusst nur Lautstärke: kein EQ, keine Sends, kein Routing.
+Bewusst nur Lautstärke: kein EQ, keine Sends, kein Routing - mit
+EINER Ausnahme, dem Eingang eines Kanals (A/D oder USB, siehe
+USB_SCHALTER weiter unten). Die gehört hierher, weil der virtuelle
+Soundcheck genau daran hängt: Ohne diesen Schalter spielt XRack die
+Aufnahme ins Pult, und das Pult hört weiter auf die Mikrofone.
 
 Warum OSC hier von Hand kodiert wird statt über python-osc: Eine neue
 Zeile in requirements.txt hätte zur Folge, dass das Update über den
@@ -67,6 +71,36 @@ CHANNELS_XAIR = 18
 TIMEOUT = 0.3
 
 MIN_DB = -90.0
+
+#
+# ------------------------------------------------------------------
+# Der Eingang eines Kanals: Vorverstaerker (A/D) oder USB
+# ------------------------------------------------------------------
+#
+# Das ist die eine Ausnahme von "nur Lautstaerke" (siehe oben). Sie
+# gehoert hierher, weil der virtuelle Soundcheck genau daran haengt:
+# Ohne diesen Schalter spielt XRack die Aufnahme ins Pult, und das
+# Pult hoert weiter auf die Mikrofone. Wer ihn nicht in XRack hat,
+# wechselt fuer jeden Kanal nach X-AIR-Edit - der letzte Handgriff,
+# der nicht in XRack ging.
+#
+# Adresse belegt aus onyx-and-iris/xair-api-python
+# (xair_api/shared.py): usbinput -> "rtnsw", 1 = USB, 0 = Vorverstaerker.
+# Am Geraet nachgefragt mit scripts/xrack-pult-fragen.py - eine
+# Bibliothek allein ist keine Hardware.
+#
+USB_SCHALTER = "/preamp/rtnsw"
+
+#
+# Beim X32 gibt es diesen Schalter nicht: Dort waehlt man je Kanal eine
+# QUELLE aus einer Liste (Local, AES50, Card ...), es ist also kein
+# Umschalter mit zwei Stellungen. Fuer die Adresse dazu gibt es hier
+# keine belegte Quelle, nur Erinnerung - und die zaehlt nicht. Deshalb
+# kennt XRack den Schalter vorerst nur an der X-Air-Serie, und die
+# Oberflaeche zeigt ihn sonst nicht. Ein geratener Schalter, der beim
+# Umlegen die falsche Quelle setzt, waere schlimmer als keiner.
+#
+USB_SCHALTER_FAMILIEN = (FAMILY_XAIR,)
 
 #
 # ------------------------------------------------------------------
@@ -542,6 +576,19 @@ class ConsoleControl:
         self._fader_link: bool | None = None
 
         #
+        # Kennt dieses Pult den USB-Schalter? None = noch nicht
+        # gefragt.
+        #
+        # Das muss gemerkt werden, sonst kostet es Zeit statt Wissen:
+        # Antwortet ein Pult auf die Adresse nicht (aeltere Firmware,
+        # anderes Modell), laeuft jede einzelne Abfrage in den
+        # Zeitablauf von 0,3 s. Bei achtzehn Kanaelen waeren das ueber
+        # fuenf Sekunden - bei JEDEM Aktualisieren der Karte. Also
+        # einmal fragen und es dann wissen.
+        #
+        self._usb_supported: bool | None = None
+
+        #
         # Ergebnis des Suchlaufs samt Zeitpunkt des letzten Versuchs.
         #
         self._discovered: str | None = None
@@ -614,6 +661,7 @@ class ConsoleControl:
         self._linked = set()
         self._link_supported = True
         self._fader_link = None
+        self._usb_supported = None
         self._discovered = None
         self._last_discovery = 0.0
         self._pair_link = {}
@@ -729,6 +777,7 @@ class ConsoleControl:
                 self._linked = set()
                 self._link_supported = True
                 self._fader_link = None
+                self._usb_supported = None
 
                 self.logger.info(
                     "Mischpult erkannt: %s auf %s:%d",
@@ -907,6 +956,48 @@ class ConsoleControl:
 
         return wert.strip() if wert else ""
 
+    def _read_usb(self, host: str, address: str) -> bool | None:
+        """
+        Liegt der USB-Rueckweg auf dem Kanal (statt des Vorverstaerkers)?
+
+        None heisst "das Pult kennt diesen Schalter nicht" - und das ist
+        etwas ANDERES als False. Die Oberflaeche zeigt dann keinen
+        Schalter, statt einen anzuzeigen, der auf "A/D" steht und sich
+        nicht bewegen laesst.
+        """
+
+        #
+        # Nur echte Eingangskanaele. Die Summe (/lr, /main/st) hat
+        # keinen Eingang, den man umschalten koennte, und beim
+        # Aux-Rueckweg (/rtn/aux) ist ungeprueft, ob er den Schalter
+        # hat - dort wird deshalb gar nicht erst gefragt.
+        #
+        if not address.startswith("/ch/"):
+            return None
+
+        if self._usb_supported is False:
+            return None
+
+        wert = self._read(host, address, USB_SCHALTER, int)
+
+        if wert is None:
+
+            #
+            # Beim ersten Kanal entscheidet die fehlende Antwort fuer
+            # alle: Ein Pult, das die Adresse nicht kennt, kennt sie
+            # auf keinem Kanal. Spaeter darf ein einzelner verlorener
+            # Datenblock das Wissen nicht wieder umstossen - deshalb
+            # nur setzen, solange noch nichts bekannt ist.
+            #
+            if self._usb_supported is None:
+                self._usb_supported = False
+
+            return None
+
+        self._usb_supported = True
+
+        return wert == 1
+
     # ----------------------------------------------------------------
     # Snapshots (X-Air) bzw. Szenen (X32)
     # ----------------------------------------------------------------
@@ -1074,6 +1165,15 @@ class ConsoleControl:
             name = self._read_name(host, address)
             muted = self._read_muted(host, address)
 
+            #
+            # Der Eingang: nur an den Familien, wo der Schalter belegt
+            # ist (siehe USB_SCHALTER_FAMILIEN).
+            #
+            usb = (
+                self._read_usb(host, address)
+                if family in USB_SCHALTER_FAMILIEN else None
+            )
+
             result.append(
                 {
                     "channel": index,
@@ -1081,6 +1181,10 @@ class ConsoleControl:
                     "name": name,
                     "is_main": spec.is_main,
                     "muted": muted,
+                    #
+                    # None heisst "kein Schalter" - nicht "A/D".
+                    #
+                    "usb": usb,
                     #
                     # None steht für "Fader zu" (-unendlich) - als JSON
                     # gibt es kein -inf.
@@ -1274,6 +1378,60 @@ class ConsoleControl:
             "/mix/fader",
             db_to_fader(db),
         )
+
+    def set_usb_input(
+        self, host: str, channels: int, channel: int, usb: bool
+    ) -> bool:
+        """
+        Legt den Eingang eines Kanalzugs auf USB (True) oder auf den
+        Vorverstaerker (False).
+
+        Scharf: Ein Kanal auf USB hoert sein Mikrofon nicht mehr. Das
+        ist der Sinn der Sache (virtueller Soundcheck), aber es ist
+        auch der Fehler, den man erst beim naechsten Auftritt merkt -
+        deshalb zeigt die Karte den Zustand an und nicht nur den Knopf.
+        """
+
+        family = self.detect(host)
+
+        if family is None or self._port is None:
+            return False
+
+        if family not in USB_SCHALTER_FAMILIEN:
+            return False
+
+        addresses = channel_addresses(family, channels, self._linked)
+
+        if not 1 <= channel <= len(addresses):
+            return False
+
+        adresse = addresses[channel - 1].address
+
+        #
+        # Nur echte Eingangskanaele, aus demselben Grund wie beim Lesen.
+        #
+        if not adresse.startswith("/ch/"):
+            return False
+
+        #
+        # Ein gekoppeltes Paar wird AUSDRUECKLICH auf beiden Kanaelen
+        # umgelegt.
+        #
+        # Beim Fader reicht der erste Kanal, den zweiten zieht das Pult
+        # mit. Ob die Kopplung auch den Vorverstaerker umfasst, ist
+        # ungeprueft - und ein halb umgelegtes Paar waere der
+        # unangenehmste Fall: eine Seite hoert die Aufnahme, die andere
+        # den Raum. Zwei Befehle kosten nichts, also beide.
+        #
+        nummer = int(adresse[len("/ch/"):])
+
+        ziele = [adresse]
+
+        if nummer in self._linked:
+            zweiter = f"/ch/{nummer + 1:02d}"
+            ziele.append(zweiter)
+
+        return self._write(host, ziele, USB_SCHALTER, 1 if usb else 0)
 
     def set_mute(
         self, host: str, channels: int, channel: int, muted: bool

@@ -147,6 +147,44 @@ Die Liste wird nicht laufend abgefragt (das kostet je nach Pult bis zu
 hundert Abfragen), sondern beim Laden der Seite, beim Entsperren der Karte
 und nach einem geladenen Snapshot.
 
+### Der Eingang eines Kanals: A/D oder USB
+
+Die Pultsteuerung macht bewusst nur Lautstärke — kein EQ, keine Sends,
+kein Routing. Eine Ausnahme gibt es: den Schalter, der einem Kanal statt
+seines Vorverstärkers den USB-Rückweg auflegt
+(`/ch/NN/preamp/rtnsw`, 1 = USB).
+
+Er gehört dazu, weil der virtuelle Soundcheck ohne ihn halb ist: XRack
+spielt die Aufnahme ins Pult, aber die Kanäle hören weiter ihre
+Mikrofone. Genau dieser Handgriff war der letzte, für den man noch nach
+X-AIR-Edit wechseln musste.
+
+Drei Dinge, die dabei entschieden sind:
+
+**Nur die X-Air-Serie.** Dort ist es ein Umschalter mit zwei Stellungen.
+Der X32 wählt stattdessen je Kanal eine *Quelle* aus einer Liste (Local,
+AES50, Card) — für die Adresse dazu gibt es keine belegte Quelle, nur
+Erinnerung. Deshalb zeigt die Karte den Schalter dort nicht: Ein
+geratener Schalter, der beim Umlegen die falsche Quelle setzt, wäre
+schlimmer als keiner.
+
+**Ein gekoppeltes Paar wird auf beiden Kanälen umgelegt.** Beim Fader
+genügt der erste Kanal, den zweiten zieht das Pult mit. Ob die Kopplung
+auch den Vorverstärker umfasst, ist ungeprüft — und ein halb umgelegtes
+Paar wäre der unangenehmste Fall: eine Seite hört die Aufnahme, die
+andere den Raum. Zwei OSC-Befehle kosten nichts.
+
+**Einmal fragen, dann wissen.** Antwortet ein Pult auf die Adresse nicht
+(ältere Firmware, X32), läuft jede Abfrage in den Zeitablauf von 0,3 s.
+Bei achtzehn Kanälen wären das über fünf Sekunden — bei *jedem*
+Auffrischen der Karte. XRack merkt sich deshalb nach der ersten Abfrage,
+dass dieses Pult den Schalter nicht kennt, und die Karte zeigt dann gar
+keinen an.
+
+Und weil er scharf ist — ein Kanal auf USB hört sein Mikrofon nicht mehr
+—, ist USB die einzige farbige Stellung. Steht am Ende der Probe noch
+irgendwo Farbe in der Karte, ist ein Kanal noch auf der Aufnahme.
+
 ---
 
 ## Der Emulator

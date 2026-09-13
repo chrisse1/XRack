@@ -580,6 +580,19 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "faders_mute": "Stumm schalten",
         #
+        # Der Eingang eines Kanals. "A/D" ist die Beschriftung am Pult
+        # selbst (Analog-Digital-Wandler) - dieselben Worte wie in
+        # X-AIR Edit, damit man nicht uebersetzen muss, waehrend man
+        # sucht.
+        #
+        "faders_usb_off": "A/D",
+        "faders_usb_on": "USB",
+        "faders_usb_title": (
+            "Eingang des Kanals: A/D = Mikrofon/Instrument am Pult, "
+            "USB = das, was XRack abspielt (virtueller Soundcheck). "
+            "Achtung: Auf USB hört der Kanal sein Mikrofon nicht."
+        ),
+        #
         # Beide Meldungen beschreiben dieselbe Lage und beginnen
         # deshalb gleich - nur der zweite Satz sagt, woran es liegt.
         # Vorher lasen sie sich wie zwei verschiedene Fehler, was beim
@@ -1387,6 +1400,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "them."
         ),
         "faders_mute": "Mute",
+        "faders_usb_off": "A/D",
+        "faders_usb_on": "USB",
+        "faders_usb_title": (
+            "Channel input: A/D = mic/instrument on the console, "
+            "USB = whatever XRack plays back (virtual soundcheck). "
+            "Careful: on USB the channel does not hear its microphone."
+        ),
         "faders_no_connection": (
             "No connection to the console. No access route is enabled "
             "yet - fader control runs over the network, not the USB "

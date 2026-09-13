@@ -279,6 +279,30 @@ class Pult:
         self.chlink: dict[str, int] = {}
 
         #
+        # Der Eingang je Kanal: 0 = Vorverstärker (A/D), 1 = USB.
+        #
+        # Das ist der Schalter, den man im Mischpult für den virtuellen
+        # Soundcheck umlegt. Nur die X-Air-Serie hat ihn in dieser Form
+        # (/ch/NN/preamp/rtnsw); ein X32 wählt stattdessen je Kanal eine
+        # Quelle aus einer Liste, und dieses Programm gibt sich als X32
+        # deshalb ahnungslos - genau so, wie XRack es dort erwarten
+        # muss.
+        #
+        self.rtnsw: dict[str, int] = {}
+
+        #
+        # Jede Abfrage, die hereingekommen ist - der Reihe nach.
+        #
+        # Damit lässt sich nicht nur prüfen, was ein Programm vom Pult
+        # weiß, sondern auch, WIE OFT es fragt. Ein echtes Pult
+        # schweigt auf eine Adresse, die es nicht kennt, und jedes
+        # Schweigen kostet die Gegenseite ihren Zeitablauf - wer
+        # achtzehnmal dieselbe unbekannte Adresse fragt, wartet
+        # achtzehnmal.
+        #
+        self.gefragt: list[str] = []
+
+        #
         # Snapshots: Nummer -> Name, dazu die gespeicherten Stellungen.
         # Ein Platz ohne Namen ist unbenutzt.
         #
@@ -292,6 +316,13 @@ class Pult:
         #
         self.answer_chlink = True
         self.answer_snapshot_names = True
+
+        #
+        # Ein Pult mit älterer Firmware, das den USB-Schalter nicht
+        # kennt: Es schweigt dazu. XRack darf daraufhin nicht bei jedem
+        # Kanal erneut in den Zeitablauf laufen.
+        #
+        self.answer_rtnsw = True
 
         #
         # /config/linkcfg/fdrmute gibt es nur beim X32. Ein X-Air
@@ -510,6 +541,8 @@ class Pult:
             self._setzen(adresse, argumente[0])
             return None
 
+        self.gefragt.append(adresse)
+
         return self._abfragen(adresse)
 
     def _setzen(self, adresse: str, wert) -> None:
@@ -537,6 +570,19 @@ class Pult:
 
             self.names[adresse] = str(wert)
             self._sagen(f"{adresse} = {wert!r}")
+
+        elif adresse.endswith("/preamp/rtnsw"):
+
+            if self.x32 or not self.answer_rtnsw:
+                self._sagen(f"{adresse} = {wert!r} (dieses Pult kennt das nicht)")
+                return
+
+            self.rtnsw[adresse] = int(wert)
+
+            self._sagen(
+                f"{adresse} = {int(wert)}  "
+                f"({'USB' if int(wert) else 'A/D'})"
+            )
 
         elif adresse.startswith("/config/chlink/"):
 
@@ -587,6 +633,25 @@ class Pult:
 
         if adresse.endswith("/config/name"):
             return osc_bauen(adresse, self.names.get(adresse, ""))
+
+        if adresse.endswith("/preamp/rtnsw"):
+
+            #
+            # Ein X32 hat diesen Schalter nicht, und ein X-Air mit
+            # älterer Firmware antwortet nicht - beides ist Schweigen,
+            # nicht "0".
+            #
+            if self.x32 or not self.answer_rtnsw:
+                return None
+
+            #
+            # Nur echte Eingangskanäle. Die Summe und der Aux-Rückweg
+            # haben keinen Vorverstärker, den man umschalten könnte.
+            #
+            if not adresse.startswith("/ch/"):
+                return None
+
+            return osc_bauen(adresse, self.rtnsw.get(adresse, 0))
 
         if adresse.startswith("/config/chlink/"):
 
@@ -1056,6 +1121,10 @@ def main() -> int:
         help="Kopplungsabfragen unbeantwortet lassen",
     )
     zerleger.add_argument(
+        "--ohne-usb-schalter", action="store_true",
+        help="Den Eingangsschalter A/D-USB nicht kennen (ältere Firmware)",
+    )
+    zerleger.add_argument(
         "--ohne-snapshot-namen", action="store_true",
         help="Namen der Snapshots nicht liefern",
     )
@@ -1123,6 +1192,7 @@ def main() -> int:
 
     pult.answer_chlink = not argumente.ohne_chlink
     pult.answer_snapshot_names = not argumente.ohne_snapshot_namen
+    pult.answer_rtnsw = not argumente.ohne_usb_schalter
 
     if argumente.ausfuehrlich:
 
