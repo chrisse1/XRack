@@ -1319,12 +1319,24 @@ try:
 
     alte_schaltzeit = sys.getswitchinterval()
 
-    diagnostics._stop.clear()
-
-    wache = threading.Thread(
-        target=diagnostics._stillstand_wachen, daemon=True
+    #
+    # KEIN eigener Thread: Die Wache läuft seit dem Konstruktor, ohne
+    # dass die Aufzeichnung eingeschaltet wäre. Genau das ist die
+    # Aussage - wer den Fehler erlebt, hat sie meist nicht vorher
+    # eingeschaltet.
+    #
+    assert diagnostics.enabled is False, (
+        "Für diesen Versuch darf die Aufzeichnung gerade NICHT laufen."
     )
-    wache.start()
+
+    assert diagnostics._stillstand_thread is not None, (
+        "Ohne eingeschaltete Aufzeichnung gibt es keine Wache - dann "
+        "bleibt der nächste Vorfall wieder unbelegt."
+    )
+
+    assert diagnostics._stillstand_thread.is_alive(), (
+        "Die Wache läuft nicht."
+    )
 
     #
     # Ein Öffnen, das hängt: Der Thread betritt die Gerätewache und
@@ -1376,8 +1388,8 @@ try:
 
         time.sleep(0.05)
 
-    diagnostics._stop.set()
-    wache.join(timeout=5)
+    diagnostics._wache_stop.set()
+    diagnostics._stillstand_thread.join(timeout=5)
 
     with diagnostics._stillstand_sperre:
         befunde = list(diagnostics._stillstaende)
@@ -1387,7 +1399,7 @@ try:
         "beim nächsten Mal wieder nichts im Protokoll."
     )
 
-    dauer, was = befunde[0]
+    zeit, dauer, was = befunde[0]
 
     assert dauer >= 0.3, f"Die gemessene Verspätung ist zu klein: {dauer}"
 
@@ -1430,23 +1442,17 @@ try:
     # Eine Wache, die immer etwas findet, ist keine.
     # ----------------------------------------------------------------
 
-    diagnostics._stillstaende = []
-    diagnostics._stop.clear()
-
-    ruhig = threading.Thread(
-        target=diagnostics._stillstand_wachen, daemon=True
-    )
-    ruhig.start()
+    ruhiger = Diagnostics(FakeApplication())
 
     time.sleep(1.0)
 
-    diagnostics._stop.set()
-    ruhig.join(timeout=5)
+    ruhiger._wache_stop.set()
+    ruhiger._stillstand_thread.join(timeout=5)
 
-    with diagnostics._stillstand_sperre:
-        assert diagnostics._stillstaende == [], (
+    with ruhiger._stillstand_sperre:
+        assert ruhiger._stillstaende == [], (
             f"Im ruhigen Betrieb meldet die Wache Stillstände: "
-            f"{diagnostics._stillstaende}"
+            f"{ruhiger._stillstaende}"
         )
 
     print("OK: Ohne Stillstand meldet die Wache nichts")
@@ -1479,7 +1485,7 @@ try:
     diagnostics._stillstaende = []
     diagnostics._stillstand_merken(2.0, 94)
 
-    dauer, befund = diagnostics._stillstaende[0]
+    zeit, dauer, befund = diagnostics._stillstaende[0]
 
     assert "Ton lief weiter" in befund, (
         f"Bei durchlaufendem Ton sagt der Befund nichts dazu: {befund!r}"
@@ -1498,7 +1504,7 @@ try:
     diagnostics._stillstaende = []
     diagnostics._stillstand_merken(2.0, 3)
 
-    dauer, befund = diagnostics._stillstaende[0]
+    zeit, dauer, befund = diagnostics._stillstaende[0]
 
     assert "Ton stand ebenfalls" in befund, (
         f"Bei stehendem Ton sagt der Befund das nicht: {befund!r}"
@@ -1511,7 +1517,7 @@ try:
     diagnostics._stillstaende = []
     diagnostics._stillstand_merken(0.7, 0)
 
-    dauer, befund = diagnostics._stillstaende[0]
+    zeit, dauer, befund = diagnostics._stillstaende[0]
 
     assert "Ton" not in befund, (
         f"Ohne laufende Wiedergabe wird über den Ton geurteilt: {befund!r}"
@@ -1565,8 +1571,11 @@ try:
 
     diagnostics._stillstaende = []
 
-    echtes_stop = diagnostics._stop
-    diagnostics._stop = VerschlafenderStop()
+    #
+    # Die Wache dieses Objekts steht schon (oben beendet) - hier läuft
+    # eine eigene mit einem Ereignis, das seinen Takt verschläft.
+    #
+    diagnostics._wache_stop = VerschlafenderStop()
 
     puls_laeuft = threading.Event()
     puls_laeuft.set()
@@ -1600,20 +1609,19 @@ try:
 
             time.sleep(0.05)
 
-        diagnostics._stop.set()
+        diagnostics._wache_stop.set()
         wache.join(timeout=5)
 
     finally:
         puls_laeuft.clear()
         pulser.join(timeout=5)
-        diagnostics._stop = echtes_stop
 
     with diagnostics._stillstand_sperre:
         befunde = list(diagnostics._stillstaende)
 
     assert befunde, "Die verschlafene Runde wurde nicht bemerkt."
 
-    dauer, befund = befunde[0]
+    zeit, dauer, befund = befunde[0]
 
     assert "Ton lief weiter" in befund, (
         f"Die Wiedergabe lief durch, der Befund sagt aber etwas "
@@ -1623,6 +1631,61 @@ try:
     )
 
     print(f"OK: Läuft der Ton weiter, steht das auch so da ({dauer:.1f} s)")
+
+    # ----------------------------------------------------------------
+    # 13e. Die Befunde stehen auch ohne eingeschaltete Aufzeichnung da
+    #
+    # Der Anlass ist der ernüchterndste Satz dieser Fehlersuche: "Ich
+    # habe jetzt mehrere Stunden alles Mögliche getestet und er ist
+    # nicht aufgetaucht."
+    #
+    # Wenn er dann auftritt, muss die Spur schon da sein. Eine Falle,
+    # die man vorher scharfstellen muss, fängt gerade den Fehler nicht,
+    # den man nicht erwartet hat - deshalb läuft die Wache immer, und
+    # ihre Funde stehen in den Einstellungen, nicht nur in einer
+    # Protokolldatei, die erst jemand holen muss.
+    # ----------------------------------------------------------------
+
+    ohne = Diagnostics(FakeApplication())
+
+    try:
+
+        assert ohne.enabled is False
+
+        ohne._stillstand_merken(1.4, 0)
+
+        stand = ohne.get_status()
+
+        assert stand["enabled"] is False, stand
+
+        assert len(stand["stillstaende"]) == 1, (
+            f"Ohne eingeschaltete Aufzeichnung wird nichts angezeigt: "
+            f"{stand}"
+        )
+
+        befund = stand["stillstaende"][0]
+
+        assert befund["dauer"] == 1.4, befund
+        assert befund["zeit"] > 0, befund
+        assert "befund" in befund, befund
+
+        assert stand["stillstand_laengster"] == 1.4, stand
+
+        #
+        # Der jüngste zuerst - wer nachsieht, sucht den von eben.
+        #
+        ohne._stillstand_merken(0.6, 0)
+
+        neuer = ohne.get_status()["stillstaende"]
+
+        assert neuer[0]["dauer"] == 0.6, neuer
+
+        assert len(neuer) == 2, neuer
+
+    finally:
+        ohne._wache_stop.set()
+
+    print("OK: Die Befunde stehen auch ohne Aufzeichnung in den Einstellungen")
 
     print("Alle Tests erfolgreich.")
 

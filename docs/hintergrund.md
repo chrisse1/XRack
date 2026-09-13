@@ -128,6 +128,15 @@ gesetzten Seiten: einmal hält eine Schleife den GIL fest (nichts läuft),
 einmal verschläft die Wache ihren Takt, während ein zweiter Thread
 munter Blöcke schreibt.
 
+**Die Wache läuft immer**, auch wenn die Aufzeichnung ausgeschaltet ist,
+und ihre Funde stehen in den Einstellungen — nicht nur in einer
+Protokolldatei, die erst jemand holen muss. Der Grund ist der
+ernüchterndste Satz dieser Fehlersuche: *„Ich habe jetzt mehrere Stunden
+alles Mögliche getestet und er ist nicht aufgetaucht."* Eine Falle, die
+man vorher scharfstellen muss, fängt gerade den Fehler nicht, den man
+nicht erwartet hat. Sie kostet: fünfmal in der Sekunde aufwachen und
+eine Zahl vergleichen.
+
 ### Welches Funkgerät wofür
 
 `wlan0` und `wlan1` werden in der Reihenfolge vergeben, in der die Geräte

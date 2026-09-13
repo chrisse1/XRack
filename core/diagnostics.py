@@ -218,10 +218,38 @@ class Diagnostics:
         # müssen: (Dauer, was gerade lief). Geschrieben wird im
         # Haupttakt, damit alle Dateizugriffe in einem Thread bleiben.
         #
-        self._stillstaende: list[tuple[float, str]] = []
+        self._stillstaende: list[tuple[float, float, str]] = []
         self._stillstand_sperre = threading.Lock()
         self._stillstand_thread: threading.Thread | None = None
         self._stillstand_laengster = 0.0
+
+        #
+        # Was zuletzt gefunden wurde - fuer die Anzeige in den
+        # Einstellungen, unabhaengig von der Aufzeichnung.
+        #
+        self._stillstand_verlauf: list[dict] = []
+
+        #
+        # Die Wache hat ein EIGENES Stopp-Ereignis, und sie laeuft von
+        # Anfang an - auch ohne eingeschaltete Aufzeichnung.
+        #
+        # Der Grund steht in der Geschichte dieses Fehlers: Er tritt
+        # selten auf, und wer ihn erlebt, hat die Aufzeichnung meist
+        # nicht vorher eingeschaltet. Nach mehreren Stunden Suche kam
+        # vom Geraet "er ist nicht aufgetaucht" - eine Falle, die man
+        # vorher scharfstellen muss, faengt aber gerade den Fehler
+        # nicht, den man nicht erwartet.
+        #
+        # Kosten: fuenfmal in der Sekunde aufwachen und eine Zahl
+        # vergleichen. Das ist weniger, als die Oberflaeche fuer einen
+        # einzigen Statusabruf braucht.
+        #
+        self._wache_stop = threading.Event()
+
+        self._stillstand_thread = threading.Thread(
+            target=self._stillstand_wachen, daemon=True
+        )
+        self._stillstand_thread.start()
 
         #
         # Fuer das Urteil ueber das Netz: wie viele Pings hintereinander
@@ -278,11 +306,6 @@ class Diagnostics:
 
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
-
-        self._stillstand_thread = threading.Thread(
-            target=self._stillstand_wachen, daemon=True
-        )
-        self._stillstand_thread.start()
 
         self.logger.info("Diagnose-Aufzeichnung gestartet: %s", LOG_FILE)
 
@@ -416,10 +439,22 @@ class Diagnostics:
 
         size = LOG_FILE.stat().st_size if LOG_FILE.is_file() else 0
 
+        with self._stillstand_sperre:
+            verlauf = list(self._stillstand_verlauf)
+            laengster = self._stillstand_laengster
+
         return {
             "enabled": self.enabled,
             "size": size,
             "path": str(LOG_FILE),
+            #
+            # Die Stillstände stehen hier unabhängig davon, ob die
+            # Aufzeichnung läuft - die Wache läuft immer (siehe
+            # __init__). Genau darum geht es: Wer den Fehler erlebt,
+            # hatte die Aufzeichnung meist nicht vorher eingeschaltet.
+            #
+            "stillstaende": verlauf[::-1],
+            "stillstand_laengster": round(laengster, 1),
         }
 
     # ------------------------------------------------------------
@@ -1174,12 +1209,12 @@ class Diagnostics:
         der Zusammenhang verloren.
         """
 
-        while not self._stop.is_set():
+        while not self._wache_stop.is_set():
 
             vorher = time.monotonic()
             bloecke_vorher = GERAETEWACHE.bloecke
 
-            self._stop.wait(STILLSTAND_TAKT)
+            self._wache_stop.wait(STILLSTAND_TAKT)
 
             verspaetung = time.monotonic() - vorher - STILLSTAND_TAKT
 
@@ -1207,13 +1242,33 @@ class Diagnostics:
 
         befund = f"{was or 'nichts am Audiogerät'}{self._tonurteil(verspaetung, bloecke)}"
 
+        #
+        # Die Uhrzeit gehört zum Befund, nicht zur Zeile: Geschrieben
+        # wird er erst im nächsten Takt der Aufzeichnung, und wenn die
+        # gerade aus ist, womöglich erst Stunden später.
+        #
+        zeit = time.time()
+
         with self._stillstand_sperre:
 
             if verspaetung > self._stillstand_laengster:
                 self._stillstand_laengster = verspaetung
 
             if len(self._stillstaende) < STILLSTAND_MERKE_MAX:
-                self._stillstaende.append((verspaetung, befund))
+                self._stillstaende.append((zeit, verspaetung, befund))
+
+            #
+            # Der Verlauf ist unabhängig von der Aufzeichnung: Er steht
+            # in den Einstellungen, damit man nach einem Vorfall
+            # nachsehen kann, ohne vorher etwas eingeschaltet zu haben.
+            #
+            self._stillstand_verlauf.append({
+                "zeit": zeit,
+                "dauer": round(verspaetung, 1),
+                "befund": befund,
+            })
+
+            del self._stillstand_verlauf[:-STILLSTAND_MERKE_MAX]
 
     def _tonurteil(self, verspaetung: float, bloecke: int) -> str:
         """
@@ -1268,11 +1323,13 @@ class Diagnostics:
             befunde = self._stillstaende
             self._stillstaende = []
 
-        for verspaetung, was in befunde:
+        for zeit, verspaetung, was in befunde:
 
             writer.warning(
-                "STILLSTAND: %.1f s lang lief kein Python - der Webserver "
-                "war in dieser Zeit nicht erreichbar. Dabei lief: %s",
+                "STILLSTAND um %s: %.1f s lang lief kein Python - der "
+                "Webserver war in dieser Zeit nicht erreichbar. Dabei "
+                "lief: %s",
+                datetime.fromtimestamp(zeit).strftime("%H:%M:%S"),
                 verspaetung,
                 was,
             )

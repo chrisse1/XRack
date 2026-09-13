@@ -4372,6 +4372,57 @@ async function loadSettings() {
 // Diagnose-Aufzeichnung
 // ------------------------------------------------------------
 
+//
+// Die gemessenen Stillstände - Zeiten, in denen im Prozess kein Python
+// lief und die Weboberfläche deshalb nicht erreichbar war.
+//
+// Sie stehen hier unabhängig davon, ob die Aufzeichnung läuft: Die
+// Wache läuft immer (siehe core/diagnostics.py). Der Grund ist die
+// Geschichte dieses Fehlers - er tritt selten auf, und wer ihn erlebt,
+// hat die Aufzeichnung meist nicht vorher eingeschaltet.
+//
+function renderStillstaende(befunde) {
+    const stelle = document.getElementById("settings-stillstaende");
+
+    if (!stelle) return;
+
+    if (!befunde.length) {
+        stelle.innerHTML =
+            '<span class="text-body-secondary">'
+            + I18N.settings_stillstand_keiner + "</span>";
+        return;
+    }
+
+    stelle.innerHTML = "";
+
+    const kopf = document.createElement("div");
+    kopf.className = "fw-semibold";
+    kopf.textContent = I18N.settings_stillstand_titel;
+    stelle.appendChild(kopf);
+
+    //
+    // Über textContent zusammengesetzt und nicht über innerHTML: Im
+    // Befund steht ein Gerätename, der vom System kommt - und was von
+    // außen kommt, gehört nicht als Markup in die Seite.
+    //
+    befunde.forEach((befund) => {
+
+        const zeile = document.createElement("div");
+        zeile.className = "text-warning";
+
+        const zeit = new Date(befund.zeit * 1000).toLocaleString();
+
+        zeile.textContent = `${zeit} — ${befund.dauer} s`;
+
+        const dazu = document.createElement("span");
+        dazu.className = "text-body-secondary";
+        dazu.textContent = ` · ${befund.befund}`;
+
+        zeile.appendChild(dazu);
+        stelle.appendChild(zeile);
+    });
+}
+
 async function loadDiagnosticsStatus() {
     const toggle = document.getElementById("settings-diagnostics-toggle");
     const download = document.getElementById("btn-diagnostics-download");
@@ -4394,6 +4445,8 @@ async function loadDiagnosticsStatus() {
                 ? formatFileSize(status.size)
                 : I18N.settings_diagnostics_empty;
         }
+
+        renderStillstaende(status.stillstaende || []);
     } catch (error) {
         console.error("Diagnose-Status konnte nicht geladen werden:", error);
     }

@@ -514,6 +514,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_diagnostics_hint": "Schreibt Zustand und Netzwerk für die Fehlersuche mit.",
         "btn_diagnostics_download": "Aufzeichnung herunterladen",
         "settings_diagnostics_empty": "Noch nichts aufgezeichnet.",
+        #
+        # Die gemessenen Stillstände stehen unabhängig vom Schalter da:
+        # Die Wache läuft immer (siehe core/diagnostics.py).
+        #
+        "settings_stillstand_titel": "Gemessene Stillstände:",
+        "settings_stillstand_keiner": (
+            "Keine Stillstände gemessen - der Prozess lief durchgehend."
+        ),
 
         "settings_wifi_hint": (
             "SSID und Passwort werden beim Speichern immer beide neu "
@@ -1338,6 +1346,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_diagnostics_hint": "Records state and network for troubleshooting.",
         "btn_diagnostics_download": "Download recording",
         "settings_diagnostics_empty": "Nothing recorded yet.",
+        "settings_stillstand_titel": "Measured stalls:",
+        "settings_stillstand_keiner": (
+            "No stalls measured - the process kept running."
+        ),
 
         "settings_wifi_hint": (
             "SSID and password are always both set anew when saving."
