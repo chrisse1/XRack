@@ -924,11 +924,21 @@ function toggleFaderLock() {
     button.classList.toggle("btn-warning", fadersUnlocked);
 
     //
-    // Die Sperre muss beides erfassen - ein Mute-Knopf, der trotz
-    // Schloss reagiert, wäre eine Lücke genau dort, wo die Sperre
-    // schützen soll.
+    // Die Sperre erfasst ALLES, was in einem Kanalzug bedienbar ist -
+    // erkennbar an der Klasse "fader-bedienung", nicht an einer Liste
+    // von Namen.
     //
-    document.querySelectorAll(".fader-input, .fader-mute").forEach((element) => {
+    // Hier stand eine solche Liste (".fader-input, .fader-mute"), und
+    // sie hat genau den Fehler gemacht, für den Listen anfällig sind:
+    // Der Eingangsschalter A/D/USB kam dazu, wurde gesperrt gezeichnet
+    // (die Karte ist im Grundzustand gesperrt) - und beim Entsperren
+    // nicht mitgenommen. Er blieb für immer tot, und am Gerät sah das
+    // so aus: "Die Anzeige stimmt, aber bei Klick passiert nichts."
+    //
+    // Mit der Klasse kann das nächste Bedienelement die Sperre nicht
+    // mehr vergessen; es fällt schon beim Zeichnen auf, wenn sie fehlt.
+    //
+    document.querySelectorAll(".fader-bedienung").forEach((element) => {
         element.disabled = !fadersUnlocked;
     });
 
@@ -1762,35 +1772,66 @@ function renderFaders(channels) {
         grid.className = "fader-grid";
         grid.innerHTML = "";
 
+        //
+        // Hat ueberhaupt ein Zug einen Eingangsschalter? Nur dann
+        // braucht die Summe einen Platzhalter - bei einem Pult ohne
+        // Schalter waere er verschwendete Hoehe.
+        //
+        const irgendeinSchalter = channels.some(
+            (kanal) => kanal.usb === true || kanal.usb === false
+        );
+
         channels.forEach((channel) => {
             const cell = document.createElement("div");
             cell.className =
                 "fader-cell"
                 + (fadersUnlocked ? "" : " is-locked")
                 + (channel.is_main ? " is-main" : "");
+            //
+            // Die Reihenfolge im Kanalzug: Eingangsschalter oben (ueber
+            // der Kanalnummer), dann Name, Regler, Zahl - und der
+            // Mute-Knopf ganz unten. Vorher standen Eingang und Mute
+            // nebeneinander, und zwar so dicht, dass man mit dem Finger
+            // leicht den falschen traf. Zwei Knoepfe, von denen einer
+            // stumm schaltet und der andere das Mikrofon abklemmt,
+            // gehoeren an die entgegengesetzten Enden.
+            //
+            // Wo es keinen Eingangsschalter gibt (die Summe, oder ein
+            // Pult, das ihn nicht kennt), steht ein unsichtbarer
+            // Platzhalter - derselbe Knopf, nur nicht zu sehen. Sonst
+            // beginnt dieser Zug eine Knopfhoehe weiter oben, und alle
+            // Regler daneben stehen versetzt. Ein Platzhalter aus
+            // demselben Element hat dabei zwangslaeufig dieselbe
+            // Hoehe; eine nachgerechnete Zahl waere beim naechsten
+            // Schriftwechsel falsch.
+            //
+            const hatSchalter =
+                channel.usb === true || channel.usb === false;
+
             cell.innerHTML = `
-                <span class="fader-name" title="${channel.name || ""}">
-                    <span class="fader-number">${channel.label}</span>${channel.name || ""}
-                </span>
-                ${channel.usb === null || channel.usb === undefined ? "" : `
+                ${hatSchalter ? `
                 <button
                     type="button"
-                    class="btn btn-outline-secondary fader-usb"
+                    class="btn btn-outline-secondary fader-usb fader-bedienung"
                     data-channel="${channel.channel}"
                     title="${I18N.faders_usb_title}"
                     ${fadersUnlocked ? "" : "disabled"}
                 ></button>
-                `}
+                ` : (irgendeinSchalter ? `
                 <button
                     type="button"
-                    class="btn btn-outline-secondary fader-mute"
-                    data-channel="${channel.channel}"
-                    title="${I18N.faders_mute}"
-                    ${fadersUnlocked ? "" : "disabled"}
-                >M</button>
+                    class="btn btn-outline-secondary fader-usb fader-usb-platz"
+                    tabindex="-1"
+                    aria-hidden="true"
+                    disabled
+                >&nbsp;</button>
+                ` : "")}
+                <span class="fader-name" title="${channel.name || ""}">
+                    <span class="fader-number">${channel.label}</span>${channel.name || ""}
+                </span>
                 <input
                     type="range"
-                    class="form-range fader-input"
+                    class="form-range fader-input fader-bedienung"
                     min="${FADER_MIN_DB}"
                     max="${FADER_MAX_DB}"
                     step="0.5"
@@ -1798,12 +1839,19 @@ function renderFaders(channels) {
                     ${fadersUnlocked ? "" : "disabled"}
                 >
                 <span class="fader-db"></span>
+                <button
+                    type="button"
+                    class="btn btn-outline-secondary fader-mute fader-bedienung"
+                    data-channel="${channel.channel}"
+                    title="${I18N.faders_mute}"
+                    ${fadersUnlocked ? "" : "disabled"}
+                >M</button>
             `;
 
             cell.querySelector(".fader-mute")
                 .addEventListener("click", () => toggleMute(channel.channel));
 
-            cell.querySelector(".fader-usb")
+            cell.querySelector(".fader-usb[data-channel]")
                 ?.addEventListener("click", () => toggleUsbInput(channel.channel));
 
             const input = cell.querySelector(".fader-input");
@@ -1843,7 +1891,9 @@ function renderFaders(channels) {
 
         renderMuteButton(mute, channel.muted);
 
-        renderUsbButton(cell.querySelector(".fader-usb"), channel.usb);
+        renderUsbButton(
+            cell.querySelector(".fader-usb[data-channel]"), channel.usb
+        );
     });
 }
 

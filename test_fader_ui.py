@@ -337,21 +337,41 @@ print("OK: Auf schmalen Geräten steht weiter ein Zug je Zeile")
 # keiner.
 # ====================================================================
 
+#
+# Der echte Schalter traegt data-channel; der unsichtbare Platzhalter
+# (fuer Zuege ohne Schalter) nicht. Beide gehoeren gemessen: der eine,
+# weil er bedienbar sein muss, der andere, weil er die Zuege auf einer
+# Linie haelt.
+#
 SCHALTER = """function () {
     const grid = document.getElementById('faders-grid');
 
-    const knoepfe = Array.from(grid.querySelectorAll('.fader-usb'));
+    const knoepfe = Array.from(
+        grid.querySelectorAll('.fader-usb[data-channel]')
+    );
+
+    //
+    // Auf welcher Hoehe die Regler stehen. Mehr als ein Wert heisst:
+    // ein Zug ist gegenueber den anderen verschoben.
+    //
+    const hoehen = new Set(
+        Array.from(grid.querySelectorAll('.fader-input')).map(
+            (regler) => Math.round(regler.getBoundingClientRect().top)
+        )
+    );
 
     return {
         anzahl: knoepfe.length,
         zellen: grid.children.length,
+        platzhalter: grid.querySelectorAll('.fader-usb-platz').length,
         beschriftung: knoepfe.map((k) => k.textContent.trim()),
         farbig: knoepfe.filter(
             (k) => k.classList.contains('btn-warning')
         ).length,
         // Der Schalter der Summe - den darf es nicht geben.
-        summe: !!grid.lastElementChild.querySelector('.fader-usb'),
-        gesperrt: knoepfe.filter((k) => k.disabled).length
+        summe: !!grid.lastElementChild.querySelector('.fader-usb[data-channel]'),
+        gesperrt: knoepfe.filter((k) => k.disabled).length,
+        reglerhoehen: hoehen.size
     };
 }"""
 
@@ -377,6 +397,21 @@ assert ergebnis["anzahl"] == 16, (
 assert ergebnis["summe"] is False, (
     "Die Summe hat einen Eingangsschalter bekommen - sie hat keinen "
     "Eingang, den man umschalten könnte."
+)
+
+#
+# Dafür steht dort ein unsichtbarer Platzhalter, und zwar aus einem
+# messbaren Grund: Ohne ihn beginnt der Summenzug eine Knopfhöhe weiter
+# oben, und sein Regler steht gegenüber allen anderen versetzt.
+#
+assert ergebnis["platzhalter"] == 1, (
+    f"Erwartet ein Platzhalter (bei der Summe), gefunden "
+    f"{ergebnis['platzhalter']}."
+)
+
+assert ergebnis["reglerhoehen"] == 1, (
+    f"Die Regler stehen auf {ergebnis['reglerhoehen']} verschiedenen "
+    f"Höhen - ein Zug ist gegenüber den anderen verschoben."
 )
 
 assert set(ergebnis["beschriftung"]) == {TEXTE["faders_usb_off"]}, (
@@ -428,6 +463,11 @@ assert ergebnis["anzahl"] == 0, (
     f"Schalter angezeigt - sie ließen sich nicht bewegen."
 )
 
+assert ergebnis["platzhalter"] == 0, (
+    "Ohne Schalter stehen trotzdem Platzhalter da - das ist nur "
+    "verschenkte Höhe."
+)
+
 print("OK: Der Eingangsschalter steht da, wo er hingehört")
 
 
@@ -470,7 +510,11 @@ RAGT_HERAUS = """function () {
 
 ergebnis = ausfuehren(RAGT_HERAUS, vorher=zeigen_mit(33, True))
 
-assert ergebnis["geprueft"] == 32, ergebnis
+#
+# 32 echte Schalter plus den Platzhalter der Summe - der ist genauso
+# breit und darf genauso wenig herausragen.
+#
+assert ergebnis["geprueft"] == 33, ergebnis
 
 assert ergebnis["ueberstand"] <= 1, (
     f"Der Eingangsschalter ragt {ergebnis['ueberstand']}px aus seinem "
@@ -544,6 +588,156 @@ for breite in (320, 360, 400):
     )
 
 print(f"OK: Auf dem Handy bleibt der Fader bedienbar ({gemessen})")
+
+
+# ====================================================================
+# 5d. Entsperren macht ALLE Bedienelemente frei
+#
+# Der Fehler, den es hier zu verhindern gibt, ist am Gerät passiert:
+# "Die Anzeige der A/D-USB-Knöpfe stimmt, ich bekomme den aktuellen
+# Stand vom Pult. Allerdings lassen sich die Knöpfe nicht betätigen.
+# Bei Klick passiert nichts."
+#
+# Die Ursache war eine Liste von Klassennamen im Entsperren
+# (".fader-input, .fader-mute"). Der Eingangsschalter kam dazu, wurde
+# gesperrt gezeichnet - die Karte ist im Grundzustand gesperrt - und
+# beim Entsperren nicht mitgenommen. Er blieb für immer tot.
+#
+# Kein Test hat je entsperrt. Deshalb hier: Es wird wirklich
+# umgeschaltet, und danach muss JEDES Bedienelement frei sein - nicht
+# die drei, die heute bekannt sind, sondern alle, die im Kanalzug
+# stehen.
+# ====================================================================
+
+ENTSPERREN = """function () {
+    const grid = document.getElementById('faders-grid');
+
+    const alle = () => Array.from(
+        grid.querySelectorAll('button, input')
+    ).filter((e) => !e.classList.contains('fader-usb-platz'));
+
+    const vorher = alle().filter((e) => e.disabled).length;
+
+    toggleFaderLock();
+
+    const offen = alle().filter((e) => !e.disabled);
+    const zu = alle().filter((e) => e.disabled);
+
+    toggleFaderLock();
+
+    const wieder = alle().filter((e) => e.disabled).length;
+
+    return {
+        gesamt: alle().length,
+        vorher: vorher,
+        offen: offen.length,
+        wieder: wieder,
+        //
+        // Welche bleiben hängen? Die Klassen sagen es, ohne dass der
+        // Versuch die Namen vorher kennen muss.
+        //
+        haengengeblieben: zu.map((e) => e.className.trim())
+    };
+}"""
+
+ergebnis = ausfuehren(ENTSPERREN, vorher=zeigen_mit(17, False))
+
+#
+# 16 Schalter + 17 Mute + 17 Regler = 50; die Zahl steht hier nicht,
+# damit sie nicht bei jeder Änderung am Kanalzug nachgezogen werden muss.
+# Entscheidend ist, dass NICHTS übrig bleibt.
+#
+assert ergebnis["vorher"] == ergebnis["gesamt"], (
+    f"Im Grundzustand sind nur {ergebnis['vorher']} von "
+    f"{ergebnis['gesamt']} Bedienelementen gesperrt - die Karte soll "
+    f"gesperrt anfangen."
+)
+
+assert ergebnis["haengengeblieben"] == [], (
+    "Nach dem Entsperren sind diese Bedienelemente noch gesperrt:\n  "
+    + "\n  ".join(ergebnis["haengengeblieben"])
+)
+
+assert ergebnis["offen"] == ergebnis["gesamt"], ergebnis
+
+#
+# Und wieder zu: Eine Sperre, die nur in einer Richtung wirkt, ist
+# keine.
+#
+assert ergebnis["wieder"] == ergebnis["gesamt"], (
+    f"Nach dem Sperren sind nur {ergebnis['wieder']} von "
+    f"{ergebnis['gesamt']} wieder gesperrt."
+)
+
+print(
+    f"OK: Entsperren macht alle {ergebnis['gesamt']} Bedienelemente frei "
+    f"- und Sperren wieder zu"
+)
+
+
+# ====================================================================
+# 5e. Und ein Klick geht wirklich ans Pult
+#
+# "Frei" ist nur die halbe Aussage. Am Gerät war zu sehen, dass nichts
+# passiert - und das kann auch an einem fehlenden Zuhörer oder an der
+# falschen Adresse liegen. Deshalb wird hier geklickt, mit
+# untergeschobenem fetch: Was rausgeht, steht danach da.
+# ====================================================================
+
+KLICK = """function () {
+    const grid = document.getElementById('faders-grid');
+
+    toggleFaderLock();
+
+    const gerufen = [];
+
+    window.fetch = (url, optionen) => {
+        gerufen.push({ url: url, body: (optionen || {}).body || '' });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    };
+
+    const knopf = grid.querySelector('.fader-usb[data-channel="3"]');
+
+    const vorher = knopf.className;
+
+    knopf.click();
+
+    return {
+        gerufen: gerufen,
+        vorher: vorher,
+        nachher: knopf.className,
+        beschriftung: knopf.textContent.trim()
+    };
+}"""
+
+ergebnis = ausfuehren(KLICK, vorher=zeigen_mit(17, False))
+
+assert len(ergebnis["gerufen"]) == 1, (
+    f"Ein Klick auf den Eingangsschalter hat {len(ergebnis['gerufen'])} "
+    f"Anfragen ausgelöst statt einer: {ergebnis['gerufen']}"
+)
+
+anfrage = ergebnis["gerufen"][0]
+
+assert anfrage["url"] == "/api/console/usb-input", anfrage
+
+#
+# Kanal und Richtung müssen stimmen: Der Kanal stand auf A/D, der Klick
+# legt ihn auf USB.
+#
+assert '"channel":3' in anfrage["body"].replace(" ", ""), anfrage
+assert '"usb":true' in anfrage["body"].replace(" ", ""), anfrage
+
+#
+# Und die Anzeige folgt sofort, ohne auf die nächste Runde zu warten.
+#
+assert "btn-warning" in ergebnis["nachher"], (
+    f"Der Knopf zeigt den neuen Zustand nicht: {ergebnis['nachher']}"
+)
+
+assert ergebnis["beschriftung"] == TEXTE["faders_usb_on"], ergebnis
+
+print(f"OK: Ein Klick schickt {anfrage['body']} ans Pult")
 
 
 print("Alle Fader-Tests erfolgreich.")

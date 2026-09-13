@@ -313,6 +313,26 @@ body {
 }
 
 /*
+   Der Platzhalter fuer Zuege ohne Eingangsschalter (die Summe).
+
+   Unsichtbar, aber NICHT entfernt: Er haelt die Hoehe frei, damit
+   Name, Regler und Zahl daneben auf derselben Linie bleiben. Und er
+   ist dasselbe Element wie der Schalter selbst - damit hat er
+   zwangslaeufig dieselbe Hoehe, ohne dass hier eine Zahl steht, die
+   beim naechsten Schriftwechsel falsch waere.
+*/
+.fader-usb-platz {
+    visibility: hidden;
+
+    /*
+       Derselbe Knopf mit denselben Klassen - und mit Inhalt (einem
+       geschuetzten Leerzeichen). Ohne Inhalt hat ein Knopf keine
+       Textzeile und wird nur 4px hoch statt 19; nachgemessen, und der
+       Summenzug stand dadurch 15px zu hoch.
+    */
+}
+
+/*
    Die Summe ist optisch abgesetzt, damit man sie nicht mit einem
    Kanalzug verwechselt.
 */

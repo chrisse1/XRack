@@ -215,6 +215,24 @@ Und weil er scharf ist — ein Kanal auf USB hört sein Mikrofon nicht mehr
 —, ist USB die einzige farbige Stellung. Steht am Ende der Probe noch
 irgendwo Farbe in der Karte, ist ein Kanal noch auf der Aufnahme.
 
+**Im Kanalzug** steht der Eingangsschalter oben über der Kanalnummer und
+der Mute-Knopf unten unter der dB-Anzeige — an den entgegengesetzten
+Enden. Nebeneinander waren sie so dicht, dass man mit dem Finger leicht
+den falschen traf, und die beiden tun sehr verschiedene Dinge. Züge ohne
+Schalter (die Summe) bekommen an dessen Stelle einen unsichtbaren
+Platzhalter: denselben Knopf, nur nicht zu sehen. Ohne ihn stünden ihre
+Regler eine Knopfhöhe höher als alle anderen — gemessen 15px.
+
+**Die Sperre der Karte greift über eine Klasse** (`fader-bedienung`), nicht
+über eine Liste von Klassennamen. Dort stand eine
+(`".fader-input, .fader-mute"`), und sie hat genau den Fehler gemacht, für
+den Listen anfällig sind: Der neue Eingangsschalter wurde gesperrt
+gezeichnet — die Karte beginnt gesperrt — und beim Entsperren nicht
+mitgenommen. Am Gerät sah das so aus: *„Die Anzeige stimmt, aber bei
+Klick passiert nichts."* Kein Test hatte je entsperrt; jetzt tut einer es
+und prüft, dass **nichts** gesperrt zurückbleibt — ohne die Namen der
+Elemente zu kennen.
+
 ---
 
 ## Der Emulator
