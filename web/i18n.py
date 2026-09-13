@@ -113,7 +113,24 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Die Messung dauert etwa fünf Sekunden. Jetzt starten?"
         ),
         "practice_latency_running": "Messung läuft …",
-        "practice_latency_done": "Gemessen: {ms} ms",
+        "practice_latency_done": (
+            "Gemessen: {ms} ms\n\nEinzelne Läufe: {werte} ms"
+        ),
+        "practice_latency_unsure": (
+            "Gemessen: {ms} ms\n\nEinzelne Läufe: {werte} ms\n\n"
+            "Die Läufe gehen um {spanne} ms auseinander - das ist keine "
+            "feste Grösse der Anlage. Ein fester Versatz gleicht sie "
+            "dann auch nicht aus. Bitte noch einmal messen, bei Ruhe "
+            "auf dem aufgenommenen Kanal."
+        ),
+        "practice_latency_zero": (
+            "Gemessen: {ms} ms\n\nEinzelne Läufe: {werte} ms\n\n"
+            "Das ist kein Fehler: Der Ausgabepuffer verzögert, der "
+            "Aufnahmepuffer holt dieselbe Zeit wieder herein - beide "
+            "sind gleich gross. Übrig bleibt der Weg durch USB und "
+            "Pult, und der sind wenige Millisekunden. Beim "
+            "Zusammenhören ist dann nichts zu verschieben."
+        ),
         "practice_take_none": "nichts",
         "practice_take_hint": "mit {name}",
         "practice_record_hint": "Mitschnitt: Kanal {a}-{b}",
@@ -924,7 +941,24 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "The measurement takes about five seconds. Start now?"
         ),
         "practice_latency_running": "measuring …",
-        "practice_latency_done": "Measured: {ms} ms",
+        "practice_latency_done": (
+            "Measured: {ms} ms\n\nIndividual runs: {werte} ms"
+        ),
+        "practice_latency_unsure": (
+            "Measured: {ms} ms\n\nIndividual runs: {werte} ms\n\n"
+            "The runs differ by {spanne} ms - that is not a fixed "
+            "property of the setup, and a fixed offset will not "
+            "compensate for it. Please measure again, with the "
+            "recorded channel quiet."
+        ),
+        "practice_latency_zero": (
+            "Measured: {ms} ms\n\nIndividual runs: {werte} ms\n\n"
+            "This is not an error: the playback buffer delays, the "
+            "capture buffer gives the same time back - both are the "
+            "same size. What remains is the path through USB and "
+            "console, a few milliseconds. Nothing to shift when "
+            "playing back together."
+        ),
         "practice_take_none": "nothing",
         "practice_take_hint": "with {name}",
         "practice_record_hint": "Recording: channels {a}-{b}",

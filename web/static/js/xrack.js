@@ -3346,7 +3346,7 @@ async function messeLaufzeit() {
     // Nachfragen, bis sie fertig ist. Die Frist ist nur dafuer da,
     // dass ein haengender Lauf den Knopf nicht fuer immer sperrt.
     //
-    const frist = Date.now() + 60000;
+    const frist = Date.now() + 120000;
 
     while (Date.now() < frist) {
 
@@ -3363,7 +3363,29 @@ async function messeLaufzeit() {
         if (stand.active) continue;
 
         if (stand.success) {
-            alert(I18N.practice_latency_done.replace("{ms}", stand.ms));
+
+            const werte = (stand.werte || []).join(", ");
+
+            //
+            // Drei gleiche Zahlen sind ein Befund, drei verschiedene
+            // eine Warnung, und eine Null braucht eine Erklaerung -
+            // sonst haelt man sie fuer einen Fehler.
+            //
+            let text = I18N.practice_latency_done;
+
+            if (stand.unsicher) {
+                text = I18N.practice_latency_unsure;
+            } else if (stand.ms <= 2) {
+                text = I18N.practice_latency_zero;
+            }
+
+            alert(
+                text
+                    .replace("{ms}", stand.ms)
+                    .replace("{werte}", werte)
+                    .replace("{spanne}", stand.spanne)
+            );
+
         } else if (stand.error) {
             alert(stand.error);
         }

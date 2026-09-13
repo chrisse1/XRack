@@ -8,7 +8,14 @@ import threading
 import time
 from pathlib import Path
 
-from core.laufzeit_messung import MESSDAUER_S, klick_datei, versatz_ms
+from core.laufzeit_messung import (
+    MESSDAUER_S,
+    MESSUNGEN,
+    SPANNE_WARNUNG_MS,
+    klick_datei,
+    mittlerer_wert,
+    versatz_ms,
+)
 from core.recording_kind import (
     KIND_PRACTICE,
     kind_from_filename,
@@ -504,6 +511,9 @@ class MusikMixin:
                 "active": True,
                 "success": None,
                 "ms": 0,
+                "werte": [],
+                "spanne": 0,
+                "unsicher": False,
                 "error": "",
             }
 
@@ -517,15 +527,22 @@ class MusikMixin:
 
     def _laufzeit_messen(self) -> None:
         """
-        Der eigentliche Lauf - in einem eigenen Faden.
+        Die Messreihe - in einem eigenen Faden.
 
-        Aufgeräumt wird in jedem Fall: Der Klick-Mix und der Mitschnitt
-        der Messung sind Wegwerfdateien. Blieben sie liegen, stünden
-        sie in der Aufnahmenliste und niemand wüsste, wozu.
+        Gemessen wird MEHRMALS. Eine einzelne Zahl ist keine Messung,
+        sondern ein Wert: Erst mehrere Läufe zeigen, ob er steht.
+        Kommt dreimal dasselbe heraus, ist es eine Eigenschaft der
+        Anlage; streut es, ist es keine Konstante - und dann wäre es
+        falsch, so zu tun, als sei sie eine.
+
+        Aufgeräumt wird in jedem Fall: Der Klick-Mix und die
+        Mitschnitte der Messung sind Wegwerfdateien. Blieben sie
+        liegen, stünden sie in der Aufnahmenliste und niemand wüsste,
+        wozu.
         """
 
         klick = None
-        mitschnitt = None
+        werte: list[int] = []
 
         arbeitsordner = tempfile.mkdtemp(prefix="xrack_laufzeit_")
 
@@ -536,6 +553,46 @@ class MusikMixin:
                 self.selected_audio_device.channels,
                 self.mixer_sample_rate,
             )
+
+            for _ in range(MESSUNGEN):
+
+                wert, grund = self._ein_laufzeitlauf(klick)
+
+                if wert < 0:
+                    self._laufzeit_fertig(False, 0, grund, werte)
+                    return
+
+                werte.append(wert)
+
+            mitte = mittlerer_wert(werte)
+
+            self.set_practice_offset(mitte)
+
+            self._laufzeit_fertig(True, mitte, "", werte)
+
+        except Exception as fehler:
+
+            self.logger.exception("Laufzeitmessung fehlgeschlagen: %s", fehler)
+
+            self._laufzeit_fertig(False, 0, "Unerwarteter Fehler.", werte)
+
+        finally:
+
+            if klick is not None:
+                Path(klick).unlink(missing_ok=True)
+
+            shutil.rmtree(arbeitsordner, ignore_errors=True)
+
+
+    def _ein_laufzeitlauf(self, klick: Path) -> tuple[int, str]:
+        """
+        Ein einzelner Durchgang: Klick abspielen, dabei mitschneiden,
+        die Stelle suchen, den Mitschnitt wieder wegräumen.
+        """
+
+        mitschnitt = None
+
+        try:
 
             #
             # Derselbe Weg wie beim Ueben mit Mitschnitt: Die Aufnahme
@@ -558,14 +615,13 @@ class MusikMixin:
             )
 
             if not erfolg:
-                self._laufzeit_fertig(False, 0, "Der Klick liess sich nicht abspielen.")
-                return
+                return -1, "Der Klick liess sich nicht abspielen."
 
             #
             # Warten, bis der Klick-Mix durch ist - er ist wenige
             # Sekunden lang. Die Frist ist grosszuegig und nur dafuer
-            # da, dass ein haengender Spieler die Messung nicht
-            # ewig offen laesst.
+            # da, dass ein haengender Spieler die Messung nicht ewig
+            # offen laesst.
             #
             frist = time.monotonic() + MESSDAUER_S + 10.0
 
@@ -577,10 +633,7 @@ class MusikMixin:
             self.recorder.stop()
 
             if not gestartet:
-                self._laufzeit_fertig(
-                    False, 0, "Der Mitschnitt liess sich nicht starten."
-                )
-                return
+                return -1, "Der Mitschnitt liess sich nicht starten."
 
             #
             # current_filename ist bereits der VOLLSTAENDIGE Pfad
@@ -596,54 +649,56 @@ class MusikMixin:
             mitschnitt = Path(gestartet[0])
 
             if not mitschnitt.is_file():
-                self._laufzeit_fertig(
-                    False, 0, "Der Mitschnitt der Messung fehlt."
-                )
-                return
+                return -1, "Der Mitschnitt der Messung fehlt."
 
-            ms, grund = versatz_ms(mitschnitt, self.mixer_sample_rate)
-
-            if ms < 0:
-                self._laufzeit_fertig(False, 0, grund)
-                return
-
-            self.set_practice_offset(ms)
-
-            self._laufzeit_fertig(True, ms, "")
-
-        except Exception as fehler:
-
-            self.logger.exception("Laufzeitmessung fehlgeschlagen: %s", fehler)
-
-            self._laufzeit_fertig(False, 0, "Unerwarteter Fehler.")
+            return versatz_ms(mitschnitt, self.mixer_sample_rate)
 
         finally:
 
             #
-            # Wegwerfdateien - auch wenn unterwegs etwas schiefging.
+            # Der Mitschnitt der Messung ist eine Wegwerfdatei - auch
+            # wenn unterwegs etwas schiefging.
             #
-            for datei in (klick, mitschnitt):
+            if mitschnitt is not None:
                 try:
-                    if datei is not None:
-                        Path(datei).unlink(missing_ok=True)
+                    Path(mitschnitt).unlink(missing_ok=True)
                 except OSError:
                     pass
 
-            shutil.rmtree(arbeitsordner, ignore_errors=True)
 
+    def _laufzeit_fertig(self, erfolg: bool, ms: int, grund: str,
+                         werte: list[int] | None = None) -> None:
+        """
+        Das Ergebnis festhalten - samt der EINZELWERTE.
 
-    def _laufzeit_fertig(self, erfolg: bool, ms: int, grund: str) -> None:
+        Die Einzelwerte gehören dazu, nicht nur der mittlere: Drei
+        gleiche Zahlen sind ein Befund, drei verschiedene sind eine
+        Warnung. Wer nur das Ergebnis sieht, kann beides nicht
+        auseinanderhalten.
+        """
+
+        werte = list(werte or [])
+
+        spanne = max(werte) - min(werte) if werte else 0
 
         with self._laufzeit_lock:
             self._laufzeit_stand = {
                 "active": False,
                 "success": erfolg,
                 "ms": ms,
+                "werte": werte,
+                "spanne": spanne,
+                "unsicher": spanne > SPANNE_WARNUNG_MS,
                 "error": grund,
             }
 
         if erfolg:
-            self.logger.info("Laufzeit gemessen: %d ms", ms)
+            self.logger.info(
+                "Laufzeit gemessen: %d ms (Läufe: %s, Spanne %d ms)",
+                ms,
+                ", ".join(str(w) for w in werte),
+                spanne,
+            )
         else:
             self.logger.warning("Laufzeitmessung ohne Ergebnis: %s", grund)
 

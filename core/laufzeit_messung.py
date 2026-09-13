@@ -69,6 +69,28 @@ KLICK_PEGEL = 0.25
 #
 MESSDAUER_S = 3.0
 
+#
+# Wie oft gemessen wird.
+#
+# Eine einzelne Zahl ist keine Messung, sondern ein Wert. Erst mehrere
+# Laeufe zeigen, ob er steht: Kommt dreimal dasselbe heraus, ist es
+# eine Eigenschaft der Anlage und laesst sich anwenden. Streut es, ist
+# es keine Konstante - und dann waere es falsch, so zu tun, als sei
+# sie eine.
+#
+# Drei Laeufe kosten gut zehn Sekunden. Das ist einmal im Leben einer
+# Anlage zu verschmerzen.
+#
+MESSUNGEN = 3
+
+#
+# Ab dieser Streuung gilt der Wert nicht als verlaesslich.
+#
+# Eine Periode sind bei 48 kHz gut 21 ms; was darunter bleibt, ist die
+# Koernigkeit der Puffer und kein Widerspruch.
+#
+SPANNE_WARNUNG_MS = 10
+
 VOLLAUSSCHLAG = 2 ** 31
 
 #
@@ -247,6 +269,24 @@ def _spitze(daten: bytes, rahmen: int, kanaele: int,
     return groesste
 
 
+def mittlerer_wert(werte: list[int]) -> int:
+    """
+    Der mittlere der gemessenen Werte - nicht ihr Durchschnitt.
+
+    Ein einzelner Ausreisser (ein Knacken auf der Leitung, ein
+    verpasster Puffer) zöge den Durchschnitt mit sich; den mittleren
+    Wert lässt er unberührt. Bei drei Läufen heisst das: Zwei müssen
+    sich einig sein, der dritte darf danebenliegen.
+    """
+
+    if not werte:
+        return 0
+
+    geordnet = sorted(werte)
+
+    return geordnet[len(geordnet) // 2]
+
+
 def versatz_ms(mitschnitt: Path, rate: int) -> tuple[int, str]:
     """
     Die Laufzeit in Millisekunden - oder eine Begründung, warum nicht.
@@ -254,6 +294,17 @@ def versatz_ms(mitschnitt: Path, rate: int) -> tuple[int, str]:
     Die Rechnung ist die ganze Messung: Der Klick steht im Mix bei
     KLICK_BEI_S. Wo er im Mitschnitt steht, ist diese Sekunde plus die
     Laufzeit des Weges. Die Differenz ist der gesuchte Wert.
+
+    **Warum dabei oft eine sehr kleine Zahl herauskommt** - das ist
+    kein Fehler, sondern die Bauart: Auf der Ausgabeseite verzögert der
+    ALSA-Puffer den Ton um seine Füllung. Auf der Aufnahmeseite wirkt
+    derselbe Puffer andersherum: Der erste Block, den XRack liest, ist
+    der ÄLTESTE im Ring - der Mitschnitt beginnt also ein Stück in der
+    Vergangenheit. Beide Puffer sind gleich gross (1024 Rahmen je
+    Periode, siehe audio/audio_backend.py und
+    audio/audio_playback_backend.py), und damit heben sie sich weitgehend
+    auf. Übrig bleibt der wirkliche Weg durch USB und Pult, und der
+    sind wenige Millisekunden.
     """
 
     rahmen, _ = klick_finden(mitschnitt)

@@ -397,6 +397,26 @@ Voraussetzung bleibt die Schleife im Pult. Die kann XRack nicht selbst
 herstellen — deshalb fragt der Knopf vorher und sagt, was einzurichten
 ist.
 
+**Und warum dabei oft fast null herauskommt (dev14).** Am Gerät
+gemessen: 0 ms. Das ist kein Fehler, sondern die Bauart. Auf der
+Ausgabeseite verzögert der ALSA-Puffer den Ton um seine Füllung; auf
+der Aufnahmeseite wirkt derselbe Puffer andersherum, denn der erste
+Block, den XRack liest, ist der **älteste** im Ring — der Mitschnitt
+beginnt also ein Stück in der Vergangenheit. Beide Puffer sind gleich
+gross (1024 Rahmen je Periode), und damit heben sie sich weitgehend
+auf. Übrig bleibt der wirkliche Weg durch USB und Pult: wenige
+Millisekunden.
+
+Die 1024 Samples, um die es anfangs ging, fallen also grösstenteils
+von selbst heraus. Gut zu wissen — aber nur, weil es gemessen ist.
+
+Damit eine Null nicht wie ein Fehler aussieht und ein Zufallstreffer
+nicht wie ein Befund, misst XRack seither **dreimal** und zeigt die
+Einzelwerte: Drei gleiche Zahlen sind eine Eigenschaft der Anlage,
+drei verschiedene eine Warnung (dann gleicht ein fester Versatz sie
+ohnehin nicht aus). Genommen wird der mittlere Wert, nicht der
+Durchschnitt — ein Ausreisser zöge den Durchschnitt mit sich.
+
 - Knopf **„Üben + mitschneiden"**: startet Übungsmix und Aufnahme in
   einem Zug (Aufnahmefenster aus Stufe 1 - beim Üben typisch zwei
   Kanäle ab dem Kanal des eigenen Instruments).

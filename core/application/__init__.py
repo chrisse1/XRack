@@ -158,6 +158,9 @@ class Application(
             "active": False,
             "success": None,
             "ms": 0,
+            "werte": [],
+            "spanne": 0,
+            "unsicher": False,
             "error": "",
         }
 

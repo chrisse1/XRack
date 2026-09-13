@@ -28,6 +28,7 @@ from core.laufzeit_messung import (  # noqa: E402
     VOLLAUSSCHLAG,
     klick_datei,
     klick_finden,
+    mittlerer_wert,
     versatz_ms,
 )
 from reader.w64_reader import W64Reader  # noqa: E402
@@ -321,6 +322,23 @@ class Pult:
         self.gelesen_rahmen = 0
         self.schloss = threading.Lock()
 
+    def zuruecksetzen(self):
+        """
+        Ein neuer Durchgang faengt bei null an.
+
+        Ein echtes Pult hat kein Gedaechtnis: Was gerade hineingeht,
+        kommt um die Laufzeit versetzt heraus, und wann XRack mit dem
+        Messen anfaengt, ist ihm gleich. Diese Attrappe zaehlt dagegen
+        Rahmen mit, und die beiden Zaehler laufen ueber Sekunden
+        minimal auseinander (zwei Faeden, zwei Schlafzeiten). Ohne
+        Ruecksetzen truege der zweite Durchgang diesen Schlupf als
+        Messwert.
+        """
+
+        with self.schloss:
+            self.ausgegeben = bytearray()
+            self.gelesen_rahmen = 0
+
     def ausgeben(self, daten):
         with self.schloss:
             self.ausgegeben += daten
@@ -375,6 +393,7 @@ class Ausgang:
         # mit, und die Messung waere um sie zu gross.
         #
         time.sleep(0.12)
+        self.pult.zuruecksetzen()
         self.opened = True
         return True
 
@@ -515,6 +534,24 @@ assert abs(stand["ms"] - LAUFZEIT_MS) <= 30, (
     f"dass die richtige Grössenordnung herauskommt und nicht Null.)"
 )
 
+#
+# Die Zahl steht hier ausgeschrieben und nicht als messung.MESSUNGEN:
+# Sonst prueft sich die Konstante gegen sich selbst, und ein einziger
+# Lauf bestuende die Pruefung genauso.
+#
+assert len(stand["werte"]) == 3, (
+    f"Gemessen wurde {len(stand['werte'])}-mal statt dreimal: "
+    f"{stand['werte']}. Eine einzelne Zahl ist keine Messung - erst "
+    f"mehrere Läufe zeigen, ob sie steht."
+)
+
+assert stand["spanne"] <= 5, (
+    f"Die Läufe gehen um {stand['spanne']} ms auseinander "
+    f"({stand['werte']}), obwohl das Pult jedes Mal gleich verzögert."
+)
+
+assert stand["unsicher"] is False, stand
+
 assert anwendung.practice_offset_ms == stand["ms"], (
     "Der gemessene Wert wurde nicht als Versatz übernommen - dann "
     "hätte die Messung nichts bewirkt."
@@ -578,6 +615,79 @@ anwendung.practice_active = False
 anwendung.music_player._playing = False
 
 print("OK: Die Messung startet nicht gegen etwas Laufendes")
+
+
+# ====================================================================
+# 10. Streuende Läufe werden als solche gemeldet
+#
+# Drei gleiche Zahlen sind ein Befund, drei verschiedene eine Warnung.
+# Ein fester Versatz gleicht nur aus, was auch fest ist - streut es,
+# wäre die Zahl eine Scheingenauigkeit, und der Nutzer verschöbe
+# seinen Mitschnitt nach einem Wert, den es gar nicht gibt.
+#
+# Geprüft an der Stelle, die das Urteil fällt: Mit der Attrappe eines
+# Pults, das immer gleich verzögert, liesse sich Streuung gar nicht
+# erzeugen.
+# ====================================================================
+
+anwendung._laufzeit_fertig(True, 40, "", [35, 40, 60])
+
+stand = anwendung.laufzeit_status()
+
+assert stand["spanne"] == 25, (
+    f"Die Spanne von [35, 40, 60] ist {stand['spanne']} statt 25."
+)
+
+assert stand["unsicher"] is True, (
+    "Läufe zwischen 35 und 60 ms gelten als verlässlich - ein fester "
+    "Versatz gleicht so etwas nicht aus."
+)
+
+assert stand["werte"] == [35, 40, 60], stand["werte"]
+
+#
+# Und der Gegenfall: Eine Streuung unterhalb der Koernigkeit der
+# Puffer ist kein Widerspruch.
+#
+anwendung._laufzeit_fertig(True, 40, "", [40, 40, 42])
+
+stand = anwendung.laufzeit_status()
+
+assert stand["spanne"] == 2 and stand["unsicher"] is False, stand
+
+print("OK: Streuende Läufe werden gemeldet, dichte nicht")
+
+
+# ====================================================================
+# 11. Der mittlere Wert, nicht der kleinste und nicht der Durchschnitt
+#
+# Ein einzelner Ausreisser (ein Knacken auf der Leitung, ein
+# verpasster Puffer) zöge den Durchschnitt mit sich; den mittleren
+# Wert lässt er unberührt. Bei drei Läufen heisst das: Zwei müssen
+# sich einig sein, der dritte darf danebenliegen.
+# ====================================================================
+
+for werte, erwartet, warum in (
+    ([40, 40, 40], 40, "drei gleiche"),
+    ([35, 40, 60], 40, "ein Ausreisser nach oben"),
+    ([0, 40, 41], 40, "ein Ausreisser nach unten"),
+    ([40], 40, "ein einzelner Wert"),
+    ([], 0, "gar keiner"),
+):
+    assert mittlerer_wert(werte) == erwartet, (
+        f"{warum}: {werte} ergibt {mittlerer_wert(werte)} statt "
+        f"{erwartet}"
+    )
+
+#
+# Der Unterschied zu den naheliegenden Alternativen - daran haengt,
+# dass dieser Versuch ueberhaupt etwas zeigt.
+#
+assert mittlerer_wert([0, 40, 41]) != min([0, 40, 41])
+
+assert mittlerer_wert([35, 40, 60]) != round(sum([35, 40, 60]) / 3)
+
+print("OK: Genommen wird der mittlere Wert, nicht der kleinste")
 
 
 os.chdir(altes_verzeichnis)
