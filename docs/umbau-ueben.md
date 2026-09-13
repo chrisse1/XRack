@@ -404,22 +404,32 @@ steht vor seiner eigenen Zeit"; die übrigen sahen so aus:
     0, 70, 69   0, 85, 84   0, 0, 73   1, 0, 85   0, 88, 71
 
 Das Muster ist eindeutig: **der erste Lauf fast immer 0, die
-folgenden 70 bis 88 ms.** Die Erklärung, die in dev14 im Code stand
-(„die Puffer heben sich auf"), war falsch — und zwar in der Richtung.
+folgenden 70 bis 88 ms.** Dahinter stecken ZWEI Fehler, die
+gegeneinander wirken — und beide verschieben den Beginn des
+Mitschnitts:
 
-Richtig ist: Wird der Lesethread erst mit der Aufnahme gestartet,
-kostet sein erster Block Zeit — der Faden muss anlaufen, ALSA den
-Strom in Gang bringen und eine volle Periode sammeln. **Der
-Mitschnitt beginnt dadurch SPÄTER als der Ton**, um eine Spanne, die
-niemand kennt. Fängt er um ungefähr die Laufzeit zu spät an, steht
-der Klick genau dort, wo er auch ohne Laufzeit stünde: 0 ms. Fängt er
-noch später an, steht er vor seiner eigenen Zeit — und die Messung
-lehnt ab. Erst wenn der Strom schon läuft, kommt die wahre Laufzeit
-zum Vorschein: **70 bis 88 ms.**
+- **Der Strom steht still.** Sein erster Block kostet Zeit: Der
+  Lesefaden muss anlaufen, ALSA den Strom in Gang bringen und eine
+  volle Periode sammeln. Der Mitschnitt beginnt zu **spät**, die
+  Messung fällt zu klein aus — 0 ms, und wenn es noch später wird,
+  steht der Klick vor seiner eigenen Zeit und die Messung lehnt ab.
+- **Der Strom läuft, wird aber nicht gelesen.** Dann füllt ALSA
+  seinen Ring weiter, und der erste Block ist der älteste darin: Der
+  Mitschnitt beginnt zu **früh**, die Messung fällt zu gross aus.
+  Genau das waren die 70 bis 88 ms in den Läufen zwei und drei —
+  ungefähr ein Puffer.
 
-Die 1024 Samples heben sich also NICHT auf. Sie sind da, auf beiden
-Seiten, und machen zusammen ungefähr das aus, was die späteren Läufe
-zeigen.
+Beide Fehler verschwinden, wenn der Faden schon liest, bevor der
+erste Ton hinausgeht. Dann steht die Zahl: **10 bis 19 ms** über zehn
+Messungen am XR18 — USB hin, Pult, USB zurück.
+
+Damit ist auch die Ausgangsfrage beantwortet, und zwar anders als
+gedacht: Die 1024 Samples des Wiedergabepuffers stecken **nicht** in
+dieser Zahl, und das ist richtig so. Die Stelle im Klick-Mix bildet
+sich fest auf die Zeit seit dem Beginn der Wiedergabe ab — das Gerät
+holt sich die Rahmen im Takt der Samplerate. Der Puffer sagt nur, wie
+lange ein geschriebener Rahmen noch wartet, nicht, wann Sekunde eins
+des Stücks erklingt.
 
 **Die Folge (dev15):** Vor dem ersten Ton bringt XRack den
 Aufnahmestrom in Gang und wartet, bis er wirklich liefert — nicht

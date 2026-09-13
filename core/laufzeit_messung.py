@@ -87,27 +87,34 @@ MESSUNGEN = 3
 # Wie lange der Aufnahmestrom vor dem Messen (und vor dem Mitschneiden)
 # schon gelesen wird.
 #
-# Das ist die Lehre aus zehn Messungen am Geraet: Ohne Vorlauf war der
-# erste Lauf fast immer 0 ms und die folgenden 70 bis 88 ms, und die
-# Haelfte aller Messungen scheiterte mit "Der Klick steht vor seiner
-# eigenen Zeit".
+# Das ist die Lehre aus zwanzig Messungen am Geraet, und sie hat zwei
+# Teile - denn ohne Vorlauf wirken ZWEI Fehler gegeneinander.
 #
-# Der Grund liegt im ANLAUF des Aufnahmestroms. Wird der Lesethread
-# erst mit der Aufnahme gestartet, kostet sein erster Block Zeit: Der
-# Faden muss anlaufen, und ALSA muss den Strom in Gang bringen und eine
+# Steht der Aufnahmestrom still, kostet sein erster Block Zeit: Der
+# Lesefaden muss anlaufen, ALSA den Strom in Gang bringen und eine
 # volle Periode sammeln. Der Mitschnitt beginnt dadurch SPAETER als der
-# Ton - und zwar um eine Spanne, die niemand kennt.
+# Ton, und die Messung faellt zu klein aus - am Geraet kam 0 ms heraus,
+# und jede zweite Messung fand den Klick sogar vor seiner eigenen Zeit.
 #
-# Das erklaert das Muster: Faengt der Mitschnitt um ungefaehr die
-# Laufzeit zu spaet an, steht der Klick genau dort, wo er auch ohne
-# Laufzeit staende - 0 ms. Faengt er noch spaeter an, steht er VOR
-# seiner eigenen Zeit, und die Messung lehnt ab. Erst wenn der Strom
-# schon laeuft, kommt die wahre Laufzeit heraus: am Geraet 70 bis
-# 88 ms.
+# Laeuft der Strom dagegen schon, wird aber NICHT gelesen, fuellt ALSA
+# seinen Ring weiter. Der erste Block, den der Faden dann bekommt, ist
+# der aelteste darin - der Mitschnitt beginnt also in der
+# Vergangenheit, und die Messung faellt zu GROSS aus. Genau das waren
+# die 70 bis 88 ms, die in den Laeufen zwei und drei standen: ungefaehr
+# ein Puffer.
 #
-# Deshalb laeuft der Lesethread jetzt VOR dem ersten Ton. Uebrig bleibt
-# als Unschaerfe die Lage innerhalb einer Periode - gut 21 ms bei
-# 48 kHz.
+# Beide Fehler verschwinden, wenn der Faden schon liest, bevor der
+# erste Ton hinausgeht. Dann steht die Zahl: am XR18 zehn bis
+# neunzehn Millisekunden ueber zehn Messungen - USB hin, Pult, USB
+# zurueck. Uebrig bleibt als Unschaerfe die Lage innerhalb einer
+# Periode, gut 21 ms bei 48 kHz.
+#
+# (Der Wiedergabepuffer steckt uebrigens NICHT darin, und das ist
+# richtig so: Die Stelle im Klick-Mix bildet sich fest auf die Zeit
+# seit dem Beginn der Wiedergabe ab - das Geraet holt sich die Rahmen
+# im Takt der Samplerate. Der Puffer sagt nur, wie lange ein
+# geschriebener Rahmen noch wartet, nicht, wann Sekunde eins des
+# Stuecks erklingt.)
 #
 # Gewartet wird auf das Lebenszeichen des Stroms; diese Frist ist nur
 # die Reissleine, damit ein toter Strom die Messung nicht aufhaelt.
@@ -332,12 +339,13 @@ def versatz_ms(mitschnitt: Path, rate: int) -> tuple[int, str]:
     KLICK_BEI_S. Wo er im Mitschnitt steht, ist diese Sekunde plus die
     Laufzeit des Weges. Die Differenz ist der gesuchte Wert.
 
-    **Der Aufnahmestrom muss dabei schon laufen** (siehe VORLAUF_S).
-    Sonst beginnt der Mitschnitt später als der Ton - der Lesethread
-    muss erst anlaufen, ALSA den Strom in Gang bringen und eine volle
-    Periode sammeln. Um genau diese Spanne fällt die Messung dann zu
-    klein aus: Am Gerät kam 0 ms heraus, im nächsten Lauf 70 ms, und
-    jede zweite Messung fand den Klick vor seiner eigenen Zeit.
+    **Der Aufnahmestrom muss dabei schon laufen und gelesen werden**
+    (siehe VORLAUF_S). Sonst beginnt der Mitschnitt entweder zu spät
+    (der Strom läuft erst an) oder zu früh (der ungelesene Ring hat
+    sich gefüllt), und die Messung fällt entsprechend zu klein oder zu
+    gross aus. Am Gerät waren beide Fehler zu sehen, bevor der Vorlauf
+    da war: 0 ms im ersten Lauf, 70 bis 88 ms in den folgenden. Der
+    wirkliche Wert liegt bei zehn bis neunzehn Millisekunden.
     """
 
     rahmen, _ = klick_finden(mitschnitt)

@@ -598,17 +598,21 @@ class MusikMixin:
         Den Aufnahmestrom in Gang bringen, bevor der erste Ton
         hinausgeht.
 
-        Wird der Lesethread erst mit der Aufnahme gestartet, kostet
-        sein erster Block Zeit: Der Faden muss anlaufen, und ALSA muss
-        den Strom in Gang bringen und eine volle Periode sammeln. Der
-        Mitschnitt beginnt dadurch SPÄTER als der Ton, um eine Spanne,
-        die niemand kennt. Am Gerät sind daran die Hälfte aller
-        Messungen gescheitert ("der Klick steht vor seiner eigenen
-        Zeit"), und die übrigen schwankten zwischen 0 und 88 ms.
+        Ohne das wirken zwei Fehler gegeneinander, und beide
+        verschieben den Beginn des Mitschnitts:
 
-        Läuft der Faden dagegen schon, beginnt der Mitschnitt dort, wo
-        er soll. Übrig bleibt die Lage innerhalb einer Periode - gut
-        21 ms bei 48 kHz.
+        - Steht der Strom still, kostet sein erster Block Zeit (Faden
+          anlaufen, ALSA in Gang bringen, eine Periode sammeln). Der
+          Mitschnitt beginnt zu SPÄT, die Messung fällt zu klein aus.
+        - Läuft er, wird aber nicht gelesen, füllt ALSA seinen Ring.
+          Der erste Block ist dann der älteste darin: Der Mitschnitt
+          beginnt zu FRÜH, die Messung fällt zu gross aus.
+
+        Am Gerät war beides zu sehen - 0 ms im ersten Lauf, 70 bis
+        88 ms in den folgenden, und die Hälfte aller Messungen
+        scheiterte ganz. Liest der Faden dagegen schon, beginnt der
+        Mitschnitt dort, wo er soll; übrig bleibt die Lage innerhalb
+        einer Periode (gut 21 ms bei 48 kHz).
 
         Liefert True, wenn die Pegelprüfung dafür eingeschaltet wurde.
         """
