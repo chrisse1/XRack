@@ -1788,13 +1788,20 @@ function renderFaders(channels) {
                 + (fadersUnlocked ? "" : " is-locked")
                 + (channel.is_main ? " is-main" : "");
             //
-            // Die Reihenfolge im Kanalzug: Eingangsschalter oben (ueber
-            // der Kanalnummer), dann Name, Regler, Zahl - und der
-            // Mute-Knopf ganz unten. Vorher standen Eingang und Mute
-            // nebeneinander, und zwar so dicht, dass man mit dem Finger
-            // leicht den falschen traf. Zwei Knoepfe, von denen einer
-            // stumm schaltet und der andere das Mikrofon abklemmt,
-            // gehoeren an die entgegengesetzten Enden.
+            // Die Reihenfolge im Kanalzug: Kanalnummer, dann der
+            // Eingangsschalter, dann der Name - also dort, wo der Kanal
+            // bezeichnet wird. Danach Regler und Zahl, und der
+            // Mute-Knopf ganz unten.
+            //
+            // Eingang und Mute standen zuerst nebeneinander, und zwar so
+            // dicht, dass man mit dem Finger leicht den falschen traf.
+            // Zwei Knoepfe, von denen einer stumm schaltet und der
+            // andere das Mikrofon abklemmt, gehoeren an die
+            // entgegengesetzten Enden.
+            //
+            // Die Kanalnummer steht deshalb als eigenes Element da und
+            // nicht mehr im Namensfeld: Der Knopf gehoert ZWISCHEN
+            // beide.
             //
             // Wo es keinen Eingangsschalter gibt (die Summe, oder ein
             // Pult, das ihn nicht kennt), steht ein unsichtbarer
@@ -1809,6 +1816,7 @@ function renderFaders(channels) {
                 channel.usb === true || channel.usb === false;
 
             cell.innerHTML = `
+                <span class="fader-number">${channel.label}</span>
                 ${hatSchalter ? `
                 <button
                     type="button"
@@ -1826,9 +1834,7 @@ function renderFaders(channels) {
                     disabled
                 >&nbsp;</button>
                 ` : "")}
-                <span class="fader-name" title="${channel.name || ""}">
-                    <span class="fader-number">${channel.label}</span>${channel.name || ""}
-                </span>
+                <span class="fader-name" title="${channel.name || ""}">${channel.name || ""}</span>
                 <input
                     type="range"
                     class="form-range fader-input fader-bedienung"

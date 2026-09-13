@@ -360,10 +360,37 @@ SCHALTER = """function () {
         )
     );
 
+    //
+    // Wo der Knopf steht: Er gehoert ZWISCHEN Kanalnummer und
+    // Kanalname. Gemessen auf zwei Wegen - an der Reihenfolge im
+    // Dokument und an den Hoehen im Fenster. Die Reihenfolge allein
+    // koennte das CSS wieder umstellen (order, flex-direction), die
+    // Hoehen allein saehen bei einer waagerechten Zeile gleich aus.
+    //
+    const erster = knoepfe[0];
+
+    const nachbarn = erster ? [
+        (erster.previousElementSibling || {}).className || '',
+        (erster.nextElementSibling || {}).className || ''
+    ] : [];
+
+    const oben = (auswahl) => {
+        const teil = erster.closest('.fader-cell').querySelector(auswahl);
+        return teil ? Math.round(teil.getBoundingClientRect().top) : null;
+    };
+
+    const reihenfolge = erster ? [
+        oben('.fader-number'),
+        Math.round(erster.getBoundingClientRect().top),
+        oben('.fader-name')
+    ] : [];
+
     return {
         anzahl: knoepfe.length,
         zellen: grid.children.length,
         platzhalter: grid.querySelectorAll('.fader-usb-platz').length,
+        nachbarn: nachbarn,
+        reihenfolge: reihenfolge,
         beschriftung: knoepfe.map((k) => k.textContent.trim()),
         farbig: knoepfe.filter(
             (k) => k.classList.contains('btn-warning')
@@ -412,6 +439,32 @@ assert ergebnis["platzhalter"] == 1, (
 assert ergebnis["reglerhoehen"] == 1, (
     f"Die Regler stehen auf {ergebnis['reglerhoehen']} verschiedenen "
     f"Höhen - ein Zug ist gegenüber den anderen verschoben."
+)
+
+#
+# Und der Knopf steht zwischen Kanalnummer und Kanalname - dort, wo der
+# Kanal bezeichnet wird.
+#
+assert "fader-number" in ergebnis["nachbarn"][0], (
+    f"Vor dem Eingangsschalter steht nicht die Kanalnummer, sondern: "
+    f"{ergebnis['nachbarn'][0]!r}"
+)
+
+assert "fader-name" in ergebnis["nachbarn"][1], (
+    f"Nach dem Eingangsschalter steht nicht der Kanalname, sondern: "
+    f"{ergebnis['nachbarn'][1]!r}"
+)
+
+nummer, knopf, name = ergebnis["reihenfolge"]
+
+assert nummer <= knopf <= name, (
+    f"Im Fenster stehen sie nicht in dieser Ordnung: Nummer bei "
+    f"{nummer}px, Knopf bei {knopf}px, Name bei {name}px."
+)
+
+assert nummer < name, (
+    f"Nummer und Name stehen auf derselben Höhe ({nummer}px) - dann "
+    f"liegt der Knopf nicht zwischen ihnen, sondern daneben."
 )
 
 assert set(ergebnis["beschriftung"]) == {TEXTE["faders_usb_off"]}, (

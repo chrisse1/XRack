@@ -258,9 +258,15 @@ body {
     color: #9aa4ad;
 }
 
-.fader-name .fader-number {
+/*
+   Die Kanalnummer steht als eigenes Element neben dem Namen, nicht
+   mehr darin: Der Eingangsschalter gehoert ZWISCHEN beide, und dafuer
+   muessen sie getrennt sein.
+*/
+.fader-number {
+    flex: 0 0 auto;
     color: #6c757d;
-    margin-right: 0.35rem;
+    font-size: 0.8rem;
 }
 
 .fader-input,
@@ -347,7 +353,8 @@ body {
    Griff dorthin ist der teuerste Fehlgriff der Karte. Die Trennlinie
    allein sieht man im Eifer nicht - eine andere Farbe schon.
 */
-.fader-cell.is-main .fader-name {
+.fader-cell.is-main .fader-name,
+.fader-cell.is-main .fader-number {
     font-weight: 600;
     color: var(--xrack-main-farbe);
 }
@@ -386,10 +393,9 @@ body {
     }
 
     /*
-       Feste Hoehe ueber zwei Zeilen: Nummer/Beschriftung oben, Name
-       darunter. Ohne das steht ein Kanal ohne Namen - die Summe zum
-       Beispiel - nur einzeilig da, und sein Regler samt Mute-Knopf
-       rutscht gegenueber den Nachbarn nach oben.
+       Feste Hoehe fuer den Namen, damit ein Kanal OHNE Namen - die
+       Summe zum Beispiel - nicht einzeilig dasteht und sein Regler
+       gegenueber den Nachbarn nach oben rutscht.
     */
     .fader-name {
         flex: 0 0 auto;
@@ -397,12 +403,18 @@ body {
         text-align: center;
         font-size: 0.7rem;
         line-height: 1.25;
-        min-height: 2.5em;
+        min-height: 1.25em;
     }
 
-    .fader-name .fader-number {
-        display: block;
-        margin-right: 0;
+    /*
+       Senkrecht steht die Nummer als eigene Zeile ueber dem
+       Eingangsschalter.
+    */
+    .fader-number {
+        width: 100%;
+        text-align: center;
+        font-size: 0.7rem;
+        line-height: 1.25;
     }
 
     /*
