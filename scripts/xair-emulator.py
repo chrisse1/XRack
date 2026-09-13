@@ -288,7 +288,18 @@ class Pult:
         # deshalb ahnungslos - genau so, wie XRack es dort erwarten
         # muss.
         #
+        # Wo es ihn gibt, ist an einem echten XR18 nachgefragt
+        # (scripts/xrack-pult-fragen.py): auf /ch/NN und auf /rtn/aux,
+        # letzteres mit gutem Grund - dieser Kanalzug nimmt entweder die
+        # Cinch-Buchsen oder USB. Die Summe wurde nicht gefragt und
+        # bleibt hier stumm; sie hat keinen Eingang.
+        #
         self.rtnsw: dict[str, int] = {}
+
+        #
+        # Die Adressen, auf denen dieses Pult den Schalter kennt.
+        #
+        self.rtnsw_adressen = ("/ch/", "/rtn/aux")
 
         #
         # Jede Abfrage, die hereingekommen ist - der Reihe nach.
@@ -573,7 +584,11 @@ class Pult:
 
         elif adresse.endswith("/preamp/rtnsw"):
 
-            if self.x32 or not self.answer_rtnsw:
+            if (
+                self.x32
+                or not self.answer_rtnsw
+                or not adresse.startswith(self.rtnsw_adressen)
+            ):
                 self._sagen(f"{adresse} = {wert!r} (dieses Pult kennt das nicht)")
                 return
 
@@ -645,10 +660,9 @@ class Pult:
                 return None
 
             #
-            # Nur echte Eingangskanäle. Die Summe und der Aux-Rückweg
-            # haben keinen Vorverstärker, den man umschalten könnte.
+            # Nur wo ein echtes Pult ihn hat (siehe rtnsw_adressen).
             #
-            if not adresse.startswith("/ch/"):
+            if not adresse.startswith(self.rtnsw_adressen):
                 return None
 
             return osc_bauen(adresse, self.rtnsw.get(adresse, 0))

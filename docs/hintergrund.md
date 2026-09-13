@@ -159,6 +159,35 @@ spielt die Aufnahme ins Pult, aber die Kanäle hören weiter ihre
 Mikrofone. Genau dieser Handgriff war der letzte, für den man noch nach
 X-AIR-Edit wechseln musste.
 
+**Die Adresse ist nicht geraten und nicht nur nachgelesen.** Sie stammt
+aus einer Bibliothek (`onyx-and-iris/xair-api-python`, `shared.py`:
+`usbinput` → `rtnsw`) — und eine Bibliothek ist keine Hardware. Deshalb
+gibt es `scripts/xrack-pult-fragen.py`: Es fragt das Pult selbst, nur
+lesend (jede OSC-Anfrage ohne Argumente liefert den aktuellen Wert
+zurück), und darf mitten in einer Probe laufen. An einem XR18 kam
+zurück:
+
+| Adresse | Antwort | |
+|---|---|---|
+| `/ch/01/mix/fader` | `0.373` | Gegenkontrolle: das Pult antwortet |
+| `/ch/01/config/name` | `'Drums'` | Gegenkontrolle: auch auf Text |
+| `/ch/01/preamp/rtnsw` | `1` | der Schalter, **je Kanal** |
+| `/ch/03/preamp/rtnsw` | `1` | |
+| `/ch/01/preamp/rtntrim` | `0.5` | linear 0…1, also 0 dB |
+| `/rtn/aux/preamp/rtnsw` | `1` | der Aux-Rückweg hat ihn **auch** |
+| `/ch/01/config/source` | — | Gegenkontrolle: nicht alles wird beantwortet |
+
+Zwei Gegenkontrollen gehören zu so einer Messung, sonst beweist sie
+nichts: oben Adressen, die XRack schon benutzt (antworten die nicht, ist
+das Pult unerreichbar, und jedes „keine Antwort" darunter sagt nichts),
+unten eine, die es nicht geben sollte (antwortet sie doch, antwortet das
+Pult auf alles).
+
+Der Aux-Rückweg war vorher als „ungeprüft" ausgeschlossen. Die Nachfrage
+hat es geklärt, und es ist plausibel: Genau dieser Kanalzug nimmt
+entweder die Cinch-Buchsen oder USB. Die Summe bleibt draußen — ob sie
+antwortet, ist ungefragt, aber einen Eingang zum Umlegen hat sie nicht.
+
 Drei Dinge, die dabei entschieden sind:
 
 **Nur die X-Air-Serie.** Dort ist es ein Umschalter mit zwei Stellungen.
@@ -172,7 +201,8 @@ schlimmer als keiner.
 genügt der erste Kanal, den zweiten zieht das Pult mit. Ob die Kopplung
 auch den Vorverstärker umfasst, ist ungeprüft — und ein halb umgelegtes
 Paar wäre der unangenehmste Fall: eine Seite hört die Aufnahme, die
-andere den Raum. Zwei OSC-Befehle kosten nichts.
+andere den Raum. Zwei OSC-Befehle kosten nichts. (Der Aux-Rückweg ist
+davon nicht betroffen: Er *ist* ein Paar, unter einer einzigen Adresse.)
 
 **Einmal fragen, dann wissen.** Antwortet ein Pult auf die Adresse nicht
 (ältere Firmware, X32), läuft jede Abfrage in den Zeitablauf von 0,3 s.

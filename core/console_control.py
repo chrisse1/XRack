@@ -86,10 +86,34 @@ MIN_DB = -90.0
 #
 # Adresse belegt aus onyx-and-iris/xair-api-python
 # (xair_api/shared.py): usbinput -> "rtnsw", 1 = USB, 0 = Vorverstaerker.
-# Am Geraet nachgefragt mit scripts/xrack-pult-fragen.py - eine
-# Bibliothek allein ist keine Hardware.
+#
+# Und am Geraet nachgefragt, mit scripts/xrack-pult-fragen.py an einem
+# XR18 - eine Bibliothek allein ist keine Hardware. Was dort zurueckkam:
+#
+#   /ch/01/mix/fader        0.373      (Gegenkontrolle: Pult antwortet)
+#   /ch/01/config/name      'Drums'    (Gegenkontrolle: auch auf Text)
+#   /ch/01/preamp/rtnsw     1          DER SCHALTER, je Kanal
+#   /ch/03/preamp/rtnsw     1
+#   /ch/01/preamp/rtntrim   0.5        (linear 0..1, also 0 dB)
+#   /rtn/aux/preamp/rtnsw   1          der Aux-Rueckweg hat ihn AUCH
+#   /ch/01/config/source    -          (Gegenkontrolle: nicht alles
+#                                       wird beantwortet)
 #
 USB_SCHALTER = "/preamp/rtnsw"
+
+#
+# Wo es den Schalter gibt.
+#
+# Zuerst stand hier nur "/ch/" - mit der Begruendung, dass beim
+# Aux-Rueckweg ungeprueft sei, ob er einen hat. Die Nachfrage am Geraet
+# hat es geklaert: Er hat einen, und das ist auch sinnvoll, denn genau
+# dieser Kanalzug nimmt entweder die Cinch-Buchsen oder USB.
+#
+# Die Summe (/lr, /main/st) bleibt draussen. Ob sie antwortet, ist
+# ungefragt - sie hat aber keinen Eingang, den man umlegen koennte, und
+# ein Schalter, der nichts tut, ist schlimmer als keiner.
+#
+USB_SCHALTER_ADRESSEN = ("/ch/", "/rtn/aux")
 
 #
 # Beim X32 gibt es diesen Schalter nicht: Dort waehlt man je Kanal eine
@@ -967,12 +991,11 @@ class ConsoleControl:
         """
 
         #
-        # Nur echte Eingangskanaele. Die Summe (/lr, /main/st) hat
-        # keinen Eingang, den man umschalten koennte, und beim
-        # Aux-Rueckweg (/rtn/aux) ist ungeprueft, ob er den Schalter
-        # hat - dort wird deshalb gar nicht erst gefragt.
+        # Nur wo es den Schalter gibt (siehe USB_SCHALTER_ADRESSEN).
+        # Anderswo wird gar nicht erst gefragt: Jede Frage, die ein Pult
+        # nicht beantwortet, kostet 0,3 s Zeitablauf.
         #
-        if not address.startswith("/ch/"):
+        if not address.startswith(USB_SCHALTER_ADRESSEN):
             return None
 
         if self._usb_supported is False:
@@ -1408,10 +1431,13 @@ class ConsoleControl:
         adresse = addresses[channel - 1].address
 
         #
-        # Nur echte Eingangskanaele, aus demselben Grund wie beim Lesen.
+        # Nur wo es den Schalter gibt, aus demselben Grund wie beim
+        # Lesen.
         #
-        if not adresse.startswith("/ch/"):
+        if not adresse.startswith(USB_SCHALTER_ADRESSEN):
             return False
+
+        ziele = [adresse]
 
         #
         # Ein gekoppeltes Paar wird AUSDRUECKLICH auf beiden Kanaelen
@@ -1423,13 +1449,15 @@ class ConsoleControl:
         # unangenehmste Fall: eine Seite hoert die Aufnahme, die andere
         # den Raum. Zwei Befehle kosten nichts, also beide.
         #
-        nummer = int(adresse[len("/ch/"):])
+        # Der Aux-Rueckweg ist davon nicht betroffen: Er IST ein Paar,
+        # unter einer einzigen Adresse.
+        #
+        if adresse.startswith("/ch/"):
 
-        ziele = [adresse]
+            nummer = int(adresse[len("/ch/"):])
 
-        if nummer in self._linked:
-            zweiter = f"/ch/{nummer + 1:02d}"
-            ziele.append(zweiter)
+            if nummer in self._linked:
+                ziele.append(f"/ch/{nummer + 1:02d}")
 
         return self._write(host, ziele, USB_SCHALTER, 1 if usb else 0)
 

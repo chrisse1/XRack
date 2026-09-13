@@ -345,32 +345,52 @@ try:
         f"Die Summe hat einen Eingangsschalter bekommen: {zuege[-1]}"
     )
 
-    assert [zug for zug in zuege if zug["label"] == "17+18"][0]["usb"] is None, (
-        "Der Aux-Rückweg hat einen Schalter bekommen - dass er einen "
-        "hat, ist ungeprüft."
+    #
+    # Der Aux-Rückweg HAT den Schalter - am Gerät nachgefragt
+    # (scripts/xrack-pult-fragen.py an einem XR18:
+    # /rtn/aux/preamp/rtnsw antwortete mit 1). Das war vorher als
+    # "ungeprüft" ausgeschlossen, und die Nachfrage hat es geklärt: Genau
+    # dieser Kanalzug nimmt entweder die Cinch-Buchsen oder USB.
+    #
+    assert [zug for zug in zuege if zug["label"] == "17+18"][0]["usb"] is False, (
+        "Der Aux-Rückweg hat keinen Eingangsschalter bekommen - am XR18 "
+        "hat er einen."
     )
 
     #
-    # Und zwar, weil XRack dort GAR NICHT FRAGT.
+    # Die Summe dagegen nicht, und zwar weil XRack dort GAR NICHT FRAGT.
     #
     # Der Unterschied ist der zwischen einer Aussage über XRack und
-    # einer über den Emulator: Der schweigt auf diese Adressen ohnehin,
+    # einer über den Emulator: Der schweigt auf diese Adresse ohnehin,
     # also wäre "usb is None" auch erfüllt, wenn XRack sie brav
     # abfragte. Am echten Pult kostet jede solche Frage aber ihren
-    # Zeitablauf, und ob ein XR18 auf /lr/preamp/rtnsw antwortet, ist
-    # ungeprüft - eine Antwort dort wäre schlimmer als keine, denn
-    # dann stünde an der Summe ein Schalter, der nichts tut.
+    # Zeitablauf - und ob die Summe antwortet, ist ungefragt. Einen
+    # Eingang zum Umlegen hat sie ohnehin nicht.
     #
     danebengefragt = [
         adresse for adresse in pult.gefragt
         if adresse.endswith("/preamp/rtnsw")
-        and not adresse.startswith("/ch/")
+        and not adresse.startswith(("/ch/", "/rtn/aux"))
     ]
 
     assert danebengefragt == [], (
         f"XRack fragt den Eingangsschalter an Adressen ab, die keinen "
-        f"Vorverstärker haben: {danebengefragt}"
+        f"Eingang haben: {danebengefragt}"
     )
+
+    #
+    # Und er lässt sich dort auch umlegen.
+    #
+    aux = [
+        nummer for nummer, zug in enumerate(zuege, start=1)
+        if zug["label"] == "17+18"
+    ][0]
+
+    assert control.set_usb_input("127.0.0.1", CHANNELS_XAIR, aux, True) is True
+
+    time.sleep(0.1)
+
+    assert pult.rtnsw.get("/rtn/aux/preamp/rtnsw") == 1, pult.rtnsw
 
     assert control.set_usb_input("127.0.0.1", CHANNELS_XAIR, 3, True) is True
 
