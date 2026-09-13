@@ -144,7 +144,324 @@ function updateAudioDeviceSelectState(data) {
 function updateUsbEjectButton(data) {
     const button = document.getElementById("btn-usb-eject");
     if (button) button.classList.toggle("d-none", !data.usb_connected);
+
+    const browse = document.getElementById("btn-usb-browse");
+    if (browse) browse.classList.toggle("d-none", !data.usb_connected);
 }
+
+// ============================================================
+// Vom USB-Stick auf das Geraet
+//
+// Die Gegenrichtung gab es lange (eine Aufnahme auf den Stick), dieser
+// Weg fehlte. Das Ziel wird EINMAL gewaehlt, dann werden Dateien und
+// ganze Ordner angehakt - dreissig Rueckfragen fuer ein Album waeren
+// keine Bedienung.
+// ============================================================
+
+//
+// Wo wir auf dem Stick gerade stehen, und was angehakt ist.
+//
+// Die Auswahl haengt am Pfad: Wer in einen Ordner geht und
+// zurueckkommt, soll seine Haken wiederfinden - aber ein Haken in
+// einem Ordner, den man verlassen hat, gehoert trotzdem mitkopiert.
+// Deshalb werden hier VOLLE Pfade gemerkt, nicht Namen.
+//
+let usbPfad = "";
+let usbAuswahl = new Set();
+
+function usbZiel() {
+    const gewaehlt = document.querySelector(
+        'input[name="usb-target"]:checked'
+    );
+    return gewaehlt ? gewaehlt.value : "music";
+}
+
+async function usbOeffnen() {
+    usbPfad = "";
+    usbAuswahl = new Set();
+
+    document.getElementById("usb-import-result").textContent = "";
+
+    await usbZielordnerFuellen();
+    await usbAuflisten();
+
+    bootstrap.Modal
+        .getOrCreateInstance(document.getElementById("usbModal"))
+        .show();
+}
+
+//
+// Die Ordner der Musikbibliothek als Ziel.
+//
+// Nur eine Ebene tief und flach aufgelistet: Wer tiefer verschachtelt,
+// findet seinen Ordner in einer langen Liste immer noch - eine
+// Baumansicht im Dialog waere ein zweiter Dateimanager im ersten.
+//
+async function usbZielordnerFuellen() {
+
+    const auswahl = document.getElementById("usb-target-folder");
+
+    if (!auswahl) return;
+
+    auswahl.innerHTML = "";
+
+    const wurzel = document.createElement("option");
+    wurzel.value = "";
+    wurzel.textContent = I18N.usb_music_root;
+    auswahl.appendChild(wurzel);
+
+    try {
+
+        const inhalt = await (
+            await fetch("/api/music/browse?path=")
+        ).json();
+
+        (inhalt.folders || []).forEach((name) => {
+            const eintrag = document.createElement("option");
+            eintrag.value = name;
+            eintrag.textContent = name;
+            auswahl.appendChild(eintrag);
+        });
+
+    } catch (fehler) {
+        console.error("Musikordner nicht lesbar:", fehler);
+    }
+}
+
+async function usbAuflisten() {
+
+    const liste = document.getElementById("usb-list");
+
+    if (!liste) return;
+
+    const antwort = await fetch(
+        `/api/usb/browse?path=${encodeURIComponent(usbPfad)}`
+        + `&target=${encodeURIComponent(usbZiel())}`
+    );
+
+    const inhalt = await antwort.json();
+
+    liste.innerHTML = "";
+
+    document.getElementById("usb-path").textContent = "/" + (inhalt.path || "");
+
+    document.getElementById("btn-usb-up").disabled = !usbPfad;
+
+    if (!inhalt.available) {
+        liste.innerHTML =
+            '<div class="list-group-item text-body-secondary">'
+            + I18N.usb_not_connected + "</div>";
+        usbAuswahlAnzeigen();
+        return;
+    }
+
+    (inhalt.folders || []).forEach((name) => {
+        liste.appendChild(usbZeile(name, true, 0, true));
+    });
+
+    (inhalt.files || []).forEach((datei) => {
+        liste.appendChild(
+            usbZeile(datei.name, false, datei.size, datei.usable)
+        );
+    });
+
+    if (!inhalt.folders.length && !inhalt.files.length) {
+        liste.innerHTML =
+            '<div class="list-group-item text-body-secondary">'
+            + I18N.usb_empty + "</div>";
+    }
+
+    usbAuswahlAnzeigen();
+}
+
+//
+// Eine Zeile: Haken, Name, Groesse. Ordner sind zum Hineingehen UND
+// zum Anhaken - ein ganzes Album kopiert man nicht Datei fuer Datei.
+//
+function usbZeile(name, istOrdner, groesse, verwendbar) {
+
+    const voll = usbPfad ? `${usbPfad}/${name}` : name;
+
+    const zeile = document.createElement("div");
+    zeile.className =
+        "list-group-item d-flex align-items-center gap-2"
+        + (verwendbar ? "" : " text-body-secondary");
+
+    const haken = document.createElement("input");
+    haken.type = "checkbox";
+    haken.className = "form-check-input mt-0";
+    haken.checked = usbAuswahl.has(voll);
+    haken.disabled = !verwendbar;
+    haken.addEventListener("change", () => {
+        if (haken.checked) usbAuswahl.add(voll);
+        else usbAuswahl.delete(voll);
+        usbAuswahlAnzeigen();
+    });
+
+    zeile.appendChild(haken);
+
+    const symbol = document.createElement("i");
+    symbol.className = istOrdner
+        ? "bi bi-folder-fill text-warning"
+        : "bi bi-music-note-beamed";
+    zeile.appendChild(symbol);
+
+    const bezeichnung = document.createElement(istOrdner ? "button" : "span");
+    bezeichnung.textContent = name;
+    bezeichnung.className = istOrdner
+        ? "btn btn-link p-0 text-start flex-grow-1"
+        : "flex-grow-1";
+
+    if (istOrdner) {
+        bezeichnung.type = "button";
+        bezeichnung.addEventListener("click", async () => {
+            usbPfad = voll;
+            await usbAuflisten();
+        });
+    }
+
+    zeile.appendChild(bezeichnung);
+
+    const rechts = document.createElement("small");
+    rechts.className = "text-body-secondary";
+    rechts.textContent = istOrdner
+        ? ""
+        : (verwendbar ? formatFileSize(groesse) : I18N.usb_not_usable);
+    zeile.appendChild(rechts);
+
+    return zeile;
+}
+
+function usbAuswahlAnzeigen() {
+
+    const info = document.getElementById("usb-selection-info");
+    const knopf = document.getElementById("btn-usb-import");
+
+    if (info) {
+        info.textContent = usbAuswahl.size
+            ? I18N.usb_selected.replace("{n}", usbAuswahl.size)
+            : "";
+    }
+
+    if (knopf) knopf.disabled = usbAuswahl.size === 0;
+}
+
+async function usbHolen() {
+
+    const knopf = document.getElementById("btn-usb-import");
+    const ergebnis = document.getElementById("usb-import-result");
+
+    if (!usbAuswahl.size) return;
+
+    knopf.disabled = true;
+    ergebnis.textContent = "";
+
+    const antwort = await fetch("/api/usb/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            sources: Array.from(usbAuswahl),
+            target: usbZiel(),
+            folder: document.getElementById("usb-target-folder").value,
+        }),
+    });
+
+    const gestartet = await antwort.json();
+
+    if (!gestartet.success) {
+        ergebnis.innerHTML =
+            '<span class="text-warning"></span>';
+        ergebnis.firstChild.textContent =
+            gestartet.message || I18N.usb_import_failed;
+        knopf.disabled = false;
+        return;
+    }
+
+    document.getElementById("usb-import-progress")
+        .classList.remove("d-none");
+
+    const stand = await usbFortschrittVerfolgen();
+
+    document.getElementById("usb-import-progress").classList.add("d-none");
+
+    const bericht = stand.report || {};
+
+    ergebnis.innerHTML = "";
+
+    const zeile = document.createElement("span");
+
+    zeile.className = stand.success ? "text-success" : "text-warning";
+
+    zeile.textContent = stand.success
+        ? I18N.usb_import_done
+            .replace("{kopiert}", bericht.kopiert || 0)
+            .replace("{uebersprungen}", bericht.uebersprungen || 0)
+        : (stand.error || I18N.usb_import_failed);
+
+    ergebnis.appendChild(zeile);
+
+    usbAuswahl = new Set();
+
+    await usbAuflisten();
+
+    //
+    // Die neuen Dateien gehoeren sofort in die Listen - sonst sucht
+    // man sie dort vergeblich.
+    //
+    await updateStatus();
+}
+
+async function usbFortschrittVerfolgen() {
+
+    while (true) {
+
+        await new Promise((weiter) => setTimeout(weiter, 400));
+
+        const stand = await (
+            await fetch("/api/usb/import_status")
+        ).json();
+
+        const anteil = stand.total
+            ? Math.round((stand.copied / stand.total) * 100)
+            : 0;
+
+        const balken = document.getElementById("usb-import-bar");
+        if (balken) balken.style.width = `${anteil}%`;
+
+        const zahl = document.getElementById("usb-import-percent");
+        if (zahl) zahl.textContent = `${anteil}%`;
+
+        const datei = document.getElementById("usb-import-file");
+        if (datei) datei.textContent = stand.file || "";
+
+        if (!stand.active) return stand;
+    }
+}
+
+document.getElementById("btn-usb-browse")
+    ?.addEventListener("click", usbOeffnen);
+
+document.getElementById("btn-usb-import")
+    ?.addEventListener("click", usbHolen);
+
+//
+// Das Ziel entscheidet, was verwendbar ist - also neu auflisten.
+//
+document.querySelectorAll('input[name="usb-target"]').forEach((feld) => {
+    feld.addEventListener("change", () => {
+        document.getElementById("usb-target-folder").disabled =
+            usbZiel() !== "music";
+        usbAuflisten();
+    });
+});
+
+document.getElementById("btn-usb-up")
+    ?.addEventListener("click", async () => {
+        usbPfad = usbPfad.includes("/")
+            ? usbPfad.slice(0, usbPfad.lastIndexOf("/"))
+            : "";
+        await usbAuflisten();
+    });
 
 document.getElementById("btn-usb-eject").addEventListener("click", ejectUsb);
 

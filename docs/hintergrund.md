@@ -913,6 +913,66 @@ ausgenommene Lampen behalten ihren Wert.
 
 ---
 
+## Vom USB-Stick auf das Gerät
+
+Die Gegenrichtung gab es lange — eine Aufnahme auf den Stick kopieren.
+Der Weg zurück fehlte, und er fehlte an zwei Stellen unterschiedlich
+schwer: Für Musik gab es wenigstens den Upload über den Browser, für
+`recordings/` gar nichts. Ein Übungsmix aus dem Backup oder von einem
+zweiten XRack kam nicht wieder auf das Gerät.
+
+**Das Ziel wird einmal gewählt, nicht je Datei gefragt.** Ein Album
+sind dreißig Dateien, und dreißig Rückfragen sind keine Bedienung. Es
+steht deshalb oben im Dialog und nicht unten: Das Ziel entscheidet,
+welche Dateien überhaupt verwendbar sind — wer es erst am Ende wählt,
+hat vorher die falschen angehakt.
+
+Zwei Ziele gibt es, und sie sind verschieden:
+
+| | Musik | Aufnahmen |
+|---|---|---|
+| Struktur | Ordner der Bibliothek | flach |
+| Verwendbar | was ffmpeg spielt | nur `.w64` |
+| Ordner vom Stick | wandern **mit** ihrer Struktur | werden flachgelegt |
+
+Dass Ordner mit ihrer Struktur wandern, ist kein Detail: Ohne das
+lägen zwei Alben mit `01 Intro.mp3` übereinander. Im
+Aufnahmeverzeichnis ist es umgekehrt — dort fände XRack eine Datei in
+einem Unterordner nie wieder.
+
+**Vier Dinge, die dabei nicht passieren dürfen**, jedes mit Gegenprobe
+festgenagelt:
+
+1. **Aus dem Stick herauslesen.** Was vom Browser kommt, darf nicht
+   bestimmen, *wo* gelesen wird — `../../etc` wäre sonst ein
+   Dateimanager für das ganze System. Dieselbe Regel wie in der
+   Musikbibliothek.
+2. **Eine vorhandene Datei überschreiben.** Gleichnamiges wird
+   übersprungen und hinterher gezählt („7 kopiert, 2 übersprungen") —
+   was man sich mit einem Fehlgriff zerstört, ist sonst genau das, was
+   man aufheben wollte.
+3. **Eine halbe Datei hinterlassen.** Geschrieben wird daneben
+   (`.teil`), umbenannt erst am Ende; das Umbenennen im selben
+   Verzeichnis ist unteilbar. Der Unterschied zeigt sich erst, wenn
+   *niemand* aufräumt — Strom weg, SIGKILL, Stick gezogen. Genau so ist
+   es geprüft.
+4. **Die Karte volllaufen lassen.** Der Platz wird vor dem ersten Byte
+   gerechnet, mit zehn Prozent Abstand: Eine Karte, die exakt bis zum
+   letzten Byte vollläuft, bringt auch die Aufnahme zum Stehen.
+
+Unbrauchbare Dateien werden **aufgeführt, aber nicht anwählbar**. Wer
+seine Datei gar nicht sieht, sucht sie; wer sie ausgegraut sieht,
+versteht warum. Draußen bleibt nur, was Betriebssysteme auf jedem Stick
+hinterlassen (`System Volume Information`, `._…`) — dort sucht niemand
+etwas.
+
+In der Oberfläche merkt sich die Auswahl **volle Pfade, keine Namen**.
+Wer im Hauptordner etwas anhakt, in einen Ordner geht und dort noch
+etwas anhakt, kopiert sonst `01 Intro.mp3` aus dem Hauptordner — wo es
+diese Datei nicht gibt, und wo dann stillschweigend nichts passiert.
+
+---
+
 ## Wave64 statt WAV
 
 Aufnahmen liegen als `.w64`. Das klassische WAV-Format kann wegen seiner

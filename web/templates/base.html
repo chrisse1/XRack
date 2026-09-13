@@ -43,6 +43,156 @@
 {% block content %}
 {% endblock %}
 
+{#
+    Vom USB-Stick auf das Geraet.
+
+    Die Gegenrichtung gab es schon lange (eine Aufnahme auf den Stick
+    kopieren), dieser Weg fehlte: Fuer Musik gab es wenigstens den
+    Upload ueber den Browser, fuer Aufnahmen gar nichts - ein
+    Uebungsmix aus dem Backup oder von einem zweiten XRack kam nicht
+    wieder auf das Geraet.
+
+    Das Ziel wird EINMAL oben gewaehlt und nicht je Datei erfragt: Ein
+    Album sind dreissig Dateien, und dreissig Rueckfragen sind keine
+    Bedienung.
+#}
+<div
+    class="modal fade"
+    id="usbModal"
+    tabindex="-1"
+    aria-hidden="true"
+>
+    <div class="modal-dialog modal-lg">
+
+        <div class="modal-content">
+
+            <div class="modal-header">
+
+                <h5 class="modal-title">
+                    <i class="bi bi-usb-drive me-2"></i>
+                    {{ t.modal_usb_title }}
+                </h5>
+
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="modal"
+                ></button>
+
+            </div>
+
+            <div class="modal-body">
+
+                {#
+                    Das Ziel steht OBEN, nicht unten: Es entscheidet,
+                    welche Dateien ueberhaupt verwendbar sind - wer es
+                    erst am Ende waehlt, hat vorher die falschen
+                    angehakt.
+                #}
+                <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+
+                    <span class="fw-semibold">{{ t.usb_target }}</span>
+
+                    <div class="form-check mb-0">
+                        <input
+                            class="form-check-input"
+                            type="radio"
+                            name="usb-target"
+                            id="usb-target-music"
+                            value="music"
+                            checked
+                        >
+                        <label class="form-check-label" for="usb-target-music">
+                            {{ t.usb_target_music }}
+                        </label>
+                    </div>
+
+                    <select
+                        id="usb-target-folder"
+                        class="form-select form-select-sm w-auto"
+                    ></select>
+
+                    <div class="form-check mb-0">
+                        <input
+                            class="form-check-input"
+                            type="radio"
+                            name="usb-target"
+                            id="usb-target-recordings"
+                            value="recordings"
+                        >
+                        <label class="form-check-label"
+                               for="usb-target-recordings">
+                            {{ t.usb_target_recordings }}
+                        </label>
+                    </div>
+
+                </div>
+
+                <div class="d-flex align-items-center gap-2 mb-2">
+
+                    <button
+                        type="button"
+                        id="btn-usb-up"
+                        class="btn btn-outline-secondary btn-sm"
+                        disabled
+                    >
+                        <i class="bi bi-arrow-90deg-up"></i>
+                    </button>
+
+                    <code id="usb-path" class="small">/</code>
+
+                </div>
+
+                <div id="usb-list" class="list-group mb-3"></div>
+
+                <div id="usb-import-progress" class="d-none">
+                    <div class="d-flex justify-content-between small mb-1">
+                        <span id="usb-import-file"></span>
+                        <span id="usb-import-percent">0%</span>
+                    </div>
+                    <div class="progress" style="height: 6px;">
+                        <div
+                            id="usb-import-bar"
+                            class="progress-bar"
+                            role="progressbar"
+                            style="width: 0%"
+                        ></div>
+                    </div>
+                </div>
+
+                <div id="usb-import-result" class="small mt-2"></div>
+
+            </div>
+
+            <div class="modal-footer flex-column flex-sm-row">
+
+                <span id="usb-selection-info"
+                      class="small text-body-secondary me-auto"></span>
+
+                <button
+                    type="button"
+                    id="btn-usb-import"
+                    class="btn btn-primary modal-footer-btn"
+                    disabled
+                >
+                    <i class="bi bi-download me-2"></i>
+                    {{ t.usb_copy_here }}
+                </button>
+
+                <button
+                    class="btn btn-secondary modal-footer-btn"
+                    data-bs-dismiss="modal"
+                >
+                    {{ t.btn_close }}
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
 <div
     class="modal fade"
     id="recordingsModal"

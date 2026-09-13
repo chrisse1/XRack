@@ -16,6 +16,26 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "audio_rescan_title": "Audiogeräte neu suchen",
         "audio_open_device": "Geöffnetes Gerät:",
         "audio_interface_fallback": "Audio Interface",
+        #
+        # Vom Stick auf das Gerät. Die Gegenrichtung (eine Aufnahme auf
+        # den Stick) gab es schon lange.
+        #
+        "btn_usb_browse": "USB-Stick durchsehen",
+        "modal_usb_title": "USB-Stick",
+        "usb_target": "Kopieren nach:",
+        "usb_target_music": "Musik",
+        "usb_target_recordings": "Aufnahmen",
+        "usb_music_root": "(Hauptordner)",
+        "usb_copy_here": "Auf XRack kopieren",
+        "usb_selected": "{n} ausgewählt",
+        "usb_not_usable": "kann XRack nicht",
+        "usb_not_connected": "Kein USB-Stick angeschlossen.",
+        "usb_empty": "Dieser Ordner ist leer.",
+        "usb_import_done": (
+            "{kopiert} kopiert, {uebersprungen} übersprungen "
+            "(gleichnamige bleiben unberührt)."
+        ),
+        "usb_import_failed": "Kopieren fehlgeschlagen.",
         "btn_usb_eject": "USB-Stick auswerfen",
         "confirm_usb_eject": "USB-Stick jetzt auswerfen?",
         "alert_usb_eject_success": "USB-Stick kann jetzt entfernt werden.",
@@ -888,6 +908,22 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "audio_rescan_title": "Rescan audio devices",
         "audio_open_device": "Connected device:",
         "audio_interface_fallback": "Audio Interface",
+        "btn_usb_browse": "Browse USB drive",
+        "modal_usb_title": "USB drive",
+        "usb_target": "Copy to:",
+        "usb_target_music": "Music",
+        "usb_target_recordings": "Recordings",
+        "usb_music_root": "(main folder)",
+        "usb_copy_here": "Copy to XRack",
+        "usb_selected": "{n} selected",
+        "usb_not_usable": "not usable",
+        "usb_not_connected": "No USB drive connected.",
+        "usb_empty": "This folder is empty.",
+        "usb_import_done": (
+            "{kopiert} copied, {uebersprungen} skipped "
+            "(existing files are left untouched)."
+        ),
+        "usb_import_failed": "Copying failed.",
         "btn_usb_eject": "Eject USB drive",
         "confirm_usb_eject": "Eject the USB drive now?",
         "alert_usb_eject_success": "The USB drive can now be removed.",

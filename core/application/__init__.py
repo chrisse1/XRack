@@ -322,6 +322,25 @@ class Application(
             "already_exists": False,
         }
 
+        #
+        # Der Weg VOM Stick: eigener Zustand, nicht derselbe wie beim
+        # Kopieren auf den Stick. Die beiden zaehlen Verschiedenes
+        # (dort eine Datei, hier ein ganzer Ordner mit Bericht), und
+        # ein gemeinsamer Zustand haette bei jeder Anzeige die Frage
+        # aufgeworfen, in welche Richtung gerade kopiert wird.
+        #
+        self._usb_import_lock = threading.Lock()
+
+        self.usb_import_state = {
+            "active": False,
+            "file": "",
+            "copied": 0,
+            "total": 0,
+            "success": None,
+            "error": "",
+            "report": None,
+        }
+
         self._stem_combine_lock = threading.Lock()
 
         self.stem_combine_state = {
