@@ -1128,6 +1128,124 @@ try:
 
     print("OK: Das Signal wird gemerkt UND weitergereicht")
 
+    # ----------------------------------------------------------------
+    # 12. Ein Dienst, der im Kreis scheitert, gehört ins Protokoll
+    #
+    # Anlass ist ein Protokoll vom Gerät: xrack-hostapd.service stand
+    # bei 14.469 Fehlstarts - einer alle fünf Sekunden, einundzwanzig
+    # Stunden lang. Jeder Versuch zog über ExecStartPre eine
+    # Neuaktivierung der NetworkManager-Brücke nach sich.
+    #
+    # In XRacks eigenem Protokoll war davon NICHTS zu sehen. Sichtbar
+    # war nur, dass gelegentlich das Netz wegblieb - und danach haben
+    # wir tagelang gesucht.
+    # ----------------------------------------------------------------
+
+    diagnostics = Diagnostics(FakeApplication())
+    diagnostics._close_writer()
+    diagnostics_module.LOG_FILE.unlink(missing_ok=True)
+
+    writer = diagnostics._open_writer()
+
+    #
+    # systemctl nachstellen: ein Dienst im Kreis, einer in Ordnung.
+    #
+    antworten = {
+        "xrack-hostapd.service": "activating\nexit-code\n14469\n",
+        "xrack-bt-agent.service": "active\nsuccess\n0\n",
+    }
+
+    class Lauf:
+        def __init__(self, text):
+            self.stdout = text
+            self.returncode = 0
+
+    echte_ausfuehrung = diagnostics_module.subprocess.run
+
+    def nachgestellt(befehl, *args, **kwargs):
+        for dienst, text in antworten.items():
+            if dienst in befehl:
+                return Lauf(text)
+        return Lauf("")
+
+    diagnostics_module.subprocess.run = nachgestellt
+
+    try:
+
+        stand = diagnostics._dienste_pruefen()
+
+        assert "xrack-hostapd.service" in stand, (
+            f"Der scheiternde Dienst fehlt im Befund: {stand!r}"
+        )
+
+        assert "14469" in stand, (
+            f"Die Zahl der Fehlstarts fehlt - genau sie macht aus "
+            f"einem Stolpern ein Dauerproblem: {stand!r}"
+        )
+
+        assert "xrack-bt-agent" not in stand, (
+            f"Ein Dienst, der laeuft, wird gemeldet: {stand!r}"
+        )
+
+        #
+        # Gemeldet wird einmal, nicht jede Minute.
+        #
+        diagnostics._dienste_melden(writer, 1000.0)
+        diagnostics._dienste_melden(writer, 2000.0)
+        diagnostics._dienste_melden(writer, 3000.0)
+
+        for handler in writer.handlers:
+            handler.flush()
+
+        inhalt = diagnostics_module.LOG_FILE.read_text(encoding="utf-8")
+
+        assert inhalt.count("DIENST SCHEITERT") == 1, (
+            f"Die Meldung steht {inhalt.count('DIENST SCHEITERT')}-mal "
+            f"da - sie gehoert einmal ins Protokoll, nicht jede Minute."
+        )
+
+        #
+        # Und wenn es wieder geht, steht auch das da.
+        #
+        antworten["xrack-hostapd.service"] = "active\nsuccess\n14469\n"
+
+        diagnostics._dienste_melden(writer, 4000.0)
+
+        for handler in writer.handlers:
+            handler.flush()
+
+        inhalt = diagnostics_module.LOG_FILE.read_text(encoding="utf-8")
+
+        assert "wieder unauffaellig" in inhalt, (
+            f"Die Entwarnung fehlt:\n{inhalt[-300:]}"
+        )
+
+    finally:
+        diagnostics_module.subprocess.run = echte_ausfuehrung
+
+    print("OK: Ein Dienst im Kreis wird gemeldet - einmal, mit Zahl")
+
+    # ----------------------------------------------------------------
+    # 12b. Viele Neustarts allein sind noch kein Befund
+    #
+    # Ein Dienst, der oft gestolpert und dann oben geblieben ist,
+    # braucht keine Meldung. Nur was WIRKLICH nicht laeuft, gehoert
+    # gemeldet - sonst gewoehnt man sich an die Warnung.
+    # ----------------------------------------------------------------
+
+    diagnostics_module.subprocess.run = lambda *a, **k: Lauf(
+        "active\nsuccess\n5\n"
+    )
+
+    try:
+        assert diagnostics._dienste_pruefen() == "", (
+            "Ein laufender Dienst mit ein paar Neustarts wird gemeldet."
+        )
+    finally:
+        diagnostics_module.subprocess.run = echte_ausfuehrung
+
+    print("OK: Ein Dienst, der laeuft, wird nicht gemeldet")
+
     print("Alle Tests erfolgreich.")
 
 finally:

@@ -100,6 +100,40 @@ REQUEST_TIMEOUT = 2.0
 PING_VERSUCHE = 3
 
 #
+# Die XRack-Dienste neben dem Hauptdienst. Sie laufen eigenstaendig,
+# und wenn einer davon im Kreis scheitert, merkt es sonst niemand.
+#
+NEBENDIENSTE = (
+    "xrack-hostapd.service",
+    "xrack-bt-agent.service",
+)
+
+#
+# Wie oft nach den Nebendiensten gesehen wird. Jede Sekunde waere
+# Verschwendung - ein Dienst, der scheitert, scheitert auch in einer
+# Minute noch.
+#
+DIENSTE_INTERVALL = 60.0
+
+#
+# Was als "geht nicht" gilt.
+#
+# Nicht die Zahl der Neustarts: Ein Dienst, der oft gestolpert und
+# dann oben geblieben ist, braucht keine Meldung - sonst gewoehnt man
+# sich an die Warnung. Massgeblich ist, wie der letzte Lauf ENDETE.
+# Ein normaler Start hat Result=success, auch waehrend er noch
+# hochkommt; ein Dienst im Kreis hat Result=exit-code.
+#
+# Der Anlass: xrack-hostapd.service stand am Geraet bei 14.469
+# Fehlstarts - einer alle fuenf Sekunden, einundzwanzig Stunden lang.
+# Jeder Versuch zog ueber ExecStartPre eine Neuaktivierung der
+# NetworkManager-Bruecke nach sich. Im Protokoll von XRack war davon
+# nichts zu sehen; sichtbar war nur, dass gelegentlich das Netz
+# wegblieb.
+#
+ERGEBNIS_OK = ("success", "")
+
+#
 # Bis zu dieser Laufzeit gilt der Prozess als "gerade erst gestartet".
 # Darueber schreibt die Aufzeichnung eine ausdrueckliche Zeile: Ein
 # Neustart, den niemand bemerkt, ist der Fehler, den man am laengsten
@@ -159,6 +193,15 @@ class Diagnostics:
         # Handler, geschrieben in die Schlusszeile.
         #
         self._signal = None
+
+        #
+        # Wann zuletzt nach den Nebendiensten gesehen wurde, und was
+        # dabei herauskam. Gemeldet wird nur, wenn es sich aendert -
+        # sonst stuende dieselbe Zeile jede Minute da.
+        #
+        self._dienste_geprueft = 0.0
+        self._dienste_stand = ""
+
 
     # ------------------------------------------------------------
     # Start/Stopp
@@ -739,6 +782,67 @@ class Diagnostics:
 
         return ""
 
+    def _dienste_pruefen(self) -> str:
+        """
+        Scheitert einer der XRack-Nebendienste im Kreis?
+
+        Ein Dienst mit `Restart=always` und ohne Startgrenze versucht
+        es für immer. Das ist gewollt (der Zugangspunkt soll
+        wiederkommen, wenn das Funkgerät erst spät bereit ist) - aber
+        wenn er NIE hochkommt, hämmert er im Fünfsekundentakt gegen
+        dieselbe Wand, und jeder Versuch fasst dabei das Netz an.
+
+        Von innen ist davon nichts zu sehen: XRack merkt nur, dass
+        gelegentlich Pakete fehlen. Deshalb steht es jetzt hier.
+        """
+
+        auffaellig = []
+
+        for dienst in NEBENDIENSTE:
+
+            try:
+
+                lauf = subprocess.run(
+                    [
+                        "systemctl", "show", dienst,
+                        "-p", "NRestarts", "-p", "ActiveState",
+                        "-p", "Result", "--value",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
+                )
+
+            except (subprocess.SubprocessError, OSError, FileNotFoundError):
+                continue
+
+            zeilen = [z.strip() for z in lauf.stdout.splitlines()]
+
+            if len(zeilen) < 3:
+                continue
+
+            zustand, ergebnis, neustarts = zeilen[0], zeilen[1], zeilen[2]
+
+            try:
+                zahl = int(neustarts)
+            except ValueError:
+                zahl = 0
+
+            #
+            # Nur melden, was wirklich nicht laeuft: Der letzte Lauf
+            # endete schlecht, oder der Dienst steht als gescheitert
+            # da. Die Zahl der Neustarts sagt dann, wie lange das
+            # schon so geht - sie loest die Meldung aber nicht aus.
+            #
+            if ergebnis in ERGEBNIS_OK and zustand != "failed":
+                continue
+
+            auffaellig.append(
+                f"{dienst}={zustand}/{ergebnis} neustarts={zahl}"
+            )
+
+        return " ".join(auffaellig)
+
     def _signalname(self) -> str:
         """Der Name des Signals, das XRack beendet hat."""
 
@@ -966,7 +1070,25 @@ class Diagnostics:
                 else "die vorherige Aufzeichnung wurde ordentlich beendet.",
             )
 
-        elif abgebrochen:
+        #
+        # Gleich beim Start nachsehen: Ein Nebendienst, der im Kreis
+        # scheitert, tut das meist schon seit Stunden.
+        #
+        dienste = self._dienste_pruefen()
+
+        #
+        # Nur den Stand merken, nicht die Zeit: Die Uhr gehoert der
+        # Messschleife, und sie liest sie ohnehin einmal je Durchlauf.
+        # Ein zweiter Griff danach waere nicht falsch, aber er macht
+        # den Ablauf schwerer nachzustellen - und ein Waechter, der
+        # sich nicht nachstellen laesst, ist kein Waechter.
+        #
+        self._dienste_stand = dienste
+
+        if dienste:
+            writer.warning("DIENST SCHEITERT: %s", dienste)
+
+        if abgebrochen and not (0 <= prozess < JUNG_S):
 
             writer.warning(
                 "ABBRUCH: Die vorherige Aufzeichnung endete ohne "
@@ -1015,6 +1137,8 @@ class Diagnostics:
                 self._last_line = ""
 
             last_tick = now
+
+            self._dienste_melden(writer, now)
 
             try:
                 self._sample(writer, port)
@@ -1147,6 +1271,33 @@ class Diagnostics:
         self._befund_start = {}
 
         return "".join(teile)
+
+    def _dienste_melden(self, writer: logging.Logger, jetzt: float) -> None:
+        """
+        Die Nebendienste im Auge behalten - höchstens einmal je
+        Minute, und nur, wenn sich etwas ändert.
+
+        Ein Dienst, der im Kreis scheitert, tut das stundenlang. Die
+        Meldung soll einmal dastehen und nicht tausendmal; wird sie
+        zur Meldung "wieder in Ordnung", steht auch das da.
+        """
+
+        if jetzt - self._dienste_geprueft < DIENSTE_INTERVALL:
+            return
+
+        self._dienste_geprueft = jetzt
+
+        stand = self._dienste_pruefen()
+
+        if stand == self._dienste_stand:
+            return
+
+        self._dienste_stand = stand
+
+        if stand:
+            writer.warning("DIENST SCHEITERT: %s", stand)
+        else:
+            writer.info("Nebendienste wieder unauffaellig.")
 
     def _sample(self, writer: logging.Logger, port: int) -> None:
 
