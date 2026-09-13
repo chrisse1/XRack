@@ -70,6 +70,13 @@ class FakePCM:
     def setperiodsize(self, size):
         pass
 
+    def write(self, daten):
+        #
+        # ALSA nimmt den Block an; was daraus wird, prüft diese Datei
+        # nicht. Gebraucht wird er, um den Puls mitzuzählen.
+        #
+        return len(daten)
+
     def close(self):
         pass
 
@@ -337,6 +344,25 @@ try:
 
     assert GERAET.id in LangsamePCM.gesehen, (
         f"Das Gerät wird nicht benannt: {LangsamePCM.gesehen!r}"
+    )
+
+    #
+    # Und der Puls: Jeder geschriebene Block wird gezählt. Ohne diese
+    # Zählung kann die Aufzeichnung nicht entscheiden, ob während eines
+    # Stillstands Ton geflossen ist - und genau das unterscheidet "der
+    # ganze Prozess stand" von "nur der Webserver stand".
+    #
+    vorher = GERAETEWACHE.bloecke
+
+    wiedergabe.write(b"\x00" * (4 * 2 * 64))
+
+    assert GERAETEWACHE.bloecke == vorher + 1, (
+        "Ein geschriebener Block wird nicht gezählt."
+    )
+
+    assert GERAETEWACHE.tonzeit(94) is not None, (
+        "Die Blockdauer wurde beim Öffnen nicht gemeldet - dann lassen "
+        "sich Blöcke nicht in Sekunden Ton umrechnen."
     )
 
     #

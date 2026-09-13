@@ -95,6 +95,39 @@ Mit einem großen Umschaltintervall (`sys.setswitchinterval`) hält eine
 gewöhnliche Python-Schleife den GIL genauso fest wie eine C-Funktion,
 die ihn nicht freigibt. Die Wache misst dabei echte Verspätung.
 
+**Der Schiedsrichter ist der Ton.** Denn gegen den GIL-Verdacht spricht
+eine zweite Beobachtung vom Gerät: *„Läuft eine Wiedergabe, wenn der
+Fehler auftritt, läuft sie auch unbeirrt weiter, während das
+Webinterface nicht erreichbar ist."*
+
+Wäre der GIL blockiert, bekäme auch der Wiedergabe-Thread keine Zeit.
+Der ALSA-Puffer fasst 1024 Rahmen je Periode, also gut zwanzig
+Millisekunden je Block — nach knapp hundert wäre er leer, und der Ton
+setzte hörbar aus. **Ein Ton, der durchläuft, beweist, dass Python
+lief.** Dann steht nicht der Prozess, sondern nur der Weg zur
+Weboberfläche, und die Ursache liegt woanders (Sperren, der Threadpool
+hinter den Endpunkten, das System).
+
+Entschieden wird das nicht durch Nachdenken, sondern durch Zählen: Die
+Gerätewache zählt jeden geschriebenen Block, und die Stillstands-Wache
+nimmt den Zählerstand vor und nach ihrem Schlaf. Daraus wird ein Urteil,
+das im Protokoll steht:
+
+```
+STILLSTAND: 2.0 s ... | Ton lief weiter (94 Blöcke = 2.0 s)
+            - Python lief also, es ist KEIN GIL-Stillstand
+STILLSTAND: 2.0 s ... | Ton stand ebenfalls (3 Blöcke = 0.1 s von 2.0 s)
+            - der ganze Prozess stand
+```
+
+Lief gar keine Wiedergabe, wird auch nicht geurteilt — ein Urteil über
+etwas, das es nicht gab, wäre schlimmer als keins.
+
+Beide Fälle sind nachgestellt und geprüft, und zwar von entgegen-
+gesetzten Seiten: einmal hält eine Schleife den GIL fest (nichts läuft),
+einmal verschläft die Wache ihren Takt, während ein zweiter Thread
+munter Blöcke schreibt.
+
 ### Welches Funkgerät wofür
 
 `wlan0` und `wlan1` werden in der Reihenfolge vergeben, in der die Geräte

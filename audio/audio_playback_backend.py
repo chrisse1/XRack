@@ -150,6 +150,11 @@ class AudioPlaybackBackend:
 
                 self._pcm.setperiodsize(1024)
 
+                #
+                # Damit aus gezählten Blöcken Sekunden Ton werden.
+                #
+                GERAETEWACHE.blockdauer_melden(1024, self._rate)
+
                 self.logger.info(
                     "ALSA Wiedergabe geöffnet: %s | Hardware: %d Ch | Datei: %d Ch | %d Hz",
                     device.id,
@@ -182,6 +187,14 @@ class AudioPlaybackBackend:
         self._pcm.write(
             self._inserter.insert(data)
         )
+
+        #
+        # Der Puls: Jeder Block, der hinausgegangen ist, wird gezählt.
+        # Über einen Stillstand hinweg sagt die Differenz, ob in dieser
+        # Zeit Ton geflossen ist - und damit, ob Python lief (siehe
+        # audio/geraetewache.py).
+        #
+        GERAETEWACHE.block_geschrieben()
 
     def close(self) -> None:
         """

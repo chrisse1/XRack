@@ -1451,6 +1451,179 @@ try:
 
     print("OK: Ohne Stillstand meldet die Wache nichts")
 
+    # ----------------------------------------------------------------
+    # 13c. Das Urteil über den Ton entscheidet den Verdacht
+    #
+    # Vom Gerät: "Läuft eine Wiedergabe, wenn der Fehler auftritt, läuft
+    # sie auch unbeirrt weiter, während das Webinterface nicht
+    # erreichbar ist."
+    #
+    # Das ist kein Detail, sondern der Schiedsrichter. Wäre der GIL
+    # blockiert, bekäme auch der Wiedergabe-Thread keine Zeit; der
+    # ALSA-Puffer (1024 Rahmen je Periode) wäre nach gut zwanzig
+    # Millisekunden je Block leer, und der Ton setzte hörbar aus. Ein
+    # Ton, der durchläuft, BEWEIST also, dass Python lief - und dann
+    # liegt die Ursache woanders.
+    #
+    # Der Befund muss das sagen, und zwar in beide Richtungen. Sonst
+    # steht im Protokoll eine Zahl, die jeder nach seiner Lieblings-
+    # theorie deutet.
+    # ----------------------------------------------------------------
+
+    GERAETEWACHE.blockdauer_melden(1024, 48000)
+
+    #
+    # Zwei Sekunden Stillstand, und es sind 94 Blöcke geschrieben
+    # worden - das sind zwei Sekunden Ton. Der Ton lief also durch.
+    #
+    diagnostics._stillstaende = []
+    diagnostics._stillstand_merken(2.0, 94)
+
+    dauer, befund = diagnostics._stillstaende[0]
+
+    assert "Ton lief weiter" in befund, (
+        f"Bei durchlaufendem Ton sagt der Befund nichts dazu: {befund!r}"
+    )
+
+    assert "KEIN GIL" in befund, (
+        f"Der Befund zieht den Schluss nicht: {befund!r}. Genau diese "
+        f"Zeile unterscheidet 'der Prozess stand' von 'nur der "
+        f"Webserver stand'."
+    )
+
+    #
+    # Und umgekehrt: zwei Sekunden Stillstand, drei Blöcke. Da stand
+    # auch die Wiedergabe.
+    #
+    diagnostics._stillstaende = []
+    diagnostics._stillstand_merken(2.0, 3)
+
+    dauer, befund = diagnostics._stillstaende[0]
+
+    assert "Ton stand ebenfalls" in befund, (
+        f"Bei stehendem Ton sagt der Befund das nicht: {befund!r}"
+    )
+
+    #
+    # Lief gar keine Wiedergabe, wird auch nicht geurteilt - ein Urteil
+    # über etwas, das es nicht gab, wäre schlimmer als keins.
+    #
+    diagnostics._stillstaende = []
+    diagnostics._stillstand_merken(0.7, 0)
+
+    dauer, befund = diagnostics._stillstaende[0]
+
+    assert "Ton" not in befund, (
+        f"Ohne laufende Wiedergabe wird über den Ton geurteilt: {befund!r}"
+    )
+
+    print("OK: Der Befund sagt, ob während des Stillstands Ton floss")
+
+    # ----------------------------------------------------------------
+    # 13d. Der Fall vom Gerät: Wache zu spät, Ton läuft weiter
+    #
+    # Genau die Lage, die der Nutzer beschrieben hat - und die der
+    # bloße Zähler nicht abbildet: Die Wache kommt zu spät, WÄHREND die
+    # Wiedergabe ungestört weiterläuft. Dann stand nicht der Prozess,
+    # sondern nur der Weg zur Weboberfläche.
+    #
+    # Nachgestellt wird das von der anderen Seite als in 13: Dort hielt
+    # eine Schleife den GIL fest (nichts lief), hier verschläft die
+    # Wache ihren Takt, während ein zweiter Thread munter Blöcke
+    # schreibt. Beide Fälle müssen im Protokoll UNTERSCHIEDLICH
+    # aussehen, sonst nützt die Messung nichts.
+    # ----------------------------------------------------------------
+
+    class VerschlafenderStop:
+        """Ein Ereignis, dessen wait() zu lange braucht - einmal."""
+
+        def __init__(self):
+            self._echt = threading.Event()
+            self.verschlafen = False
+
+        def is_set(self):
+            return self._echt.is_set()
+
+        def set(self):
+            self._echt.set()
+
+        def clear(self):
+            self._echt.clear()
+
+        def wait(self, dauer):
+
+            if not self.verschlafen:
+                self.verschlafen = True
+                #
+                # Schlafen, ohne den GIL zu halten - andere Threads
+                # laufen weiter. Das ist der Unterschied zu 13.
+                #
+                time.sleep(1.0)
+                return False
+
+            return self._echt.wait(dauer)
+
+    diagnostics._stillstaende = []
+
+    echtes_stop = diagnostics._stop
+    diagnostics._stop = VerschlafenderStop()
+
+    puls_laeuft = threading.Event()
+    puls_laeuft.set()
+
+    def puls():
+        #
+        # Ein Wiedergabe-Thread, wie er sein soll: ein Block alle gut
+        # zwanzig Millisekunden.
+        #
+        while puls_laeuft.is_set():
+            GERAETEWACHE.block_geschrieben()
+            time.sleep(1024 / 48000)
+
+    pulser = threading.Thread(target=puls, daemon=True)
+    pulser.start()
+
+    try:
+
+        wache = threading.Thread(
+            target=diagnostics._stillstand_wachen, daemon=True
+        )
+        wache.start()
+
+        frist = time.monotonic() + 5
+
+        while time.monotonic() < frist:
+
+            with diagnostics._stillstand_sperre:
+                if diagnostics._stillstaende:
+                    break
+
+            time.sleep(0.05)
+
+        diagnostics._stop.set()
+        wache.join(timeout=5)
+
+    finally:
+        puls_laeuft.clear()
+        pulser.join(timeout=5)
+        diagnostics._stop = echtes_stop
+
+    with diagnostics._stillstand_sperre:
+        befunde = list(diagnostics._stillstaende)
+
+    assert befunde, "Die verschlafene Runde wurde nicht bemerkt."
+
+    dauer, befund = befunde[0]
+
+    assert "Ton lief weiter" in befund, (
+        f"Die Wiedergabe lief durch, der Befund sagt aber etwas "
+        f"anderes: {befund!r}. Damit wäre im Protokoll nicht zu "
+        f"unterscheiden, ob der ganze Prozess stand oder nur der "
+        f"Webserver."
+    )
+
+    print(f"OK: Läuft der Ton weiter, steht das auch so da ({dauer:.1f} s)")
+
     print("Alle Tests erfolgreich.")
 
 finally:

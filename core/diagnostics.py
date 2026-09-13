@@ -1177,6 +1177,7 @@ class Diagnostics:
         while not self._stop.is_set():
 
             vorher = time.monotonic()
+            bloecke_vorher = GERAETEWACHE.bloecke
 
             self._stop.wait(STILLSTAND_TAKT)
 
@@ -1185,9 +1186,13 @@ class Diagnostics:
             if verspaetung < STILLSTAND_SCHWELLE:
                 continue
 
-            self._stillstand_merken(verspaetung)
+            self._stillstand_merken(
+                verspaetung, GERAETEWACHE.bloecke - bloecke_vorher
+            )
 
-    def _stillstand_merken(self, verspaetung: float) -> None:
+    def _stillstand_merken(
+        self, verspaetung: float, bloecke: int = 0
+    ) -> None:
         """Einen Befund ablegen, samt dem, was gerade lief."""
 
         was = GERAETEWACHE.laufend()
@@ -1200,15 +1205,60 @@ class Diagnostics:
             #
             was = GERAETEWACHE.letzte(nicht_aelter_als=verspaetung + 1.0)
 
+        befund = f"{was or 'nichts am Audiogerät'}{self._tonurteil(verspaetung, bloecke)}"
+
         with self._stillstand_sperre:
 
             if verspaetung > self._stillstand_laengster:
                 self._stillstand_laengster = verspaetung
 
             if len(self._stillstaende) < STILLSTAND_MERKE_MAX:
-                self._stillstaende.append(
-                    (verspaetung, was or "nichts am Audiogerät")
-                )
+                self._stillstaende.append((verspaetung, befund))
+
+    def _tonurteil(self, verspaetung: float, bloecke: int) -> str:
+        """
+        Ist während des Stillstands Ton geflossen?
+
+        Das ist die Frage, die den Verdacht entscheidet. Vom Gerät kam:
+        "Läuft eine Wiedergabe, wenn der Fehler auftritt, läuft sie auch
+        unbeirrt weiter." Wäre der GIL blockiert, könnte der
+        Wiedergabe-Thread keinen Block mehr schreiben - der ALSA-Puffer
+        wäre nach knapp hundert Millisekunden leer, und man hörte es.
+
+        Deshalb zählt die Gerätewache jeden geschriebenen Block. Was
+        hier steht, ist gemessen und nicht geschlossen:
+
+          "Ton lief weiter"  -> Python lief. Dann ist es KEIN
+                                GIL-Stillstand, und die Ursache liegt
+                                woanders (Webserver, Sperren, System).
+          "Ton stand still"  -> Auch die Wiedergabe kam nicht dran -
+                                der ganze Prozess stand.
+          nichts             -> Es lief gar keine Wiedergabe; die Frage
+                                ist dann gegenstandslos.
+        """
+
+        tonzeit = GERAETEWACHE.tonzeit(bloecke)
+
+        if tonzeit is None or (bloecke == 0 and verspaetung < 1.0):
+            #
+            # Ohne bekannte Blockdauer, oder ganz ohne Wiedergabe: Dazu
+            # laesst sich nichts sagen. Lieber nichts als ein Urteil
+            # ueber eine Wiedergabe, die es nicht gab.
+            #
+            return ""
+
+        anteil = tonzeit / verspaetung if verspaetung > 0 else 0.0
+
+        if anteil >= 0.5:
+            return (
+                f" | Ton lief weiter ({bloecke} Blöcke = {tonzeit:.1f} s) "
+                f"- Python lief also, es ist KEIN GIL-Stillstand"
+            )
+
+        return (
+            f" | Ton stand ebenfalls ({bloecke} Blöcke = {tonzeit:.1f} s "
+            f"von {verspaetung:.1f} s) - der ganze Prozess stand"
+        )
 
     def _stillstand_melden(self, writer: logging.Logger) -> None:
         """Die abgelegten Befunde schreiben."""
