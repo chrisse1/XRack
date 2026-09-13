@@ -116,15 +116,37 @@ print("OK: Brauchbare Namen kommen durch, unbrauchbare nicht")
 
 
 # ====================================================================
-# 2. Der Name wird für JEDE Adresse gemeldet
+# 2. Gemeldet wird EINE Adresse - und zwar eine erreichbare
 #
-# Welche Adresse das Tablet erreicht, hängt am Raum: über den Access
-# Point ist es eine andere als über das Kabel, und beide gleichzeitig
-# gibt es auch. Wird nur eine gemeldet, zeigt der Name im falschen
-# Netz ins Leere.
+# Hier stand einmal das Gegenteil: "der Name wird für JEDE Adresse
+# gemeldet", weil das Tablet je nach Raum eine andere braucht. Am
+# Gerät kam davon das hier zurück: "gelegentlich erreichbar, dann
+# meldete der Browser eine Netzwerk-Zeitüberschreitung".
+#
+# Der Grund steckt in avahi-publish: Es kennt keine Option für eine
+# Schnittstelle und meldet deshalb jede Adresse auf ALLEN. Ein Tablet
+# im Heimnetz bekam damit zwei Antworten - die richtige und die der
+# Access-Point-Brücke, die von dort aus niemand erreicht. Welche der
+# Browser nimmt, entscheidet er selbst; nimmt er die falsche, wartet
+# er bis zur Zeitüberschreitung.
+#
+# Der eigene Hostname hatte das Problem nie: Den meldet avahi-daemon
+# selbst, und der antwortet je Schnittstelle passend. Genau deshalb
+# war "x18rack.local" stabil und "xrack.local" sprunghaft.
 # ====================================================================
 
-alias.adressen = lambda: ["192.168.1.50", "10.42.0.1"]
+#
+# Der Normalfall am Gerät: Heimnetz-WLAN und die Brücke des Access
+# Points. Die Standardroute geht über wlan0.
+#
+def netz(karte, standard=""):
+    """Ein nachgestelltes Netz: Schnittstellen und die Standardroute."""
+
+    alias.schnittstellen = lambda: karte
+    alias.standard_schnittstelle = lambda: standard
+
+
+netz({"wlan0": ["192.168.1.50"], "br0": ["10.42.0.1"]}, standard="wlan0")
 
 erfolg, meldung = alias.setzen("xrack")
 
@@ -134,12 +156,14 @@ time.sleep(0.3)
 
 gemeldet = aufrufe(dateien["log"])
 
-assert len(gemeldet) == 2, f"Erwartet zwei Aufrufe, gefunden: {gemeldet}"
+assert len(gemeldet) == 1, (
+    f"Es wurde mehr als eine Adresse gemeldet - genau daran hing die "
+    f"Zeitüberschreitung im Browser: {gemeldet}"
+)
 
-for adresse in ("192.168.1.50", "10.42.0.1"):
-    assert any(
-        zeile.endswith(f"xrack.local {adresse}") for zeile in gemeldet
-    ), f"Für {adresse} wurde nichts gemeldet: {gemeldet}"
+assert gemeldet[0].endswith("xrack.local 192.168.1.50"), (
+    f"Gemeldet wurde nicht die erreichbare Adresse: {gemeldet}"
+)
 
 assert all("-a" in zeile for zeile in gemeldet), gemeldet
 
@@ -147,10 +171,117 @@ stand = alias.status()
 
 assert stand["published"] is True, stand
 assert stand["name"] == "xrack", stand
-assert stand["addresses"] == ["192.168.1.50", "10.42.0.1"], stand
+assert stand["addresses"] == ["192.168.1.50"], stand
 assert stand["error"] == "", stand
 
-print(f"OK: Der Name wird für jede Adresse gemeldet ({gemeldet})")
+print(f"OK: Gemeldet wird eine erreichbare Adresse ({gemeldet})")
+
+
+# ====================================================================
+# 2b. Ohne Heimnetz gilt der Access Point
+#
+# Der Proberaum: kein Heimnetz in Reichweite, die Tablets hängen am
+# Access Point. Dann ist dessen Adresse die einzige, die es gibt -
+# und sie MUSS gemeldet werden. Eine Auswahl, die hier nichts mehr
+# findet, hätte den Proberaum kaputtgemacht, also genau den Fall, für
+# den es den Zweitnamen gibt.
+# ====================================================================
+
+for karte, standard, erwartet, warum in (
+    (
+        {"br0": ["10.42.0.1"]},
+        "",
+        "10.42.0.1",
+        "nur der Access Point",
+    ),
+    (
+        {"br0": ["10.42.0.1"], "eth0": ["192.168.0.2"]},
+        "",
+        "10.42.0.1",
+        "Access Point und Mischpult-Buchse, aber kein Weg nach draußen",
+    ),
+    (
+        {"eth0": ["192.168.0.2"]},
+        "",
+        "192.168.0.2",
+        "nur die Buchse",
+    ),
+    (
+        {"wlan0": ["169.254.7.7"], "br0": ["10.42.0.1"]},
+        "",
+        "10.42.0.1",
+        "eine selbstvergebene Adresse ist schlechter als der Access Point",
+    ),
+    (
+        {"wlan0": ["169.254.7.7"]},
+        "",
+        "169.254.7.7",
+        "selbstvergeben ist immer noch besser als gar kein Name",
+    ),
+    (
+        {"eth0": ["192.168.0.2"], "wlan0": ["192.168.1.50"]},
+        "wlan0",
+        "192.168.1.50",
+        "die Standardroute schlägt die Mischpult-Buchse",
+    ),
+):
+
+    netz(karte, standard)
+
+    assert alias.adressen() == [erwartet], (
+        f"{warum}: erwartet {erwartet}, bekommen {alias.adressen()} "
+        f"(Netz: {karte}, Standardroute: {standard!r})"
+    )
+
+print("OK: Ohne Heimnetz gilt der Access Point, sonst der Weg nach draußen")
+
+
+# ====================================================================
+# 2c. Die Auswahl liest ein echtes /proc/net/route
+#
+# Die Tabelle ist nicht schön, aber sie steht überall und kostet kein
+# Werkzeug: Die Standardroute ist die Zeile mit dem Ziel 00000000.
+# Ein Test, der nur die überschriebene Funktion prüft, hätte einen
+# Lesefehler hier nie bemerkt.
+# ====================================================================
+
+echte = MdnsAlias()
+
+routen = scratch / "route"
+
+routen.write_text(
+    "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\n"
+    "br0\t00002A0A\t00000000\t0001\t0\t0\t0\t00FFFFFF\n"
+    "wlan0\t00000000\t0101A8C0\t0003\t0\t0\t600\t00000000\n",
+    encoding="utf-8",
+)
+
+modul.ROUTEN_DATEI = str(routen)
+
+assert echte.standard_schnittstelle() == "wlan0", (
+    f"Die Standardroute wurde nicht gefunden: "
+    f"{echte.standard_schnittstelle()!r}"
+)
+
+#
+# Und ohne Standardroute (Proberaum ohne Uplink) bleibt es leer,
+# statt die erstbeste Zeile zu nehmen.
+#
+routen.write_text(
+    "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\n"
+    "br0\t00002A0A\t00000000\t0001\t0\t0\t0\t00FFFFFF\n",
+    encoding="utf-8",
+)
+
+assert echte.standard_schnittstelle() == "", (
+    "Ohne Standardroute wird eine beliebige Schnittstelle genommen."
+)
+
+modul.ROUTEN_DATEI = "/proc/net/route"
+
+echte.stop()
+
+print("OK: Die Standardroute wird aus /proc/net/route gelesen")
 
 
 # ====================================================================
@@ -185,7 +316,7 @@ print("OK: Abschalten beendet die Meldungen")
 
 dateien["log"].unlink(missing_ok=True)
 
-alias.adressen = lambda: ["192.168.1.50"]
+netz({"wlan0": ["192.168.1.50"]}, standard="wlan0")
 
 alias.setzen("xrack")
 
@@ -194,9 +325,9 @@ time.sleep(0.2)
 alte_kinder = list(alias._prozesse)
 
 #
-# Jetzt hängt das Gerät woanders.
+# Jetzt hängt das Gerät woanders: Heimnetz weg, Access Point an.
 #
-alias.adressen = lambda: ["10.42.0.1"]
+netz({"br0": ["10.42.0.1"]}, standard="")
 
 time.sleep(0.4)
 
@@ -229,7 +360,7 @@ alias.setzen("")
 dateien["konflikt"].write_text("ja", encoding="utf-8")
 dateien["log"].unlink(missing_ok=True)
 
-alias.adressen = lambda: ["192.168.1.50"]
+netz({"wlan0": ["192.168.1.50"]}, standard="wlan0")
 
 alias.setzen("xrack")
 

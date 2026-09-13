@@ -322,14 +322,16 @@ class Pult:
         self.klick_zeiten = []
         self.schloss = threading.Lock()
 
-    def ausgeben(self, daten, kanaele):
+    def ausgeben(self, daten, kanaele, zeitpunkt=None):
         """Merkt sich, WANN ein Klick hinausgegangen ist."""
 
         if not _enthaelt_klick(daten, kanaele):
             return
 
         with self.schloss:
-            self.klick_zeiten.append(time.monotonic())
+            self.klick_zeiten.append(
+                zeitpunkt if zeitpunkt is not None else time.monotonic()
+            )
 
     def klick_im_fenster(self, von, bis):
         """
@@ -371,6 +373,12 @@ class Ausgang:
         self.kanaele = 2
         self.rate = RATE
 
+        #
+        # Wann der naechste Block zu hoeren ist. None heisst: noch
+        # nichts geschrieben, der erste Block laeuft sofort.
+        #
+        self.faellig = None
+
     def open(self, device, channels, rate, start_channel=0,
              sample_format=None):
         #
@@ -381,6 +389,15 @@ class Ausgang:
         self.kanaele = channels
         self.rate = rate
         self.opened = True
+
+        #
+        # Ein frisch geoeffnetes Geraet faengt neu an zu takten. Ohne
+        # das liefe die Zeitrechnung des vorigen Laufs weiter, und der
+        # naechste Lauf haette seine Bloecke allesamt "ueberfaellig" -
+        # er schuettete sie ohne Pause hinaus.
+        #
+        self.faellig = None
+
         return True
 
     def write(self, daten):
@@ -394,11 +411,36 @@ class Ausgang:
         # verspaeteter Aufnahmestrom nachstellen -, waere der Klick
         # lange vor seiner Zeit draussen.
         #
+        # Getaktet wird auf einen FAELLIGKEITSPUNKT, nicht mit einer
+        # festen Pause je Block. Der Unterschied ist der zwischen
+        # einer Uhr und einer Sanduhr: Die feste Pause haengt jede
+        # Verspaetung der Maschine an alle folgenden Bloecke an, und
+        # auf einer belasteten Maschine ging dieser Versuch dadurch
+        # gelegentlich fehl - ein Lauf lag dann 50 ms hinter den
+        # anderen. Ein ALSA-Geraet kennt das nicht: Es hat seine
+        # eigene Uhr, und genau dafuer ist sein Puffer da. Ein Block,
+        # der spaet angeliefert wird, ist trotzdem zu seiner Zeit zu
+        # hoeren.
+        #
         rahmen = len(daten) / (self.kanaele * 4)
 
-        time.sleep(rahmen / self.rate)
+        jetzt = time.monotonic()
 
-        self.pult.ausgeben(daten, self.kanaele)
+        if self.faellig is None:
+            self.faellig = jetzt
+
+        rest = self.faellig - jetzt
+
+        if rest > 0:
+            time.sleep(rest)
+
+        #
+        # Zu hoeren ist der Block ab seinem Faelligkeitspunkt - nicht
+        # ab dem Moment, in dem diese Funktion zurueckkehrt.
+        #
+        self.pult.ausgeben(daten, self.kanaele, self.faellig)
+
+        self.faellig += rahmen / self.rate
 
     def close(self):
         self.opened = False

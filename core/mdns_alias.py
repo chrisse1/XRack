@@ -13,11 +13,16 @@ Deshalb kann jedes Gerät zusätzlich einen GEMEINSAMEN Namen melden,
 etwa "xrack.local". Die Web-App wird einmal darunter gespeichert und
 landet dann in jedem Raum auf dem Gerät, das dort steht.
 
-Gemacht wird das mit "avahi-publish -a", einem Kindprozess je Adresse:
-Solange er läuft, steht der Name im Netz. Mehrere Adressen sind der
-Normalfall - der Pi hängt oft gleichzeitig am Kabel und spannt einen
-Access Point auf, und das Tablet erreicht ihn je nach Raum über den
-einen oder den anderen Weg.
+Gemacht wird das mit "avahi-publish -a": Solange der Kindprozess
+läuft, steht der Name im Netz.
+
+Gemeldet wird dabei GENAU EINE Adresse, obwohl der Pi meist mehrere
+hat (Kabel, Heimnetz-WLAN, eigener Access Point). Der Grund steht
+ausführlich bei adressen() und ist am Gerät teuer bezahlt worden:
+avahi-publish kennt keine Option für eine Schnittstelle und meldet
+deshalb jede Adresse überall. Ein Tablet bekam so auch Adressen, die
+von seinem Netz aus nicht zu erreichen sind - und wenn der Browser
+eine davon erwischte, wartete er bis zur Zeitüberschreitung.
 
 Zwei Grenzen gehören dazu:
 
@@ -35,6 +40,7 @@ import socket
 import subprocess
 import threading
 import time
+from pathlib import Path
 
 import psutil
 
@@ -60,6 +66,25 @@ WACHINTERVALL = 5.0
 # noch einmal - vielleicht ist das andere Gerät inzwischen weg.
 #
 KONFLIKT_PAUSE_S = 60.0
+
+#
+# Wo der Kernel seine Routen auflistet. Überschreibbar, damit der Test
+# eine nachgestellte Tabelle unterschieben kann.
+#
+ROUTEN_DATEI = "/proc/net/route"
+
+#
+# Die Brücke des Access Points (install.sh legt sie als "br0" an, mit
+# der festen Adresse 10.42.0.1). Ihre Adresse ist nur von dort aus zu
+# erreichen - siehe die Begründung bei adressen().
+#
+AP_BRUECKE = "br0"
+
+#
+# Adressen, die ein Gerät sich selbst gibt, wenn es keine bekommt
+# (169.254.0.0/16). Besser als nichts, aber schlechter als jede echte.
+#
+SELBSTVERGEBEN = "169.254."
 
 
 class MdnsAlias:
@@ -193,23 +218,17 @@ class MdnsAlias:
     # Veröffentlichen
     # ----------------------------------------------------------------
 
-    def adressen(self) -> list[str]:
-        """
-        Alle IPv4-Adressen dieses Geräts, ohne Loopback.
+    def schnittstellen(self) -> dict[str, list[str]]:
+        """Alle IPv4-Adressen je Schnittstelle, ohne Loopback."""
 
-        Veröffentlicht wird JEDE davon: Welche das Tablet erreicht,
-        hängt am Raum - über den Access Point ist es eine andere als
-        über das Kabel, und beide gleichzeitig gibt es auch.
-        """
-
-        gefunden = []
+        gefunden: dict[str, list[str]] = {}
 
         try:
-            schnittstellen = psutil.net_if_addrs()
+            vorhanden = psutil.net_if_addrs()
         except Exception:
             return gefunden
 
-        for adressen in schnittstellen.values():
+        for name, adressen in vorhanden.items():
 
             for adresse in adressen:
 
@@ -219,10 +238,123 @@ class MdnsAlias:
                 if not adresse.address or adresse.address.startswith("127."):
                     continue
 
-                if adresse.address not in gefunden:
-                    gefunden.append(adresse.address)
+                gefunden.setdefault(name, []).append(adresse.address)
 
         return gefunden
+
+    def standard_schnittstelle(self) -> str:
+        """
+        Über welche Schnittstelle es nach draußen geht.
+
+        Aus /proc/net/route, weil das ohne Werkzeug und ohne Rechte
+        geht: Die Standardroute ist die Zeile mit dem Ziel 00000000.
+        """
+
+        try:
+            zeilen = Path(ROUTEN_DATEI).read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return ""
+
+        for zeile in zeilen[1:]:
+
+            felder = zeile.split()
+
+            if len(felder) < 2:
+                continue
+
+            if felder[1] == "00000000":
+                return felder[0]
+
+        return ""
+
+    def adressen(self) -> list[str]:
+        """
+        Die Adresse, unter der der Zweitname gemeldet wird - genau eine.
+
+        Hier stand bis 3.0.0-dev19 "jede Adresse des Geräts", mit der
+        Begründung: Welche das Tablet erreicht, hängt am Raum. Die
+        Begründung stimmt, der Schluss daraus war falsch, und das hat
+        am Gerät wehgetan.
+
+        Der Grund liegt in avahi-publish: Es kennt keine Option für
+        eine Schnittstelle (nachgesehen in avahi-utils/avahi-publish.c
+        - es gibt -a, -s, -H, -R, -f, -d, sonst nichts). Was es meldet,
+        meldet es deshalb auf ALLEN Schnittstellen. Mit zwei Adressen
+        bekam ein Tablet im Heimnetz also beide Antworten:
+
+            xrack.local -> 192.168.1.50   (erreichbar)
+            xrack.local -> 10.42.0.1      (die Brücke des Access
+                                           Points - von hier aus nicht)
+
+        Welche der Browser nimmt, entscheidet er selbst. Nimmt er die
+        zweite, laufen die Pakete zum Router und verschwinden dort:
+        keine Fehlermeldung, sondern eine halbe Minute Warten und dann
+        "Netzwerk-Zeitüberschreitung". Am Gerät sah das so aus, wie es
+        sich anfühlt - mal geht es, mal nicht, und niemand weiß warum.
+
+        Der eigene Hostname hat dieses Problem nie gehabt: Den meldet
+        avahi-daemon selbst, und der kennt seine Schnittstellen - auf
+        wlan0 antwortet er mit der wlan0-Adresse, auf br0 mit der von
+        br0. Genau deshalb war "x18rack.local" durchgehend erreichbar,
+        während "xrack.local" sprunghaft war.
+
+        Nachbauen lässt sich das mit avahi-publish nicht. Also wird
+        eine Adresse ausgesucht, und zwar die, die von überall
+        erreichbar ist:
+
+          1. Die Schnittstelle mit der Standardroute. Sie führt ins
+             Heimnetz; ein Tablet dort erreicht sie direkt, und eines
+             am Access Point erreicht sie über XRack - für das ist
+             XRack ja das Standard-Gateway.
+          2. Sonst die Brücke des Access Points. Das ist der
+             Proberaum ohne Heimnetz: Dort hängen die Tablets am
+             Access Point, und nur diese Adresse gibt es.
+          3. Sonst irgendeine echte Adresse (etwa die Buchse zum
+             Mischpult, wenn sonst nichts da ist).
+          4. Sonst eine selbstvergebene - besser als gar kein Name.
+
+        Umgekehrt gilt der Satz nicht: Die Adresse des Access Points
+        ist NUR von dort zu erreichen. Sie zu melden, solange es eine
+        bessere gibt, schadet mehr, als sie nützt.
+        """
+
+        karte = self.schnittstellen()
+
+        if not karte:
+            return []
+
+        standard = self.standard_schnittstelle()
+
+        echte = [
+            adresse
+            for name, adressen in karte.items()
+            if name != AP_BRUECKE
+            for adresse in adressen
+            if not adresse.startswith(SELBSTVERGEBEN)
+        ]
+
+        alle = [
+            adresse
+            for adressen in karte.values()
+            for adresse in adressen
+        ]
+
+        for kandidaten in (
+            [a for a in karte.get(standard, []) if a],
+            karte.get(AP_BRUECKE, []),
+            echte,
+            alle,
+        ):
+
+            if kandidaten:
+                #
+                # Eine reicht, und mehr als eine ist der Fehler von
+                # oben. Mehrere Adressen auf derselben Schnittstelle
+                # sind ohnehin die Ausnahme.
+                #
+                return kandidaten[:1]
+
+        return []
 
     def _starten(self) -> None:
         """Je Adresse einen avahi-publish - Sperre gehalten."""

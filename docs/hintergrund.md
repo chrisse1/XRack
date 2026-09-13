@@ -292,12 +292,38 @@ zusätzlich zu seinem Hostnamen einen **gemeinsamen Zweitnamen**
 (`core/mdns_alias.py`). Trägt man auf jedem Gerät `xrack` ein, findet
 dieselbe gespeicherte App in jedem Raum das Gerät, das dort steht.
 
-Gemacht wird das mit `avahi-publish -a`, einem Kindprozess **je
-Adresse**: Solange er läuft, steht der Name im Netz. Mehrere Adressen
-sind der Normalfall — der Pi hängt am Kabel und spannt gleichzeitig
-einen Access Point auf, und je nach Raum erreicht ihn das Tablet über
-den einen oder den anderen Weg. Ein einzelner Eintrag zeigte im
-falschen Netz ins Leere.
+Gemacht wird das mit `avahi-publish -a`: Solange der Kindprozess läuft,
+steht der Name im Netz.
+
+Gemeldet wird dabei **genau eine** Adresse, obwohl der Pi meist
+mehrere hat. Zuerst war es jede — die Begründung klang zwingend: Je
+nach Raum erreicht das Tablet den Pi über das Kabel oder über den
+Access Point. Am Gerät kam davon zurück: *„gelegentlich erreichbar,
+dann meldete der Browser eine Netzwerk-Zeitüberschreitung."*
+
+Der Grund steckt in `avahi-publish`: Es kennt keine Option für eine
+Schnittstelle (nachgesehen in `avahi-utils/avahi-publish.c`) und
+meldet deshalb jede Adresse auf **allen**. Ein Tablet im Heimnetz bekam
+damit zwei Antworten — die richtige und die `10.42.0.1` der
+Access-Point-Brücke, die von dort niemand erreicht. Welche der Browser
+nimmt, entscheidet er selbst; nimmt er die zweite, laufen die Pakete
+zum Router und verschwinden dort: keine Fehlermeldung, sondern eine
+halbe Minute Warten.
+
+Der eigene Hostname hatte das Problem nie. Den meldet `avahi-daemon`
+selbst, und der kennt seine Schnittstellen — auf `wlan0` antwortet er
+mit der `wlan0`-Adresse, auf `br0` mit der von `br0`. Genau deshalb war
+`x18rack.local` durchgehend erreichbar, während `xrack.local`
+sprunghaft war.
+
+Nachbauen lässt sich das mit `avahi-publish` nicht, also wird
+ausgewählt — und zwar die Adresse, die von **überall** erreichbar ist:
+die der Schnittstelle mit der Standardroute. Ein Tablet im Heimnetz
+erreicht sie direkt, eines am Access Point über XRack, denn für das ist
+XRack das Gateway. Gibt es keine Standardroute (Proberaum ohne
+Heimnetz), gilt die Brücke des Access Points; dann hängen die Tablets
+ohnehin dort. Umgekehrt gilt der Satz nicht: Die Adresse des Access
+Points ist nur von dort zu erreichen.
 
 Zwei Dinge hält eine Wache im Auge: Wechselt die Adresse (Kabel raus,
 Access Point an), wird der Name neu gemeldet — ein Eintrag auf eine
