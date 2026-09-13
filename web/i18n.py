@@ -125,11 +125,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "practice_latency_zero": (
             "Gemessen: {ms} ms\n\nEinzelne Läufe: {werte} ms\n\n"
-            "Das ist kein Fehler: Der Ausgabepuffer verzögert, der "
-            "Aufnahmepuffer holt dieselbe Zeit wieder herein - beide "
-            "sind gleich gross. Übrig bleibt der Weg durch USB und "
-            "Pult, und der sind wenige Millisekunden. Beim "
-            "Zusammenhören ist dann nichts zu verschieben."
+            "Fast null ist ungewöhnlich: Der Weg über USB und Pult "
+            "braucht Zeit. Bitte noch einmal messen. Bleibt es dabei, "
+            "kommt der Klick vermutlich nicht über das Pult zurück, "
+            "sondern auf einem kürzeren Weg."
         ),
         "practice_take_none": "nichts",
         "practice_take_hint": "mit {name}",
@@ -953,11 +952,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "practice_latency_zero": (
             "Measured: {ms} ms\n\nIndividual runs: {werte} ms\n\n"
-            "This is not an error: the playback buffer delays, the "
-            "capture buffer gives the same time back - both are the "
-            "same size. What remains is the path through USB and "
-            "console, a few milliseconds. Nothing to shift when "
-            "playing back together."
+            "Almost zero is unusual: the path through USB and console "
+            "takes time. Please measure again. If it stays at zero, "
+            "the click is probably not coming back through the "
+            "console but by a shorter route."
         ),
         "practice_take_none": "nothing",
         "practice_take_hint": "with {name}",

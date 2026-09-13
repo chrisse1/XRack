@@ -117,6 +117,21 @@ class Recorder:
 
         self._buffer_count = 0
 
+        #
+        # Wie viele Bloecke der Lesethread ueberhaupt geholt hat - ob
+        # sie in eine Datei gehen oder nur in die Pegelanzeige.
+        #
+        # Gebraucht wird das als Lebenszeichen des Aufnahmestroms: Wer
+        # den Mitschnitt gleichlaufend zum Ton beginnen will, muss
+        # wissen, dass der Strom schon LIEFERT - nicht bloss, dass er
+        # gestartet wurde. Zwischen beidem liegen der Anlauf des Fadens
+        # und eine volle Periode von ALSA.
+        #
+        # Er laeuft ueber die ganze Lebensdauer und wird beim Starten
+        # NICHT zurueckgesetzt: Gemessen werden Unterschiede.
+        #
+        self._bloecke_gelesen = 0
+
         self._bytes_written = 0
 
         self._start_time = None
@@ -238,6 +253,7 @@ class Recorder:
             return False
 
         self._buffer_count = 0
+
         self._bytes_written = 0
         self._start_time = monotonic()
 
@@ -655,6 +671,8 @@ class Recorder:
 
                 continue
 
+            self._bloecke_gelesen += 1
+
             #
             # Zwei Sichten auf denselben Block:
             #
@@ -725,6 +743,15 @@ class Recorder:
     @property
     def buffer_count(self) -> int:
         return self._buffer_count
+
+    @property
+    def bloecke_gelesen(self) -> int:
+        """
+        Lebenszeichen des Aufnahmestroms: Bloecke, die wirklich
+        angekommen sind.
+        """
+
+        return self._bloecke_gelesen
 
     @property
     def bytes_written(self) -> int:

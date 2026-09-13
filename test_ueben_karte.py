@@ -136,7 +136,26 @@ class Aufnehmer:
         self.recordings = list(namen)
         self.bereit = True
         self.recording = False
+        self.monitoring = False
         self.praefixe = []
+
+        #
+        # Das Lebenszeichen des Aufnahmestroms. Die Attrappe liefert
+        # sofort - geprueft wird hier die Reihenfolge, nicht die
+        # Anlaufzeit (die steht in test_laufzeit_messung.py).
+        #
+        self.bloecke_gelesen = 0
+
+    def start_monitoring(self):
+        #
+        # Der Vorlauf, der den Aufnahmestrom in Gang bringt, bevor der
+        # erste Ton hinausgeht (siehe
+        # Application._aufnahmestrom_vorwaermen).
+        #
+        PROTOKOLL.append("strom-an")
+        self.monitoring = True
+        self.bloecke_gelesen += 2
+        return True
 
     def start(self, name_prefix="Soundcheck", trenner="-"):
 
@@ -153,6 +172,14 @@ class Aufnehmer:
     def stop(self):
         PROTOKOLL.append("aufnahme-aus")
         self.recording = False
+
+        #
+        # Wie beim echten Recorder: "Stop" beendet auch eine
+        # Pegelpruefung, die daneben lief (siehe Recorder._abmelden).
+        # Damit steht der Aufnahmestrom danach wieder - und der
+        # naechste Lauf muss ihn erneut in Gang bringen.
+        #
+        self.monitoring = False
 
 
 class Anwendung(MusikMixin):
@@ -488,11 +515,17 @@ with tempfile.TemporaryDirectory() as tmp:
 
     assert erfolg, meldung
 
-    assert PROTOKOLL == ["ton-an", "aufnahme-an"], (
-        f"Gerufen wurde in dieser Reihenfolge: {PROTOKOLL}. Die "
-        f"Aufnahme gehört an den ersten Block des Spielers - davor "
-        f"liegt eine Anlaufzeit, die jedes Mal anders ausfällt und "
-        f"sich hinterher nicht mehr herausrechnen lässt."
+    assert PROTOKOLL == ["strom-an", "ton-an", "aufnahme-an"], (
+        f"Gerufen wurde in dieser Reihenfolge: {PROTOKOLL}.\n"
+        f"Erwartet: erst den Aufnahmestrom in Gang bringen, dann den "
+        f"Ton, dann die Aufnahme.\n"
+        f"Fängt der Strom erst mit der Aufnahme an, beginnt der "
+        f"Mitschnitt um eine unbekannte Spanne zu spät - der "
+        f"Lesethread muss anlaufen und ALSA eine volle Periode "
+        f"sammeln.\n"
+        f"Und die Aufnahme gehört an den ERSTEN BLOCK des Spielers: "
+        f"davor liegt eine Anlaufzeit, die jedes Mal anders ausfällt "
+        f"und sich hinterher nicht herausrechnen lässt."
     )
 
     assert anwendung.recorder.recording, "Es wird gar nicht aufgenommen."
@@ -571,7 +604,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
     assert not erfolg and meldung, "Der Fehlschlag blieb unbemerkt."
 
-    assert PROTOKOLL == ["ton-an"], (
+    assert PROTOKOLL == ["strom-an", "ton-an"], (
         f"Nach dem Fehlschlag stand: {PROTOKOLL}. Kommt der Ton gar "
         f"nicht erst zustande, darf auch keine Aufnahme angefangen "
         f"haben - sie liefe sonst weiter, ohne dass jemand sie "

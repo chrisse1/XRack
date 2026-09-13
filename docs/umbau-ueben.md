@@ -397,25 +397,44 @@ Voraussetzung bleibt die Schleife im Pult. Die kann XRack nicht selbst
 herstellen — deshalb fragt der Knopf vorher und sagt, was einzurichten
 ist.
 
-**Und warum dabei oft fast null herauskommt (dev14).** Am Gerät
-gemessen: 0 ms. Das ist kein Fehler, sondern die Bauart. Auf der
-Ausgabeseite verzögert der ALSA-Puffer den Ton um seine Füllung; auf
-der Aufnahmeseite wirkt derselbe Puffer andersherum, denn der erste
-Block, den XRack liest, ist der **älteste** im Ring — der Mitschnitt
-beginnt also ein Stück in der Vergangenheit. Beide Puffer sind gleich
-gross (1024 Rahmen je Periode), und damit heben sie sich weitgehend
-auf. Übrig bleibt der wirkliche Weg durch USB und Pult: wenige
-Millisekunden.
+**Was die ersten Messungen am Gerät gezeigt haben (dev14/dev15).**
+Zehn Messungen, je drei Läufe. Die Hälfte scheiterte mit „Der Klick
+steht vor seiner eigenen Zeit"; die übrigen sahen so aus:
 
-Die 1024 Samples, um die es anfangs ging, fallen also grösstenteils
-von selbst heraus. Gut zu wissen — aber nur, weil es gemessen ist.
+    0, 70, 69   0, 85, 84   0, 0, 73   1, 0, 85   0, 88, 71
 
-Damit eine Null nicht wie ein Fehler aussieht und ein Zufallstreffer
-nicht wie ein Befund, misst XRack seither **dreimal** und zeigt die
-Einzelwerte: Drei gleiche Zahlen sind eine Eigenschaft der Anlage,
-drei verschiedene eine Warnung (dann gleicht ein fester Versatz sie
-ohnehin nicht aus). Genommen wird der mittlere Wert, nicht der
-Durchschnitt — ein Ausreisser zöge den Durchschnitt mit sich.
+Das Muster ist eindeutig: **der erste Lauf fast immer 0, die
+folgenden 70 bis 88 ms.** Die Erklärung, die in dev14 im Code stand
+(„die Puffer heben sich auf"), war falsch — und zwar in der Richtung.
+
+Richtig ist: Wird der Lesethread erst mit der Aufnahme gestartet,
+kostet sein erster Block Zeit — der Faden muss anlaufen, ALSA den
+Strom in Gang bringen und eine volle Periode sammeln. **Der
+Mitschnitt beginnt dadurch SPÄTER als der Ton**, um eine Spanne, die
+niemand kennt. Fängt er um ungefähr die Laufzeit zu spät an, steht
+der Klick genau dort, wo er auch ohne Laufzeit stünde: 0 ms. Fängt er
+noch später an, steht er vor seiner eigenen Zeit — und die Messung
+lehnt ab. Erst wenn der Strom schon läuft, kommt die wahre Laufzeit
+zum Vorschein: **70 bis 88 ms.**
+
+Die 1024 Samples heben sich also NICHT auf. Sie sind da, auf beiden
+Seiten, und machen zusammen ungefähr das aus, was die späteren Läufe
+zeigen.
+
+**Die Folge (dev15):** Vor dem ersten Ton bringt XRack den
+Aufnahmestrom in Gang und wartet, bis er wirklich liefert — nicht
+eine feste Zeit lang, sondern bis Blöcke ankommen
+(`Recorder.bloecke_gelesen` als Lebenszeichen). Das gilt für die
+Messung UND fürs Mitschneiden beim Üben; beide müssen denselben Weg
+gehen, sonst passt der gemessene Versatz nicht zu dem, was er
+ausgleichen soll. Übrig bleibt als Unschärfe die Lage innerhalb einer
+Periode, gut 21 ms bei 48 kHz — und genau dort liegt seither auch die
+Schwelle, ab der XRack eine Messreihe als unsicher meldet.
+
+Gemessen wird **dreimal**, mit Anzeige der Einzelwerte: Drei gleiche
+Zahlen sind eine Eigenschaft der Anlage, drei verschiedene eine
+Warnung. Genommen wird der mittlere Wert, nicht der Durchschnitt — ein
+Ausreisser zöge den Durchschnitt mit sich.
 
 - Knopf **„Üben + mitschneiden"**: startet Übungsmix und Aufnahme in
   einem Zug (Aufnahmefenster aus Stufe 1 - beim Üben typisch zwei

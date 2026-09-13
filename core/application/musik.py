@@ -12,6 +12,7 @@ from core.laufzeit_messung import (
     MESSDAUER_S,
     MESSUNGEN,
     SPANNE_WARNUNG_MS,
+    VORLAUF_S,
     klick_datei,
     mittlerer_wert,
     versatz_ms,
@@ -334,6 +335,14 @@ class MusikMixin:
             #
             praefix = take_praefix(filename)
 
+            #
+            # Denselben Vorlauf wie bei der Messung: Sonst faengt der
+            # Mitschnitt ein unbekanntes Stueck in der Vergangenheit
+            # an, und der gemessene Versatz passt nicht zu dem, was
+            # dieser Mitschnitt braucht.
+            #
+            self._aufnahmestrom_vorwaermen()
+
             def beim_start():
                 if self.recorder.start(praefix, trenner=""):
                     self.practice_recording = True
@@ -584,6 +593,55 @@ class MusikMixin:
             shutil.rmtree(arbeitsordner, ignore_errors=True)
 
 
+    def _aufnahmestrom_vorwaermen(self) -> bool:
+        """
+        Den Aufnahmestrom in Gang bringen, bevor der erste Ton
+        hinausgeht.
+
+        Wird der Lesethread erst mit der Aufnahme gestartet, kostet
+        sein erster Block Zeit: Der Faden muss anlaufen, und ALSA muss
+        den Strom in Gang bringen und eine volle Periode sammeln. Der
+        Mitschnitt beginnt dadurch SPÄTER als der Ton, um eine Spanne,
+        die niemand kennt. Am Gerät sind daran die Hälfte aller
+        Messungen gescheitert ("der Klick steht vor seiner eigenen
+        Zeit"), und die übrigen schwankten zwischen 0 und 88 ms.
+
+        Läuft der Faden dagegen schon, beginnt der Mitschnitt dort, wo
+        er soll. Übrig bleibt die Lage innerhalb einer Periode - gut
+        21 ms bei 48 kHz.
+
+        Liefert True, wenn die Pegelprüfung dafür eingeschaltet wurde.
+        """
+
+        if self.recorder.monitoring:
+            return False
+
+        vorher = self.recorder.bloecke_gelesen
+
+        if not self.recorder.start_monitoring():
+            return False
+
+        #
+        # Warten, bis der Strom WIRKLICH liefert - nicht eine feste
+        # Zeit lang hoffen.
+        #
+        # Eine feste Wartezeit waere geraten: Auf einem belasteten Pi
+        # kann der Anlauf laenger dauern, und dann begaenne der
+        # Mitschnitt doch wieder zu spaet. Umgekehrt wartete XRack auf
+        # einem flotten Geraet unnoetig. Das Lebenszeichen ist der
+        # ehrliche Massstab, die Frist nur die Reissleine.
+        #
+        frist = time.monotonic() + VORLAUF_S
+
+        while (
+            self.recorder.bloecke_gelesen - vorher < 2
+            and time.monotonic() < frist
+        ):
+            time.sleep(0.005)
+
+        return True
+
+
     def _ein_laufzeitlauf(self, klick: Path) -> tuple[int, str]:
         """
         Ein einzelner Durchgang: Klick abspielen, dabei mitschneiden,
@@ -593,6 +651,13 @@ class MusikMixin:
         mitschnitt = None
 
         try:
+
+            #
+            # Erst den Aufnahmestrom in Gang bringen, dann den Ton.
+            # Ohne das misst man den Inhalt des Ringpuffers mit - siehe
+            # _aufnahmestrom_vorwaermen().
+            #
+            self._aufnahmestrom_vorwaermen()
 
             #
             # Derselbe Weg wie beim Ueben mit Mitschnitt: Die Aufnahme

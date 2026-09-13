@@ -84,12 +84,49 @@ MESSDAUER_S = 3.0
 MESSUNGEN = 3
 
 #
+# Wie lange der Aufnahmestrom vor dem Messen (und vor dem Mitschneiden)
+# schon gelesen wird.
+#
+# Das ist die Lehre aus zehn Messungen am Geraet: Ohne Vorlauf war der
+# erste Lauf fast immer 0 ms und die folgenden 70 bis 88 ms, und die
+# Haelfte aller Messungen scheiterte mit "Der Klick steht vor seiner
+# eigenen Zeit".
+#
+# Der Grund liegt im ANLAUF des Aufnahmestroms. Wird der Lesethread
+# erst mit der Aufnahme gestartet, kostet sein erster Block Zeit: Der
+# Faden muss anlaufen, und ALSA muss den Strom in Gang bringen und eine
+# volle Periode sammeln. Der Mitschnitt beginnt dadurch SPAETER als der
+# Ton - und zwar um eine Spanne, die niemand kennt.
+#
+# Das erklaert das Muster: Faengt der Mitschnitt um ungefaehr die
+# Laufzeit zu spaet an, steht der Klick genau dort, wo er auch ohne
+# Laufzeit staende - 0 ms. Faengt er noch spaeter an, steht er VOR
+# seiner eigenen Zeit, und die Messung lehnt ab. Erst wenn der Strom
+# schon laeuft, kommt die wahre Laufzeit heraus: am Geraet 70 bis
+# 88 ms.
+#
+# Deshalb laeuft der Lesethread jetzt VOR dem ersten Ton. Uebrig bleibt
+# als Unschaerfe die Lage innerhalb einer Periode - gut 21 ms bei
+# 48 kHz.
+#
+# Gewartet wird auf das Lebenszeichen des Stroms; diese Frist ist nur
+# die Reissleine, damit ein toter Strom die Messung nicht aufhaelt.
+#
+VORLAUF_S = 2.0
+
+#
 # Ab dieser Streuung gilt der Wert nicht als verlaesslich.
 #
-# Eine Periode sind bei 48 kHz gut 21 ms; was darunter bleibt, ist die
-# Koernigkeit der Puffer und kein Widerspruch.
+# Eine Periode sind bei 48 kHz gut 21 ms, und genau um diese Spanne
+# kann der Beginn des Mitschnitts liegen: Der Lesethread bekommt
+# seinen ersten Block irgendwo innerhalb einer Periode. Was darunter
+# bleibt, ist also die Koernigkeit der Puffer und kein Widerspruch.
 #
-SPANNE_WARNUNG_MS = 10
+# Hier stand zuerst 10 - im selben Atemzug mit der Begruendung, dass
+# eine Periode 21 ms sind. Damit haette XRack den Normalfall als
+# unsicher gemeldet.
+#
+SPANNE_WARNUNG_MS = 25
 
 VOLLAUSSCHLAG = 2 ** 31
 
@@ -295,16 +332,12 @@ def versatz_ms(mitschnitt: Path, rate: int) -> tuple[int, str]:
     KLICK_BEI_S. Wo er im Mitschnitt steht, ist diese Sekunde plus die
     Laufzeit des Weges. Die Differenz ist der gesuchte Wert.
 
-    **Warum dabei oft eine sehr kleine Zahl herauskommt** - das ist
-    kein Fehler, sondern die Bauart: Auf der Ausgabeseite verzögert der
-    ALSA-Puffer den Ton um seine Füllung. Auf der Aufnahmeseite wirkt
-    derselbe Puffer andersherum: Der erste Block, den XRack liest, ist
-    der ÄLTESTE im Ring - der Mitschnitt beginnt also ein Stück in der
-    Vergangenheit. Beide Puffer sind gleich gross (1024 Rahmen je
-    Periode, siehe audio/audio_backend.py und
-    audio/audio_playback_backend.py), und damit heben sie sich weitgehend
-    auf. Übrig bleibt der wirkliche Weg durch USB und Pult, und der
-    sind wenige Millisekunden.
+    **Der Aufnahmestrom muss dabei schon laufen** (siehe VORLAUF_S).
+    Sonst beginnt der Mitschnitt später als der Ton - der Lesethread
+    muss erst anlaufen, ALSA den Strom in Gang bringen und eine volle
+    Periode sammeln. Um genau diese Spanne fällt die Messung dann zu
+    klein aus: Am Gerät kam 0 ms heraus, im nächsten Lauf 70 ms, und
+    jede zweite Messung fand den Klick vor seiner eigenen Zeit.
     """
 
     rahmen, _ = klick_finden(mitschnitt)

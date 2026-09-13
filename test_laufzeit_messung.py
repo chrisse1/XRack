@@ -309,71 +309,57 @@ class Pult:
     Ein Pult, das zurückschickt, was es bekommt - um LAUFZEIT_MS
     verzögert.
 
-    Das ist die ganze Nachstellung. Was XRack ausgibt, landet in einer
-    Warteschlange; was XRack aufnimmt, kommt um die Laufzeit versetzt
-    wieder heraus.
+    Gerechnet wird mit der UHR und nicht mit Rahmenzählern. Das ist
+    der Unterschied, an dem die erste Fassung dieses Versuchs
+    vorbeilief: Ein echtes Pult hat kein Gedächtnis und keine Zähler.
+    Was zur Zeit t hineingeht, kommt zur Zeit t + Laufzeit heraus -
+    ganz gleich, wer wann zu lesen beginnt. Nur so lässt sich prüfen,
+    was passiert, wenn der Aufnahmestrom später anläuft als der Ton.
     """
 
-    def __init__(self, kanaele_aus, kanaele_ein, rate):
-        self.kanaele_aus = kanaele_aus
-        self.kanaele_ein = kanaele_ein
-        self.rate = rate
-        self.ausgegeben = bytearray()
-        self.gelesen_rahmen = 0
+    def __init__(self, laufzeit_s):
+        self.laufzeit_s = laufzeit_s
+        self.klick_zeiten = []
         self.schloss = threading.Lock()
 
-    def zuruecksetzen(self):
-        """
-        Ein neuer Durchgang faengt bei null an.
+    def ausgeben(self, daten, kanaele):
+        """Merkt sich, WANN ein Klick hinausgegangen ist."""
 
-        Ein echtes Pult hat kein Gedaechtnis: Was gerade hineingeht,
-        kommt um die Laufzeit versetzt heraus, und wann XRack mit dem
-        Messen anfaengt, ist ihm gleich. Diese Attrappe zaehlt dagegen
-        Rahmen mit, und die beiden Zaehler laufen ueber Sekunden
-        minimal auseinander (zwei Faeden, zwei Schlafzeiten). Ohne
-        Ruecksetzen truege der zweite Durchgang diesen Schlupf als
-        Messwert.
+        if not _enthaelt_klick(daten, kanaele):
+            return
+
+        with self.schloss:
+            self.klick_zeiten.append(time.monotonic())
+
+    def klick_im_fenster(self, von, bis):
+        """
+        Wo im Zeitfenster [von, bis) kommt ein Klick zurück?
+
+        Liefert den Abstand zum Fensteranfang in Sekunden, oder None.
+        Auf die Stelle IM Block kommt es an: Sonst wäre die
+        nachgestellte Messung auf eine Blocklänge gerundet, und ein
+        Fehler von 20 ms fiele nicht auf.
         """
 
         with self.schloss:
-            self.ausgegeben = bytearray()
-            self.gelesen_rahmen = 0
+            for zeit in self.klick_zeiten:
+                ankunft = zeit + self.laufzeit_s
+                if von <= ankunft < bis:
+                    return ankunft - von
 
-    def ausgeben(self, daten):
-        with self.schloss:
-            self.ausgegeben += daten
+        return None
 
-    def aufnehmen(self, rahmen):
-        """
-        Liefert `rahmen` Rahmen der Aufnahme - das, was vor
-        LAUFZEIT_MS ausgegeben wurde.
-        """
 
-        verzug = int(LAUFZEIT_MS * self.rate / 1000)
+def _enthaelt_klick(daten, kanaele):
 
-        block = bytearray()
+    schritt = kanaele * 4 * 64
 
-        with self.schloss:
+    for stelle in range(0, max(0, len(daten) - 4), schritt):
+        wert = struct.unpack("<i", daten[stelle:stelle + 4])[0]
+        if abs(wert) > 0.1 * VOLLAUSSCHLAG:
+            return True
 
-            for n in range(self.gelesen_rahmen,
-                           self.gelesen_rahmen + rahmen):
-
-                quelle = n - verzug
-
-                wert = 0
-
-                if quelle >= 0:
-                    stelle = quelle * self.kanaele_aus * 4
-                    if stelle + 4 <= len(self.ausgegeben):
-                        wert = struct.unpack(
-                            "<i", bytes(self.ausgegeben[stelle:stelle + 4])
-                        )[0]
-
-                block += struct.pack("<i", wert) * self.kanaele_ein
-
-            self.gelesen_rahmen += rahmen
-
-        return bytes(block)
+    return False
 
 
 class Ausgang:
@@ -382,38 +368,65 @@ class Ausgang:
     def __init__(self, pult):
         self.pult = pult
         self.opened = False
+        self.kanaele = 2
+        self.rate = RATE
 
     def open(self, device, channels, rate, start_channel=0,
              sample_format=None):
         #
         # Ein echtes ALSA-Geraet braucht zum Oeffnen Zeit, und zwar
-        # jedes Mal unterschiedlich viel. Hier steht die Zeit fest -
-        # sie ist dafuer da, dass es auffaellt, wenn die Aufnahme vor
-        # dem ersten Block startet: Dann maesse man diese Anlaufzeit
-        # mit, und die Messung waere um sie zu gross.
+        # jedes Mal unterschiedlich viel.
         #
         time.sleep(0.12)
-        self.pult.zuruecksetzen()
+        self.kanaele = channels
+        self.rate = rate
         self.opened = True
         return True
 
     def write(self, daten):
         #
-        # Bremsen wie ein echtes Interface: Ohne das waere der
-        # Klick-Mix in Millisekunden durch, und der Recorder haette
-        # nichts zu lesen.
+        # In ECHTZEIT annehmen, nicht schneller.
         #
-        time.sleep(0.004)
-        self.pult.ausgeben(daten)
+        # Ein ALSA-Geraet nimmt die Bloecke im Takt der Samplerate an.
+        # Die erste Fassung dieser Attrappe schluckte sie fuenfmal so
+        # schnell; solange das Pult Rahmen zaehlte, fiel das nicht auf.
+        # Sobald es nach der Uhr arbeitet - und nur so laesst sich ein
+        # verspaeteter Aufnahmestrom nachstellen -, waere der Klick
+        # lange vor seiner Zeit draussen.
+        #
+        rahmen = len(daten) / (self.kanaele * 4)
+
+        time.sleep(rahmen / self.rate)
+
+        self.pult.ausgeben(daten, self.kanaele)
 
     def close(self):
         self.opened = False
 
 
 class Eingang:
-    """Der Aufnahmeweg - er holt sich, was das Pult zurückschickt."""
+    """
+    Der Aufnahmeweg - er holt sich, was das Pult zurückschickt.
+
+    Mit einem ANLAUF: Der erste Block nach einer Pause kostet Zeit
+    (der Faden muss anlaufen, ALSA den Strom in Gang bringen und eine
+    volle Periode sammeln). Genau diese Spanne hat am Gerät die
+    Messung verdorben, solange der Aufnahmestrom erst mit der Aufnahme
+    gestartet wurde - der Mitschnitt begann dadurch später als der
+    Ton.
+    """
 
     RAHMEN = 1024
+
+    #
+    # So lange braucht der Strom, bis der erste Block da ist.
+    #
+    # Laenger als das Oeffnen des Wiedergabegeraets (0,12 s) - sonst
+    # waere der Strom schon von selbst bereit, wenn der erste Ton
+    # hinausgeht, und ein fehlender Vorlauf fiele nicht auf. Auf einem
+    # belasteten Pi ist genau das der Fall, den es zu treffen gilt.
+    #
+    ANLAUF_S = 0.25
 
     def __init__(self, pult, kanaele, rate):
         self.pult = pult
@@ -423,12 +436,66 @@ class Eingang:
         self.rate = rate
         self.start_channel = 0
 
+        self.blockdauer = self.RAHMEN / rate
+
+        #
+        # None heisst: Der Strom steht. Der naechste Block kostet den
+        # Anlauf, und die Zeitrechnung beginnt erst dann.
+        #
+        self.gelesen_bis = None
+
     def read(self):
-        time.sleep(0.004)
-        return self.pult.aufnehmen(self.RAHMEN)
+
+        #
+        # Der Strom stand: Anlauf zahlen und die Zeitrechnung HIER
+        # beginnen. Alles davor ist verpasst - genau wie bei ALSA.
+        #
+        if self.gelesen_bis is None:
+            time.sleep(self.ANLAUF_S)
+            self.gelesen_bis = time.monotonic()
+
+        von = self.gelesen_bis
+        bis = von + self.blockdauer
+
+        #
+        # In Echtzeit warten, bis der Block wirklich vorbei ist. Die
+        # Fenster stossen dabei lueckenlos aneinander - ein echter
+        # Strom verliert zwischen zwei Bloecken nichts.
+        #
+        rest = bis - time.monotonic()
+
+        if rest > 0:
+            time.sleep(rest)
+
+        self.gelesen_bis = bis
+
+        versatz = self.pult.klick_im_fenster(von, bis)
+
+        block = bytearray()
+
+        anfang = (
+            int(versatz * self.rate) if versatz is not None else None
+        )
+
+        for n in range(self.RAHMEN):
+
+            wert = (
+                int(0.2 * VOLLAUSSCHLAG)
+                if anfang is not None and anfang <= n < anfang + 240
+                else 0
+            )
+
+            block += struct.pack("<i", wert) * self.channels
+
+        return bytes(block)
 
     def aufnahmebreite(self, daten):
         return daten
+
+    def strom_anhalten(self):
+        """Der Strom steht wieder - der naechste Block kostet Anlauf."""
+
+        self.gelesen_bis = None
 
 
 class Geraet:
@@ -476,12 +543,13 @@ from recorder.recorder import Recorder  # noqa: E402
 lauf_ordner = tempfile.TemporaryDirectory()
 LAUF = Path(lauf_ordner.name)
 
-pult = Pult(kanaele_aus=Geraet.channels, kanaele_ein=Geraet.channels,
-            rate=RATE)
+pult = Pult(laufzeit_s=LAUFZEIT_MS / 1000)
 
 spieler = MusicPlayer(Ausgang(pult), MusicLibrary(LAUF))
 
-aufnehmer = Recorder(Eingang(pult, Geraet.channels, RATE))
+eingang = Eingang(pult, Geraet.channels, RATE)
+
+aufnehmer = Recorder(eingang)
 
 #
 # Ein RELATIVES Aufnahmeverzeichnis - genau wie am Geraet
@@ -527,7 +595,7 @@ assert stand["success"] is True, (
     f"Die Messung kam zu keinem Ergebnis: {stand}"
 )
 
-assert abs(stand["ms"] - LAUFZEIT_MS) <= 30, (
+assert abs(stand["ms"] - LAUFZEIT_MS) <= 25, (
     f"Gemessen wurden {stand['ms']} ms, das Pult verzögert um "
     f"{LAUFZEIT_MS} ms. (Die Toleranz ist grosszügig: Die "
     f"nachgestellten Puffer laufen nicht taktgenau - es geht darum, "
@@ -545,9 +613,16 @@ assert len(stand["werte"]) == 3, (
     f"mehrere Läufe zeigen, ob sie steht."
 )
 
-assert stand["spanne"] <= 5, (
+#
+# Eine Periode Unschaerfe bleibt: Der Lesethread bekommt seinen ersten
+# Block irgendwo innerhalb einer Periode (gut 21 ms bei 48 kHz). Mehr
+# darf es nicht sein - dann waere der Anlauf wieder im Spiel.
+#
+assert stand["spanne"] <= 25, (
     f"Die Läufe gehen um {stand['spanne']} ms auseinander "
-    f"({stand['werte']}), obwohl das Pult jedes Mal gleich verzögert."
+    f"({stand['werte']}), obwohl das Pult jedes Mal gleich verzögert. "
+    f"Mehr als eine Periode heisst: Der Mitschnitt beginnt nicht "
+    f"verlässlich mit dem Ton."
 )
 
 assert stand["unsicher"] is False, stand
@@ -630,30 +705,32 @@ print("OK: Die Messung startet nicht gegen etwas Laufendes")
 # erzeugen.
 # ====================================================================
 
-anwendung._laufzeit_fertig(True, 40, "", [35, 40, 60])
+anwendung._laufzeit_fertig(True, 40, "", [35, 40, 95])
 
 stand = anwendung.laufzeit_status()
 
-assert stand["spanne"] == 25, (
-    f"Die Spanne von [35, 40, 60] ist {stand['spanne']} statt 25."
+assert stand["spanne"] == 60, (
+    f"Die Spanne von [35, 40, 95] ist {stand['spanne']} statt 60."
 )
 
 assert stand["unsicher"] is True, (
-    "Läufe zwischen 35 und 60 ms gelten als verlässlich - ein fester "
-    "Versatz gleicht so etwas nicht aus."
+    "Läufe zwischen 35 und 95 ms gelten als verlässlich - das sind "
+    "fast drei Perioden Unterschied, und ein fester Versatz gleicht "
+    "so etwas nicht aus."
 )
 
-assert stand["werte"] == [35, 40, 60], stand["werte"]
+assert stand["werte"] == [35, 40, 95], stand["werte"]
 
 #
-# Und der Gegenfall: Eine Streuung unterhalb der Koernigkeit der
-# Puffer ist kein Widerspruch.
+# Und der Gegenfall: Eine Streuung innerhalb einer Periode (gut 21 ms
+# bei 48 kHz) ist kein Widerspruch, sondern die Koernigkeit der
+# Puffer.
 #
-anwendung._laufzeit_fertig(True, 40, "", [40, 40, 42])
+anwendung._laufzeit_fertig(True, 72, "", [71, 72, 88])
 
 stand = anwendung.laufzeit_status()
 
-assert stand["spanne"] == 2 and stand["unsicher"] is False, stand
+assert stand["spanne"] == 17 and stand["unsicher"] is False, stand
 
 print("OK: Streuende Läufe werden gemeldet, dichte nicht")
 
@@ -669,7 +746,7 @@ print("OK: Streuende Läufe werden gemeldet, dichte nicht")
 
 for werte, erwartet, warum in (
     ([40, 40, 40], 40, "drei gleiche"),
-    ([35, 40, 60], 40, "ein Ausreisser nach oben"),
+    ([35, 40, 95], 40, "ein Ausreisser nach oben"),
     ([0, 40, 41], 40, "ein Ausreisser nach unten"),
     ([40], 40, "ein einzelner Wert"),
     ([], 0, "gar keiner"),
@@ -685,7 +762,7 @@ for werte, erwartet, warum in (
 #
 assert mittlerer_wert([0, 40, 41]) != min([0, 40, 41])
 
-assert mittlerer_wert([35, 40, 60]) != round(sum([35, 40, 60]) / 3)
+assert mittlerer_wert([35, 40, 95]) != round(sum([35, 40, 95]) / 3)
 
 print("OK: Genommen wird der mittlere Wert, nicht der kleinste")
 
