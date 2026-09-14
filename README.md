@@ -279,6 +279,24 @@ The same program stands in for the console in the test suite, so it
 cannot quietly drift away from what XRack expects. `--x32` makes it
 answer as an X32 instead.
 
+### The test suite
+
+The tests live in `tests/` and run without hardware — no ALSA, no
+console, no network. Each file is a standalone program that prints what
+it checked:
+
+```bash
+python3 tests/alle.py            # all of them
+python3 tests/alle.py wlan usb   # only files matching these words
+python3 tests/test_extractor.py  # a single one
+```
+
+They need no pytest and no extra packages: on the Pi nothing is
+installed beyond what XRack itself uses, and the suite has to run there
+too. Checks that need a browser (the ones measuring the real layout)
+skip themselves when none is present, and the runner says so rather
+than reporting a false "ok".
+
 ### When something is stuck
 
 If the web interface does not come up, the update also runs from a
@@ -607,6 +625,24 @@ python3 scripts/xair-emulator.py --audio
 Dasselbe Programm steht in der Testreihe an der Stelle des Pults — es
 kann also nicht still von dem abweichen, was XRack erwartet. Mit
 `--x32` antwortet es als X32.
+
+### Die Testreihe
+
+Die Tests liegen in `tests/` und laufen ohne Hardware — ohne ALSA, ohne
+Pult, ohne Netz. Jede Datei ist ein eigenständiges Programm, das
+ausgibt, was es geprüft hat:
+
+```bash
+python3 tests/alle.py            # alle
+python3 tests/alle.py wlan usb   # nur, was zu diesen Wörtern passt
+python3 tests/test_extractor.py  # eine einzelne
+```
+
+Kein pytest, keine zusätzlichen Pakete: Auf dem Pi ist nichts
+installiert außer dem, was XRack selbst braucht, und dort soll die
+Reihe auch laufen. Prüfungen, die einen Browser brauchen (die, die das
+echte Layout messen), überspringen sich ohne einen — und der Läufer
+schreibt das hin, statt ein falsches „ok" zu melden.
 
 ### Wenn etwas klemmt
 

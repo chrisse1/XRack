@@ -1,0 +1,151 @@
+"""
+Prüft MusicLibrary: Ordner/Dateien auflisten, Pfad-Sicherheit
+(kein Verlassen des Musikverzeichnisses über "..") und
+Shuffle-Playlist-Erstellung.
+"""
+
+#
+# Der Suchpfad zur Projektwurzel - siehe tests/_wurzel.py. Muss VOR
+# allen Importen aus XRack stehen.
+#
+from _wurzel import WURZEL  # noqa: F401,E402
+
+
+import tempfile
+from pathlib import Path
+
+from player.music_library import MusicLibrary
+
+with tempfile.TemporaryDirectory() as tmp_dir:
+
+    root = Path(tmp_dir) / "music"
+    root.mkdir()
+
+    (root / "Rock").mkdir()
+    (root / "Rock" / "song1.mp3").write_bytes(b"fake")
+    (root / "Rock" / "song2.flac").write_bytes(b"fake")
+    (root / "Rock" / "cover.jpg").write_bytes(b"fake")
+
+    (root / "Jazz").mkdir()
+    (root / "Jazz" / "song3.wav").write_bytes(b"fake")
+
+    (root / "top.mp3").write_bytes(b"fake")
+
+    outside = Path(tmp_dir) / "secret.mp3"
+    outside.write_bytes(b"fake")
+
+    library = MusicLibrary(root)
+
+    # ---------------------------------------------------------
+    # 1. Wurzelverzeichnis
+    # ---------------------------------------------------------
+
+    listing = library.browse("")
+    assert listing is not None
+    assert listing.folders == ["Jazz", "Rock"]
+    assert listing.files == ["top.mp3"]
+    print("OK: Wurzelverzeichnis gelistet")
+
+    # ---------------------------------------------------------
+    # 2. Unterordner, nur Audiodateien (kein cover.jpg)
+    # ---------------------------------------------------------
+
+    listing = library.browse("Rock")
+    assert listing is not None
+    assert listing.folders == []
+    assert listing.files == ["song1.mp3", "song2.flac"]
+    print("OK: Unterordner gelistet, Nicht-Audiodateien ausgeblendet")
+
+    # ---------------------------------------------------------
+    # 3. Pfad-Sicherheit: "../" darf das Verzeichnis nicht verlassen
+    # ---------------------------------------------------------
+
+    assert library.browse("../") is None
+    assert library.resolve("../secret.mp3") is None
+    print("OK: Verzeichnis-Ausbruch ('..') wird verhindert")
+
+    # ---------------------------------------------------------
+    # 4. Nicht existierender Ordner
+    # ---------------------------------------------------------
+
+    assert library.browse("Does/Not/Exist") is None
+    print("OK: Nicht existierender Ordner liefert None")
+
+    # ---------------------------------------------------------
+    # 5. Rekursive Dateisuche + Shuffle
+    # ---------------------------------------------------------
+
+    files = library.find_audio_files(root)
+    names = sorted(f.name for f in files)
+    assert names == ["song1.mp3", "song2.flac", "song3.wav", "top.mp3"]
+    print(f"OK: Rekursive Suche findet alle {len(files)} Audiodateien")
+
+    playlist = library.build_shuffled_playlist(root)
+    assert sorted(p.name for p in playlist) == names
+    print("OK: Shuffle-Playlist enthält alle Dateien (nur andere Reihenfolge)")
+
+    # ---------------------------------------------------------
+    # 6. Ordner anlegen
+    # ---------------------------------------------------------
+
+    assert library.create_folder("", "Klassik") is True
+    assert (root / "Klassik").is_dir()
+    print("OK: Neuer Ordner im Wurzelverzeichnis angelegt")
+
+    assert library.create_folder("Rock", "Subgenre") is True
+    assert (root / "Rock" / "Subgenre").is_dir()
+    print("OK: Neuer Unterordner angelegt")
+
+    # Doppelt anlegen soll fehlschlagen, nicht überschreiben
+    assert library.create_folder("", "Klassik") is False
+    print("OK: Existierender Ordner wird nicht überschrieben")
+
+    # Kein Ausbruch über ".." oder Pfadtrenner im Namen
+    assert library.create_folder("", "../evil") is False
+    assert library.create_folder("", "sub/evil") is False
+    assert not (Path(tmp_dir) / "evil").exists()
+    print("OK: Ordnername mit Pfadtrenner/'..' wird abgelehnt")
+
+    # ---------------------------------------------------------
+    # 7. Upload
+    # ---------------------------------------------------------
+
+    import io
+
+    uploaded_name = library.save_upload("", "new_song.mp3", io.BytesIO(b"audio-daten"))
+    assert uploaded_name == "new_song.mp3"
+    assert (root / "new_song.mp3").read_bytes() == b"audio-daten"
+    print("OK: Upload einer Musikdatei ins Wurzelverzeichnis")
+
+    # Nicht-Audiodatei wird abgelehnt
+    assert library.save_upload("", "malware.exe", io.BytesIO(b"x")) is None
+    assert not (root / "malware.exe").exists()
+    print("OK: Nicht-Audiodatei wird beim Upload abgelehnt")
+
+    # Pfad im Dateinamen wird auf den reinen Namen reduziert
+    uploaded_name = library.save_upload("Jazz", "../../escape.mp3", io.BytesIO(b"x"))
+    assert uploaded_name == "escape.mp3"
+    assert (root / "Jazz" / "escape.mp3").exists()
+    assert not (Path(tmp_dir) / "escape.mp3").exists()
+    print("OK: Pfadanteile im Upload-Dateinamen werden entfernt")
+
+    # ---------------------------------------------------------
+    # 8. Löschen
+    # ---------------------------------------------------------
+
+    assert library.delete_file("top.mp3") is True
+    assert not (root / "top.mp3").exists()
+    print("OK: Musikdatei wird gelöscht")
+
+    assert library.delete_file("top.mp3") is False
+    print("OK: Löschen einer nicht existierenden Datei liefert False")
+
+    assert library.delete_file("../secret.mp3") is False
+    assert outside.exists()
+    print("OK: Löschen außerhalb der Bibliothek wird verhindert")
+
+    assert library.delete_file("Rock/cover.jpg") is False
+    assert (root / "Rock" / "cover.jpg").exists()
+    print("OK: Löschen von Nicht-Audiodateien wird verhindert")
+
+print("Alle Tests erfolgreich.")
