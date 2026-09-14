@@ -3188,17 +3188,93 @@ function stemCombineBeschriftungenErneuern() {
     });
 }
 
+//
+// Die Dateien, die schon auf dem Geraet liegen - einmal geholt und
+// dann in jede Zeile gefuellt.
+//
+let stemCombineBibliothek = [];
+
+async function stemCombineBibliothekLaden() {
+
+    try {
+
+        const antwort = await fetch("/api/music/all-files");
+
+        stemCombineBibliothek = (await antwort.json()).files || [];
+
+    } catch (fehler) {
+        console.error("Musikbibliothek nicht lesbar:", fehler);
+        stemCombineBibliothek = [];
+    }
+}
+
+function stemCombineBibliothekFuellen(auswahl) {
+
+    if (!auswahl) return;
+
+    auswahl.innerHTML = "";
+
+    const leer = document.createElement("option");
+    leer.value = "";
+    leer.textContent = stemCombineBibliothek.length
+        ? I18N.stem_combine_from_device
+        : I18N.stem_combine_device_empty;
+    auswahl.appendChild(leer);
+
+    auswahl.disabled = stemCombineBibliothek.length === 0;
+
+    stemCombineBibliothek.forEach((pfad) => {
+        const eintrag = document.createElement("option");
+        eintrag.value = pfad;
+        eintrag.textContent = pfad;
+        auswahl.appendChild(eintrag);
+    });
+}
+
 function addStemCombineRow() {
     if (stemCombineRowCount >= STEM_COMBINE_MAX_FILES) return;
 
     stemCombineRowCount++;
 
+    //
+    // Zwei Wege je Kanalpaar: hochladen ODER eine Datei nehmen, die
+    // schon auf dem Geraet liegt.
+    //
+    // Der zweite ist dazugekommen, seit Dateien auch vom USB-Stick
+    // kommen koennen. Sie dann durch den Browser wieder hochzuladen
+    // waere genau der Umweg ueber die Leitung, den der Stick
+    // vermeiden sollte - und bei Stems geht es um hundert Megabyte
+    // aufwaerts.
+    //
     const row = document.createElement("div");
     row.className = "mb-2";
     row.innerHTML = `
         <label class="form-label small mb-1"></label>
         <input type="file" class="form-control form-control-sm stem-combine-file-input" accept=".wav,.w64">
+        <select class="form-select form-select-sm mt-1 stem-combine-library">
+        </select>
     `;
+
+    const auswahl = row.querySelector(".stem-combine-library");
+
+    stemCombineBibliothekFuellen(auswahl);
+
+    //
+    // Eins von beidem, nicht beides: Was gewaehlt ist, sperrt das
+    // andere. Sonst muesste irgendwo eine Vorrangregel stehen, die
+    // niemand sieht.
+    //
+    const hochladen = row.querySelector(".stem-combine-file-input");
+
+    auswahl.addEventListener("change", () => {
+        hochladen.disabled = !!auswahl.value;
+        if (auswahl.value) hochladen.value = "";
+    });
+
+    hochladen.addEventListener("change", () => {
+        auswahl.disabled = hochladen.files.length > 0;
+        if (hochladen.files.length) auswahl.value = "";
+    });
 
     stemCombineZeileBeschriften(row, stemCombineRowCount);
 
@@ -3270,7 +3346,7 @@ document.getElementById("btn-stem-combine-add-file").addEventListener("click", a
 // Geschlossen kehrt der Dialog dorthin zurueck, woher er kam: Der
 // naechste Griff gilt fast immer dem eben erzeugten Mix.
 //
-function oeffneStemCombine() {
+async function oeffneStemCombine() {
 
     bootstrap.Modal
         .getOrCreateInstance(document.getElementById("recordingsModal"))
@@ -3281,6 +3357,19 @@ function oeffneStemCombine() {
     bootstrap.Modal
         .getOrCreateInstance(document.getElementById("stemCombineModal"))
         .show();
+
+    //
+    // Die Dateien vom Geraet werden NACHGEFUELLT, nicht vorher
+    // geholt: Der Dialog soll sofort dastehen. Wer erst laedt und dann
+    // zeigt, laesst den Knopf haengen, solange die Bibliothek
+    // durchsucht wird - und bei ein paar hundert Titeln ist das zu
+    // sehen.
+    //
+    await stemCombineBibliothekLaden();
+
+    document
+        .querySelectorAll("#stem-combine-files .stem-combine-library")
+        .forEach(stemCombineBibliothekFuellen);
 }
 
 document.getElementById("btn-open-stem-combine").addEventListener("click", () => {
@@ -3302,13 +3391,35 @@ async function submitStemCombine() {
         return;
     }
 
-    const files = Array.from(
-        document.querySelectorAll("#stem-combine-files .stem-combine-file-input")
-    )
-        .map((input) => input.files[0])
-        .filter((file) => !!file);
+    //
+    // Die REIHENFOLGE ist die Kanalzuordnung, und sie laeuft ueber
+    // beide Quellen hinweg. Deshalb wird sie ausdruecklich
+    // mitgeschickt: Ohne sie bliebe der Gegenseite nur zu raten, ob
+    // der Upload vor oder hinter der Datei vom Geraet liegt - und die
+    // Stems laegen auf den falschen Kanaelen.
+    //
+    const quellen = [];
+    const uploads = [];
 
-    if (files.length < 2) {
+    Array.from(
+        document.querySelectorAll("#stem-combine-files > div")
+    ).forEach((zeile) => {
+
+        const ausBibliothek = zeile.querySelector(".stem-combine-library");
+        const hochgeladen = zeile.querySelector(".stem-combine-file-input");
+
+        if (ausBibliothek && ausBibliothek.value) {
+            quellen.push({ kind: "library", path: ausBibliothek.value });
+            return;
+        }
+
+        if (hochgeladen && hochgeladen.files[0]) {
+            quellen.push({ kind: "upload" });
+            uploads.push(hochgeladen.files[0]);
+        }
+    });
+
+    if (quellen.length < 2) {
         showStemCombineError(I18N.stem_combine_files_required);
         return;
     }
@@ -3316,7 +3427,9 @@ async function submitStemCombine() {
     const formData = new FormData();
     formData.append("name", name);
     formData.append("start_channel", String(stemCombineStartkanal()));
-    for (const file of files) {
+    formData.append("sources", JSON.stringify(quellen));
+
+    for (const file of uploads) {
         formData.append("files", file);
     }
 

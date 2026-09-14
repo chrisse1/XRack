@@ -128,6 +128,9 @@ def seite_bauen(pruefung: str, vorlauf: str) -> str:
         "          files: teil.files }\n"
         "      : { available: false, path: '', folders: [], files: [] }) };\n"
         "  }\n"
+        "  if (u.indexOf('/api/music/all-files') === 0)\n"
+        "    return { ok: true, json: async () => (\n"
+        "      { files: ['Proben/klick.wav', 'Stems/bass.wav'] }) };\n"
         "  if (u.indexOf('/api/music/browse') === 0)\n"
         "    return { ok: true, json: async () => (\n"
         "      { path: '', folders: ['Proben', 'Konzerte'], files: [] }) };\n"
@@ -420,6 +423,135 @@ assert "2" in geschickt["ergebnis"] and "1" in geschickt["ergebnis"], (
 )
 
 print(f"OK: Kopieren schickt volle Pfade und Ziel ({koerper})")
+
+
+# ====================================================================
+# 5. Stems können vom Gerät kommen, nicht nur aus dem Upload
+#
+# Seit die Dateien vom Stick kommen, liegen die Stems schon auf dem
+# Gerät. Sie dann durch den Browser wieder hochzuladen wäre der Umweg
+# über die Leitung, den der Stick vermeiden sollte - bei Stems geht es
+# um hundert Megabyte aufwärts.
+#
+# Das Heikle ist die REIHENFOLGE: Sie ist die Kanalzuordnung (Quelle 1
+# -> Kanal 1+2) und läuft über beide Quellen hinweg. Sie muss
+# ausdrücklich mitgehen, sonst lägen die Stems auf den falschen
+# Kanälen - und hören würde man das erst beim Üben.
+# ====================================================================
+
+STEMS = """function () {
+
+    const zeilen = Array.from(
+        document.querySelectorAll('#stem-combine-files > div')
+    );
+
+    const gesendet = window.__formulare || [];
+
+    return {
+        zeilen: zeilen.length,
+        auswahlen: zeilen.map((z) => {
+            const s = z.querySelector('.stem-combine-library');
+            return s ? Array.from(s.options).map((o) => o.value) : null;
+        }),
+        upload_gesperrt: zeilen.map(
+            (z) => z.querySelector('.stem-combine-file-input').disabled
+        ),
+        gesendet: gesendet
+    };
+}"""
+
+#
+# Das Formular geht als FormData hinaus - der nachgestellte fetch
+# schreibt seine Felder mit, damit sichtbar wird, was ankommt.
+#
+FORMULAR_MITSCHRIFT = (
+    "window.__formulare = [];"
+    "const echtesFetch = window.fetch;"
+    "window.fetch = async (url, optionen) => {"
+    "  if (optionen && optionen.body instanceof FormData) {"
+    "    const felder = {};"
+    "    optionen.body.forEach((wert, name) => {"
+    "      felder[name] = (felder[name] || []);"
+    "      felder[name].push(typeof wert === 'string' ? wert : 'DATEI');"
+    "    });"
+    "    window.__formulare.push({ url: String(url), felder: felder });"
+    "    return { ok: true, json: async () => ({ success: true }) };"
+    "  }"
+    "  return echtesFetch(url, optionen);"
+    "};"
+)
+
+stems = ausfuehren(
+    STEMS,
+    (
+        FORMULAR_MITSCHRIFT
+        + "await oeffneStemCombine();"
+        #
+        # Kanal 1+2 vom Geraet, Kanal 3+4 ebenfalls - hochgeladen wird
+        # hier nichts, denn eine Datei laesst sich von hier aus nicht
+        # in ein Dateifeld legen.
+        #
+        "const zeilen = document.querySelectorAll("
+        "  '#stem-combine-files > div');"
+        "zeilen[0].querySelector('.stem-combine-library').value ="
+        "  'Proben/klick.wav';"
+        "zeilen[0].querySelector('.stem-combine-library')"
+        "  .dispatchEvent(new Event('change'));"
+        "zeilen[1].querySelector('.stem-combine-library').value ="
+        "  'Stems/bass.wav';"
+        "zeilen[1].querySelector('.stem-combine-library')"
+        "  .dispatchEvent(new Event('change'));"
+        "document.getElementById('stem-combine-name').value = 'Probe';"
+        "await submitStemCombine();"
+    ),
+)
+
+assert stems["zeilen"] >= 2, stems
+
+assert stems["auswahlen"][0] == ["", "Proben/klick.wav", "Stems/bass.wav"], (
+    f"Die Dateien vom Gerät stehen nicht zur Wahl: {stems['auswahlen'][0]}"
+)
+
+#
+# Eins von beidem: Ist eine Datei vom Gerät gewählt, ist das Hochladen
+# gesperrt. Sonst müsste irgendwo eine Vorrangregel stehen, die niemand
+# sieht.
+#
+assert stems["upload_gesperrt"][0] is True, (
+    "Trotz gewählter Datei vom Gerät lässt sich noch hochladen."
+)
+
+anfragen = [
+    f for f in stems["gesendet"]
+    if f["url"].startswith("/api/recordings/combine")
+]
+
+assert len(anfragen) == 1, (
+    f"Es ging {len(anfragen)}-mal etwas hinaus: {stems['gesendet']}"
+)
+
+felder = anfragen[0]["felder"]
+
+assert "sources" in felder, (
+    f"Die Reihenfolge wurde nicht mitgeschickt: {felder}"
+)
+
+reihenfolge = json.loads(felder["sources"][0])
+
+assert reihenfolge == [
+    {"kind": "library", "path": "Proben/klick.wav"},
+    {"kind": "library", "path": "Stems/bass.wav"},
+], (
+    f"Die Reihenfolge kam als {reihenfolge} heraus - sie ist die "
+    f"Kanalzuordnung."
+)
+
+assert "files" not in felder, (
+    f"Es wurde etwas hochgeladen, obwohl beide Dateien auf dem Gerät "
+    f"liegen: {felder}"
+)
+
+print("OK: Stems vom Gerät gehen mit ihrer Reihenfolge hinaus")
 
 
 print("Alle Tests des USB-Dialogs erfolgreich.")

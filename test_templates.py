@@ -153,6 +153,52 @@ for pfad in sorted(VORLAGEN.rglob("*.html")):
             f"({len(baum.modale)} Modale, keines verschachtelt)"
         )
 
+# ====================================================================
+# Und das JavaScript muss sich überhaupt laden lassen
+#
+# Anlass: Beim Kommentieren ist ein "#" statt "//" in xrack.js
+# gerutscht. Damit war die GANZE Datei ungültig - kein einziger
+# Knopf tat noch etwas. Aufgefallen ist es nur, weil zufällig eine
+# Browser-Prüfung lief und "updateUsbEjectButton is not defined"
+# meldete; ohne die wäre es auf dem Gerät aufgefallen.
+#
+# Eine Syntaxprüfung kostet nichts und findet genau das. Ohne node
+# wird übersprungen statt zu scheitern - auf dem Pi ist keiner
+# installiert, und dort soll die Testreihe durchlaufen.
+# ====================================================================
+
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+
+node = shutil.which("node") or shutil.which("nodejs")
+
+if node is None:
+    print("(übersprungen: kein node - JavaScript wird nicht geprüft)")
+
+else:
+
+    for name in ("xrack.js",):
+
+        pfad = VORLAGEN.parent / "static" / "js" / name
+
+        lauf = subprocess.run(
+            [node, "--check", str(pfad)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+        if lauf.returncode != 0:
+
+            fehler = True
+
+            print(f"FEHLER: {name} lässt sich nicht laden:")
+            print(lauf.stderr.strip()[:800])
+
+        else:
+            print(f"OK: {name} - Syntax in Ordnung")
+
+
 if fehler:
     sys.exit(1)
 

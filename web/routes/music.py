@@ -84,6 +84,39 @@ def music_browse(
     }
 
 
+@router.get("/api/music/all-files")
+def music_all_files(request: Request):
+    """
+    Alle Musikdateien der Bibliothek, rekursiv und mit ihrem Pfad.
+
+    Gebraucht beim Erstellen eines Übungsmixes: Seit die Dateien auch
+    vom USB-Stick kommen können, liegen die Stems schon auf dem Gerät -
+    sie dann durch den Browser wieder hochzuladen, wäre der Umweg über
+    die Leitung, der gerade vermieden werden sollte.
+
+    Rekursiv und flach in einer Liste (nicht als Baum): In diesem
+    Dialog wird EINE Datei je Kanalpaar gewählt, und eine Liste mit
+    Ordnerpfad davor ist dafür schneller als ein zweiter Dateimanager
+    im Dialog.
+    """
+
+    application = request.app.state.application
+
+    bibliothek = application.music_library
+
+    wurzel = bibliothek.resolve("")
+
+    if wurzel is None:
+        return {"files": []}
+
+    dateien = sorted(
+        str(pfad.relative_to(wurzel))
+        for pfad in bibliothek.find_audio_files(wurzel)
+    )
+
+    return {"files": dateien}
+
+
 @router.post("/api/music/channel")
 def music_channel(
     selection: MusicChannelSelection,

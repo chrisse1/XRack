@@ -327,8 +327,15 @@ try:
             self.stem_combine_state = {"active": False}
             self.gestartet = []
 
-        def _run_stem_combine(self, name, file_paths, start_channel=1):
+        def _run_stem_combine(self, name, file_paths, start_channel=1,
+                              temporaer=None):
+            #
+            # `temporaer` sagt, was hinterher weggeraeumt werden darf -
+            # seit ein Stem auch aus der Musikbibliothek kommen kann,
+            # ist das nicht mehr dasselbe wie "alle Quellen".
+            #
             self.gestartet.append((name, len(file_paths), start_channel))
+            self.aufzuraeumen = temporaer
 
     faelle = (
         (18, 1, 4, True,  "vier Stems ab Kanal 1 auf einem 18er"),

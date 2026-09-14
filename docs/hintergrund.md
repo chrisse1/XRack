@@ -966,6 +966,29 @@ versteht warum. Draußen bleibt nur, was Betriebssysteme auf jedem Stick
 hinterlassen (`System Volume Information`, `._…`) — dort sucht niemand
 etwas.
 
+**Und die Stems kommen von dort weiter.** Ein Übungsmix entsteht aus
+zwei bis acht Stereodateien, und die mussten bisher alle durch den
+Browser hochgeladen werden. Seit sie vom Stick kommen können, liegen
+sie schon auf dem Gerät — sie dann wieder hochzuladen wäre genau der
+Umweg über die Leitung, den der Stick vermeiden sollte; bei Stems geht
+es um hundert Megabyte aufwärts. Im Erstellen-Dialog steht deshalb je
+Kanalpaar beides zur Wahl: hochladen **oder** eine Datei vom Gerät.
+Eins sperrt das andere — sonst müsste irgendwo eine Vorrangregel
+stehen, die niemand sieht.
+
+Zwei Dinge daran sind heikel:
+
+- **Die Reihenfolge ist die Kanalzuordnung** (Quelle 1 → Kanal 1+2) und
+  läuft über beide Quellen hinweg. Sie geht deshalb ausdrücklich mit
+  (`sources` als JSON-Liste); ohne sie bliebe der Gegenseite nur zu
+  raten, ob der Upload vor oder hinter der Datei vom Gerät liegt — und
+  die Stems lägen auf den falschen Kanälen. Hören würde man das erst
+  beim Üben.
+- **Weggeräumt werden nur die Uploads.** Sie sind Kopien in einem
+  Scratch-Verzeichnis. Räumte XRack weiter „alle Quellen" weg,
+  verschwände mit dem fertigen Übungsmix das Material, aus dem er
+  entstanden ist.
+
 In der Oberfläche merkt sich die Auswahl **volle Pfade, keine Namen**.
 Wer im Hauptordner etwas anhakt, in einen Ordner geht und dort noch
 etwas anhakt, kopiert sonst `01 Intro.mp3` aus dem Hauptordner — wo es

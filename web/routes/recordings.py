@@ -3,6 +3,7 @@ Aufnehmen, Soundcheck, Pegel - und alles, was mit den
 fertigen Dateien passiert.
 """
 
+import json
 import shutil
 import tempfile
 
@@ -424,23 +425,40 @@ def upload_recordings(
 def combine_recordings(
     request: Request,
     name: str = Form(...),
-    files: list[UploadFile] = File(...),
+    files: list[UploadFile] = File(default=[]),
     start_channel: int = Form(1),
+    sources: str = Form(""),
 ):
     """
-    Übungsmix: kombiniert mehrere hochgeladene Stereo-Stems (siehe
-    core/stem_combiner.py) - Reihenfolge der Uploads bestimmt die
-    Kanalzuordnung (Datei 1 -> Kanal 1+2, ...). Kopiert die Uploads
-    zunächst in ein Scratch-Verzeichnis, die eigentliche Arbeit läuft
-    danach im Hintergrund (siehe Application.start_stem_combine()) -
-    Fortschritt über GET /api/recordings/combine/status abfragbar.
+    Übungsmix: legt mehrere Stereo-Stems zusammen (siehe
+    core/stem_combiner.py). Die Reihenfolge bestimmt die
+    Kanalzuordnung (Quelle 1 -> Kanal 1+2, ...).
+
+    Eine Quelle kann von zwei Orten kommen:
+
+      - HOCHGELADEN vom Rechner oder Tablet. Sie landet in einem
+        Scratch-Verzeichnis und wird nach getaner Arbeit gelöscht.
+      - Aus der MUSIKBIBLIOTHEK, also von einer Datei, die schon auf
+        dem Gerät liegt. Seit die Stems auch vom USB-Stick kommen
+        können, ist das der übliche Weg - sie dann durch den Browser
+        wieder hochzuladen wäre genau der Umweg über die Leitung, den
+        der Stick vermeiden sollte. Diese Datei wird NICHT gelöscht.
+
+    `sources` sagt, in welcher REIHENFOLGE beides zusammengehört - als
+    JSON-Liste aus {"kind": "upload"} und
+    {"kind": "library", "path": "Proben/klick.wav"}. Ohne die Angabe
+    bliebe nur zu raten, ob der Upload vor oder hinter der Datei aus
+    der Bibliothek liegt, und die Stems lägen auf den falschen Kanälen.
+
+    Fehlt `sources` ganz, gilt der alte Weg: alles Uploads, in ihrer
+    Reihenfolge.
     """
 
     application = request.app.state.application
 
     scratch_dir = Path(tempfile.mkdtemp(prefix="xrack_stem_combine_"))
 
-    file_paths = []
+    hochgeladen = []
 
     for index, upload in enumerate(files):
 
@@ -451,20 +469,84 @@ def combine_recordings(
         with destination.open("wb") as target:
             shutil.copyfileobj(upload.file, target)
 
-        file_paths.append(destination)
+        hochgeladen.append(destination)
+
+    def aufraeumen_und_melden(meldung: str) -> dict:
+
+        for pfad in hochgeladen:
+            pfad.unlink(missing_ok=True)
+
+        try:
+            scratch_dir.rmdir()
+        except OSError:
+            pass
+
+        return {"success": False, "message": meldung}
+
+    if not sources:
+        reihenfolge = [{"kind": "upload"} for _ in hochgeladen]
+
+    else:
+
+        try:
+            reihenfolge = json.loads(sources)
+
+        except ValueError:
+            return aufraeumen_und_melden("Die Reihenfolge ist unlesbar.")
+
+        if not isinstance(reihenfolge, list):
+            return aufraeumen_und_melden("Die Reihenfolge ist unlesbar.")
+
+    file_paths = []
+
+    offene_uploads = list(hochgeladen)
+
+    for eintrag in reihenfolge:
+
+        art = (eintrag or {}).get("kind") if isinstance(eintrag, dict) else None
+
+        if art == "upload":
+
+            if not offene_uploads:
+                return aufraeumen_und_melden(
+                    "Es fehlt eine hochgeladene Datei."
+                )
+
+            file_paths.append(offene_uploads.pop(0))
+
+        elif art == "library":
+
+            #
+            # Aufgeloest wird gegen die Bibliothek, nicht gegen das
+            # Dateisystem: Was vom Browser kommt, darf nicht
+            # bestimmen, WO gelesen wird.
+            #
+            pfad = application.music_library.resolve(
+                str(eintrag.get("path", ""))
+            )
+
+            if pfad is None or not pfad.is_file():
+                return aufraeumen_und_melden(
+                    "Eine Datei aus der Bibliothek gibt es nicht."
+                )
+
+            file_paths.append(pfad)
+
+        else:
+            return aufraeumen_und_melden("Unbekannte Quelle.")
 
     success, message = application.start_stem_combine(
         name,
         file_paths,
         start_channel,
+        #
+        # Weggeraeumt wird nur, was hochgeladen wurde.
+        #
+        temporaer=hochgeladen,
     )
 
     if not success:
-
-        for path in file_paths:
-            path.unlink(missing_ok=True)
-
-        scratch_dir.rmdir()
+        return aufraeumen_und_melden(message)
 
     return {
         "success": success,

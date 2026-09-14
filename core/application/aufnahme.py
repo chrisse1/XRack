@@ -216,6 +216,7 @@ class AufnahmeMixin:
         name: str,
         file_paths: list[Path],
         start_channel: int = 1,
+        temporaer: list[Path] | None = None,
     ) -> tuple[bool, str]:
         """
         Startet die Zusammenführung mehrerer Stereo-Stems (z.B. Click,
@@ -230,6 +231,16 @@ class AufnahmeMixin:
         Interfaces der Mix später liegen soll. Er wandert in den
         Dateinamen und wird beim Üben von dort gelesen - gewählt wird
         er einmal hier und nicht vor jedem Üben neu.
+
+        `temporaer` sagt, welche der Dateien danach WEGGERÄUMT werden
+        dürfen. Das ist nötig geworden, seit ein Stem auch aus der
+        Musikbibliothek kommen kann: Früher waren alle Quellen
+        hochgeladene Kopien, und am Ende wurden schlicht alle gelöscht.
+        Täte es das weiter, verschwände mit dem fertigen Übungsmix die
+        Datei, aus der er entstanden ist.
+
+        Ohne Angabe bleibt es beim alten Verhalten (alles war ein
+        Upload).
         """
 
         name = name.strip()
@@ -287,7 +298,12 @@ class AufnahmeMixin:
 
         thread = threading.Thread(
             target=self._run_stem_combine,
-            args=(name, file_paths, start_channel),
+            args=(
+                name,
+                file_paths,
+                start_channel,
+                list(file_paths) if temporaer is None else list(temporaer),
+            ),
             daemon=True,
         )
         thread.start()
@@ -422,6 +438,7 @@ class AufnahmeMixin:
         name: str,
         file_paths: list[Path],
         start_channel: int = 1,
+        temporaer: list[Path] | None = None,
     ) -> None:
 
         try:
@@ -459,12 +476,19 @@ class AufnahmeMixin:
             with self._stem_combine_lock:
                 self.stem_combine_state["active"] = False
 
-            for path in file_paths:
+            #
+            # NUR die hochgeladenen Kopien, nicht die Dateien aus der
+            # Bibliothek: Sonst verschwaende mit dem fertigen
+            # Uebungsmix die Datei, aus der er entstanden ist.
+            #
+            aufraeumen = list(file_paths) if temporaer is None else temporaer
+
+            for path in aufraeumen:
                 path.unlink(missing_ok=True)
 
-            if file_paths:
+            if aufraeumen:
                 try:
-                    file_paths[0].parent.rmdir()
+                    aufraeumen[0].parent.rmdir()
                 except OSError:
                     pass
 

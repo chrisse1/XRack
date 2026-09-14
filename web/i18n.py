@@ -257,6 +257,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "stem_combine_name_label": "Name",
         "stem_combine_name_placeholder": "z.B. Songtitel",
         "stem_combine_channel_label": "Kanal {a}+{b}:",
+        #
+        # Ein Stem kann auch schon auf dem Gerät liegen - seit die
+        # Dateien vom USB-Stick kommen können, ist das der übliche Weg.
+        #
+        "stem_combine_from_device": "… oder Datei vom Gerät wählen",
+        "stem_combine_device_empty": "(keine Dateien auf dem Gerät)",
         "btn_stem_combine_add_file": "Weitere Datei",
         "btn_stem_combine_create": "Übungsmix erstellen",
         "stem_combine_in_progress": "Übungsmix wird erstellt...",
@@ -1127,6 +1133,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "stem_combine_name_label": "Name",
         "stem_combine_name_placeholder": "e.g. song title",
         "stem_combine_channel_label": "Channel {a}+{b}:",
+        "stem_combine_from_device": "… or pick a file on the device",
+        "stem_combine_device_empty": "(no files on the device)",
         "btn_stem_combine_add_file": "Add another file",
         "btn_stem_combine_create": "Create practice mix",
         "stem_combine_in_progress": "Creating practice mix...",
