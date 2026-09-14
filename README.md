@@ -2,7 +2,7 @@
 
 *[English](#english) | [Deutsch](#deutsch)*
 
-Aufnehmen, abspielen, Musik, Pult-Fernbedienung und Licht — für
+Aufnehmen, üben, abspielen, Musik, Pult-Fernbedienung und Licht — für
 Behringer-Mischpulte der X-Serie, auf einem Raspberry Pi, bedient über
 den Browser.
 
@@ -103,15 +103,34 @@ without the whole installer:
 
 #### Recording and playback
 
+- **Two watchdogs for the recording** — XRack measures the sample rate
+  that actually arrives and speaks up when it does not match the
+  setting (otherwise the recording turns out too fast or too slow, and
+  there is no way to notice: over USB the X-series always reports its
+  whole range). And the free space stands in the card as remaining
+  time: 32 channels at 48 kHz are about 22 GB an hour. When it gets
+  tight the recording is **ended** in time instead of cut off — a
+  closed file is readable, an interrupted one is not.
 - **Virtual soundcheck** — record every channel straight off the desk,
   then play it back on exactly the same channels. The band can soundcheck
   without playing.
+- **A recording window** — how many channels, and from which one on.
+  Eight channels from channel 17 on an X32 are eight tracks, not
+  twenty-four with sixteen empty ones. The starting channel travels
+  with the file, in its name, so the virtual soundcheck puts the
+  recording back where it came from; files without it start at channel
+  1 as before.
 - **Practice mix** — combine several stereo files (a click track, your own
   instrument, the rest of the band) into one multichannel recording. File
   one lands on channels 1+2, file two on 3+4, and so on. At the desk you
-  then dial in exactly what you want to hear.
-- **Upload and copy** — add `.w64` files through the web interface, and
-  copy any recording to a plugged-in USB stick with one button.
+  then dial in exactly what you want to hear. The parts may come from
+  your computer or already be sitting in XRack's music library.
+- **Files in and out** — upload `.w64` files through the web interface,
+  copy any recording onto a plugged-in USB stick with one button, and
+  browse a stick in the interface to copy *from* it: single files or a
+  whole folder with everything underneath — music into the library,
+  recordings to the recordings. Whether the space is there, XRack says
+  beforehand.
 
 Recordings are Wave64 (`.w64`), which does not have the 4 GB limit of
 plain WAV — with 18 channels that is reached after about 26 minutes.
@@ -128,12 +147,51 @@ plain WAV — with 18 channels that is reached after about 26 minutes.
 Both cards have their own level control and mute for the pair they use,
 so you do not have to scroll to the channel strips.
 
+#### Practising
+
+Practising has its own card since XRack 3.0 — and it shares the music
+player's place, with a switch at the top between **Music** and
+**Practice**. Not side by side: the console takes exactly one playback
+stream, so two cards would offer something the hardware cannot do.
+
+- **Play a practice mix** with everything the music player has and the
+  soundcheck never did: pause, seek, a position slider, and *Repeat*
+  for the passage that is not sitting yet.
+- **Record along** — one switch, and starting the mix starts the
+  recording with it. Which channels it records is the recording window
+  from above (two channels from your own instrument's channel is the
+  usual case), and because both begin in the same moment there is no
+  drift to correct.
+- **Hear your own take against the mix** — pick a take in the practice
+  card and XRack lays both files into the same stream: the mix on its
+  channels, the take on its own. Nothing is rewritten, every attempt
+  can be heard against the mix, and a bad one is simply deleted.
+- **The way through the console** costs a few milliseconds, so the take
+  sits a little behind the mix. XRack measures that instead of guessing:
+  a click goes out, the same channel comes back, and where the peak
+  lands is the offset. On the test rig it was 10 to 19 ms. The measured
+  value can be kept and is applied when listening back.
+- **Make one file out of it** — when an attempt sits, mix and take are
+  written into a new practice mix to take with you.
+
+Recording while practising is expressly allowed — one playback stream,
+one recording stream, which is exactly what the console can do.
+Practice, music and soundcheck exclude each other, and XRack holds that
+where it belongs rather than only in the interface.
+
 #### Working the console
 
 - **Channel strips** — the desk's own faders and mutes with their channel
   names, plus the master. Locked until you open the padlock, and they lock
   themselves again after a while (you set whether and after how long).
   While locked, not a single packet goes onto the network.
+- **A/D or USB per channel** — the channel strips carry the input
+  switch the desk has: the analogue input, or the channel coming back
+  out of XRack over USB. That is the one the virtual soundcheck needs,
+  and until now it meant reaching for the console. Linked channels
+  switch as a pair, and the aux return (17+18) has it too. X-Air only —
+  the X32 does this differently, and XRack does not guess at a command
+  it has not seen a console answer.
 - **Snapshots** — recall the snapshots (X32: scenes) stored in the
   console. This is the most far-reaching command XRack sends, so it sits
   behind the same lock and asks first.
@@ -249,6 +307,10 @@ survives restarts.
 - **Diagnostic recording** — a switch that logs in the background how XRack
   and the network are doing, for faults that only show up now and then. It
   survives a restart and the log downloads straight from the settings.
+  It also measures when the process itself stops answering, and notes
+  whether the sound kept running through that stretch — which tells a
+  blocked interpreter apart from a web server that hung on its own. No
+  amount of thinking about it could; counting can.
 
 ### Trying it without hardware
 
@@ -436,13 +498,22 @@ sie sich einzeln, ohne den ganzen Installer:
 - **Virtueller Soundcheck** — alle Kanäle direkt vom Pult aufnehmen und
   danach auf genau denselben Kanälen wieder abspielen. Die Band kann
   soundchecken, ohne zu spielen.
+- **Ein Aufnahmefenster** — wie viele Kanäle, und ab welchem. Acht
+  Kanäle ab Kanal 17 am X32 sind acht Spuren und nicht vierundzwanzig
+  mit sechzehn leeren. Der Startkanal reist im Dateinamen mit, damit
+  der virtuelle Soundcheck die Aufnahme dorthin zurücklegt, wo sie
+  herkam; Dateien ohne ihn beginnen wie bisher bei Kanal 1.
 - **Übungsmix** — mehrere Stereo-Dateien (Click, das eigene Instrument,
   der Rest der Band) zu einer Mehrkanal-Aufnahme zusammenfassen. Datei 1
   landet auf Kanal 1+2, Datei 2 auf 3+4 und so weiter. Am Pult stellt man
-  sich damit ein, was man beim Üben hören will.
-- **Hochladen und kopieren** — `.w64`-Dateien über die Weboberfläche in
-  die Liste laden, und jede Aufnahme mit einem Knopf auf einen
-  angesteckten USB-Stick kopieren.
+  sich damit ein, was man beim Üben hören will. Die Teile dürfen vom
+  Rechner kommen oder schon in XRacks Musikbibliothek liegen.
+- **Dateien hinein und hinaus** — `.w64`-Dateien über die Weboberfläche
+  hochladen, jede Aufnahme mit einem Knopf auf einen angesteckten
+  USB-Stick kopieren, und den Stick in der Oberfläche durchsehen, um
+  *von* ihm zu kopieren: einzelne Dateien oder einen ganzen Ordner mit
+  allem, was darunter liegt — Musik in die Bibliothek, Aufnahmen zu den
+  Aufnahmen. Ob der Platz reicht, sagt XRack vorher.
 
 Aufnahmen liegen als Wave64 (`.w64`). Dieses Format hat die 4-GB-Grenze
 von gewöhnlichem WAV nicht — die wäre bei 18 Kanälen nach rund 26
@@ -463,6 +534,41 @@ Beide Karten haben einen eigenen Regler samt Stummschaltung für ihr
 Kanalpaar — fürs Lautermachen muss man also nicht zu den Kanalzügen
 scrollen.
 
+#### Üben
+
+Üben ist seit XRack 3.0 eine eigene Karte — und sie teilt sich den
+Platz mit dem Musikspieler, oben ein Umschalter zwischen **Musik** und
+**Üben**. Nicht nebeneinander: Das Pult nimmt genau einen
+Wiedergabestrom, zwei Karten würden also etwas anbieten, was die
+Hardware nicht kann.
+
+- **Einen Übungsmix abspielen**, mit allem, was der Musikspieler kann
+  und der Soundcheck nie konnte: anhalten, spulen, ein Positionsregler
+  und *Wiederholen* für die Stelle, die noch nicht sitzt.
+- **Mitschneiden** — ein Schalter, und mit dem Mix startet auch die
+  Aufnahme. Welche Kanäle sie mitnimmt, ist das Aufnahmefenster von
+  oben (zwei Kanäle ab dem Kanal des eigenen Instruments ist der
+  Normalfall), und weil beides im selben Moment beginnt, gibt es keinen
+  Versatz zu korrigieren.
+- **Den eigenen Versuch gegen den Mix hören** — in der Üben-Karte einen
+  Mitschnitt wählen, und XRack legt beide Dateien in denselben Strom:
+  den Mix auf seine Kanäle, den Mitschnitt auf seine. Nichts wird neu
+  geschrieben, jeder Versuch lässt sich gegen den Mix anhören, und ein
+  missratener ist einfach gelöscht.
+- **Der Weg durch das Pult** kostet einige Millisekunden, der
+  Mitschnitt liegt also ein Stück hinter dem Mix. XRack misst das,
+  statt zu raten: Ein Klick geht hinaus, derselbe Kanal kommt zurück,
+  und wo der Ausschlag landet, ist der Versatz. Am Testgerät waren es
+  10 bis 19 ms. Der gemessene Wert lässt sich merken und wird beim
+  Zusammenhören angewandt.
+- **Eine Datei daraus machen** — wenn ein Versuch sitzt, werden Mix und
+  Mitschnitt zu einem neuen Übungsmix zum Mitnehmen geschrieben.
+
+Aufnehmen während des Übens ist ausdrücklich erlaubt — ein
+Wiedergabe-, ein Aufnahmestrom, genau das kann das Pult. Üben, Musik
+und Soundcheck schließen einander aus, und XRack hält das dort fest, wo
+es hingehört, nicht nur in der Oberfläche.
+
 #### Das Pult bedienen
 
 - **Kanalzüge** — die Fader und Stummschaltungen des Pults samt seiner
@@ -470,6 +576,14 @@ scrollen.
   Schloss öffnet, und sie sperren sich von selbst wieder (ob überhaupt
   und nach wie vielen Sekunden, stellt man ein). Im gesperrten Zustand
   geht kein einziges Paket ins Netz.
+- **A/D oder USB je Kanal** — die Kanalzüge tragen den
+  Eingangsschalter, den das Pult auch hat: den analogen Eingang, oder
+  den Kanal, der über USB aus XRack zurückkommt. Genau den braucht der
+  virtuelle Soundcheck, und bisher musste man dafür ans Pult greifen.
+  Verkoppelte Kanäle schalten als Paar, und der Aux-Rückweg (17+18) hat
+  ihn auch. Nur an der X-Air-Serie — das X32 macht das anders, und
+  XRack rät nicht bei einem Befehl, auf den es noch kein Pult hat
+  antworten sehen.
 - **Snapshots** — die im Pult gespeicherten Snapshots (beim X32: Szenen)
   aufrufen. Das ist der eingreifendste Befehl, den XRack ans Pult
   schickt: Er hängt an derselben Sperre und fragt vorher nach.
@@ -594,6 +708,11 @@ Lichtkarte sagt das auch. Die Zuordnung übersteht Neustarts.
   mitschreibt, wie es XRack und dem Netzwerk geht. Gedacht für Fehler,
   die nur sporadisch auftreten: Der Schalter übersteht einen Neustart,
   und die Aufzeichnung lädt man direkt aus den Einstellungen herunter.
+  Gemessen wird dabei auch, wann der Prozess selbst nicht mehr
+  antwortet — und dazu vermerkt, ob in dieser Zeit Ton geflossen ist.
+  Das unterscheidet einen blockierten Interpreter von einem Webserver,
+  der für sich hängt. Durch Nachdenken war das nicht zu entscheiden,
+  durch Zählen schon.
 
 ### Ohne Hardware ausprobieren
 

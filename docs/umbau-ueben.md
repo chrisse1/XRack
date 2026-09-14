@@ -1,25 +1,32 @@
 # Umbau: Üben als eigene Karte (Version 3.0)
 
-Dieses Dokument gehoert zum Zweig `v3-ueben` und wird mit dem Umbau
-fortgeschrieben. Es steht im Projekt und nicht in einem Chatverlauf,
-weil der Umbau ueber mehrere Sitzungen laeuft: Wer hier weiterarbeitet
-- ich beim naechsten Mal oder jemand anderes -, soll den Stand und vor
-allem die BEGRUENDUNGEN vorfinden, nicht nur das Ergebnis.
+Dieses Dokument begleitete den Umbau auf dem Zweig `v3-ueben`. Es steht
+im Projekt und nicht in einem Chatverlauf, weil der Umbau über mehrere
+Sitzungen lief: Wer hier weiterarbeitet - ich beim nächsten Mal oder
+jemand anderes -, soll den Stand und vor allem die BEGRÜNDUNGEN
+vorfinden, nicht nur das Ergebnis.
 
-**Stand:** Stufen 1 bis 4 gebaut, dazu der Gleichlauf beim
-Zusammenhoeren samt Messung und die getrennte Dateiverwaltung
-(3.0.0-dev11). Das Aufnahmefenster steht und ist am
-Geraet abgenommen; der Musikspieler spielt Uebungsmixe mehrkanalig mit
-Spulen und Schleife; die Karte hat den Umschalter Musik | Ueben; das
-Geuebte laesst sich mitschneiden und zusammen mit dem Mix wieder
-abspielen; die Sperrmatrix steht als Tabelle im Versuch. Offen: die
-Messung der Laufzeit durch das Pult. Stufe 5 (aus Mix und Versuch eine
-Datei schreiben) ist zurueckgestellt - beim Testen war sie nicht
-wichtig, die Laufzeit dafuer umso mehr.
+**Stand: fertig.** Alles unten Beschriebene ist gebaut, am Gerät
+abgenommen und in 3.0.0 nach `main` gegangen; der Zweig `v3-ueben` ist
+danach gelöscht worden. Gebaut sind die Stufen 1 bis 5, die Messung der
+Laufzeit durch das Pult (10 bis 19 ms am Testgerät), die getrennte
+Dateiverwaltung und die Sperrmatrix als Tabelle im Versuch.
 
-**Versionen:** Auf diesem Zweig 3.0.0-dev1, -dev2 ... je Stufe. Wer
-so eine Fassung auf dem Geraet hat, sieht am Namen, dass es eine
-Vorschau ist. Beim Zusammenfuehren nach `main` wird daraus 3.0.0.
+Dazu kam, was im Plan unten noch nicht steht, weil es sich erst beim
+Testen ergab:
+
+- der Eingangsschalter A/D ↔ USB in den Kanalzügen (X-Air), vorher am
+  Pult selbst erfragt statt einer Bibliothek geglaubt,
+- das Kopieren VOM USB-Stick, rekursiv, mit Ordnerwahl im Dialog,
+- Stems, die schon auf dem Gerät liegen dürfen,
+- die Stillstands-Wache, die misst, wann der Prozess nicht mehr
+  antwortet, und dazu vermerkt, ob Ton geflossen ist,
+- der Umzug der Testreihe nach `tests/`.
+
+Was der Plan unten anders vorsah als das Gebaute, steht bei der
+jeweiligen Stufe. Die Versionsangabe ganz unten („2.11.0 bis 2.14.0")
+ist von der Wirklichkeit überholt worden: Der Umbau lief als
+3.0.0-dev1 bis -dev32 und wurde als 3.0.0 zusammengeführt.
 
 ---
 
