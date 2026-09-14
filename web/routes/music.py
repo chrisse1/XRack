@@ -38,6 +38,29 @@ class MusicChannelSelection(BaseModel):
     start_channel: int
 
 
+class PlayerModeSelection(BaseModel):
+    mode: str
+
+
+class PracticeSelection(BaseModel):
+    filename: str
+    repeat: bool = False
+    record: bool = False
+    take: str = ""
+
+
+class PracticeRecordSelection(BaseModel):
+    record: bool
+
+
+class PracticeOffsetSelection(BaseModel):
+    offset_ms: int
+
+
+class PracticeRepeatSelection(BaseModel):
+    repeat: bool
+
+
 @router.get("/api/music/browse")
 def music_browse(
     request: Request,
@@ -59,6 +82,39 @@ def music_browse(
         "folders": listing.folders,
         "files": listing.files,
     }
+
+
+@router.get("/api/music/all-files")
+def music_all_files(request: Request):
+    """
+    Alle Musikdateien der Bibliothek, rekursiv und mit ihrem Pfad.
+
+    Gebraucht beim Erstellen eines Übungsmixes: Seit die Dateien auch
+    vom USB-Stick kommen können, liegen die Stems schon auf dem Gerät -
+    sie dann durch den Browser wieder hochzuladen, wäre der Umweg über
+    die Leitung, der gerade vermieden werden sollte.
+
+    Rekursiv und flach in einer Liste (nicht als Baum): In diesem
+    Dialog wird EINE Datei je Kanalpaar gewählt, und eine Liste mit
+    Ordnerpfad davor ist dafür schneller als ein zweiter Dateimanager
+    im Dialog.
+    """
+
+    application = request.app.state.application
+
+    bibliothek = application.music_library
+
+    wurzel = bibliothek.resolve("")
+
+    if wurzel is None:
+        return {"files": []}
+
+    dateien = sorted(
+        str(pfad.relative_to(wurzel))
+        for pfad in bibliothek.find_audio_files(wurzel)
+    )
+
+    return {"files": dateien}
 
 
 @router.post("/api/music/channel")
@@ -111,6 +167,120 @@ def music_play_file(
 
     return {
         "success": success
+    }
+
+
+@router.post("/api/player/mode")
+def set_player_mode(auswahl: PlayerModeSelection, request: Request):
+    """
+    Zwischen Musikspieler und Ueben umschalten.
+
+    Die Karte tauscht dabei ihre Quelle aus - deshalb nicht, solange
+    etwas laeuft (siehe Application.set_player_mode).
+    """
+
+    application = request.app.state.application
+
+    erfolg, meldung = application.set_player_mode(auswahl.mode)
+
+    return {
+        "success": erfolg,
+        "message": meldung,
+    }
+
+
+@router.post("/api/practice/start")
+def start_practice(auswahl: PracticeSelection, request: Request):
+    """Einen Uebungsmix abspielen."""
+
+    application = request.app.state.application
+
+    erfolg, meldung = application.start_practice(
+        auswahl.filename,
+        auswahl.repeat,
+        auswahl.record,
+        auswahl.take,
+    )
+
+    return {
+        "success": erfolg,
+        "message": meldung,
+    }
+
+
+@router.post("/api/practice/stop")
+def stop_practice(request: Request):
+    """
+    Das Ueben beenden - samt Mitschnitt, wenn dieser Lauf ihn
+    gestartet hat.
+    """
+
+    application = request.app.state.application
+
+    return {
+        "success": application.stop_practice()
+    }
+
+
+@router.post("/api/practice/record")
+def set_practice_record(auswahl: PracticeRecordSelection, request: Request):
+    """Den Schalter "Mitschneiden" merken."""
+
+    application = request.app.state.application
+
+    return {
+        "success": application.set_practice_record(auswahl.record)
+    }
+
+
+@router.post("/api/practice/offset")
+def set_practice_offset(auswahl: PracticeOffsetSelection, request: Request):
+    """
+    Die Laufzeit durch das Pult, um die der Mitschnitt beim
+    Zusammenhoeren vorgezogen wird.
+    """
+
+    application = request.app.state.application
+
+    return {
+        "success": application.set_practice_offset(auswahl.offset_ms)
+    }
+
+
+@router.post("/api/practice/latency")
+def start_latency_measurement(request: Request):
+    """
+    Die Laufzeit durch das Pult messen (Klick hin, Klick zurueck).
+
+    Laeuft im Hintergrund - der Fortschritt kommt ueber
+    GET /api/practice/latency.
+    """
+
+    application = request.app.state.application
+
+    erfolg, meldung = application.start_laufzeit_messung()
+
+    return {
+        "success": erfolg,
+        "message": meldung,
+    }
+
+
+@router.get("/api/practice/latency")
+def latency_status(request: Request):
+    """Was die Laufzeitmessung gerade tut."""
+
+    return request.app.state.application.laufzeit_status()
+
+
+@router.post("/api/practice/repeat")
+def set_practice_repeat(auswahl: PracticeRepeatSelection, request: Request):
+    """Die Schleife ein- oder ausschalten."""
+
+    application = request.app.state.application
+
+    return {
+        "success": application.set_practice_repeat(auswahl.repeat)
     }
 
 

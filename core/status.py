@@ -40,6 +40,12 @@ class SystemStatus(BaseModel):
     uptime: str = ""
     audio_device: str = "Kein Audio-Interface"
     record_channels: int = 18
+
+    #
+    # Der erste aufgenommene Kanal (1-basiert). Aufgenommen wird ein
+    # Fenster, nicht immer der Anfang.
+    #
+    record_start_channel: int = 1
     record_sample_rate: int = 0
     record_bits_per_sample: int = 0
 
@@ -91,6 +97,34 @@ class SystemStatus(BaseModel):
     music_position: float = 0.0
     music_duration: float = 0.0
     music_preferred_start_channel: int = 1
+
+    #
+    # Die Karte zeigt entweder den Musikspieler oder das Ueben.
+    #
+    player_mode: str = "music"
+    practice_repeat: bool = False
+
+    #
+    # practice_record ist der SCHALTER (soll mitgeschnitten werden),
+    # practice_recording der ZUSTAND (dieser Uebungslauf nimmt gerade
+    # auf). Zwei Dinge, die leicht zusammenfallen - und dann wuerde
+    # der Schalter beim Stoppen umspringen.
+    #
+    practice_record: bool = False
+    practice_recording: bool = False
+
+    #
+    # Zu jedem Uebungsmix seine Mitschnitte. Eine Abbildung und keine
+    # Liste: In "Dazu hoeren" stehen nur die Versuche zum gerade
+    # gewaehlten Stueck.
+    #
+    practice_takes: dict[str, list[str]] = {}
+
+    #
+    # Um wie viel der Mitschnitt beim Zusammenhoeren vorgezogen wird.
+    #
+    practice_offset_ms: int = 0
+    practice_mixes: list[str] = []
 
     bluetooth_streaming: bool = False
     bluetooth_device_name: str = ""

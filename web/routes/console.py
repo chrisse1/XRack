@@ -44,6 +44,15 @@ class MuteSelection(BaseModel):
     muted: bool
 
 
+class UsbSelection(BaseModel):
+    channel: int
+    #
+    # True = der Kanal hoert den USB-Rueckweg, False = seinen
+    # Vorverstaerker (A/D).
+    #
+    usb: bool
+
+
 class FaderSelection(BaseModel):
     channel: int
     #
@@ -211,6 +220,30 @@ def set_console_mute(
     success = application.set_console_mute(
         selection.channel,
         selection.muted,
+    )
+
+    return {
+        "success": success,
+    }
+
+
+@router.post("/api/console/usb-input")
+def set_console_usb_input(
+    selection: UsbSelection,
+    request: Request,
+):
+    """
+    Legt den Eingang eines Kanals auf USB oder auf A/D.
+
+    Nur die X-Air-Serie kennt diesen Schalter; sonst kommt
+    success=false zurueck, und die Karte zeigt ihn ohnehin nicht an.
+    """
+
+    application = request.app.state.application
+
+    success = application.set_console_usb_input(
+        selection.channel,
+        selection.usb,
     )
 
     return {

@@ -5,7 +5,11 @@ Basisklasse für Audio-Dateischreiber.
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from core.recording_kind import MARKER_SOUNDCHECK, strip_marker
+from core.recording_kind import (
+    MARKER_SOUNDCHECK,
+    marker_mit_kanal,
+    strip_marker,
+)
 
 
 class AudioWriter(ABC):
@@ -28,6 +32,8 @@ class AudioWriter(ABC):
         extension: str,
         prefix: str = "Soundcheck",
         marker: str = MARKER_SOUNDCHECK,
+        start_channel: int = 1,
+        trenner: str = "-",
     ) -> str:
         """
         Erstellt Dateiname und Verzeichnis. Der Dateiname besteht aus
@@ -46,9 +52,17 @@ class AudioWriter(ABC):
 
         safe_prefix = prefix.strip() if prefix and prefix.strip() else "Soundcheck"
 
-        index = self._next_index(safe_prefix, extension)
+        index = self._next_index(safe_prefix, extension, trenner)
 
-        filename = f"{safe_prefix}-{index}_{marker}"
+        #
+        # War der erste aufgenommene Kanal nicht die 1, steht er mit im
+        # Namen - sonst landet die Aufnahme beim Soundcheck wieder auf
+        # Kanal 1 (siehe core/recording_kind.py).
+        #
+        filename = (
+            f"{safe_prefix}{trenner}{index}_"
+            f"{marker_mit_kanal(marker, start_channel)}"
+        )
 
         self.filename = str(
             self.directory / f"{filename}.{extension}"
@@ -56,7 +70,8 @@ class AudioWriter(ABC):
 
         return self.filename
 
-    def _next_index(self, prefix: str, extension: str) -> int:
+    def _next_index(self, prefix: str, extension: str,
+                    trenner: str = "-") -> int:
         """
         Ermittelt die nächste freie fortlaufende Nummer für `prefix`
         anhand der im Verzeichnis vorhandenen Dateien.
@@ -66,9 +81,15 @@ class AudioWriter(ABC):
         ("Soundcheck-1.w64") - sonst würde der Zähler nach der
         Einführung des Kürzels wieder bei 1 anfangen und die
         vorhandene Aufnahme beim Öffnen überschreiben.
+
+        `trenner` steht zwischen Präfix und Nummer. Bei Aufnahmen ist
+        es ein Bindestrich ("Soundcheck-1_s"), bei Mitschnitten zum
+        Üben nichts ("Umbrella-1-Take1_s9") - dort trägt schon das
+        Präfix den Bindestrich, und "Take-1" läse sich wie ein
+        Abzug.
         """
 
-        start = f"{prefix}-"
+        start = f"{prefix}{trenner}"
         suffix = f".{extension}"
         highest = 0
 
@@ -94,10 +115,13 @@ class AudioWriter(ABC):
         bits_per_sample: int,
         name_prefix: str = "Soundcheck",
         marker: str = MARKER_SOUNDCHECK,
+        start_channel: int = 1,
+        trenner: str = "-",
     ):
         """
         Öffnet die Ausgabedatei. `marker` kennzeichnet die Art der
-        Datei im Dateinamen, siehe core/recording_kind.py.
+        Datei im Dateinamen, `start_channel` den ersten aufgenommenen
+        Kanal - siehe core/recording_kind.py.
         """
         pass
 

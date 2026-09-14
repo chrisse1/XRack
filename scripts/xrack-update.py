@@ -160,6 +160,58 @@ def is_preserved(relative: Path) -> bool:
     return False
 
 
+#
+# Dateien frueherer Fassungen, die es nicht mehr geben soll.
+#
+# Der Updater kopiert nur, er loescht nicht (siehe copy_tree): Was aus
+# dem Projekt verschwindet, bleibt auf dem Geraet fuer immer liegen.
+# Beim Umzug der Testreihe nach tests/ waeren das zweiundfuenfzig
+# verwaiste Dateien im Hauptverzeichnis - verwirrend beim naechsten
+# Nachsehen, und beim naechsten Umzug waeren es mehr.
+#
+# Ausdrueckliche Muster und kein Abgleich des ganzen Baums: Ein
+# Updater, der alles wegraeumt, was er nicht kennt, nimmt auch das
+# mit, was jemand selbst dazugelegt hat. Und nur im
+# Hauptverzeichnis - "test_*.py" soll die Tests in tests/ nicht
+# treffen.
+#
+ALTLASTEN = ("test_*.py",)
+
+
+def altlasten_entfernen(install_dir: Path) -> list[str]:
+    """
+    Raeumt Dateien weg, die zu einer frueheren Fassung gehoerten.
+
+    Laeuft NACH dem Kopieren: Vorher waere nicht sicher, ob das Update
+    ueberhaupt durchkommt, und ein abgebrochenes Update haette dann
+    Dateien geloescht, ohne neue zu bringen.
+
+    Ein Fehlschlag ist folgenlos - es geht um Aufraeumen, nicht um die
+    Funktion.
+    """
+
+    entfernt = []
+
+    for muster in ALTLASTEN:
+
+        for pfad in sorted(install_dir.glob(muster)):
+
+            if not pfad.is_file():
+                continue
+
+            try:
+                pfad.unlink()
+                entfernt.append(pfad.name)
+
+            except OSError as fehler:
+                log(f"Altlast {pfad.name} blieb liegen: {fehler}")
+
+    if entfernt:
+        log(f"Altlasten entfernt: {', '.join(entfernt)}")
+
+    return entfernt
+
+
 def copy_tree(source: Path, target: Path) -> None:
     """
     Kopiert `source` nach `target` und lässt dabei die geschützten
@@ -808,6 +860,9 @@ def run_update(
 
     try:
         copy_tree(source_dir, install_dir)
+
+        altlasten_entfernen(install_dir)
+
         chown_tree(install_dir, service_user)
 
         ausfuehrbar_machen(install_dir)

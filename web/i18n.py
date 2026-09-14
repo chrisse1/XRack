@@ -16,6 +16,26 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "audio_rescan_title": "Audiogeräte neu suchen",
         "audio_open_device": "Geöffnetes Gerät:",
         "audio_interface_fallback": "Audio Interface",
+        #
+        # Vom Stick auf das Gerät. Die Gegenrichtung (eine Aufnahme auf
+        # den Stick) gab es schon lange.
+        #
+        "btn_usb_browse": "USB-Stick durchsehen",
+        "modal_usb_title": "USB-Stick",
+        "usb_target": "Kopieren nach:",
+        "usb_target_music": "Musik",
+        "usb_target_recordings": "Aufnahmen",
+        "usb_music_root": "(Hauptordner)",
+        "usb_copy_here": "Auf XRack kopieren",
+        "usb_selected": "{n} ausgewählt",
+        "usb_not_usable": "kann XRack nicht",
+        "usb_not_connected": "Kein USB-Stick angeschlossen.",
+        "usb_empty": "Dieser Ordner ist leer.",
+        "usb_import_done": (
+            "{kopiert} kopiert, {uebersprungen} übersprungen "
+            "(gleichnamige bleiben unberührt)."
+        ),
+        "usb_import_failed": "Kopieren fehlgeschlagen.",
         "btn_usb_eject": "USB-Stick auswerfen",
         "confirm_usb_eject": "USB-Stick jetzt auswerfen?",
         "alert_usb_eject_success": "USB-Stick kann jetzt entfernt werden.",
@@ -23,9 +43,21 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "alert_usb_eject_busy": "Es läuft noch ein Kopiervorgang - bitte warten.",
 
         # Soundcheck-Karte
-        "soundcheck_title": "Soundcheck & Üben",
+        #
+        # Nur noch Soundcheck: Das Ueben hat seit 3.0 eine eigene
+        # Karte, und der Name hier meinte zuletzt etwas, was hier
+        # nicht mehr stattfindet.
+        #
+        "soundcheck_title": "Soundcheck",
         "status_label": "Status:",
         "record_channels_label": "Aufnahmekanäle:",
+
+        #
+        # Das Aufnahmefenster: "Aufnahme ab Kanal [9] , [4] Kanäle"
+        #
+        "record_window_label": "Aufnahme ab Kanal",
+        "record_window_count": "Anzahl:",
+        "record_space_basis": "{channels} Ch ab {start} · {gb} GB/h",
         "record_space_left": "Verbleibend: {time}",
         "record_space_warning": (
             "Der Speicher reicht nur noch für {time}. Bei {gb} GB je Stunde "
@@ -56,6 +88,90 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "btn_recording_stop": "Aufnahme stoppen",
         "btn_soundcheck": "Soundcheck",
         "btn_practice": "Üben",
+
+        #
+        # Die Karte, die zwischen Musik und Üben umschaltet.
+        #
+        "mode_music": "Musik",
+        "mode_practice": "Üben",
+        "practice_title": "Üben",
+        "practice_mix_label": "Übungsmix:",
+        "practice_repeat": "Wiederholen",
+        "practice_none": (
+            "Noch kein Übungsmix da. \"Übungsmix erstellen\" legt aus "
+            "zwei bis acht Stereodateien einen an - jede Datei landet "
+            "auf einem eigenen Kanalpaar, damit sich beim Üben jede "
+            "Spur einzeln regeln lässt."
+        ),
+        "practice_busy": (
+            "Erst anhalten: Beim Umschalten tauscht die Karte ihre "
+            "Quelle aus."
+        ),
+        "practice_hint": "Liegt ab Kanal {a}",
+        "practice_record": "Mitschneiden",
+        "title_choose_for_practice": "Zum Üben auswählen",
+        "btn_practice_files": "Dateien",
+        "modal_practice_files_title": "Übungsmixe und Mitschnitte",
+        "practice_no_files": (
+            "Noch kein Übungsmix da. \"Übungsmix erstellen\" legt aus "
+            "zwei bis acht Stereodateien einen an."
+        ),
+        "practice_take_short": "Versuch {nr}",
+        "practice_no_takes": "noch kein Mitschnitt",
+        "title_listen_along": "Zum Dazuhören auswählen",
+        "practice_take_label": "Dazu hören:",
+        "practice_offset_label": "Versatz:",
+        "practice_offset_hint": "Versatz {ms} ms",
+        "practice_latency_measure": "messen",
+        "practice_latency_confirm": (
+            "XRack spielt gleich einen kurzen Klick auf allen "
+            "Wiedergabekanälen und nimmt dabei auf.\n\n"
+            "Damit etwas zu messen ist, muss der Klick am Pult auf "
+            "einen Kanal zurückkommen, der gerade aufgenommen wird - "
+            "derselbe Weg, den der Übungsmix beim Üben nimmt. Auf "
+            "diesem Kanal sollte es sonst still sein.\n\n"
+            "Die Messung dauert etwa fünf Sekunden. Jetzt starten?"
+        ),
+        "practice_latency_running": "Messung läuft …",
+        "practice_latency_done": (
+            "Gemessen: {ms} ms\n\nEinzelne Läufe: {werte} ms"
+        ),
+        "practice_latency_unsure": (
+            "Gemessen: {ms} ms\n\nEinzelne Läufe: {werte} ms\n\n"
+            "Die Läufe gehen um {spanne} ms auseinander - das ist keine "
+            "feste Grösse der Anlage. Ein fester Versatz gleicht sie "
+            "dann auch nicht aus. Bitte noch einmal messen, bei Ruhe "
+            "auf dem aufgenommenen Kanal."
+        ),
+        "practice_latency_zero": (
+            "Gemessen: {ms} ms\n\nEinzelne Läufe: {werte} ms\n\n"
+            "Fast null ist ungewöhnlich: Der Weg über USB und Pult "
+            "braucht Zeit. Bitte noch einmal messen. Bleibt es dabei, "
+            "kommt der Klick vermutlich nicht über das Pult zurück, "
+            "sondern auf einem kürzeren Weg."
+        ),
+        "practice_take_none": "nichts",
+        #
+        # Stufe 5: aus Mix und Mitschnitt eine Datei. Zum Anhören
+        # braucht es das nicht - zum Mitnehmen schon.
+        #
+        "practice_merge": "Zusammenführen",
+        "practice_merge_name": (
+            "Name für den neuen Übungsmix aus Mix und Mitschnitt:"
+        ),
+        "practice_merge_done": "Fertig: {name}",
+        "practice_merge_failed": "Zusammenführen fehlgeschlagen.",
+        "practice_take_hint": "mit {name}",
+        "practice_record_hint": "Mitschnitt: Kanal {a}-{b}",
+        "practice_record_no_device": (
+            "Zum Mitschneiden fehlt ein offenes Audiogerät."
+        ),
+        "stem_combine_start_channel_label": "Erster Kanal:",
+        "stem_combine_start_channel_hint": (
+            "Ab hier liegt der Mix später beim Üben - jede Datei auf "
+            "einem eigenen Kanalpaar. Die Angabe steht danach im "
+            "Dateinamen und muss beim Üben nicht neu gewählt werden."
+        ),
         "badge_kind_soundcheck": "Soundcheck",
         "badge_kind_practice": "Übungsmix",
         "btn_stop": "Stop",
@@ -69,7 +185,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "label_size": "Größe",
         "recent_recordings": "Letzte Dateien",
         "no_recordings": "Keine Aufnahmen vorhanden.",
-        "btn_all_recordings": "Alle Dateien...",
+        "btn_all_recordings": "Aufnahmen...",
         "channels_option": "{n} Kanäle",
 
         # Musikspieler-Karte
@@ -120,9 +236,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
 
         # Aufnahmen-Modal
-        "modal_recordings_title": "Alle Dateien",
-        "section_soundchecks": "Soundchecks",
-        "section_practice_mixes": "Übungsmixe",
+        "modal_recordings_title": "Aufnahmen",
         "btn_delete_selected": "Ausgewählte löschen",
         "btn_close": "Schließen",
         "badge_selected_for_soundcheck": "Für Wiedergabe ausgewählt",
@@ -143,6 +257,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "stem_combine_name_label": "Name",
         "stem_combine_name_placeholder": "z.B. Songtitel",
         "stem_combine_channel_label": "Kanal {a}+{b}:",
+        #
+        # Ein Stem kann auch schon auf dem Gerät liegen - seit die
+        # Dateien vom USB-Stick kommen können, ist das der übliche Weg.
+        #
+        "stem_combine_from_device": "… oder Datei vom Gerät wählen",
+        "stem_combine_device_empty": "(keine Dateien auf dem Gerät)",
         "btn_stem_combine_add_file": "Weitere Datei",
         "btn_stem_combine_create": "Übungsmix erstellen",
         "stem_combine_in_progress": "Übungsmix wird erstellt...",
@@ -430,6 +550,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_diagnostics_hint": "Schreibt Zustand und Netzwerk für die Fehlersuche mit.",
         "btn_diagnostics_download": "Aufzeichnung herunterladen",
         "settings_diagnostics_empty": "Noch nichts aufgezeichnet.",
+        #
+        # Die gemessenen Stillstände stehen unabhängig vom Schalter da:
+        # Die Wache läuft immer (siehe core/diagnostics.py).
+        #
+        "settings_stillstand_titel": "Gemessene Stillstände:",
+        "settings_stillstand_keiner": (
+            "Keine Stillstände gemessen - der Prozess lief durchgehend."
+        ),
 
         "settings_wifi_hint": (
             "SSID und Passwort werden beim Speichern immer beide neu "
@@ -495,6 +623,19 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "tippen."
         ),
         "faders_mute": "Stumm schalten",
+        #
+        # Der Eingang eines Kanals. "A/D" ist die Beschriftung am Pult
+        # selbst (Analog-Digital-Wandler) - dieselben Worte wie in
+        # X-AIR Edit, damit man nicht uebersetzen muss, waehrend man
+        # sucht.
+        #
+        "faders_usb_off": "A/D",
+        "faders_usb_on": "USB",
+        "faders_usb_title": (
+            "Eingang des Kanals: A/D = Mikrofon/Instrument am Pult, "
+            "USB = das, was XRack abspielt (virtueller Soundcheck). "
+            "Achtung: Auf USB hört der Kanal sein Mikrofon nicht."
+        ),
         #
         # Beide Meldungen beschreiben dieselbe Lage und beginnen
         # deshalb gleich - nur der zweite Satz sagt, woran es liegt.
@@ -773,6 +914,22 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "audio_rescan_title": "Rescan audio devices",
         "audio_open_device": "Connected device:",
         "audio_interface_fallback": "Audio Interface",
+        "btn_usb_browse": "Browse USB drive",
+        "modal_usb_title": "USB drive",
+        "usb_target": "Copy to:",
+        "usb_target_music": "Music",
+        "usb_target_recordings": "Recordings",
+        "usb_music_root": "(main folder)",
+        "usb_copy_here": "Copy to XRack",
+        "usb_selected": "{n} selected",
+        "usb_not_usable": "not usable",
+        "usb_not_connected": "No USB drive connected.",
+        "usb_empty": "This folder is empty.",
+        "usb_import_done": (
+            "{kopiert} copied, {uebersprungen} skipped "
+            "(existing files are left untouched)."
+        ),
+        "usb_import_failed": "Copying failed.",
         "btn_usb_eject": "Eject USB drive",
         "confirm_usb_eject": "Eject the USB drive now?",
         "alert_usb_eject_success": "The USB drive can now be removed.",
@@ -780,9 +937,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "alert_usb_eject_busy": "A copy is still in progress - please wait.",
 
         # Soundcheck card
-        "soundcheck_title": "Soundcheck & Practice",
+        "soundcheck_title": "Soundcheck",
         "status_label": "Status:",
         "record_channels_label": "Recording channels:",
+        "record_window_label": "Record from channel",
+        "record_window_count": "Count:",
+        "record_space_basis": "{channels} ch from {start} · {gb} GB/h",
         "record_space_left": "Remaining: {time}",
         "record_space_warning": (
             "Only {time} of recording space left. At {gb} GB per hour the "
@@ -813,6 +973,81 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "btn_recording_stop": "Stop recording",
         "btn_soundcheck": "Soundcheck",
         "btn_practice": "Practice",
+        "mode_music": "Music",
+        "mode_practice": "Practice",
+        "practice_title": "Practice",
+        "practice_mix_label": "Practice mix:",
+        "practice_repeat": "Repeat",
+        "practice_none": (
+            "No practice mix yet. \"Create practice mix\" builds one "
+            "from two to eight stereo files - each file lands on its "
+            "own channel pair so every part can be set separately "
+            "while practising."
+        ),
+        "practice_busy": (
+            "Stop first: switching swaps the card's source."
+        ),
+        "practice_hint": "Starts at channel {a}",
+        "practice_record": "Record along",
+        "title_choose_for_practice": "Select for practising",
+        "btn_practice_files": "Files",
+        "modal_practice_files_title": "Practice mixes and takes",
+        "practice_no_files": (
+            "No practice mix yet. \"Create practice mix\" builds one "
+            "from two to eight stereo files."
+        ),
+        "practice_take_short": "Take {nr}",
+        "practice_no_takes": "no take yet",
+        "title_listen_along": "Select to play along",
+        "practice_take_label": "Play along with:",
+        "practice_offset_label": "Offset:",
+        "practice_offset_hint": "offset {ms} ms",
+        "practice_latency_measure": "measure",
+        "practice_latency_confirm": (
+            "XRack will play a short click on all playback channels "
+            "and record at the same time.\n\n"
+            "For anything to be measured, the click has to come back "
+            "at the console on a channel that is being recorded - the "
+            "same path the practice mix takes. That channel should be "
+            "quiet otherwise.\n\n"
+            "The measurement takes about five seconds. Start now?"
+        ),
+        "practice_latency_running": "measuring …",
+        "practice_latency_done": (
+            "Measured: {ms} ms\n\nIndividual runs: {werte} ms"
+        ),
+        "practice_latency_unsure": (
+            "Measured: {ms} ms\n\nIndividual runs: {werte} ms\n\n"
+            "The runs differ by {spanne} ms - that is not a fixed "
+            "property of the setup, and a fixed offset will not "
+            "compensate for it. Please measure again, with the "
+            "recorded channel quiet."
+        ),
+        "practice_latency_zero": (
+            "Measured: {ms} ms\n\nIndividual runs: {werte} ms\n\n"
+            "Almost zero is unusual: the path through USB and console "
+            "takes time. Please measure again. If it stays at zero, "
+            "the click is probably not coming back through the "
+            "console but by a shorter route."
+        ),
+        "practice_take_none": "nothing",
+        "practice_merge": "Merge",
+        "practice_merge_name": (
+            "Name for the new practice mix from mix and take:"
+        ),
+        "practice_merge_done": "Done: {name}",
+        "practice_merge_failed": "Merging failed.",
+        "practice_take_hint": "with {name}",
+        "practice_record_hint": "Recording: channels {a}-{b}",
+        "practice_record_no_device": (
+            "Recording along needs an open audio device."
+        ),
+        "stem_combine_start_channel_label": "First channel:",
+        "stem_combine_start_channel_hint": (
+            "This is where the mix will sit while practising - each "
+            "file on its own channel pair. The setting then lives in "
+            "the file name and need not be chosen again."
+        ),
         "badge_kind_soundcheck": "Soundcheck",
         "badge_kind_practice": "Practice mix",
         "btn_stop": "Stop",
@@ -826,7 +1061,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "label_size": "Size",
         "recent_recordings": "Recent files",
         "no_recordings": "No recordings yet.",
-        "btn_all_recordings": "All files...",
+        "btn_all_recordings": "Recordings...",
         "channels_option": "{n} channels",
 
         # Music player card
@@ -877,9 +1112,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
 
         # Recordings modal
-        "modal_recordings_title": "All files",
-        "section_soundchecks": "Soundchecks",
-        "section_practice_mixes": "Practice mixes",
+        "modal_recordings_title": "Recordings",
         "btn_delete_selected": "Delete selected",
         "btn_close": "Close",
         "badge_selected_for_soundcheck": "Selected for playback",
@@ -900,6 +1133,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "stem_combine_name_label": "Name",
         "stem_combine_name_placeholder": "e.g. song title",
         "stem_combine_channel_label": "Channel {a}+{b}:",
+        "stem_combine_from_device": "… or pick a file on the device",
+        "stem_combine_device_empty": "(no files on the device)",
         "btn_stem_combine_add_file": "Add another file",
         "btn_stem_combine_create": "Create practice mix",
         "stem_combine_in_progress": "Creating practice mix...",
@@ -1171,6 +1406,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings_diagnostics_hint": "Records state and network for troubleshooting.",
         "btn_diagnostics_download": "Download recording",
         "settings_diagnostics_empty": "Nothing recorded yet.",
+        "settings_stillstand_titel": "Measured stalls:",
+        "settings_stillstand_keiner": (
+            "No stalls measured - the process kept running."
+        ),
 
         "settings_wifi_hint": (
             "SSID and password are always both set anew when saving."
@@ -1233,6 +1472,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "them."
         ),
         "faders_mute": "Mute",
+        "faders_usb_off": "A/D",
+        "faders_usb_on": "USB",
+        "faders_usb_title": (
+            "Channel input: A/D = mic/instrument on the console, "
+            "USB = whatever XRack plays back (virtual soundcheck). "
+            "Careful: on USB the channel does not hear its microphone."
+        ),
         "faders_no_connection": (
             "No connection to the console. No access route is enabled "
             "yet - fader control runs over the network, not the USB "

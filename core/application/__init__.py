@@ -105,10 +105,77 @@ class Application(
             18,
         )
 
+        #
+        # Der erste aufgenommene Kanal (1-basiert). Aufgenommen wird
+        # ein Fenster, nicht immer der Anfang - siehe
+        # set_record_start_channel().
+        #
+        self.record_start_channel = self.state_store.get(
+            "record_start_channel",
+            1,
+        )
+
         self.music_channel_preference = self.state_store.get(
             "music_channel",
             1,
         )
+
+        #
+        # Die Karte zeigt entweder den Musikspieler oder das Ueben -
+        # zwei Wiedergabestroeme kann das Interface nicht, deshalb ist
+        # es eine Karte mit Umschalter (siehe set_player_mode).
+        #
+        self.player_mode = self.state_store.get("player_mode", "music")
+
+        self.practice_repeat = self.state_store.get(
+            "practice_repeat",
+            False,
+        )
+
+        self.practice_record = self.state_store.get(
+            "practice_record",
+            False,
+        )
+
+        #
+        # Die Laufzeit des Weges XRack -> Pult -> XRack, in
+        # Millisekunden. Beim Zusammenhoeren wird der Mitschnitt um so
+        # viel vorgezogen (siehe set_practice_offset).
+        #
+        self.practice_offset_ms = self.state_store.get(
+            "practice_offset_ms",
+            0,
+        )
+
+        #
+        # Der Stand der Laufzeitmessung. Sie laeuft in einem eigenen
+        # Faden (siehe MusikMixin.start_laufzeit_messung), deshalb
+        # unter Schloss.
+        #
+        self._laufzeit_lock = threading.Lock()
+
+        self._laufzeit_stand = {
+            "active": False,
+            "success": None,
+            "ms": 0,
+            "werte": [],
+            "spanne": 0,
+            "unsicher": False,
+            "error": "",
+        }
+
+        #
+        # Hat DIESER Uebungslauf die Aufnahme gestartet? Nur dann wird
+        # sie mit dem Ueben auch wieder beendet (siehe stop_practice).
+        #
+        self.practice_recording = False
+
+        #
+        # Laeuft gerade eine Uebung? Der Musikspieler allein sagt das
+        # nicht - er spielt auch Musik. Gebraucht wird es fuer die
+        # Sperren (siehe MusikMixin.wiedergabe_laeuft).
+        #
+        self.practice_active = False
 
         self.record_name_prefix = self.state_store.get(
             "record_name_prefix",
@@ -253,6 +320,25 @@ class Application(
             "total": 0,
             "success": None,
             "already_exists": False,
+        }
+
+        #
+        # Der Weg VOM Stick: eigener Zustand, nicht derselbe wie beim
+        # Kopieren auf den Stick. Die beiden zaehlen Verschiedenes
+        # (dort eine Datei, hier ein ganzer Ordner mit Bericht), und
+        # ein gemeinsamer Zustand haette bei jeder Anzeige die Frage
+        # aufgeworfen, in welche Richtung gerade kopiert wird.
+        #
+        self._usb_import_lock = threading.Lock()
+
+        self.usb_import_state = {
+            "active": False,
+            "file": "",
+            "copied": 0,
+            "total": 0,
+            "success": None,
+            "error": "",
+            "report": None,
         }
 
         self._stem_combine_lock = threading.Lock()
@@ -583,6 +669,34 @@ class Application(
 
         self.status.music_playing = self.music_player.playing
 
+        #
+        # Was die Karte gerade zeigt, und was das Ueben braucht.
+        #
+        self.status.player_mode = self.player_mode
+
+        self.status.practice_repeat = self.music_player.wiederholen
+
+        self.status.practice_record = self.practice_record
+
+        self.status.practice_offset_ms = self.practice_offset_ms
+
+        #
+        # Laeuft die Aufnahme wirklich noch? Der Recorder kann von
+        # selbst aufgehoert haben (voller Datentraeger) - dann gehoert
+        # sie nicht mehr zum Ueben.
+        #
+        #
+        # Uebung und Mitschnitt koennen von selbst zu Ende gegangen
+        # sein - siehe MusikMixin.uebung_nachfuehren().
+        #
+        self.uebung_nachfuehren()
+
+        self.status.practice_recording = self.practice_recording
+
+        self.status.practice_mixes = self.practice_mixes()
+
+        self.status.practice_takes = self.practice_takes()
+
         self.status.music_paused = self.music_player.paused
 
         self.status.music_track = self.music_player.current_track
@@ -631,6 +745,10 @@ class Application(
         
         self.status.record_channels = (
             self.record_channels
+        )
+
+        self.status.record_start_channel = (
+            self.record_start_channel
         )
         
         self.status.record_sample_rate = (

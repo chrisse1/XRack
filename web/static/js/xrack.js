@@ -144,7 +144,324 @@ function updateAudioDeviceSelectState(data) {
 function updateUsbEjectButton(data) {
     const button = document.getElementById("btn-usb-eject");
     if (button) button.classList.toggle("d-none", !data.usb_connected);
+
+    const browse = document.getElementById("btn-usb-browse");
+    if (browse) browse.classList.toggle("d-none", !data.usb_connected);
 }
+
+// ============================================================
+// Vom USB-Stick auf das Geraet
+//
+// Die Gegenrichtung gab es lange (eine Aufnahme auf den Stick), dieser
+// Weg fehlte. Das Ziel wird EINMAL gewaehlt, dann werden Dateien und
+// ganze Ordner angehakt - dreissig Rueckfragen fuer ein Album waeren
+// keine Bedienung.
+// ============================================================
+
+//
+// Wo wir auf dem Stick gerade stehen, und was angehakt ist.
+//
+// Die Auswahl haengt am Pfad: Wer in einen Ordner geht und
+// zurueckkommt, soll seine Haken wiederfinden - aber ein Haken in
+// einem Ordner, den man verlassen hat, gehoert trotzdem mitkopiert.
+// Deshalb werden hier VOLLE Pfade gemerkt, nicht Namen.
+//
+let usbPfad = "";
+let usbAuswahl = new Set();
+
+function usbZiel() {
+    const gewaehlt = document.querySelector(
+        'input[name="usb-target"]:checked'
+    );
+    return gewaehlt ? gewaehlt.value : "music";
+}
+
+async function usbOeffnen() {
+    usbPfad = "";
+    usbAuswahl = new Set();
+
+    document.getElementById("usb-import-result").textContent = "";
+
+    await usbZielordnerFuellen();
+    await usbAuflisten();
+
+    bootstrap.Modal
+        .getOrCreateInstance(document.getElementById("usbModal"))
+        .show();
+}
+
+//
+// Die Ordner der Musikbibliothek als Ziel.
+//
+// Nur eine Ebene tief und flach aufgelistet: Wer tiefer verschachtelt,
+// findet seinen Ordner in einer langen Liste immer noch - eine
+// Baumansicht im Dialog waere ein zweiter Dateimanager im ersten.
+//
+async function usbZielordnerFuellen() {
+
+    const auswahl = document.getElementById("usb-target-folder");
+
+    if (!auswahl) return;
+
+    auswahl.innerHTML = "";
+
+    const wurzel = document.createElement("option");
+    wurzel.value = "";
+    wurzel.textContent = I18N.usb_music_root;
+    auswahl.appendChild(wurzel);
+
+    try {
+
+        const inhalt = await (
+            await fetch("/api/music/browse?path=")
+        ).json();
+
+        (inhalt.folders || []).forEach((name) => {
+            const eintrag = document.createElement("option");
+            eintrag.value = name;
+            eintrag.textContent = name;
+            auswahl.appendChild(eintrag);
+        });
+
+    } catch (fehler) {
+        console.error("Musikordner nicht lesbar:", fehler);
+    }
+}
+
+async function usbAuflisten() {
+
+    const liste = document.getElementById("usb-list");
+
+    if (!liste) return;
+
+    const antwort = await fetch(
+        `/api/usb/browse?path=${encodeURIComponent(usbPfad)}`
+        + `&target=${encodeURIComponent(usbZiel())}`
+    );
+
+    const inhalt = await antwort.json();
+
+    liste.innerHTML = "";
+
+    document.getElementById("usb-path").textContent = "/" + (inhalt.path || "");
+
+    document.getElementById("btn-usb-up").disabled = !usbPfad;
+
+    if (!inhalt.available) {
+        liste.innerHTML =
+            '<div class="list-group-item text-body-secondary">'
+            + I18N.usb_not_connected + "</div>";
+        usbAuswahlAnzeigen();
+        return;
+    }
+
+    (inhalt.folders || []).forEach((name) => {
+        liste.appendChild(usbZeile(name, true, 0, true));
+    });
+
+    (inhalt.files || []).forEach((datei) => {
+        liste.appendChild(
+            usbZeile(datei.name, false, datei.size, datei.usable)
+        );
+    });
+
+    if (!inhalt.folders.length && !inhalt.files.length) {
+        liste.innerHTML =
+            '<div class="list-group-item text-body-secondary">'
+            + I18N.usb_empty + "</div>";
+    }
+
+    usbAuswahlAnzeigen();
+}
+
+//
+// Eine Zeile: Haken, Name, Groesse. Ordner sind zum Hineingehen UND
+// zum Anhaken - ein ganzes Album kopiert man nicht Datei fuer Datei.
+//
+function usbZeile(name, istOrdner, groesse, verwendbar) {
+
+    const voll = usbPfad ? `${usbPfad}/${name}` : name;
+
+    const zeile = document.createElement("div");
+    zeile.className =
+        "list-group-item d-flex align-items-center gap-2"
+        + (verwendbar ? "" : " text-body-secondary");
+
+    const haken = document.createElement("input");
+    haken.type = "checkbox";
+    haken.className = "form-check-input mt-0";
+    haken.checked = usbAuswahl.has(voll);
+    haken.disabled = !verwendbar;
+    haken.addEventListener("change", () => {
+        if (haken.checked) usbAuswahl.add(voll);
+        else usbAuswahl.delete(voll);
+        usbAuswahlAnzeigen();
+    });
+
+    zeile.appendChild(haken);
+
+    const symbol = document.createElement("i");
+    symbol.className = istOrdner
+        ? "bi bi-folder-fill text-warning"
+        : "bi bi-music-note-beamed";
+    zeile.appendChild(symbol);
+
+    const bezeichnung = document.createElement(istOrdner ? "button" : "span");
+    bezeichnung.textContent = name;
+    bezeichnung.className = istOrdner
+        ? "btn btn-link p-0 text-start flex-grow-1"
+        : "flex-grow-1";
+
+    if (istOrdner) {
+        bezeichnung.type = "button";
+        bezeichnung.addEventListener("click", async () => {
+            usbPfad = voll;
+            await usbAuflisten();
+        });
+    }
+
+    zeile.appendChild(bezeichnung);
+
+    const rechts = document.createElement("small");
+    rechts.className = "text-body-secondary";
+    rechts.textContent = istOrdner
+        ? ""
+        : (verwendbar ? formatFileSize(groesse) : I18N.usb_not_usable);
+    zeile.appendChild(rechts);
+
+    return zeile;
+}
+
+function usbAuswahlAnzeigen() {
+
+    const info = document.getElementById("usb-selection-info");
+    const knopf = document.getElementById("btn-usb-import");
+
+    if (info) {
+        info.textContent = usbAuswahl.size
+            ? I18N.usb_selected.replace("{n}", usbAuswahl.size)
+            : "";
+    }
+
+    if (knopf) knopf.disabled = usbAuswahl.size === 0;
+}
+
+async function usbHolen() {
+
+    const knopf = document.getElementById("btn-usb-import");
+    const ergebnis = document.getElementById("usb-import-result");
+
+    if (!usbAuswahl.size) return;
+
+    knopf.disabled = true;
+    ergebnis.textContent = "";
+
+    const antwort = await fetch("/api/usb/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            sources: Array.from(usbAuswahl),
+            target: usbZiel(),
+            folder: document.getElementById("usb-target-folder").value,
+        }),
+    });
+
+    const gestartet = await antwort.json();
+
+    if (!gestartet.success) {
+        ergebnis.innerHTML =
+            '<span class="text-warning"></span>';
+        ergebnis.firstChild.textContent =
+            gestartet.message || I18N.usb_import_failed;
+        knopf.disabled = false;
+        return;
+    }
+
+    document.getElementById("usb-import-progress")
+        .classList.remove("d-none");
+
+    const stand = await usbFortschrittVerfolgen();
+
+    document.getElementById("usb-import-progress").classList.add("d-none");
+
+    const bericht = stand.report || {};
+
+    ergebnis.innerHTML = "";
+
+    const zeile = document.createElement("span");
+
+    zeile.className = stand.success ? "text-success" : "text-warning";
+
+    zeile.textContent = stand.success
+        ? I18N.usb_import_done
+            .replace("{kopiert}", bericht.kopiert || 0)
+            .replace("{uebersprungen}", bericht.uebersprungen || 0)
+        : (stand.error || I18N.usb_import_failed);
+
+    ergebnis.appendChild(zeile);
+
+    usbAuswahl = new Set();
+
+    await usbAuflisten();
+
+    //
+    // Die neuen Dateien gehoeren sofort in die Listen - sonst sucht
+    // man sie dort vergeblich.
+    //
+    await updateStatus();
+}
+
+async function usbFortschrittVerfolgen() {
+
+    while (true) {
+
+        await new Promise((weiter) => setTimeout(weiter, 400));
+
+        const stand = await (
+            await fetch("/api/usb/import_status")
+        ).json();
+
+        const anteil = stand.total
+            ? Math.round((stand.copied / stand.total) * 100)
+            : 0;
+
+        const balken = document.getElementById("usb-import-bar");
+        if (balken) balken.style.width = `${anteil}%`;
+
+        const zahl = document.getElementById("usb-import-percent");
+        if (zahl) zahl.textContent = `${anteil}%`;
+
+        const datei = document.getElementById("usb-import-file");
+        if (datei) datei.textContent = stand.file || "";
+
+        if (!stand.active) return stand;
+    }
+}
+
+document.getElementById("btn-usb-browse")
+    ?.addEventListener("click", usbOeffnen);
+
+document.getElementById("btn-usb-import")
+    ?.addEventListener("click", usbHolen);
+
+//
+// Das Ziel entscheidet, was verwendbar ist - also neu auflisten.
+//
+document.querySelectorAll('input[name="usb-target"]').forEach((feld) => {
+    feld.addEventListener("change", () => {
+        document.getElementById("usb-target-folder").disabled =
+            usbZiel() !== "music";
+        usbAuflisten();
+    });
+});
+
+document.getElementById("btn-usb-up")
+    ?.addEventListener("click", async () => {
+        usbPfad = usbPfad.includes("/")
+            ? usbPfad.slice(0, usbPfad.lastIndexOf("/"))
+            : "";
+        await usbAuflisten();
+    });
 
 document.getElementById("btn-usb-eject").addEventListener("click", ejectUsb);
 
@@ -290,8 +607,18 @@ function updateRecordingList(recordings) {
     // ausgewählt ist. Übungsmixe gehören dort nicht hin - sie sind
     // über "Alle Dateien" erreichbar.
     //
+    //
+    // Weder Uebungsmixe noch Mitschnitte: Beide gehoeren in die
+    // Dateiverwaltung der Ueben-Karte. Ein Mitschnitt ist zwar eine
+    // Aufnahme, aber er ergibt nur neben seinem Uebungsmix einen
+    // Sinn - hier waere er nach ein paar Uebungsabenden die Mehrheit,
+    // und der Soundcheck faende sich zwischen ihnen nicht wieder.
+    //
+    const mitschnitte = alleMitschnitte();
+
     const soundchecks = recordings.filter(
         (recording) => !isPracticeMix(kindFromFilename(recording))
+            && !mitschnitte.has(recording)
     );
 
     if (soundchecks.length === 0) {
@@ -361,7 +688,15 @@ function updateRecordChannels(data) {
     const select = document.getElementById("record-channels");
     select.innerHTML = "";
 
-    for (let channels = 2; channels <= data.audio_channels; channels += 2) {
+    //
+    // Wie viele Kanaele ab dem gewaehlten Startkanal ueberhaupt noch
+    // da sind. Mehr anzubieten hiesse, ueber das Interface hinaus
+    // aufzunehmen - die ueberzaehligen Spuren blieben still.
+    //
+    const ersterKanal = data.record_start_channel || 1;
+    const uebrig = Math.max(0, (data.audio_channels || 0) - ersterKanal + 1);
+
+    for (let channels = 2; channels <= uebrig; channels += 2) {
         const option = document.createElement("option");
         option.value = channels;
         option.textContent = I18N.channels_option.replace("{n}", channels);
@@ -376,6 +711,52 @@ function updateRecordChannels(data) {
     };
 
     select.disabled = isAudioBusy(data);
+
+    updateRecordStartChannel(data);
+}
+
+//
+// Ab welchem Kanal aufgenommen wird.
+//
+// Angeboten werden nur ungerade Kanaele: Aufgenommen wird in
+// Stereopaaren, und ein Fenster, das mitten in einem Paar beginnt,
+// zerreisst jedes Stereosignal des Pults.
+//
+function updateRecordStartChannel(data) {
+
+    const select = document.getElementById("record-start-channel");
+
+    if (!select) return;
+
+    select.innerHTML = "";
+
+    const vorhanden = data.audio_channels || 0;
+
+    for (let kanal = 1; kanal <= vorhanden; kanal += 2) {
+        const option = document.createElement("option");
+        option.value = kanal;
+        option.textContent = kanal;
+        if (kanal === (data.record_start_channel || 1)) {
+            option.selected = true;
+        }
+        select.appendChild(option);
+    }
+
+    select.onchange = () => {
+        setRecordStartChannel(Number(select.value));
+    };
+
+    select.disabled = isAudioBusy(data);
+}
+
+async function setRecordStartChannel(startChannel) {
+    const response = await fetch("/api/recorder/start-channel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start_channel: startChannel })
+    });
+    await response.json();
+    await refreshDashboard();
 }
 
 //
@@ -423,8 +804,21 @@ function updateRecordWarnings(data) {
         : "0";
 
     if (platz) {
+
+        //
+        // Die Zahl allein ist nicht nachpruefbar. Sie sprang einmal von
+        // 14 auf 21 Stunden, und es kostete eine Rechnung, um zu sehen,
+        // dass sich nicht die Kanalzahl, sondern der freie Platz
+        // geaendert hatte. Also steht die Grundlage daneben.
+        //
+        const grundlage = I18N.record_space_basis
+            .replace("{channels}", data.record_channels)
+            .replace("{start}", data.record_start_channel || 1)
+            .replace("{gb}", gb);
+
         platz.textContent = rest > 0
             ? I18N.record_space_left.replace("{time}", formatDuration(rest))
+                + " (" + grundlage + ")"
             : "";
     }
 
@@ -566,16 +960,16 @@ function updateSoundcheckButton(data) {
         button.disabled = false;
     } else {
         //
-        // Beschriftung richtet sich nach der ausgewählten Datei:
-        // "Soundcheck" für eine Aufnahme, "Üben" für einen Übungsmix.
-        // Die Aktion selbst bleibt identisch - der Player spielt jede
-        // Datei auf den Kanälen ab, auf denen sie liegt.
+        // Der Knopf heisst Soundcheck und meint nur das.
         //
-        const label = selectedRecordingInfo && isPracticeMix(selectedRecordingInfo.kind)
-            ? I18N.btn_practice
-            : I18N.btn_soundcheck;
-
-        button.innerHTML = `<i class="bi bi-play-circle fs-3"></i><small>${label}</small>`;
+        // Er hiess einmal "Ueben", wenn ein Uebungsmix ausgewaehlt
+        // war, und spielte ihn dann ueber denselben Weg ab. Damit gab
+        // es den Weg zweimal - und dieser hier kann weniger: kein
+        // Anhalten, kein Spulen, keine Schleife. Zum Ueben ist genau
+        // das noetig, deshalb laeuft es ueber die Ueben-Karte.
+        //
+        button.innerHTML =
+            `<i class="bi bi-play-circle fs-3"></i><small>${I18N.btn_soundcheck}</small>`;
         button.classList.remove("btn-warning");
         button.classList.add("btn-success");
 
@@ -847,11 +1241,21 @@ function toggleFaderLock() {
     button.classList.toggle("btn-warning", fadersUnlocked);
 
     //
-    // Die Sperre muss beides erfassen - ein Mute-Knopf, der trotz
-    // Schloss reagiert, wäre eine Lücke genau dort, wo die Sperre
-    // schützen soll.
+    // Die Sperre erfasst ALLES, was in einem Kanalzug bedienbar ist -
+    // erkennbar an der Klasse "fader-bedienung", nicht an einer Liste
+    // von Namen.
     //
-    document.querySelectorAll(".fader-input, .fader-mute").forEach((element) => {
+    // Hier stand eine solche Liste (".fader-input, .fader-mute"), und
+    // sie hat genau den Fehler gemacht, für den Listen anfällig sind:
+    // Der Eingangsschalter A/D/USB kam dazu, wurde gesperrt gezeichnet
+    // (die Karte ist im Grundzustand gesperrt) - und beim Entsperren
+    // nicht mitgenommen. Er blieb für immer tot, und am Gerät sah das
+    // so aus: "Die Anzeige stimmt, aber bei Klick passiert nichts."
+    //
+    // Mit der Klasse kann das nächste Bedienelement die Sperre nicht
+    // mehr vergessen; es fällt schon beim Zeichnen auf, wenn sie fehlt.
+    //
+    document.querySelectorAll(".fader-bedienung").forEach((element) => {
         element.disabled = !fadersUnlocked;
     });
 
@@ -905,6 +1309,52 @@ function renderMuteButton(button, muted) {
 
     button.classList.toggle("btn-danger", muted);
     button.classList.toggle("btn-outline-secondary", !muted);
+}
+
+//
+// Der Eingang eines Kanals: A/D oder USB.
+//
+// Beschriftet wird mit dem Zustand, nicht mit der Wirkung des Drucks -
+// "USB" heisst also "dieser Kanal hoert gerade USB". Ein Knopf, auf
+// dem steht, was er tun WUERDE, ist beim Hinsehen aus zwei Metern
+// nicht zu unterscheiden, und hier haengt daran, ob das Pult die
+// Mikrofone hoert.
+//
+// Farbig ist deshalb nur USB: Das ist der Zustand, den man nicht
+// vergessen darf. Steht am Ende der Probe noch irgendwo Farbe in der
+// Karte, ist ein Kanal noch auf der Aufnahme.
+//
+function renderUsbButton(button, usb) {
+    if (!button) return;
+
+    button.textContent = usb ? I18N.faders_usb_on : I18N.faders_usb_off;
+
+    button.classList.toggle("btn-warning", usb === true);
+    button.classList.toggle("btn-outline-secondary", usb !== true);
+}
+
+async function toggleUsbInput(channel) {
+    const button = document.querySelector(
+        `.fader-usb[data-channel="${channel}"]`
+    );
+
+    if (!button) return;
+
+    const usb = !button.classList.contains("btn-warning");
+
+    resetFaderAutolock();
+
+    //
+    // Sofort umschalten, damit die Rueckmeldung nicht erst beim
+    // naechsten Auffrischen kommt.
+    //
+    renderUsbButton(button, usb);
+
+    await sendToConsole(
+        "/api/console/usb-input",
+        { channel, usb },
+        "Eingangsquelle"
+    );
 }
 
 //
@@ -1625,8 +2075,13 @@ function renderFaders(channels) {
     // Pegelanzeige). Die Ausrichtung waagerecht/senkrecht macht allein
     // das CSS, hier gibt es dafür keine Fallunterscheidung.
     //
+    //
+    // Ob es den USB-Schalter GIBT, gehoert zur Struktur (null heisst:
+    // dieses Pult kennt ihn nicht). Seine Stellung dagegen nicht - die
+    // wird unten wie Fader und Stummschaltung nur gesetzt.
+    //
     const signature = channels
-        .map((c) => `${c.label}|${c.name}|${c.is_main}`)
+        .map((c) => `${c.label}|${c.name}|${c.is_main}|${c.usb === null || c.usb === undefined ? "-" : "s"}`)
         .join(";");
 
     if (grid.dataset.signature !== signature) {
@@ -1634,26 +2089,72 @@ function renderFaders(channels) {
         grid.className = "fader-grid";
         grid.innerHTML = "";
 
+        //
+        // Hat ueberhaupt ein Zug einen Eingangsschalter? Nur dann
+        // braucht die Summe einen Platzhalter - bei einem Pult ohne
+        // Schalter waere er verschwendete Hoehe.
+        //
+        const irgendeinSchalter = channels.some(
+            (kanal) => kanal.usb === true || kanal.usb === false
+        );
+
         channels.forEach((channel) => {
             const cell = document.createElement("div");
             cell.className =
                 "fader-cell"
                 + (fadersUnlocked ? "" : " is-locked")
                 + (channel.is_main ? " is-main" : "");
+            //
+            // Die Reihenfolge im Kanalzug: Kanalnummer, dann der
+            // Eingangsschalter, dann der Name - also dort, wo der Kanal
+            // bezeichnet wird. Danach Regler und Zahl, und der
+            // Mute-Knopf ganz unten.
+            //
+            // Eingang und Mute standen zuerst nebeneinander, und zwar so
+            // dicht, dass man mit dem Finger leicht den falschen traf.
+            // Zwei Knoepfe, von denen einer stumm schaltet und der
+            // andere das Mikrofon abklemmt, gehoeren an die
+            // entgegengesetzten Enden.
+            //
+            // Die Kanalnummer steht deshalb als eigenes Element da und
+            // nicht mehr im Namensfeld: Der Knopf gehoert ZWISCHEN
+            // beide.
+            //
+            // Wo es keinen Eingangsschalter gibt (die Summe, oder ein
+            // Pult, das ihn nicht kennt), steht ein unsichtbarer
+            // Platzhalter - derselbe Knopf, nur nicht zu sehen. Sonst
+            // beginnt dieser Zug eine Knopfhoehe weiter oben, und alle
+            // Regler daneben stehen versetzt. Ein Platzhalter aus
+            // demselben Element hat dabei zwangslaeufig dieselbe
+            // Hoehe; eine nachgerechnete Zahl waere beim naechsten
+            // Schriftwechsel falsch.
+            //
+            const hatSchalter =
+                channel.usb === true || channel.usb === false;
+
             cell.innerHTML = `
-                <span class="fader-name" title="${channel.name || ""}">
-                    <span class="fader-number">${channel.label}</span>${channel.name || ""}
-                </span>
+                <span class="fader-number">${channel.label}</span>
+                ${hatSchalter ? `
                 <button
                     type="button"
-                    class="btn btn-outline-secondary fader-mute"
+                    class="btn btn-outline-secondary fader-usb fader-bedienung"
                     data-channel="${channel.channel}"
-                    title="${I18N.faders_mute}"
+                    title="${I18N.faders_usb_title}"
                     ${fadersUnlocked ? "" : "disabled"}
-                >M</button>
+                ></button>
+                ` : (irgendeinSchalter ? `
+                <button
+                    type="button"
+                    class="btn btn-outline-secondary fader-usb fader-usb-platz"
+                    tabindex="-1"
+                    aria-hidden="true"
+                    disabled
+                >&nbsp;</button>
+                ` : "")}
+                <span class="fader-name" title="${channel.name || ""}">${channel.name || ""}</span>
                 <input
                     type="range"
-                    class="form-range fader-input"
+                    class="form-range fader-input fader-bedienung"
                     min="${FADER_MIN_DB}"
                     max="${FADER_MAX_DB}"
                     step="0.5"
@@ -1661,10 +2162,20 @@ function renderFaders(channels) {
                     ${fadersUnlocked ? "" : "disabled"}
                 >
                 <span class="fader-db"></span>
+                <button
+                    type="button"
+                    class="btn btn-outline-secondary fader-mute fader-bedienung"
+                    data-channel="${channel.channel}"
+                    title="${I18N.faders_mute}"
+                    ${fadersUnlocked ? "" : "disabled"}
+                >M</button>
             `;
 
             cell.querySelector(".fader-mute")
                 .addEventListener("click", () => toggleMute(channel.channel));
+
+            cell.querySelector(".fader-usb[data-channel]")
+                ?.addEventListener("click", () => toggleUsbInput(channel.channel));
 
             const input = cell.querySelector(".fader-input");
             input.addEventListener("input", onFaderInput);
@@ -1702,6 +2213,10 @@ function renderFaders(channels) {
         readout.textContent = formatDb(channel.db);
 
         renderMuteButton(mute, channel.muted);
+
+        renderUsbButton(
+            cell.querySelector(".fader-usb[data-channel]"), channel.usb
+        );
     });
 }
 
@@ -1988,50 +2503,242 @@ async function loadRecordings()
         );
     }
 }
+// ============================================================
+// Die Dateiverwaltung - ein Dialog, zwei Betriebsarten
 //
-// Getrennt nach Art, nicht gemischt: Soundcheck-Aufnahmen und
-// Übungsmixe entstehen bei verschiedenen Gelegenheiten und werden
-// auch verschieden gebraucht. Durcheinander muss man jede Zeile
-// einzeln am Kennzeichen prüfen.
+// "soundcheck" zeigt die Aufnahmen, "practice" die Uebungsmixe samt
+// ihren Mitschnitten. Es ist bewusst DERSELBE Dialog: Hochladen,
+// Herunterladen, auf USB kopieren, Loeschen, mehrere auf einmal
+// loeschen - das ist zweimal dieselbe Verwaltung. Zweimal gebaut
+// hiesse, jede kuenftige Aenderung zweimal zu machen und beim zweiten
+// Mal die eine Haelfte zu vergessen.
 //
-// Leere Abschnitte werden weggelassen - eine Überschrift ohne Inhalt
-// sieht aus, als fehle etwas.
+// Die Zuordnung Mitschnitt -> Uebungsmix kommt aus dem Status
+// (practice_takes) und wird hier NICHT aus den Dateinamen gelesen:
+// Die Regel dafuer steht in core/recording_kind.py, und sie soll dort
+// stehen bleiben.
+// ============================================================
+
+let dateienModus = "soundcheck";
+
+function mitschnittZuordnung() {
+    return (lastStatusData && lastStatusData.practice_takes) || {};
+}
+
+function alleMitschnitte() {
+
+    const namen = new Set();
+
+    Object.values(mitschnittZuordnung()).forEach((liste) => {
+        (liste || []).forEach((name) => namen.add(name));
+    });
+
+    return namen;
+}
+
 //
+// Der Anzeigename: ohne Endung und ohne Kuerzel. "Umbrella-1_p.w64"
+// heisst fuer den Nutzer "Umbrella-1" - das Kuerzel ist XRacks
+// Buchhaltung und nicht sein Problem.
+//
+function anzeigeName(dateiname) {
+    return String(dateiname || "")
+        .replace(/\.w64$/i, "")
+        .replace(/_[sp]\d*$/, "");
+}
+
+async function oeffneDateien(modus) {
+
+    dateienModus = modus;
+
+    const ueben = modus === "practice";
+
+    const titel = document.getElementById("recordingsModalTitle");
+
+    if (titel) {
+        titel.textContent = ueben
+            ? I18N.modal_practice_files_title
+            : I18N.modal_recordings_title;
+    }
+
+    //
+    // Hochladen gehoert zu den Aufnahmen: Eine hochgeladene Datei ist
+    // erst einmal eine Aufnahme, kein Uebungsmix. Und "Uebungsmix
+    // erstellen" gehoert dorthin, wo die Uebungsmixe stehen.
+    //
+    const hochladen = document.getElementById("recording-upload-label");
+    const erstellen = document.getElementById("btn-open-stem-combine");
+
+    if (hochladen) hochladen.classList.toggle("d-none", ueben);
+    if (erstellen) erstellen.classList.toggle("d-none", !ueben);
+
+    await loadRecordings();
+
+    bootstrap.Modal
+        .getOrCreateInstance(document.getElementById("recordingsModal"))
+        .show();
+}
+
 function renderRecordings(recordings) {
+
     const container = document.getElementById("recordingsList");
     container.innerHTML = "";
 
-    const abschnitte = [
-        {
-            titel: I18N.section_soundchecks,
-            dateien: recordings.filter((r) => !isPracticeMix(r.kind)),
-        },
-        {
-            titel: I18N.section_practice_mixes,
-            dateien: recordings.filter((r) => isPracticeMix(r.kind)),
-        },
-    ];
+    if (dateienModus === "practice") {
+        renderUebungsdateien(container, recordings);
+    } else {
+        renderAufnahmen(container, recordings);
+    }
+}
 
-    abschnitte.forEach((abschnitt, index) => {
+//
+// Soundcheck: alles, was weder Uebungsmix noch Mitschnitt ist.
+//
+// Die Mitschnitte fehlen hier mit Absicht. Sie sind zwar Aufnahmen
+// (und heissen auch so), aber sie ergeben nur neben ihrem Uebungsmix
+// einen Sinn - in dieser Liste waeren sie nach ein paar Uebungsabenden
+// die Mehrheit, und der Soundcheck faende sich zwischen ihnen nicht
+// wieder.
+//
+function renderAufnahmen(container, recordings) {
 
-        if (abschnitt.dateien.length === 0) return;
+    const mitschnitte = alleMitschnitte();
+
+    const dateien = recordings.filter(
+        (r) => !isPracticeMix(r.kind) && !mitschnitte.has(r.filename)
+    );
+
+    if (dateien.length === 0) {
+        container.innerHTML =
+            `<div class="text-muted text-center py-3">${I18N.no_recordings}</div>`;
+        return;
+    }
+
+    for (const recording of dateien) {
+        container.appendChild(createRecordingCard(recording));
+    }
+}
+
+//
+// Ueben: jeder Uebungsmix mit seinen Mitschnitten darunter.
+//
+function renderUebungsdateien(container, recordings) {
+
+    const zuordnung = mitschnittZuordnung();
+
+    const nachName = {};
+    recordings.forEach((r) => { nachName[r.filename] = r; });
+
+    const mixe = recordings.filter((r) => isPracticeMix(r.kind));
+
+    if (mixe.length === 0) {
+        container.innerHTML =
+            `<div class="text-muted text-center py-3">${I18N.practice_no_files}</div>`;
+        return;
+    }
+
+    mixe.forEach((mix, index) => {
 
         const ueberschrift = document.createElement("h6");
         ueberschrift.className =
             "text-body-secondary" + (index === 0 ? " mb-2" : " mt-4 mb-2");
-        ueberschrift.textContent =
-            `${abschnitt.titel} (${abschnitt.dateien.length})`;
+        ueberschrift.textContent = anzeigeName(mix.filename);
 
         container.appendChild(ueberschrift);
 
-        for (const recording of abschnitt.dateien) {
-            container.appendChild(createRecordingCard(recording));
+        container.appendChild(
+            createRecordingCard(mix, ["practice", "download", "copy-usb", "delete"])
+        );
+
+        const takes = (zuordnung[mix.filename] || [])
+            .map((name) => nachName[name])
+            .filter((r) => !!r);
+
+        if (takes.length === 0) {
+
+            const leer = document.createElement("div");
+            leer.className = "text-body-secondary small ms-4 mb-2";
+            leer.textContent = I18N.practice_no_takes;
+
+            container.appendChild(leer);
+
+            return;
         }
+
+        takes.forEach((take) => {
+
+            const karte = createRecordingCard(
+                take, ["listen", "download", "copy-usb", "delete"]
+            );
+
+            //
+            // Eingerueckt: Der Mitschnitt gehoert zum Stueck darueber,
+            // und das soll man sehen, ohne den Namen zu lesen.
+            //
+            karte.classList.add("ms-4");
+
+            container.appendChild(karte);
+        });
     });
 }
 
-function createRecordingCard(recording) {
+//
+// Die Knoepfe je Datei. Welche es gibt, haengt davon ab, was die Datei
+// IST - deshalb als Liste uebergeben und nicht in der Karte
+// entschieden: Ein Uebungsmix wird zum Ueben gewaehlt, ein Mitschnitt
+// zum Dazuhoeren, eine Aufnahme fuer den Soundcheck.
+//
+const DATEI_AKTIONEN = {
+    choose: {
+        stil: "btn-outline-success",
+        symbol: "bi-play-circle",
+        titel: () => I18N.title_choose_for_soundcheck,
+    },
+    practice: {
+        stil: "btn-outline-info",
+        symbol: "bi-repeat",
+        titel: () => I18N.title_choose_for_practice,
+    },
+    listen: {
+        stil: "btn-outline-info",
+        symbol: "bi-headphones",
+        titel: () => I18N.title_listen_along,
+    },
+    download: {
+        stil: "btn-outline-primary",
+        symbol: "bi-download",
+        titel: () => I18N.title_download,
+    },
+    "copy-usb": {
+        stil: "btn-outline-secondary",
+        symbol: "bi-usb-drive",
+        titel: () => I18N.title_copy_to_usb,
+    },
+    delete: {
+        stil: "btn-outline-danger",
+        symbol: "bi-trash",
+        titel: () => I18N.title_delete,
+    },
+};
+
+function createRecordingCard(recording, aktionen) {
     const isSelected = recording.filename === selectedRecording;
+
+    if (!aktionen) {
+        aktionen = ["choose", "download", "copy-usb", "delete"];
+    }
+
+    const knoepfe = aktionen
+        .filter((name) => name !== "copy-usb" || usbConnected)
+        .map((name) => {
+            const a = DATEI_AKTIONEN[name];
+            if (!a) return "";
+            return `
+                <button class="btn ${a.stil} btn-sm" title="${a.titel()}" data-action="${name}" data-filename="${recording.filename}">
+                    <i class="bi ${a.symbol}"></i>
+                </button>`;
+        })
+        .join("");
 
     const card = document.createElement("div");
     card.className = "card mb-2" + (isSelected ? " border-primary" : "");
@@ -2043,8 +2750,7 @@ function createRecordingCard(recording) {
             <div class="flex-grow-1">
                 <h6 class="card-title mb-2">
                     <i class="bi bi-music-note-beamed me-2"></i>
-                    ${recording.filename}
-                    <span class="ms-2">${kindBadge(recording.kind)}</span>
+                    ${anzeigeName(recording.filename)}
                     ${isSelected ? `<span class="badge text-bg-primary ms-2">${I18N.badge_selected_for_soundcheck}</span>` : ''}
                 </h6>
                 <small class="text-body-secondary">
@@ -2056,20 +2762,7 @@ function createRecordingCard(recording) {
                 </small>
             </div>
             <div class="btn-group btn-group-sm">
-                <button class="btn btn-outline-success btn-sm" title="${I18N.title_choose_for_soundcheck}" data-action="choose" data-filename="${recording.filename}">
-                    <i class="bi bi-play-circle"></i>
-                </button>
-                <button class="btn btn-outline-primary btn-sm" title="${I18N.title_download}" data-action="download" data-filename="${recording.filename}">
-                    <i class="bi bi-download"></i>
-                </button>
-                ${usbConnected ? `
-                <button class="btn btn-outline-secondary btn-sm" title="${I18N.title_copy_to_usb}" data-action="copy-usb" data-filename="${recording.filename}">
-                    <i class="bi bi-usb-drive"></i>
-                </button>
-                ` : ''}
-                <button class="btn btn-outline-danger btn-sm" title="${I18N.title_delete}" data-action="delete" data-filename="${recording.filename}">
-                    <i class="bi bi-trash"></i>
-                </button>
+                ${knoepfe}
             </div>
         </div>
     `;
@@ -2101,6 +2794,12 @@ async function handleRecordingAction(event) {
             break;
         case "choose":
             await chooseRecordingForPlayback(filename);
+            break;
+        case "practice":
+            await waehleUebungsmix(filename);
+            break;
+        case "listen":
+            waehleMitschnitt(filename);
             break;
         case "copy-usb":
             await copyRecordingToUsb(filename);
@@ -2197,6 +2896,87 @@ async function chooseRecordingForPlayback(filename) {
     modal.hide();
 
     await refreshDashboard();
+}
+
+//
+// Einen Uebungsmix aus der Dateiverwaltung zum Ueben waehlen.
+//
+// Der Knopf sass frueher am selben Platz und hiess "fuer den
+// Soundcheck auswaehlen" - er spielte den Mix dann ueber den
+// Soundcheck-Spieler ab, der weder anhalten noch spulen kann. Jetzt
+// fuehrt derselbe Griff dorthin, wo der Mix hingehoert: in die
+// Ueben-Karte.
+//
+async function waehleUebungsmix(filename) {
+
+    const antwort = await fetch("/api/player/mode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "practice" })
+    });
+
+    const ergebnis = await antwort.json();
+
+    if (!ergebnis.success) {
+        //
+        // Umgeschaltet wird nicht, solange etwas laeuft. Dann bleibt
+        // der Dialog stehen und sagt, warum.
+        //
+        if (ergebnis.message) alert(ergebnis.message);
+        return;
+    }
+
+    bootstrap.Modal
+        .getOrCreateInstance(document.getElementById("recordingsModal"))
+        .hide();
+
+    await refreshDashboard();
+
+    //
+    // Erst nach dem Auffrischen: Vorher steht der Mix noch gar nicht
+    // in der Auswahl.
+    //
+    const auswahl = document.getElementById("practice-mix");
+
+    if (auswahl) {
+        auswahl.value = filename;
+        updatePracticeCard(lastStatusData);
+    }
+}
+
+//
+// Einen Mitschnitt aus der Dateiverwaltung zum Dazuhoeren waehlen.
+//
+// Er gehoert zu einem bestimmten Uebungsmix - also wird der gleich
+// mitgewaehlt. Sonst stuende in der Karte ein Versuch, der zu einem
+// anderen Stueck gehoert, und beim Abspielen kaeme Unsinn heraus.
+//
+function waehleMitschnitt(filename) {
+
+    const zuordnung = mitschnittZuordnung();
+
+    const mix = Object.keys(zuordnung).find(
+        (name) => (zuordnung[name] || []).includes(filename)
+    );
+
+    const mixAuswahl = document.getElementById("practice-mix");
+    const takeAuswahl = document.getElementById("practice-take");
+
+    if (mix && mixAuswahl) mixAuswahl.value = mix;
+
+    //
+    // Die Liste der Versuche haengt am gewaehlten Stueck - erst
+    // aufbauen, dann darin waehlen.
+    //
+    updatePracticeCard(lastStatusData);
+
+    if (takeAuswahl) takeAuswahl.value = filename;
+
+    updatePracticeCard(lastStatusData);
+
+    bootstrap.Modal
+        .getOrCreateInstance(document.getElementById("recordingsModal"))
+        .hide();
 }
 
 function downloadRecording(filename) {
@@ -2372,21 +3152,131 @@ const STEM_COMBINE_MAX_FILES = 8;
 let stemCombineRowCount = 0;
 let stemCombinePollTimer = null;
 
+//
+// Ab welchem Kanal der Mix liegen soll. Alles andere im Dialog haengt
+// daran - auch die Beschriftung der Dateizeilen, denn "Kanal 1+2" ist
+// gelogen, wenn der Mix ab Kanal 9 liegt.
+//
+function stemCombineStartkanal() {
+
+    const feld = document.getElementById("stem-combine-start-channel");
+
+    return feld && feld.value ? Number(feld.value) : 1;
+}
+
+function stemCombineZeileBeschriften(zeile, nummer) {
+
+    const start = stemCombineStartkanal();
+
+    const a = start + (nummer - 1) * 2;
+
+    const beschriftung = zeile.querySelector("label");
+
+    if (beschriftung) {
+        beschriftung.textContent = I18N.stem_combine_channel_label
+            .replace("{a}", a)
+            .replace("{b}", a + 1);
+    }
+}
+
+function stemCombineBeschriftungenErneuern() {
+
+    const zeilen = document.querySelectorAll("#stem-combine-files > div");
+
+    zeilen.forEach((zeile, index) => {
+        stemCombineZeileBeschriften(zeile, index + 1);
+    });
+}
+
+//
+// Die Dateien, die schon auf dem Geraet liegen - einmal geholt und
+// dann in jede Zeile gefuellt.
+//
+let stemCombineBibliothek = [];
+
+async function stemCombineBibliothekLaden() {
+
+    try {
+
+        const antwort = await fetch("/api/music/all-files");
+
+        stemCombineBibliothek = (await antwort.json()).files || [];
+
+    } catch (fehler) {
+        console.error("Musikbibliothek nicht lesbar:", fehler);
+        stemCombineBibliothek = [];
+    }
+}
+
+function stemCombineBibliothekFuellen(auswahl) {
+
+    if (!auswahl) return;
+
+    auswahl.innerHTML = "";
+
+    const leer = document.createElement("option");
+    leer.value = "";
+    leer.textContent = stemCombineBibliothek.length
+        ? I18N.stem_combine_from_device
+        : I18N.stem_combine_device_empty;
+    auswahl.appendChild(leer);
+
+    auswahl.disabled = stemCombineBibliothek.length === 0;
+
+    stemCombineBibliothek.forEach((pfad) => {
+        const eintrag = document.createElement("option");
+        eintrag.value = pfad;
+        eintrag.textContent = pfad;
+        auswahl.appendChild(eintrag);
+    });
+}
+
 function addStemCombineRow() {
     if (stemCombineRowCount >= STEM_COMBINE_MAX_FILES) return;
 
     stemCombineRowCount++;
-    const a = stemCombineRowCount * 2 - 1;
-    const b = stemCombineRowCount * 2;
 
+    //
+    // Zwei Wege je Kanalpaar: hochladen ODER eine Datei nehmen, die
+    // schon auf dem Geraet liegt.
+    //
+    // Der zweite ist dazugekommen, seit Dateien auch vom USB-Stick
+    // kommen koennen. Sie dann durch den Browser wieder hochzuladen
+    // waere genau der Umweg ueber die Leitung, den der Stick
+    // vermeiden sollte - und bei Stems geht es um hundert Megabyte
+    // aufwaerts.
+    //
     const row = document.createElement("div");
     row.className = "mb-2";
     row.innerHTML = `
-        <label class="form-label small mb-1">
-            ${I18N.stem_combine_channel_label.replace("{a}", a).replace("{b}", b)}
-        </label>
+        <label class="form-label small mb-1"></label>
         <input type="file" class="form-control form-control-sm stem-combine-file-input" accept=".wav,.w64">
+        <select class="form-select form-select-sm mt-1 stem-combine-library">
+        </select>
     `;
+
+    const auswahl = row.querySelector(".stem-combine-library");
+
+    stemCombineBibliothekFuellen(auswahl);
+
+    //
+    // Eins von beidem, nicht beides: Was gewaehlt ist, sperrt das
+    // andere. Sonst muesste irgendwo eine Vorrangregel stehen, die
+    // niemand sieht.
+    //
+    const hochladen = row.querySelector(".stem-combine-file-input");
+
+    auswahl.addEventListener("change", () => {
+        hochladen.disabled = !!auswahl.value;
+        if (auswahl.value) hochladen.value = "";
+    });
+
+    hochladen.addEventListener("change", () => {
+        auswahl.disabled = hochladen.files.length > 0;
+        if (hochladen.files.length) auswahl.value = "";
+    });
+
+    stemCombineZeileBeschriften(row, stemCombineRowCount);
 
     document.getElementById("stem-combine-files").appendChild(row);
 
@@ -2397,6 +3287,35 @@ function addStemCombineRow() {
 function resetStemCombineModal() {
     document.getElementById("stem-combine-name").value = "";
     document.getElementById("stem-combine-files").innerHTML = "";
+
+    //
+    // Nur ungerade Kanaele: Jeder Stem ist ein Stereopaar. Ab einem
+    // geraden Kanal laege jedes Paar quer ueber zwei Paare des Pults.
+    //
+    const kanal = document.getElementById("stem-combine-start-channel");
+
+    if (kanal) {
+
+        const vorher = kanal.value;
+        const verfuegbar = lastStatusData.audio_channels || 0;
+
+        kanal.innerHTML = "";
+
+        for (let start = 1; start + 1 <= verfuegbar; start += 2) {
+            const eintrag = document.createElement("option");
+            eintrag.value = start;
+            eintrag.textContent = I18N.channel_option
+                .replace("{a}", start)
+                .replace("{b}", start + 1);
+            kanal.appendChild(eintrag);
+        }
+
+        if (vorher) kanal.value = vorher;
+
+        if (!kanal.value && kanal.options.length) kanal.selectedIndex = 0;
+
+        kanal.onchange = stemCombineBeschriftungenErneuern;
+    }
     document.getElementById("stemCombineProgressWrapper").classList.add("d-none");
     document.getElementById("stemCombineError").classList.add("d-none");
 
@@ -2419,19 +3338,46 @@ function showStemCombineError(message) {
 
 document.getElementById("btn-stem-combine-add-file").addEventListener("click", addStemCombineRow);
 
-document.getElementById("btn-open-stem-combine").addEventListener("click", () => {
-    const recordingsModalElement = document.getElementById("recordingsModal");
-    bootstrap.Modal.getOrCreateInstance(recordingsModalElement).hide();
+//
+// "Uebungsmix erstellen" sitzt in der Dateiverwaltung - dort, wo die
+// Uebungsmixe stehen. Ein Uebungsmix ist eine Datei, und Dateien macht
+// man in der Dateiverwaltung.
+//
+// Geschlossen kehrt der Dialog dorthin zurueck, woher er kam: Der
+// naechste Griff gilt fast immer dem eben erzeugten Mix.
+//
+async function oeffneStemCombine() {
+
+    bootstrap.Modal
+        .getOrCreateInstance(document.getElementById("recordingsModal"))
+        .hide();
 
     resetStemCombineModal();
 
-    const modalElement = document.getElementById("stemCombineModal");
-    bootstrap.Modal.getOrCreateInstance(modalElement).show();
+    bootstrap.Modal
+        .getOrCreateInstance(document.getElementById("stemCombineModal"))
+        .show();
+
+    //
+    // Die Dateien vom Geraet werden NACHGEFUELLT, nicht vorher
+    // geholt: Der Dialog soll sofort dastehen. Wer erst laedt und dann
+    // zeigt, laesst den Knopf haengen, solange die Bibliothek
+    // durchsucht wird - und bei ein paar hundert Titeln ist das zu
+    // sehen.
+    //
+    await stemCombineBibliothekLaden();
+
+    document
+        .querySelectorAll("#stem-combine-files .stem-combine-library")
+        .forEach(stemCombineBibliothekFuellen);
+}
+
+document.getElementById("btn-open-stem-combine").addEventListener("click", () => {
+    oeffneStemCombine();
 });
 
 document.getElementById("stemCombineModal").addEventListener("hidden.bs.modal", () => {
-    const recordingsModalElement = document.getElementById("recordingsModal");
-    bootstrap.Modal.getOrCreateInstance(recordingsModalElement).show();
+    oeffneDateien("practice");
 });
 
 document.getElementById("btn-stem-combine-submit").addEventListener("click", submitStemCombine);
@@ -2445,20 +3391,45 @@ async function submitStemCombine() {
         return;
     }
 
-    const files = Array.from(
-        document.querySelectorAll("#stem-combine-files .stem-combine-file-input")
-    )
-        .map((input) => input.files[0])
-        .filter((file) => !!file);
+    //
+    // Die REIHENFOLGE ist die Kanalzuordnung, und sie laeuft ueber
+    // beide Quellen hinweg. Deshalb wird sie ausdruecklich
+    // mitgeschickt: Ohne sie bliebe der Gegenseite nur zu raten, ob
+    // der Upload vor oder hinter der Datei vom Geraet liegt - und die
+    // Stems laegen auf den falschen Kanaelen.
+    //
+    const quellen = [];
+    const uploads = [];
 
-    if (files.length < 2) {
+    Array.from(
+        document.querySelectorAll("#stem-combine-files > div")
+    ).forEach((zeile) => {
+
+        const ausBibliothek = zeile.querySelector(".stem-combine-library");
+        const hochgeladen = zeile.querySelector(".stem-combine-file-input");
+
+        if (ausBibliothek && ausBibliothek.value) {
+            quellen.push({ kind: "library", path: ausBibliothek.value });
+            return;
+        }
+
+        if (hochgeladen && hochgeladen.files[0]) {
+            quellen.push({ kind: "upload" });
+            uploads.push(hochgeladen.files[0]);
+        }
+    });
+
+    if (quellen.length < 2) {
         showStemCombineError(I18N.stem_combine_files_required);
         return;
     }
 
     const formData = new FormData();
     formData.append("name", name);
-    for (const file of files) {
+    formData.append("start_channel", String(stemCombineStartkanal()));
+    formData.append("sources", JSON.stringify(quellen));
+
+    for (const file of uploads) {
         formData.append("files", file);
     }
 
@@ -2549,16 +3520,635 @@ function formatFileSize(bytes) {
 // 11b. MUSIC PLAYER
 // ============================================================
 
+// ============================================================
+// Musik oder Üben - eine Karte, zwei Quellen
+//
+// Zwei Wiedergabestroeme kann das Interface nicht (deshalb schliessen
+// sich Musik und Soundcheck seit jeher aus). Zwei Karten nebeneinander
+// wuerden also etwas anbieten, was die Hardware nicht hergibt -
+// deshalb eine Karte mit Umschalter.
+//
+// Getauscht wird nur der KOPF: Transport, Schnellregler, Angaben und
+// Positionsregler sind fuer beide dasselbe, es ist ja derselbe
+// Spieler.
+// ============================================================
+
+function applyPlayerMode(data) {
+
+    const ueben = data.player_mode === "practice";
+
+    const kopfMusik = document.getElementById("player-head-music");
+    const kopfUeben = document.getElementById("player-head-practice");
+
+    if (kopfMusik) kopfMusik.classList.toggle("d-none", ueben);
+    if (kopfUeben) kopfUeben.classList.toggle("d-none", !ueben);
+
+    const titel = document.getElementById("player-title-text");
+    if (titel) {
+        titel.textContent = ueben ? I18N.practice_title : I18N.music_player_title;
+    }
+
+    const symbol = document.getElementById("player-icon");
+    if (symbol) {
+        symbol.className = ueben
+            ? "bi bi-repeat me-2"
+            : "bi bi-music-note-list me-2";
+    }
+
+    //
+    // Der Schnellregler gehoert zum Musikspieler. Ein Uebungsmix liegt
+    // auf so vielen Kanaelen, wie er Spuren hat - ein Stereoregler
+    // passt darauf nicht, und geregelt wird beim Ueben am Pult, Spur
+    // fuer Spur. Ihn stehen zu lassen hiesse, den Pegel EINES Paares
+    // zu verstellen und sich zu wundern, warum nur ein Teil leiser
+    // wird.
+    //
+    const regler = document.getElementById("player-fader-music");
+
+    if (regler) regler.classList.toggle("d-none", ueben);
+
+    const knopfMusik = document.getElementById("btn-mode-music");
+    const knopfUeben = document.getElementById("btn-mode-practice");
+
+    if (knopfMusik) knopfMusik.classList.toggle("active", !ueben);
+    if (knopfUeben) knopfUeben.classList.toggle("active", ueben);
+
+    //
+    // Nicht umschalten, solange etwas laeuft: Die Karte tauscht
+    // darunter die Quelle aus. Der Server lehnt es ebenfalls ab - hier
+    // ist es nur der sichtbare Teil derselben Regel.
+    //
+    const laeuft = data.music_playing || data.music_paused;
+
+    [knopfMusik, knopfUeben].forEach((knopf) => {
+        if (!knopf) return;
+        knopf.disabled = laeuft;
+        knopf.title = laeuft ? I18N.practice_busy : "";
+    });
+}
+
+async function setPlayerMode(mode) {
+
+    const response = await fetch("/api/player/mode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode })
+    });
+
+    const ergebnis = await response.json();
+
+    if (!ergebnis.success && ergebnis.message) {
+        alert(ergebnis.message);
+    }
+
+    await refreshDashboard();
+}
+
+function updatePracticeCard(data) {
+
+    const auswahl = document.getElementById("practice-mix");
+
+    if (!auswahl) return;
+
+    const mixe = data.practice_mixes || [];
+
+    //
+    // Nur neu aufbauen, wenn sich die Liste geaendert hat - sonst
+    // springt die Auswahl bei jeder Statusabfrage zurueck.
+    //
+    const kennung = mixe.join("|");
+
+    if (auswahl.dataset.built !== kennung) {
+
+        const vorher = auswahl.value;
+
+        auswahl.innerHTML = "";
+
+        mixe.forEach((name) => {
+            const eintrag = document.createElement("option");
+            eintrag.value = name;
+            eintrag.textContent = anzeigeName(name);
+            auswahl.appendChild(eintrag);
+        });
+
+        auswahl.dataset.built = kennung;
+
+        if (mixe.includes(vorher)) auswahl.value = vorher;
+    }
+
+    //
+    // Was sich dazuhoeren laesst: die Mitschnitte ZU DIESEM Stueck.
+    //
+    // Nicht alle Aufnahmen: Nach ein paar Uebungsabenden waere das
+    // eine Liste, in der man sucht - und ein Versuch zu einem anderen
+    // Stueck ergibt beim Zusammenhoeren ohnehin nur Unsinn. Die
+    // Zuordnung steht im Dateinamen (siehe core/recording_kind.py)
+    // und kommt fertig aus dem Status.
+    //
+    const mitspielen = document.getElementById("practice-take");
+
+    if (mitspielen) {
+
+        const takes = (data.practice_takes || {})[auswahl.value] || [];
+
+        const kennung = auswahl.value + "|" + takes.join("|");
+
+        if (mitspielen.dataset.built !== kennung) {
+
+            const vorher = mitspielen.value;
+
+            mitspielen.innerHTML = "";
+
+            const keiner = document.createElement("option");
+            keiner.value = "";
+            keiner.textContent = I18N.practice_take_none;
+            mitspielen.appendChild(keiner);
+
+            takes.forEach((name) => {
+                const eintrag = document.createElement("option");
+                eintrag.value = name;
+                eintrag.textContent = takeName(name);
+                mitspielen.appendChild(eintrag);
+            });
+
+            mitspielen.dataset.built = kennung;
+
+            if (takes.includes(vorher)) mitspielen.value = vorher;
+        }
+
+        mitspielen.disabled = data.music_playing;
+
+        //
+        // Zusammenfuehren geht nur mit einem gewaehlten Mitschnitt -
+        // und nicht, waehrend etwas laeuft: Die neue Datei entsteht
+        // aus beiden Quellen, und wer sie dabei umschaltet, bekaeme
+        // eine andere als die, die er gerade hoert.
+        //
+        const zusammen = document.getElementById("btn-practice-merge");
+
+        if (zusammen) {
+            zusammen.disabled =
+                !mitspielen.value || data.music_playing || data.recording;
+        }
+    }
+
+    //
+    // Der Versatz gehoert zum Mitschnitt: ohne einen ist er ohne
+    // Wirkung. Getippt wird er von Hand, deshalb nur setzen, wenn
+    // niemand gerade darin schreibt.
+    //
+    const versatz = document.getElementById("practice-offset");
+
+    if (versatz) {
+
+        if (document.activeElement !== versatz) {
+            versatz.value = data.practice_offset_ms || 0;
+        }
+
+        versatz.disabled = data.music_playing;
+    }
+
+    const messen = document.getElementById("btn-practice-latency");
+
+    if (messen && !laufzeitLaeuft) {
+
+        //
+        // Die Messung ist selbst eine Wiedergabe MIT Aufnahme - sie
+        // faellt unter dieselben Sperren wie das Ueben.
+        //
+        messen.disabled = (
+            data.music_playing
+            || data.playback_active
+            || data.recording
+            || !isAudioReady(data)
+        );
+    }
+
+    const schleife = document.getElementById("practice-repeat");
+
+    if (schleife && document.activeElement !== schleife) {
+        schleife.checked = Boolean(data.practice_repeat);
+    }
+
+    const mitschnitt = document.getElementById("practice-record");
+
+    if (mitschnitt) {
+
+        if (document.activeElement !== mitschnitt) {
+            mitschnitt.checked = Boolean(data.practice_record);
+        }
+
+        //
+        // Ohne offenes Interface gibt es nichts aufzunehmen. Der
+        // Schalter bleibt dann zu und sagt, warum - ein Schalter, der
+        // sich umlegen laesst und nichts bewirkt, ist schlimmer.
+        //
+        const bereit = isAudioReady(data);
+
+        mitschnitt.disabled = !bereit || data.music_playing;
+
+        mitschnitt.title = bereit ? "" : I18N.practice_record_no_device;
+    }
+
+    //
+    // Auf welchen Kanaelen der Mix landet, steht in SEINEM Namen
+    // ("Probe-1_p9.w64") - hier wird es nur vorgelesen. Ein Feld zum
+    // Waehlen gab es einmal; es log, weil es Stereopaare anbot,
+    // waehrend ein Uebungsmix acht Kanaele belegen kann.
+    //
+    const hinweis = document.getElementById("practice-hint");
+
+    if (hinweis) {
+
+        if (!mixe.length) {
+            hinweis.textContent = I18N.practice_none;
+        } else {
+
+            const teile = [
+                I18N.practice_hint.replace(
+                    "{a}", startkanalAusName(auswahl.value))
+            ];
+
+            //
+            // Was aufgenommen wird, steht in der Soundcheck-Karte -
+            // hier wird es nur dazugesagt. Ein Mitschnitt, von dem man
+            // nicht weiss, was darauf ist, ist keiner.
+            //
+            if (mitschnitt && mitschnitt.checked) {
+
+                const von = data.record_start_channel || 1;
+                const bis = von + (data.record_channels || 0) - 1;
+
+                teile.push(
+                    I18N.practice_record_hint
+                        .replace("{a}", von)
+                        .replace("{b}", bis)
+                );
+            }
+
+            if (mitspielen && mitspielen.value) {
+
+                teile.push(
+                    I18N.practice_take_hint.replace(
+                        "{name}", takeName(mitspielen.value))
+                );
+
+                teile.push(
+                    I18N.practice_offset_hint.replace(
+                        "{ms}", data.practice_offset_ms || 0)
+                );
+            }
+
+            hinweis.textContent = teile.join(" · ");
+        }
+    }
+}
+
+//
+// Der erste Kanal aus dem Dateinamen: "_p9" heisst Kanal 9, "_p" und
+// alles ohne Kuerzel heisst Kanal 1. Dieselbe Regel wie in
+// core/recording_kind.py - sie steht hier ein zweites Mal, weil der
+// Browser den Namen liest, bevor er den Server fragt.
+//
+//
+// "Umbrella-1-Take2_s9.w64" heisst in der Auswahl "Versuch 2". Der
+// Name des Stuecks steht schon darueber - ihn zu wiederholen macht
+// die Liste nur breit.
+//
+function takeName(dateiname) {
+
+    const treffer = /-Take(\d+)$/.exec(anzeigeName(dateiname));
+
+    return treffer
+        ? I18N.practice_take_short.replace("{nr}", treffer[1])
+        : anzeigeName(dateiname);
+}
+
+function startkanalAusName(name) {
+
+    const treffer = /_[sp](\d+)\.[^.]+$/i.exec(String(name || ""));
+
+    return treffer ? Number(treffer[1]) : 1;
+}
+
+async function startPractice() {
+
+    const auswahl = document.getElementById("practice-mix");
+    const schleife = document.getElementById("practice-repeat");
+    const mitschnitt = document.getElementById("practice-record");
+    const mitspielen = document.getElementById("practice-take");
+
+    if (!auswahl || !auswahl.value) return;
+
+    const response = await fetch("/api/practice/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            filename: auswahl.value,
+            repeat: schleife ? schleife.checked : false,
+            record: mitschnitt ? mitschnitt.checked : false,
+            take: mitspielen ? mitspielen.value : ""
+        })
+    });
+
+    const ergebnis = await response.json();
+
+    if (!ergebnis.success && ergebnis.message) {
+        alert(ergebnis.message);
+    }
+
+    await refreshDashboard();
+}
+
+//
+// Beim Ueben beendet der Stop-Knopf BEIDES - Ton und Mitschnitt. Der
+// Server beendet dabei nur, was dieser Uebungslauf gestartet hat
+// (siehe Application.stop_practice).
+//
+async function stopPractice() {
+
+    await fetch("/api/practice/stop", { method: "POST" });
+
+    await refreshDashboard();
+}
+
+//
+// Die Laufzeit durch das Pult messen.
+//
+// Sie laeuft einige Sekunden im Hintergrund - deshalb starten,
+// nachfragen, und erst dann das Ergebnis. Vorher wird gesagt, was
+// dafuer am Pult eingerichtet sein muss: XRack kann die Schleife nicht
+// selbst herstellen, und eine Messung ohne sie findet nichts.
+//
+let laufzeitLaeuft = false;
+
+//
+// Stufe 5: aus Uebungsmix und Mitschnitt eine Datei schreiben.
+//
+// Der Name wird vorgeschlagen und nicht erfragt-und-vergessen: Er
+// setzt sich aus dem Stueck und der Nummer des Versuchs zusammen
+// ("Umbrella-1 mit Take 2"), denn genau daran erkennt man die Datei
+// spaeter auf dem Stick wieder.
+//
+async function takeZusammenfuehren() {
+
+    const mix = document.getElementById("practice-mix");
+    const take = document.getElementById("practice-take");
+    const knopf = document.getElementById("btn-practice-merge");
+
+    if (!mix || !take || !take.value) return;
+
+    const vorschlag = `${anzeigeName(mix.value)} + ${takeName(take.value)}`;
+
+    const name = prompt(I18N.practice_merge_name, vorschlag);
+
+    //
+    // Abbrechen heisst abbrechen - ein leerer Name waere sonst ein
+    // stillschweigendes "Soundcheck".
+    //
+    if (name === null || !name.trim()) return;
+
+    if (knopf) knopf.disabled = true;
+
+    try {
+
+        const antwort = await fetch("/api/recordings/combine-take", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                mix: mix.value,
+                take: take.value,
+                name: name.trim(),
+            }),
+        });
+
+        const ergebnis = await antwort.json();
+
+        if (!ergebnis.success) {
+            alert(ergebnis.message || I18N.practice_merge_failed);
+            return;
+        }
+
+        //
+        // Die Arbeit laeuft im Hintergrund - gewartet wird auf
+        // dieselbe Statusabfrage wie beim Erstellen eines Uebungsmixes
+        // aus Stems. Es ist dieselbe Arbeit: Am Ende steht ein
+        // Uebungsmix.
+        //
+        const fertig = await warteAufZusammenfuehrung();
+
+        if (fertig.success) {
+            alert(
+                I18N.practice_merge_done.replace("{name}", fertig.filename)
+            );
+
+            //
+            // Die neue Datei gehoert sofort in die Auswahl - sonst
+            // sucht man sie dort vergeblich und haelt es fuer einen
+            // Fehlschlag.
+            //
+            await updateStatus();
+        } else {
+            alert(fertig.error || I18N.practice_merge_failed);
+        }
+
+    } catch (fehler) {
+        console.error("Zusammenführen fehlgeschlagen:", fehler);
+        alert(I18N.practice_merge_failed);
+
+    } finally {
+        if (knopf) knopf.disabled = false;
+    }
+}
+
+//
+// Nachfragen, bis die Zusammenfuehrung fertig ist.
+//
+// Die Frist ist grosszuegig: Geschrieben wird eine ganze Datei, und
+// eine Stunde Uebungsmix sind Gigabytes. Sie ist trotzdem da - ohne
+// sie warte die Oberflaeche ewig, wenn der Hintergrundlauf stirbt.
+//
+async function warteAufZusammenfuehrung(frist_s = 1800) {
+
+    const ende = Date.now() + frist_s * 1000;
+
+    while (Date.now() < ende) {
+
+        await new Promise((weiter) => setTimeout(weiter, 500));
+
+        const stand = await (
+            await fetch("/api/recordings/combine/status")
+        ).json();
+
+        if (!stand.active) return stand;
+    }
+
+    return { success: false, error: I18N.practice_merge_failed };
+}
+
+async function messeLaufzeit() {
+
+    if (laufzeitLaeuft) return;
+
+    if (!confirm(I18N.practice_latency_confirm)) return;
+
+    const knopf = document.getElementById("btn-practice-latency");
+
+    const antwort = await fetch("/api/practice/latency", { method: "POST" });
+
+    const ergebnis = await antwort.json();
+
+    if (!ergebnis.success) {
+        if (ergebnis.message) alert(ergebnis.message);
+        return;
+    }
+
+    laufzeitLaeuft = true;
+
+    if (knopf) {
+        knopf.disabled = true;
+        knopf.textContent = I18N.practice_latency_running;
+    }
+
+    //
+    // Nachfragen, bis sie fertig ist. Die Frist ist nur dafuer da,
+    // dass ein haengender Lauf den Knopf nicht fuer immer sperrt.
+    //
+    const frist = Date.now() + 120000;
+
+    while (Date.now() < frist) {
+
+        await new Promise((weiter) => setTimeout(weiter, 500));
+
+        let stand;
+
+        try {
+            stand = await (await fetch("/api/practice/latency")).json();
+        } catch (fehler) {
+            break;
+        }
+
+        if (stand.active) continue;
+
+        if (stand.success) {
+
+            const werte = (stand.werte || []).join(", ");
+
+            //
+            // Drei gleiche Zahlen sind ein Befund, drei verschiedene
+            // eine Warnung, und eine Null braucht eine Erklaerung -
+            // sonst haelt man sie fuer einen Fehler.
+            //
+            let text = I18N.practice_latency_done;
+
+            if (stand.unsicher) {
+                text = I18N.practice_latency_unsure;
+            } else if (stand.ms <= 2) {
+                text = I18N.practice_latency_zero;
+            }
+
+            alert(
+                text
+                    .replace("{ms}", stand.ms)
+                    .replace("{werte}", werte)
+                    .replace("{spanne}", stand.spanne)
+            );
+
+        } else if (stand.error) {
+            alert(stand.error);
+        }
+
+        break;
+    }
+
+    laufzeitLaeuft = false;
+
+    if (knopf) {
+        knopf.innerHTML =
+            `<i class="bi bi-stopwatch me-1"></i>${I18N.practice_latency_measure}`;
+        knopf.disabled = false;
+    }
+
+    await refreshDashboard();
+}
+
+async function setPracticeOffset(millisekunden) {
+
+    await fetch("/api/practice/offset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ offset_ms: millisekunden })
+    });
+
+    await refreshDashboard();
+}
+
+async function setPracticeRecord(an) {
+
+    await fetch("/api/practice/record", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ record: an })
+    });
+
+    await refreshDashboard();
+}
+
+async function setPracticeRepeat(an) {
+
+    await fetch("/api/practice/repeat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repeat: an })
+    });
+
+    await refreshDashboard();
+}
+
+document.getElementById("practice-repeat").addEventListener("change", (e) => {
+    setPracticeRepeat(e.target.checked);
+});
+
+document.getElementById("practice-record").addEventListener("change", (e) => {
+    setPracticeRecord(e.target.checked);
+});
+
+//
+// Die Auswahl steht nur im Browser: Anders als Schleife und
+// Mitschneiden ist sie kein Zustand des Racks, sondern die Frage
+// "welchen Versuch hoere ich mir jetzt an".
+//
+document.getElementById("practice-mix").addEventListener("change", () => {
+    updatePracticeCard(lastStatusData);
+});
+
+document.getElementById("practice-take").addEventListener("change", () => {
+    updatePracticeCard(lastStatusData);
+});
+
+document.getElementById("practice-offset").addEventListener("change", (e) => {
+    setPracticeOffset(Number(e.target.value) || 0);
+});
+
 function updateMusicPlayer(data) {
     musicPlaying = data.music_playing;
     musicPaused = data.music_paused;
 
+    applyPlayerMode(data);
+    updatePracticeCard(data);
     updateMusicChannels(data);
     updateMusicStatus(data);
     updateMusicButtons(data);
     updateMusicSeek(data);
 
-    const select = document.getElementById("music-channels");
+    //
+    // Beim Ueben ist der Regler ausgeblendet (siehe applyPlayerMode) -
+    // dann hat er auch kein Paar zu holen. Sonst liefe im Hintergrund
+    // eine Abfrage je Sekunde fuer einen Regler, den niemand sieht.
+    //
+    const select = data.player_mode === "practice"
+        ? null
+        : document.getElementById("music-channels");
 
     //
     // Pausiert zählt als "läuft": Wer kurz anhält, um die Lautstärke
@@ -2729,9 +4319,58 @@ function updateMusicStatus(data) {
     }
 }
 
+//
+// Kann jetzt geuebt werden? Dieselbe Frage stellt der Server noch
+// einmal (Application.start_practice) - hier ist es nur der sichtbare
+// Teil davon.
+//
+function uebenMoeglich(data) {
+
+    const auswahl = document.getElementById("practice-mix");
+
+    return Boolean(
+        auswahl
+        && auswahl.value
+        && !data.music_playing
+        && !data.playback_active
+        && isAudioReady(data)
+    );
+}
+
 function updateMusicButtons(data) {
+
+    const ueben = data.player_mode === "practice";
+
     const stopButton = document.getElementById("btn-music-stop");
-    if (stopButton) stopButton.disabled = !data.music_playing;
+
+    //
+    // Beim Ueben ist derselbe Knopf Start und Stop. Ein eigener
+    // Startknopf stand vorher oben in der Karte - das ist zweierlei
+    // Bedienung fuer eine Sache. XRack macht es ueberall so: In der
+    // Soundcheck-Karte startet und stoppt ebenfalls EIN Knopf.
+    //
+    if (stopButton && ueben && !data.music_playing) {
+
+        stopButton.innerHTML =
+            `<i class="bi bi-play-circle fs-3"></i><small>${I18N.btn_practice}</small>`;
+
+        stopButton.classList.remove("btn-outline-danger");
+        stopButton.classList.add("btn-primary");
+
+        stopButton.onclick = startPractice;
+        stopButton.disabled = !uebenMoeglich(data);
+
+    } else if (stopButton) {
+
+        stopButton.innerHTML =
+            `<i class="bi bi-stop-circle fs-3"></i><small>${I18N.btn_stop}</small>`;
+
+        stopButton.classList.add("btn-outline-danger");
+        stopButton.classList.remove("btn-primary");
+
+        stopButton.onclick = ueben ? stopPractice : stopMusic;
+        stopButton.disabled = !data.music_playing;
+    }
 
     const skipButton = document.getElementById("btn-music-skip");
     if (skipButton) skipButton.disabled = !data.music_playing || !data.music_folder_mode;
@@ -3280,6 +4919,57 @@ async function loadSettings() {
 // Diagnose-Aufzeichnung
 // ------------------------------------------------------------
 
+//
+// Die gemessenen Stillstände - Zeiten, in denen im Prozess kein Python
+// lief und die Weboberfläche deshalb nicht erreichbar war.
+//
+// Sie stehen hier unabhängig davon, ob die Aufzeichnung läuft: Die
+// Wache läuft immer (siehe core/diagnostics.py). Der Grund ist die
+// Geschichte dieses Fehlers - er tritt selten auf, und wer ihn erlebt,
+// hat die Aufzeichnung meist nicht vorher eingeschaltet.
+//
+function renderStillstaende(befunde) {
+    const stelle = document.getElementById("settings-stillstaende");
+
+    if (!stelle) return;
+
+    if (!befunde.length) {
+        stelle.innerHTML =
+            '<span class="text-body-secondary">'
+            + I18N.settings_stillstand_keiner + "</span>";
+        return;
+    }
+
+    stelle.innerHTML = "";
+
+    const kopf = document.createElement("div");
+    kopf.className = "fw-semibold";
+    kopf.textContent = I18N.settings_stillstand_titel;
+    stelle.appendChild(kopf);
+
+    //
+    // Über textContent zusammengesetzt und nicht über innerHTML: Im
+    // Befund steht ein Gerätename, der vom System kommt - und was von
+    // außen kommt, gehört nicht als Markup in die Seite.
+    //
+    befunde.forEach((befund) => {
+
+        const zeile = document.createElement("div");
+        zeile.className = "text-warning";
+
+        const zeit = new Date(befund.zeit * 1000).toLocaleString();
+
+        zeile.textContent = `${zeit} — ${befund.dauer} s`;
+
+        const dazu = document.createElement("span");
+        dazu.className = "text-body-secondary";
+        dazu.textContent = ` · ${befund.befund}`;
+
+        zeile.appendChild(dazu);
+        stelle.appendChild(zeile);
+    });
+}
+
 async function loadDiagnosticsStatus() {
     const toggle = document.getElementById("settings-diagnostics-toggle");
     const download = document.getElementById("btn-diagnostics-download");
@@ -3302,6 +4992,8 @@ async function loadDiagnosticsStatus() {
                 ? formatFileSize(status.size)
                 : I18N.settings_diagnostics_empty;
         }
+
+        renderStillstaende(status.stillstaende || []);
     } catch (error) {
         console.error("Diagnose-Status konnte nicht geladen werden:", error);
     }

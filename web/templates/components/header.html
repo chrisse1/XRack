@@ -16,6 +16,20 @@
 
   <div class="d-flex gap-2">
 
+    {#
+        Der Stick als Dateimanager: nachsehen, was darauf liegt, und
+        Dateien oder ganze Ordner auf das Geraet holen. Steht neben dem
+        Auswerfen, weil beides denselben Stick meint - und beide nur
+        sichtbar sind, wenn einer steckt.
+    #}
+    <button
+        id="btn-usb-browse"
+        class="btn btn-outline-secondary btn-sm d-none"
+        title="{{ t.btn_usb_browse }}"
+    >
+        <i class="bi bi-folder2-open"></i>
+    </button>
+
     <button
         id="btn-usb-eject"
         class="btn btn-outline-secondary btn-sm d-none"

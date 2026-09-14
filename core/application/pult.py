@@ -465,3 +465,38 @@ class PultMixin:
             return False
 
         return self.console_control.set_mute(host, channels, channel, muted)
+
+
+    def set_console_usb_input(self, channel: int, usb: bool) -> bool:
+        """
+        Legt den Eingang eines Kanals auf USB oder auf den
+        Vorverstaerker (A/D).
+
+        Das Gegenstueck zum virtuellen Soundcheck: XRack spielt die
+        Aufnahme ins Pult, und der Kanal muss sie hoeren statt des
+        Mikrofons. Bisher war das der einzige Handgriff, fuer den man
+        noch nach X-AIR-Edit wechseln musste.
+
+        Ins Protokoll geschrieben wird es ausdruecklich: Ein Kanal, der
+        auf USB stehen geblieben ist, hoert beim naechsten Auftritt sein
+        Mikrofon nicht - und dann will man nachlesen koennen, wer wann
+        umgelegt hat.
+        """
+
+        host, channels, _ = self._console_host_and_channels()
+
+        if not host or channels <= 0:
+            return False
+
+        erfolg = self.console_control.set_usb_input(
+            host, channels, channel, usb
+        )
+
+        if erfolg:
+            self.logger.info(
+                "Pult-Kanal %d auf %s gelegt.",
+                channel,
+                "USB" if usb else "A/D",
+            )
+
+        return erfolg

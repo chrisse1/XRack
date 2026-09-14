@@ -5,7 +5,12 @@ von Stereodateien zum Uebungsmix.
 
 import threading
 
-from core.stem_combiner import combine_stems, StemCombineError
+from core.recording_kind import KIND_PRACTICE, kind_from_filename
+from core.stem_combiner import (
+    StemCombineError,
+    combine_stems,
+    uebungsmix_mit_take,
+)
 from pathlib import Path
 
 
@@ -35,8 +40,45 @@ class AufnahmeMixin:
         if manuell:
             self.state_store.set("record_channels_manual", True)
 
+        return self._aufnahmefenster_anwenden()
+
+
+    def set_record_start_channel(self, start_channel: int) -> bool:
+        """
+        Setzt den ersten aufgenommenen Kanal (1-basiert).
+
+        Aufgenommen wird ein Fenster, nicht immer der Anfang: Am X32
+        braucht man vielleicht nur die Kanäle 17-24, und beim Üben nur
+        das eigene Instrument.
+        """
+
+        self.record_start_channel = max(1, int(start_channel))
+
+        return self._aufnahmefenster_anwenden()
+
+
+    def _aufnahmefenster_anwenden(self) -> bool:
+        """
+        Das Fenster (erster Kanal, Anzahl) auf das Interface anwenden
+        und merken.
+
+        Beides zusammen, weil beides dasselbe Öffnen braucht - und
+        weil ein halb angewandtes Fenster hiesse, dass die Anzeige
+        etwas anderes sagt als die Aufnahme tut.
+        """
+
         if self.selected_audio_device is None:
             return False
+
+        #
+        # Das Fenster muss ins Interface passen. Ist es zu weit rechts,
+        # wird es hierher gezogen statt daneben zu greifen.
+        #
+        vorhanden = self.selected_audio_device.channels
+
+        self.record_start_channel = max(
+            1, min(self.record_start_channel, vorhanden)
+        )
 
         self.audio_core.close()
 
@@ -44,11 +86,17 @@ class AufnahmeMixin:
             self.selected_audio_device,
             self.record_channels,
             self.mixer_sample_rate,
+            start_channel=self.record_start_channel - 1,
         )
 
         self.state_store.set(
             "record_channels",
             self.record_channels,
+        )
+
+        self.state_store.set(
+            "record_start_channel",
+            self.record_start_channel,
         )
 
         return True
@@ -71,8 +119,18 @@ class AufnahmeMixin:
 
     def start_soundcheck(self, filename: str) -> bool:
         """
-        Spielt eine Aufnahme auf denselben Kanälen ab,
-        auf denen sie aufgenommen wurde ("virtueller Soundcheck").
+        Spielt eine AUFNAHME auf denselben Kanälen ab, auf denen sie
+        aufgenommen wurde ("virtueller Soundcheck").
+
+        Nur Aufnahmen: Übungsmixe laufen über die Üben-Karte, und zwar
+        über den Musikspieler - der kann anhalten, spulen und
+        wiederholen, und genau das braucht man zum Üben. Hier liefen
+        sie lange auch, weil es historisch derselbe Knopf war; damit
+        gab es den Weg zweimal, und einer davon konnte weniger.
+
+        Während einer Aufnahme nicht: Dieselbe Datei würde gelesen und
+        beschrieben. Während Musik oder einer Übung auch nicht - das
+        Interface nimmt einen Wiedergabestrom.
         """
 
         if self.selected_audio_device is None:
@@ -82,6 +140,16 @@ class AufnahmeMixin:
             return False
 
         if self.music_player.playing:
+            return False
+
+        if kind_from_filename(filename) == KIND_PRACTICE:
+
+            self.logger.warning(
+                "Übungsmix nicht über den Soundcheck: %s - dafür gibt "
+                "es die Üben-Karte.",
+                filename,
+            )
+
             return False
 
         path = self.recorder.writer.directory / filename
@@ -147,6 +215,8 @@ class AufnahmeMixin:
         self,
         name: str,
         file_paths: list[Path],
+        start_channel: int = 1,
+        temporaer: list[Path] | None = None,
     ) -> tuple[bool, str]:
         """
         Startet die Zusammenführung mehrerer Stereo-Stems (z.B. Click,
@@ -156,6 +226,21 @@ class AufnahmeMixin:
         Verzeichnis kopierte Uploads, die nach Abschluss gelöscht
         werden. Reihenfolge der Liste = Kanalzuordnung (Datei 1 ->
         Kanal 1+2, ...).
+
+        `start_channel` (1-basiert) sagt, ab welchem Kanal des
+        Interfaces der Mix später liegen soll. Er wandert in den
+        Dateinamen und wird beim Üben von dort gelesen - gewählt wird
+        er einmal hier und nicht vor jedem Üben neu.
+
+        `temporaer` sagt, welche der Dateien danach WEGGERÄUMT werden
+        dürfen. Das ist nötig geworden, seit ein Stem auch aus der
+        Musikbibliothek kommen kann: Früher waren alle Quellen
+        hochgeladene Kopien, und am Ende wurden schlicht alle gelöscht.
+        Täte es das weiter, verschwände mit dem fertigen Übungsmix die
+        Datei, aus der er entstanden ist.
+
+        Ohne Angabe bleibt es beim alten Verhalten (alles war ein
+        Upload).
         """
 
         name = name.strip()
@@ -172,14 +257,31 @@ class AufnahmeMixin:
         if not 2 <= len(file_paths) <= 8:
             return False, "Es werden 2 bis 8 Dateien benötigt."
 
+        #
+        # Nur ungerade Startkanaele: Jeder Stem ist ein Stereopaar.
+        # Faenge der Mix auf einem geraden Kanal an, laege jedes Paar
+        # quer ueber zwei Paare des Pults - links und rechts kaemen
+        # aus verschiedenen Zuegen.
+        #
+        start_channel = int(start_channel)
+
+        if start_channel < 1 or start_channel % 2 == 0:
+            return False, "Der erste Kanal muss ungerade sein."
+
         if self.selected_audio_device is not None:
 
             max_channels = self.selected_audio_device.channels
 
-            if len(file_paths) * 2 > max_channels:
+            #
+            # Gemessen wird ab dem ersten Kanal, nicht ab 1: Vier Stems
+            # ab Kanal 13 brauchen bis Kanal 20. Was darueber
+            # hinausragt, waere beim Ueben still - und niemand saehe,
+            # warum.
+            #
+            if start_channel - 1 + len(file_paths) * 2 > max_channels:
                 return False, (
-                    f"Zu viele Dateien für das Interface "
-                    f"({max_channels} Kanäle verfügbar)."
+                    f"Zu viele Dateien für das Interface ab Kanal "
+                    f"{start_channel} ({max_channels} Kanäle verfügbar)."
                 )
 
         with self._stem_combine_lock:
@@ -196,7 +298,12 @@ class AufnahmeMixin:
 
         thread = threading.Thread(
             target=self._run_stem_combine,
-            args=(name, file_paths),
+            args=(
+                name,
+                file_paths,
+                start_channel,
+                list(file_paths) if temporaer is None else list(temporaer),
+            ),
             daemon=True,
         )
         thread.start()
@@ -204,10 +311,134 @@ class AufnahmeMixin:
         return True, "started"
 
 
+    def start_take_zusammenfuehren(
+        self,
+        mix: str,
+        take: str,
+        name: str,
+    ) -> tuple[bool, str]:
+        """
+        Schreibt aus einem Übungsmix und einem Mitschnitt eine neue
+        Datei - Stufe 5 des Üben-Umbaus.
+
+        Beim Üben legt XRack beides nur in denselben Wiedergabestrom,
+        ohne etwas zu schreiben: Für "mal eben anhören" ist das der
+        richtige Weg, und ein missratener Versuch ist einfach gelöscht.
+        Sitzt ein Versuch aber, will man ihn mitnehmen - auf den Stick,
+        ins Backup, auf ein anderes XRack. Dafür muss aus zweien eine
+        Datei werden.
+
+        Der gemessene Versatz wird dabei angewandt, und zwar derselbe,
+        mit dem auch abgespielt wird (practice_offset_ms). Sonst klänge
+        die neue Datei anders als das, was man beim Üben gehört hat -
+        und genau dafür wurde die Messung gebaut.
+
+        Läuft im Hintergrund, über denselben Zustand wie die
+        Stem-Zusammenführung: Beide schreiben eine Übungsmix-Datei, und
+        zwei davon gleichzeitig gibt es nicht.
+        """
+
+        name = name.strip()
+
+        if (
+            not name
+            or len(name) > 40
+            or "/" in name
+            or "\\" in name
+            or name in (".", "..")
+        ):
+            return False, "Ungültiger Name."
+
+        verzeichnis = Path(self.recorder.writer.directory)
+
+        #
+        # Nur Dateinamen, keine Pfade: Was von aussen kommt, darf nicht
+        # bestimmen, WO gelesen wird (dieselbe Regel wie beim Loeschen
+        # und Herunterladen von Aufnahmen).
+        #
+        for teil in (mix, take):
+
+            if not teil or "/" in teil or "\\" in teil or teil in (".", ".."):
+                return False, "Ungültiger Dateiname."
+
+        mix_pfad = verzeichnis / mix
+        take_pfad = verzeichnis / take
+
+        for pfad in (mix_pfad, take_pfad):
+            if not pfad.is_file():
+                return False, f"Datei nicht gefunden: {pfad.name}"
+
+        with self._stem_combine_lock:
+
+            if self.stem_combine_state["active"]:
+                return False, "Es läuft bereits eine Zusammenführung."
+
+            self.stem_combine_state = {
+                "active": True,
+                "success": None,
+                "error": "",
+                "filename": "",
+            }
+
+        thread = threading.Thread(
+            target=self._run_take_zusammenfuehren,
+            args=(mix_pfad, take_pfad, name),
+            daemon=True,
+        )
+        thread.start()
+
+        return True, "started"
+
+
+    def _run_take_zusammenfuehren(
+        self,
+        mix: Path,
+        take: Path,
+        name: str,
+    ) -> None:
+
+        try:
+
+            filename = uebungsmix_mit_take(
+                mix,
+                take,
+                name,
+                versatz_ms=self.practice_offset_ms,
+            )
+
+            with self._stem_combine_lock:
+                self.stem_combine_state["success"] = True
+                self.stem_combine_state["filename"] = filename
+
+        except StemCombineError as exc:
+
+            with self._stem_combine_lock:
+                self.stem_combine_state["success"] = False
+                self.stem_combine_state["error"] = str(exc)
+
+        except Exception as exc:
+
+            self.logger.exception(
+                "Zusammenführen von Mix und Mitschnitt fehlgeschlagen: %s",
+                exc,
+            )
+
+            with self._stem_combine_lock:
+                self.stem_combine_state["success"] = False
+                self.stem_combine_state["error"] = "Unerwarteter Fehler."
+
+        finally:
+
+            with self._stem_combine_lock:
+                self.stem_combine_state["active"] = False
+
+
     def _run_stem_combine(
         self,
         name: str,
         file_paths: list[Path],
+        start_channel: int = 1,
+        temporaer: list[Path] | None = None,
     ) -> None:
 
         try:
@@ -216,6 +447,7 @@ class AufnahmeMixin:
                 file_paths,
                 self.mixer_sample_rate,
                 name,
+                start_channel=start_channel,
             )
 
             with self._stem_combine_lock:
@@ -244,12 +476,19 @@ class AufnahmeMixin:
             with self._stem_combine_lock:
                 self.stem_combine_state["active"] = False
 
-            for path in file_paths:
+            #
+            # NUR die hochgeladenen Kopien, nicht die Dateien aus der
+            # Bibliothek: Sonst verschwaende mit dem fertigen
+            # Uebungsmix die Datei, aus der er entstanden ist.
+            #
+            aufraeumen = list(file_paths) if temporaer is None else temporaer
+
+            for path in aufraeumen:
                 path.unlink(missing_ok=True)
 
-            if file_paths:
+            if aufraeumen:
                 try:
-                    file_paths[0].parent.rmdir()
+                    aufraeumen[0].parent.rmdir()
                 except OSError:
                     pass
 

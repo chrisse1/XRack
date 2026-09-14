@@ -27,6 +27,7 @@ import logging
 
 import alsaaudio
 
+from audio.geraetewache import GERAETEWACHE
 from audio.channel_extractor import ChannelExtractor
 from audio.models import AudioDevice, DiagnosticItem
 
@@ -72,6 +73,7 @@ class AudioBackend:
         self._rate = 0
         self._channels = 0
         self._native_channels = 0
+        self._start_channel = 0
         self._period_size = 0
         self._format = None
         self._extractor: ChannelExtractor | None = None
@@ -107,6 +109,17 @@ class AudioBackend:
         return self._native_channels
 
     @property
+    def start_channel(self) -> int:
+        """
+        Der erste aufgenommene Kanal (0-basiert).
+
+        Aufgenommen wird ein Fenster, nicht immer der Anfang: Am X32
+        will man vielleicht nur die Kanäle 17-24, und beim Üben nur
+        das eigene Instrument (siehe ChannelExtractor).
+        """
+        return self._start_channel
+
+    @property
     def period_size(self) -> int:
         return self._period_size
 
@@ -132,6 +145,7 @@ class AudioBackend:
         device: AudioDevice,
         channels: int | None = None,
         rate: int | None = None,
+        start_channel: int = 0,
     ) -> bool:
         """
         Öffnet das Audiogerät.
@@ -168,99 +182,134 @@ class AudioBackend:
 
         self._format = WUNSCHFORMAT
 
+        self._start_channel = max(
+            0, min(start_channel, self._native_channels - 1)
+        )
+
         self._extractor = ChannelExtractor(
             input_channels=self._native_channels,
             output_channels=self._channels,
+            start_channel=self._start_channel,
         )
 
-        try:
+        #
+        # Das Öffnen hält den GIL: Weder snd_pcm_open noch die
+        # Aushandlung der Hardware-Parameter geben ihn frei, und
+        # XRack löst fünf solcher Aushandlungen aus (PCM() und
+        # die vier Setter). Solange das läuft, läuft in diesem
+        # Prozess KEIN Python - auch der Webserver nicht.
+        # Begründung und Quellenlage: audio/geraetewache.py.
+        #
+        # Gemessen wird es deshalb, statt es zu vermuten.
+        #
+        with GERAETEWACHE.arbeit(f"Aufnahmegerät öffnen: {device.id}"):
 
-            self._pcm = alsaaudio.PCM(
+            try:
 
-                type=alsaaudio.PCM_CAPTURE,
+                self._pcm = alsaaudio.PCM(
 
-                mode=alsaaudio.PCM_NORMAL,
+                    type=alsaaudio.PCM_CAPTURE,
 
-                device=device.id,
+                    mode=alsaaudio.PCM_NORMAL,
 
-            )
+                    device=device.id,
 
-            actual_rate = self._pcm.setrate(
-                self._rate
-            )
+                )
 
-            if actual_rate and actual_rate != self._rate:
-                self.logger.warning(
-                    "ALSA hat eine andere Samplerate akzeptiert als "
-                    "angefordert: gefordert %d Hz, gemeldet %d Hz.",
+                actual_rate = self._pcm.setrate(
+                    self._rate
+                )
+
+                if actual_rate and actual_rate != self._rate:
+                    self.logger.warning(
+                        "ALSA hat eine andere Samplerate akzeptiert als "
+                        "angefordert: gefordert %d Hz, gemeldet %d Hz.",
+                        self._rate,
+                        actual_rate,
+                    )
+
+                self._pcm.setchannels(
+                    self._native_channels
+                )
+
+                actual_format = self._pcm.setformat(
+                    self._format
+                )
+
+                if actual_format is not None and actual_format != self._format:
+
+                    #
+                    # Ein Befund, keine Nebenbemerkung: XRacks ganze Kette
+                    # rechnet mit S32_LE (siehe Kopf dieser Datei). Kommt
+                    # etwas anderes, stimmen Pegel und Aufnahmen nicht, und
+                    # bei einem Drei-Byte-Format (S24_3LE) verrutschen sogar
+                    # die Kanaele. Deshalb mit Namen, Angebot und Folge -
+                    # "gemeldet 10" hat im Protokoll niemandem geholfen.
+                    #
+                    self._format = actual_format
+
+                    self.logger.error(
+                        "Das Interface liefert %s statt %s. XRack rechnet mit "
+                        "%s (vier Byte je Wert, 2^31 Vollausschlag) - Pegel "
+                        "und Aufnahmen sind damit nicht verlaesslich. Das "
+                        "Geraet bietet an: %s.",
+                        formatname(actual_format),
+                        WUNSCHFORMAT_NAME,
+                        WUNSCHFORMAT_NAME,
+                        ", ".join(device.formats) or "unbekannt",
+                    )
+
+                self._pcm.setperiodsize(
+                    self._period_size
+                )
+
+                self.logger.info(
+                    "ALSA geöffnet: %s | Hardware: %d Ch | Aufnahme: %d Ch "
+                    "ab Kanal %d | %d Hz",
+                    device.id,
+                    self._native_channels,
+                    self._channels,
+                    self._start_channel + 1,
                     self._rate,
-                    actual_rate,
                 )
 
-            self._pcm.setchannels(
-                self._native_channels
-            )
+                return True
 
-            actual_format = self._pcm.setformat(
-                self._format
-            )
+            except Exception as exc:
 
-            if actual_format is not None and actual_format != self._format:
-
-                #
-                # Ein Befund, keine Nebenbemerkung: XRacks ganze Kette
-                # rechnet mit S32_LE (siehe Kopf dieser Datei). Kommt
-                # etwas anderes, stimmen Pegel und Aufnahmen nicht, und
-                # bei einem Drei-Byte-Format (S24_3LE) verrutschen sogar
-                # die Kanaele. Deshalb mit Namen, Angebot und Folge -
-                # "gemeldet 10" hat im Protokoll niemandem geholfen.
-                #
-                self._format = actual_format
-
-                self.logger.error(
-                    "Das Interface liefert %s statt %s. XRack rechnet mit "
-                    "%s (vier Byte je Wert, 2^31 Vollausschlag) - Pegel "
-                    "und Aufnahmen sind damit nicht verlaesslich. Das "
-                    "Geraet bietet an: %s.",
-                    formatname(actual_format),
-                    WUNSCHFORMAT_NAME,
-                    WUNSCHFORMAT_NAME,
-                    ", ".join(device.formats) or "unbekannt",
+                self.logger.exception(
+                    "ALSA konnte nicht geöffnet werden: %s",
+                    exc,
                 )
 
-            self._pcm.setperiodsize(
-                self._period_size
-            )
+                self._pcm = None
 
-            self.logger.info(
-                "ALSA geöffnet: %s | Hardware: %d Ch | Aufnahme: %d Ch | %d Hz",
-                device.id,
-                self._native_channels,
-                self._channels,
-                self._rate,
-            )
-
-            return True
-
-        except Exception as exc:
-
-            self.logger.exception(
-                "ALSA konnte nicht geöffnet werden: %s",
-                exc,
-            )
-
-            self._pcm = None
-
-            return False
+                return False
 
     def close(self) -> None:
         """
         Schließt das Audiogerät.
         """
 
+        #
+        # Der Gerätename muss VOR dem Schließen gesichert werden -
+        # danach ist self.device leer.
+        #
+        geraetename = self.device.id if self.device else "?"
+
         if self._pcm is not None:
 
-            self._pcm.close()
+            #
+            # Auch das Schließen hält den GIL: close() gibt ihn zwar für
+            # snd_pcm_drain() frei, für snd_pcm_close() aber nicht
+            # (siehe audio/geraetewache.py). Das ist die zweite Hälfte
+            # des Befunds vom Gerät - es klemmt beim Starten UND beim
+            # Stoppen.
+            #
+            with GERAETEWACHE.arbeit(
+                f"Aufnahmegerät schließen: {geraetename}"
+            ):
+                self._pcm.close()
 
             self._pcm = None
 

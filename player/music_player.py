@@ -13,6 +13,12 @@ from audio.audio_playback_backend import AudioPlaybackBackend
 from audio.models import AudioDevice
 from player.music_library import MusicLibrary
 from player.track_decoder import TrackDecoder, probe_duration, probe_tags
+from player.ueben_decoder import UebenDecoder
+from player.w64_decoder import (
+    W64Decoder,
+    eckdaten,
+    liest_xrack_selbst,
+)
 
 CHANNELS = 2
 CHUNK_FRAMES = 1024
@@ -39,6 +45,37 @@ class MusicPlayer:
 
         self.decoder = TrackDecoder()
 
+        #
+        # XRacks eigene Dateien liest XRack selbst: ffmpeg liest unsere
+        # Wave64 falsch (siehe player/w64_decoder.py). Welcher der
+        # beiden gerade zustaendig ist, entscheidet _decoder_fuer().
+        #
+        self.eigener_decoder = W64Decoder()
+
+        #
+        # Beim Ueben mit Mitschnitt liegen ZWEI Dateien in einem
+        # Strom - der Mix auf seinen Kanaelen, der Versuch auf seinen.
+        # Zustaendig ist dann dieser Dekoder (siehe
+        # player/ueben_decoder.py).
+        #
+        self.ueben_decoder = UebenDecoder()
+
+        self._mitschnitt: Path | None = None
+
+        #
+        # Wird EINMAL gerufen, sobald der erste Block wirklich beim
+        # Interface ist. Daran haengt der Gleichlauf beim Mitschneiden:
+        # Zwischen "Aufnahme starten" und "der erste Ton geht hinaus"
+        # liegen das Oeffnen von ALSA, ein Threadstart und das Oeffnen
+        # der Datei - zusammen einige zehn Millisekunden, und jedes Mal
+        # unterschiedlich viele. Wer die Aufnahme vorher startet, hat
+        # diesen Zufall im Mitschnitt stehen und kann ihn nachher nicht
+        # mehr herausrechnen.
+        #
+        self._beim_ersten_block = None
+
+        self._aktiver_decoder = self.decoder
+
         self._playing = False
 
         self._paused = False
@@ -58,6 +95,12 @@ class MusicPlayer:
         self._thread: threading.Thread | None = None
 
         self._folder_mode = False
+
+        #
+        # Beim Ueben spielt man dieselbe Stelle immer wieder - dafuer
+        # laeuft der Titel in der Schleife.
+        #
+        self._wiederholen = False
 
         self._playlist: list[Path] = []
 
@@ -104,6 +147,22 @@ class MusicPlayer:
     @property
     def folder_mode(self) -> bool:
         return self._folder_mode
+
+    @property
+    def wiederholen(self) -> bool:
+        """Laeuft der Titel in der Schleife?"""
+
+        return self._wiederholen
+
+    def set_wiederholen(self, an: bool) -> None:
+        """
+        Die Schleife waehrend der Wiedergabe ein- oder ausschalten.
+
+        Wirkt am Ende des Titels - mitten im Stueck umzuschalten soll
+        nichts abschneiden.
+        """
+
+        self._wiederholen = bool(an)
 
     @property
     def current_track(self) -> str:
@@ -170,6 +229,16 @@ class MusicPlayer:
         if self.playing:
             self.stop()
 
+        #
+        # Kein Mitschnitt: Der gehoert zum Ueben. Bliebe er vom letzten
+        # Mal stehen, liefe der naechste Titel durch den falschen
+        # Dekoder - und ffmpeg-Material durch einen Wave64-Leser ergibt
+        # gar nichts.
+        #
+        self._mitschnitt = None
+
+        self._beim_ersten_block = None
+
         playlist = self.library.build_shuffled_playlist(folder)
 
         if not playlist:
@@ -182,6 +251,23 @@ class MusicPlayer:
             start_channel=start_channel,
             rate=rate,
         )
+
+    def _decoder_fuer(self, track: Path):
+        """
+        Wer diesen Titel liest.
+
+        Alles Ueblliche geht ueber ffmpeg; XRacks eigene Wave64-Dateien
+        liest XRack selbst, weil ffmpeg sie falsch liest (drei Byte je
+        Wert statt vier - siehe player/w64_decoder.py).
+        """
+
+        if self._mitschnitt is not None:
+            return self.ueben_decoder
+
+        if liest_xrack_selbst(track):
+            return self.eigener_decoder
+
+        return self.decoder
 
     def play_file(
         self,
@@ -198,6 +284,16 @@ class MusicPlayer:
         if self.playing:
             self.stop()
 
+        #
+        # Kein Mitschnitt: Der gehoert zum Ueben. Bliebe er vom letzten
+        # Mal stehen, liefe der naechste Titel durch den falschen
+        # Dekoder - und ffmpeg-Material durch einen Wave64-Leser ergibt
+        # gar nichts.
+        #
+        self._mitschnitt = None
+
+        self._beim_ersten_block = None
+
         if not path.exists():
             return False
 
@@ -207,6 +303,109 @@ class MusicPlayer:
             folder_mode=False,
             start_channel=start_channel,
             rate=rate,
+        )
+
+    def play_practice(
+        self,
+        device: AudioDevice,
+        path: Path,
+        start_channel: int,
+        rate: int,
+        wiederholen: bool = False,
+        mitschnitt: Path | None = None,
+        mitschnitt_start: int = 0,
+        versatz: float = 0.0,
+        beim_start=None,
+    ) -> bool:
+        """
+        Einen Übungsmix abspielen - auf Wunsch mit einem Mitschnitt
+        darüber.
+
+        Der Unterschied zu play_file() ist die Kanalzahl: Ein
+        Übungsmix bringt sie selbst mit (vier Stems sind acht Kanäle),
+        während Musik immer Stereo ist. Gelesen wird die Datei von
+        XRack selbst - ffmpeg liest unsere Wave64 falsch, siehe
+        player/w64_decoder.py.
+
+        Mit Mitschnitt liegen zwei Dateien in EINEM Strom (mehr gibt
+        das Interface nicht her). Dann übernimmt der UebenDecoder, und
+        geöffnet wird mit der vollen Kanalzahl des Interfaces: Der
+        Dekoder legt beide Quellen gleich an ihren Platz, und der
+        ChannelInserter im Backend hat nichts mehr zu tun - eine
+        Schleife über die Rahmen statt zweier.
+        """
+
+        if self.playing:
+            self.stop()
+
+        if not path.exists():
+            return False
+
+        daten = eckdaten(path)
+
+        if not daten["channels"]:
+            self.logger.error(
+                "Übungsmix konnte nicht gelesen werden: %s", path
+            )
+            return False
+
+        self._mitschnitt = mitschnitt
+
+        self._beim_ersten_block = beim_start
+
+        if mitschnitt is None:
+
+            return self._start(
+                device,
+                [path],
+                folder_mode=False,
+                start_channel=start_channel,
+                rate=rate,
+                channels=daten["channels"],
+                wiederholen=wiederholen,
+            )
+
+        if not Path(mitschnitt).exists():
+
+            self.logger.error(
+                "Mitschnitt nicht gefunden: %s", mitschnitt
+            )
+
+            self._mitschnitt = None
+            self._beim_ersten_block = None
+
+            return False
+
+        self.ueben_decoder.einrichten(
+            breite=device.channels,
+            start_channel=start_channel,
+            mitschnitt=mitschnitt,
+            mitschnitt_start=mitschnitt_start,
+            versatz=versatz,
+        )
+
+        #
+        # Vorher fragen, nicht unterwegs scheitern: Eine Quelle, die
+        # ueber den Rand des Interfaces ragt, waere entweder halbiert
+        # (ein Stereopaar auseinandergerissen) oder sie schriebe in den
+        # naechsten Rahmen - dann ist nicht eine Spur still, sondern
+        # alles verschoben.
+        #
+        if not self.ueben_decoder.passt(path):
+
+            self._mitschnitt = None
+            self._beim_ersten_block = None
+
+            return False
+
+        return self._start(
+            device,
+            [path],
+            folder_mode=False,
+            start_channel=0,
+            rate=rate,
+            channels=device.channels,
+            wiederholen=wiederholen,
         )
 
     #
@@ -265,7 +464,7 @@ class MusicPlayer:
 
         self._pause_event.set()
 
-        self.decoder.close()
+        self._aktiver_decoder.close()
 
         if self._thread is None:
             return
@@ -342,7 +541,7 @@ class MusicPlayer:
 
         self._pause_event.clear()
 
-        self.decoder.close()
+        self._aktiver_decoder.close()
 
     def resume(self) -> None:
         """
@@ -368,7 +567,7 @@ class MusicPlayer:
 
         self._wake_if_paused()
 
-        self.decoder.close()
+        self._aktiver_decoder.close()
 
     def seek(self, position: float) -> None:
         """
@@ -382,7 +581,7 @@ class MusicPlayer:
 
         self._wake_if_paused()
 
-        self.decoder.close()
+        self._aktiver_decoder.close()
 
     def _wake_if_paused(self) -> None:
         """
@@ -401,12 +600,20 @@ class MusicPlayer:
         folder_mode: bool,
         start_channel: int,
         rate: int,
+        channels: int | None = None,
+        wiederholen: bool = False,
     ) -> bool:
 
         self._playlist = playlist
         self._index = 0
         self._folder_mode = folder_mode
-        self._channels = CHANNELS
+        self._wiederholen = wiederholen
+
+        #
+        # Musik ist Stereo; ein Uebungsmix bringt seine Kanalzahl
+        # selbst mit (vier Stems sind acht Kanaele).
+        #
+        self._channels = channels or CHANNELS
         self._start_channel = start_channel
         self._rate = rate
 
@@ -477,6 +684,15 @@ class MusicPlayer:
 
                     if not self._playlist:
                         break
+
+                elif self._wiederholen:
+                    #
+                    # Beim Ueben spielt man dieselbe Stelle immer
+                    # wieder. Dieselbe Schleife wie beim Ordner, nur
+                    # auf einen Titel angewandt.
+                    #
+                    self._index = 0
+
                 else:
                     break
 
@@ -494,11 +710,24 @@ class MusicPlayer:
             if not self._playing:
                 break
 
-            tags = probe_tags(track)
-            self._current_track_title = tags["title"]
-            self._current_track_artist = tags["artist"]
+            #
+            # Eigene Dateien beantworten das aus ihrem Kopf - schneller
+            # als zwei ffprobe-Aufrufe, und richtig: ffprobe rechnet
+            # bei unseren Wave64-Dateien mit drei Byte je Wert.
+            #
+            if liest_xrack_selbst(track):
 
-            self._track_duration = probe_duration(track)
+                self._current_track_title = track.stem
+                self._current_track_artist = ""
+                self._track_duration = eckdaten(track)["duration"]
+
+            else:
+
+                tags = probe_tags(track)
+                self._current_track_title = tags["title"]
+                self._current_track_artist = tags["artist"]
+
+                self._track_duration = probe_duration(track)
 
             if self._play_track(track, chunk_bytes):
                 consecutive_failures = 0
@@ -544,7 +773,9 @@ class MusicPlayer:
 
             self._track_offset = position
 
-            if not self.decoder.open(
+            self._aktiver_decoder = self._decoder_fuer(track)
+
+            if not self._aktiver_decoder.open(
                 track,
                 channels=self._channels,
                 rate=self._rate,
@@ -572,12 +803,29 @@ class MusicPlayer:
                 and not self._paused
             ):
 
-                data = self.decoder.read(chunk_bytes)
+                data = self._aktiver_decoder.read(chunk_bytes)
 
                 if data is None:
                     break
 
                 self.backend.write(data)
+
+                #
+                # Erst JETZT ist der Ton unterwegs. Was hier haengt,
+                # verzoegert den zweiten Block - der Puffer traegt
+                # aber eine ganze Periode, das reicht dafuer bequem.
+                #
+                if self._beim_ersten_block is not None:
+
+                    ruf = self._beim_ersten_block
+                    self._beim_ersten_block = None
+
+                    try:
+                        ruf()
+                    except Exception as fehler:
+                        self.logger.exception(
+                            "Beim Start des Mitschnitts: %s", fehler
+                        )
 
             #
             # War eine Pause im Spiel? Gefragt wird nach der
@@ -608,7 +856,7 @@ class MusicPlayer:
 
             self._pause_angefordert = False
 
-            self.decoder.close()
+            self._aktiver_decoder.close()
 
             if self._playing and war_pausiert:
 

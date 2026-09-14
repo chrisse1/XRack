@@ -43,6 +43,113 @@ mit neuen Werten nicht hoch, stellt XRack die alten wieder her, statt einen
 stummen Access Point zu hinterlassen. Aus demselben Grund filtert der
 Netzwerk-Selbsttest diese Datei, statt sie durchzureichen.
 
+### Wenn kein Python mehr läuft
+
+Nicht jedes „nicht erreichbar" ist ein Netzproblem. Vom Gerät kam dieser
+Bericht: *„Das Interface war wieder kurz nicht erreichbar, als ich einen
+Übemix starten wollte. Ich habe das Gefühl, es passiert immer, wenn ich
+eine Wiedergabe starten oder stoppen will."* Kein Absturz, kein
+Protokolleintrag, geht von selbst vorbei.
+
+Der Verdacht liegt im GIL. Nachgesehen im Quelltext von pyalsaaudio
+0.11.0 (`alsaaudio.c`):
+
+| Stelle | gibt den GIL frei? |
+|---|---|
+| `snd_pcm_open` im Konstruktor | **nein** |
+| `alsapcm_setup` (hw-params, hinter `setrate`/`setchannels`/`setformat`/`setperiodsize`) | **nein** |
+| `snd_pcm_close` in `close()` | **nein** (`snd_pcm_drain` davor schon) |
+| `snd_pcm_readi` / `snd_pcm_writei` | ja |
+
+Im laufenden Betrieb ist also alles gut — aber solange ein Gerät
+geöffnet oder geschlossen wird, läuft in diesem Prozess **kein Python**:
+kein Webserver, keine Statusabfrage, nichts. Und XRack löst pro Öffnen
+nicht eine, sondern fünf Aushandlungen aus (`PCM()` plus die vier
+Setter). Das passt auf jedes Merkmal des Berichts: beim Starten und beim
+Stoppen, selbstheilend, ohne Spur.
+
+Bewiesen ist damit noch nichts — deshalb wird jetzt gemessen statt
+vermutet. Zwei Teile:
+
+- **`audio/geraetewache.py`** hält fest, was gerade am Audiogerät getan
+  wird und wie lange es gedauert hat. Öffnen und Schließen melden sich
+  dort an, in beiden Richtungen.
+- **Die Stillstands-Wache** in `core/diagnostics.py` schläft in Takten
+  von 0,2 s und misst, wie spät sie aufwacht. Mehr tut sie nicht, und
+  mehr darf sie nicht tun — was sie selbst an Arbeit täte, verfälschte
+  die Messung. Kommt sie über eine halbe Sekunde zu spät, lief in dieser
+  Zeit kein Python; dann fragt sie sofort bei der Gerätewache nach und
+  schreibt beides zusammen ins Protokoll:
+
+  ```
+  STILLSTAND: 2.3 s lang lief kein Python - der Webserver war in dieser
+  Zeit nicht erreichbar. Dabei lief: Wiedergabegerät öffnen: hw:2,0
+  ```
+
+Die bisherige „LÜCKE"-Zeile bleibt, taugt für diesen Fall aber nicht:
+Sie zählt im Sekundentakt und meldet erst ab drei Sekunden, und sie kann
+nicht sagen, was in der Zeit lief.
+
+Geprüft wird das nicht mit einer Attrappe, sondern am echten Vorgang:
+Mit einem großen Umschaltintervall (`sys.setswitchinterval`) hält eine
+gewöhnliche Python-Schleife den GIL genauso fest wie eine C-Funktion,
+die ihn nicht freigibt. Die Wache misst dabei echte Verspätung.
+
+**Der Schiedsrichter ist der Ton.** Denn gegen den GIL-Verdacht spricht
+eine zweite Beobachtung vom Gerät: *„Läuft eine Wiedergabe, wenn der
+Fehler auftritt, läuft sie auch unbeirrt weiter, während das
+Webinterface nicht erreichbar ist."*
+
+Wäre der GIL blockiert, bekäme auch der Wiedergabe-Thread keine Zeit.
+Der ALSA-Puffer fasst 1024 Rahmen je Periode, also gut zwanzig
+Millisekunden je Block — nach knapp hundert wäre er leer, und der Ton
+setzte hörbar aus. **Ein Ton, der durchläuft, beweist, dass Python
+lief.** Dann steht nicht der Prozess, sondern nur der Weg zur
+Weboberfläche, und die Ursache liegt woanders (Sperren, der Threadpool
+hinter den Endpunkten, das System).
+
+Entschieden wird das nicht durch Nachdenken, sondern durch Zählen: Die
+Gerätewache zählt jeden geschriebenen Block, und die Stillstands-Wache
+nimmt den Zählerstand vor und nach ihrem Schlaf. Daraus wird ein Urteil,
+das im Protokoll steht:
+
+```
+STILLSTAND: 2.0 s ... | Ton lief weiter (94 Blöcke = 2.0 s)
+            - Python lief also, es ist KEIN GIL-Stillstand
+STILLSTAND: 2.0 s ... | Ton stand ebenfalls (3 Blöcke = 0.1 s von 2.0 s)
+            - der ganze Prozess stand
+```
+
+Lief gar keine Wiedergabe, wird auch nicht geurteilt — ein Urteil über
+etwas, das es nicht gab, wäre schlimmer als keins.
+
+Beide Fälle sind nachgestellt und geprüft, und zwar von entgegen-
+gesetzten Seiten: einmal hält eine Schleife den GIL fest (nichts läuft),
+einmal verschläft die Wache ihren Takt, während ein zweiter Thread
+munter Blöcke schreibt.
+
+**Die Dauer selbst steht im Protokoll**, auch ohne Stillstand: Jede
+Gerätearbeit über 0,2 s schreibt eine Zeile
+
+```
+GERÄTEARBEIT: Wiedergabegerät öffnen: hw:2,0 dauerte 0.42 s - so lange
+lief in dieser Zeit kein Python (pyalsaaudio hält dabei den GIL).
+```
+
+Das ist die Zahl, um die es eigentlich geht, und sie fällt bei *jedem*
+Starten und Stoppen an — nicht nur im Fehlerfall. Ohne diese Zeile
+hätten mehrere Stunden Mitschnitt nichts ergeben, solange der Fehler
+ausblieb. Erscheint sie nie, ist der GIL-Verdacht damit erledigt.
+
+**Die Wache läuft immer**, auch wenn die Aufzeichnung ausgeschaltet ist,
+und ihre Funde stehen in den Einstellungen — nicht nur in einer
+Protokolldatei, die erst jemand holen muss. Der Grund ist der
+ernüchterndste Satz dieser Fehlersuche: *„Ich habe jetzt mehrere Stunden
+alles Mögliche getestet und er ist nicht aufgetaucht."* Eine Falle, die
+man vorher scharfstellen muss, fängt gerade den Fehler nicht, den man
+nicht erwartet hat. Sie kostet: fünfmal in der Sekunde aufwachen und
+eine Zahl vergleichen.
+
 ### Welches Funkgerät wofür
 
 `wlan0` und `wlan1` werden in der Reihenfolge vergeben, in der die Geräte
@@ -60,6 +167,47 @@ kann kein 5 GHz.
 Vorhandene WLAN-Profile (etwa das vom Raspberry Pi Imager angelegte
 `preconfigured`) werden stillgelegt, damit sie XRacks Profil nicht das
 Funkgerät streitig machen. Gelöscht wird nichts.
+
+### Kein Stick, kein Startversuch
+
+Ein eingerichteter Access Point und ein nicht eingesteckter USB-Stick sind
+kein Widerspruch: Der Stick wird nur in manchen Szenarien gebraucht, die
+Einrichtung soll dafür nicht jedes Mal fallen. Bis Version 3 hatte diese
+Lage aber Folgen, die niemand vermutet hätte. `xrack-hostapd.service` läuft
+mit `Restart=always`, hostapd fand kein Gerät, und so stand im Journal
+eines Geräts:
+
+```
+xrack-hostapd.service: Scheduled restart job, restart counter is at 14453.
+nmcli connection up XRack-Bridge          (ExecStartPre)
+hostapd: Main process exited, code=exited, status=1/FAILURE
+```
+
+14.469 Fehlstarts in einundzwanzig Stunden — und weil jeder Versuch über
+`ExecStartPre` die NetworkManager-Brücke neu aktivierte, alle fünf Sekunden
+ein Eingriff ins Netz, rund um die Uhr. Daneben im Protokoll: die
+Netzaussetzer, hinter denen wir tagelang her waren.
+
+Seither fragt die Unit erst, ob es überhaupt etwas aufzuspannen gibt
+(`ExecCondition=scripts/xrack-ap-bereit.sh`, entscheidet an derselben Quelle
+wie alles andere: `xrack-wifi-iface.sh`). Eine gescheiterte Bedingung lässt
+systemd den Dienst **überspringen** — kein Fehlschlag, und vor allem läuft
+keine der Zeilen darunter.
+
+Damit endet auch der Fünfsekundentakt, denn einen übersprungenen Start
+wiederholt systemd nicht, auch bei `Restart=always` nicht. Genau das war
+aber die einzige Stelle, an der ein später eingesteckter Stick bisher
+bemerkt wurde — der nächste Versuch fand ihn ja. Diese Fähigkeit hätte die
+Bedingung stillschweigend mitgenommen; sie liegt deshalb jetzt bei einer
+udev-Regel (`/etc/udev/rules.d/99-xrack-ap.rules`), die den Dienst bei jedem
+auftauchenden Funkgerät anstößt. Ob es das richtige ist, entscheidet dann
+wieder die Bedingung.
+
+Die Aufzeichnung (`core/diagnostics.py`) wacht seither über die
+Nebendienste — sie hätte das Hämmern von innen gemeldet. `exec-condition`
+zählt dort ausdrücklich als unauffällig: Der übersprungene Dienst ist der
+gewollte Zustand, und eine Warnung, die im Normalfall angeht, liest bald
+niemand mehr.
 
 ### Name und Zertifikat
 
@@ -105,6 +253,92 @@ ein Pult nicht darauf, zeigt die Auswahl statt Namen einfach die Nummern.
 Die Liste wird nicht laufend abgefragt (das kostet je nach Pult bis zu
 hundert Abfragen), sondern beim Laden der Seite, beim Entsperren der Karte
 und nach einem geladenen Snapshot.
+
+### Der Eingang eines Kanals: A/D oder USB
+
+Die Pultsteuerung macht bewusst nur Lautstärke — kein EQ, keine Sends,
+kein Routing. Eine Ausnahme gibt es: den Schalter, der einem Kanal statt
+seines Vorverstärkers den USB-Rückweg auflegt
+(`/ch/NN/preamp/rtnsw`, 1 = USB).
+
+Er gehört dazu, weil der virtuelle Soundcheck ohne ihn halb ist: XRack
+spielt die Aufnahme ins Pult, aber die Kanäle hören weiter ihre
+Mikrofone. Genau dieser Handgriff war der letzte, für den man noch nach
+X-AIR-Edit wechseln musste.
+
+**Die Adresse ist nicht geraten und nicht nur nachgelesen.** Sie stammt
+aus einer Bibliothek (`onyx-and-iris/xair-api-python`, `shared.py`:
+`usbinput` → `rtnsw`) — und eine Bibliothek ist keine Hardware. Deshalb
+gibt es `scripts/xrack-pult-fragen.py`: Es fragt das Pult selbst, nur
+lesend (jede OSC-Anfrage ohne Argumente liefert den aktuellen Wert
+zurück), und darf mitten in einer Probe laufen. An einem XR18 kam
+zurück:
+
+| Adresse | Antwort | |
+|---|---|---|
+| `/ch/01/mix/fader` | `0.373` | Gegenkontrolle: das Pult antwortet |
+| `/ch/01/config/name` | `'Drums'` | Gegenkontrolle: auch auf Text |
+| `/ch/01/preamp/rtnsw` | `1` | der Schalter, **je Kanal** |
+| `/ch/03/preamp/rtnsw` | `1` | |
+| `/ch/01/preamp/rtntrim` | `0.5` | linear 0…1, also 0 dB |
+| `/rtn/aux/preamp/rtnsw` | `1` | der Aux-Rückweg hat ihn **auch** |
+| `/ch/01/config/source` | — | Gegenkontrolle: nicht alles wird beantwortet |
+
+Zwei Gegenkontrollen gehören zu so einer Messung, sonst beweist sie
+nichts: oben Adressen, die XRack schon benutzt (antworten die nicht, ist
+das Pult unerreichbar, und jedes „keine Antwort" darunter sagt nichts),
+unten eine, die es nicht geben sollte (antwortet sie doch, antwortet das
+Pult auf alles).
+
+Der Aux-Rückweg war vorher als „ungeprüft" ausgeschlossen. Die Nachfrage
+hat es geklärt, und es ist plausibel: Genau dieser Kanalzug nimmt
+entweder die Cinch-Buchsen oder USB. Die Summe bleibt draußen — ob sie
+antwortet, ist ungefragt, aber einen Eingang zum Umlegen hat sie nicht.
+
+Drei Dinge, die dabei entschieden sind:
+
+**Nur die X-Air-Serie.** Dort ist es ein Umschalter mit zwei Stellungen.
+Der X32 wählt stattdessen je Kanal eine *Quelle* aus einer Liste (Local,
+AES50, Card) — für die Adresse dazu gibt es keine belegte Quelle, nur
+Erinnerung. Deshalb zeigt die Karte den Schalter dort nicht: Ein
+geratener Schalter, der beim Umlegen die falsche Quelle setzt, wäre
+schlimmer als keiner.
+
+**Ein gekoppeltes Paar wird auf beiden Kanälen umgelegt.** Beim Fader
+genügt der erste Kanal, den zweiten zieht das Pult mit. Ob die Kopplung
+auch den Vorverstärker umfasst, ist ungeprüft — und ein halb umgelegtes
+Paar wäre der unangenehmste Fall: eine Seite hört die Aufnahme, die
+andere den Raum. Zwei OSC-Befehle kosten nichts. (Der Aux-Rückweg ist
+davon nicht betroffen: Er *ist* ein Paar, unter einer einzigen Adresse.)
+
+**Einmal fragen, dann wissen.** Antwortet ein Pult auf die Adresse nicht
+(ältere Firmware, X32), läuft jede Abfrage in den Zeitablauf von 0,3 s.
+Bei achtzehn Kanälen wären das über fünf Sekunden — bei *jedem*
+Auffrischen der Karte. XRack merkt sich deshalb nach der ersten Abfrage,
+dass dieses Pult den Schalter nicht kennt, und die Karte zeigt dann gar
+keinen an.
+
+Und weil er scharf ist — ein Kanal auf USB hört sein Mikrofon nicht mehr
+—, ist USB die einzige farbige Stellung. Steht am Ende der Probe noch
+irgendwo Farbe in der Karte, ist ein Kanal noch auf der Aufnahme.
+
+**Im Kanalzug** steht der Eingangsschalter zwischen Kanalnummer und
+Kanalname — also dort, wo der Kanal bezeichnet wird — und der Mute-Knopf
+unten unter der dB-Anzeige, am anderen Ende. Nebeneinander waren sie so dicht, dass man mit dem Finger leicht
+den falschen traf, und die beiden tun sehr verschiedene Dinge. Züge ohne
+Schalter (die Summe) bekommen an dessen Stelle einen unsichtbaren
+Platzhalter: denselben Knopf, nur nicht zu sehen. Ohne ihn stünden ihre
+Regler eine Knopfhöhe höher als alle anderen — gemessen 15px.
+
+**Die Sperre der Karte greift über eine Klasse** (`fader-bedienung`), nicht
+über eine Liste von Klassennamen. Dort stand eine
+(`".fader-input, .fader-mute"`), und sie hat genau den Fehler gemacht, für
+den Listen anfällig sind: Der neue Eingangsschalter wurde gesperrt
+gezeichnet — die Karte beginnt gesperrt — und beim Entsperren nicht
+mitgenommen. Am Gerät sah das so aus: *„Die Anzeige stimmt, aber bei
+Klick passiert nichts."* Kein Test hatte je entsperrt; jetzt tut einer es
+und prüft, dass **nichts** gesperrt zurückbleibt — ohne die Namen der
+Elemente zu kennen.
 
 ---
 
@@ -251,12 +485,38 @@ zusätzlich zu seinem Hostnamen einen **gemeinsamen Zweitnamen**
 (`core/mdns_alias.py`). Trägt man auf jedem Gerät `xrack` ein, findet
 dieselbe gespeicherte App in jedem Raum das Gerät, das dort steht.
 
-Gemacht wird das mit `avahi-publish -a`, einem Kindprozess **je
-Adresse**: Solange er läuft, steht der Name im Netz. Mehrere Adressen
-sind der Normalfall — der Pi hängt am Kabel und spannt gleichzeitig
-einen Access Point auf, und je nach Raum erreicht ihn das Tablet über
-den einen oder den anderen Weg. Ein einzelner Eintrag zeigte im
-falschen Netz ins Leere.
+Gemacht wird das mit `avahi-publish -a`: Solange der Kindprozess läuft,
+steht der Name im Netz.
+
+Gemeldet wird dabei **genau eine** Adresse, obwohl der Pi meist
+mehrere hat. Zuerst war es jede — die Begründung klang zwingend: Je
+nach Raum erreicht das Tablet den Pi über das Kabel oder über den
+Access Point. Am Gerät kam davon zurück: *„gelegentlich erreichbar,
+dann meldete der Browser eine Netzwerk-Zeitüberschreitung."*
+
+Der Grund steckt in `avahi-publish`: Es kennt keine Option für eine
+Schnittstelle (nachgesehen in `avahi-utils/avahi-publish.c`) und
+meldet deshalb jede Adresse auf **allen**. Ein Tablet im Heimnetz bekam
+damit zwei Antworten — die richtige und die `10.42.0.1` der
+Access-Point-Brücke, die von dort niemand erreicht. Welche der Browser
+nimmt, entscheidet er selbst; nimmt er die zweite, laufen die Pakete
+zum Router und verschwinden dort: keine Fehlermeldung, sondern eine
+halbe Minute Warten.
+
+Der eigene Hostname hatte das Problem nie. Den meldet `avahi-daemon`
+selbst, und der kennt seine Schnittstellen — auf `wlan0` antwortet er
+mit der `wlan0`-Adresse, auf `br0` mit der von `br0`. Genau deshalb war
+`x18rack.local` durchgehend erreichbar, während `xrack.local`
+sprunghaft war.
+
+Nachbauen lässt sich das mit `avahi-publish` nicht, also wird
+ausgewählt — und zwar die Adresse, die von **überall** erreichbar ist:
+die der Schnittstelle mit der Standardroute. Ein Tablet im Heimnetz
+erreicht sie direkt, eines am Access Point über XRack, denn für das ist
+XRack das Gateway. Gibt es keine Standardroute (Proberaum ohne
+Heimnetz), gilt die Brücke des Access Points; dann hängen die Tablets
+ohnehin dort. Umgekehrt gilt der Satz nicht: Die Adresse des Access
+Points ist nur von dort zu erreichen.
 
 Zwei Dinge hält eine Wache im Auge: Wechselt die Adresse (Kabel raus,
 Access Point an), wird der Name neu gemeldet — ein Eintrag auf eine
@@ -650,6 +910,89 @@ kein Sonderfall —, bliebe der Wert sonst stehen und die Lampe würde
 weiterblitzen, obwohl die Show längst aus ist. Angefasst wird dabei
 nur, was die Show auch gefahren hat: Hintergrundlicht und
 ausgenommene Lampen behalten ihren Wert.
+
+---
+
+## Vom USB-Stick auf das Gerät
+
+Die Gegenrichtung gab es lange — eine Aufnahme auf den Stick kopieren.
+Der Weg zurück fehlte, und er fehlte an zwei Stellen unterschiedlich
+schwer: Für Musik gab es wenigstens den Upload über den Browser, für
+`recordings/` gar nichts. Ein Übungsmix aus dem Backup oder von einem
+zweiten XRack kam nicht wieder auf das Gerät.
+
+**Das Ziel wird einmal gewählt, nicht je Datei gefragt.** Ein Album
+sind dreißig Dateien, und dreißig Rückfragen sind keine Bedienung. Es
+steht deshalb oben im Dialog und nicht unten: Das Ziel entscheidet,
+welche Dateien überhaupt verwendbar sind — wer es erst am Ende wählt,
+hat vorher die falschen angehakt.
+
+Zwei Ziele gibt es, und sie sind verschieden:
+
+| | Musik | Aufnahmen |
+|---|---|---|
+| Struktur | Ordner der Bibliothek | flach |
+| Verwendbar | was ffmpeg spielt | nur `.w64` |
+| Ordner vom Stick | wandern **mit** ihrer Struktur | werden flachgelegt |
+
+Dass Ordner mit ihrer Struktur wandern, ist kein Detail: Ohne das
+lägen zwei Alben mit `01 Intro.mp3` übereinander. Im
+Aufnahmeverzeichnis ist es umgekehrt — dort fände XRack eine Datei in
+einem Unterordner nie wieder.
+
+**Vier Dinge, die dabei nicht passieren dürfen**, jedes mit Gegenprobe
+festgenagelt:
+
+1. **Aus dem Stick herauslesen.** Was vom Browser kommt, darf nicht
+   bestimmen, *wo* gelesen wird — `../../etc` wäre sonst ein
+   Dateimanager für das ganze System. Dieselbe Regel wie in der
+   Musikbibliothek.
+2. **Eine vorhandene Datei überschreiben.** Gleichnamiges wird
+   übersprungen und hinterher gezählt („7 kopiert, 2 übersprungen") —
+   was man sich mit einem Fehlgriff zerstört, ist sonst genau das, was
+   man aufheben wollte.
+3. **Eine halbe Datei hinterlassen.** Geschrieben wird daneben
+   (`.teil`), umbenannt erst am Ende; das Umbenennen im selben
+   Verzeichnis ist unteilbar. Der Unterschied zeigt sich erst, wenn
+   *niemand* aufräumt — Strom weg, SIGKILL, Stick gezogen. Genau so ist
+   es geprüft.
+4. **Die Karte volllaufen lassen.** Der Platz wird vor dem ersten Byte
+   gerechnet, mit zehn Prozent Abstand: Eine Karte, die exakt bis zum
+   letzten Byte vollläuft, bringt auch die Aufnahme zum Stehen.
+
+Unbrauchbare Dateien werden **aufgeführt, aber nicht anwählbar**. Wer
+seine Datei gar nicht sieht, sucht sie; wer sie ausgegraut sieht,
+versteht warum. Draußen bleibt nur, was Betriebssysteme auf jedem Stick
+hinterlassen (`System Volume Information`, `._…`) — dort sucht niemand
+etwas.
+
+**Und die Stems kommen von dort weiter.** Ein Übungsmix entsteht aus
+zwei bis acht Stereodateien, und die mussten bisher alle durch den
+Browser hochgeladen werden. Seit sie vom Stick kommen können, liegen
+sie schon auf dem Gerät — sie dann wieder hochzuladen wäre genau der
+Umweg über die Leitung, den der Stick vermeiden sollte; bei Stems geht
+es um hundert Megabyte aufwärts. Im Erstellen-Dialog steht deshalb je
+Kanalpaar beides zur Wahl: hochladen **oder** eine Datei vom Gerät.
+Eins sperrt das andere — sonst müsste irgendwo eine Vorrangregel
+stehen, die niemand sieht.
+
+Zwei Dinge daran sind heikel:
+
+- **Die Reihenfolge ist die Kanalzuordnung** (Quelle 1 → Kanal 1+2) und
+  läuft über beide Quellen hinweg. Sie geht deshalb ausdrücklich mit
+  (`sources` als JSON-Liste); ohne sie bliebe der Gegenseite nur zu
+  raten, ob der Upload vor oder hinter der Datei vom Gerät liegt — und
+  die Stems lägen auf den falschen Kanälen. Hören würde man das erst
+  beim Üben.
+- **Weggeräumt werden nur die Uploads.** Sie sind Kopien in einem
+  Scratch-Verzeichnis. Räumte XRack weiter „alle Quellen" weg,
+  verschwände mit dem fertigen Übungsmix das Material, aus dem er
+  entstanden ist.
+
+In der Oberfläche merkt sich die Auswahl **volle Pfade, keine Namen**.
+Wer im Hauptordner etwas anhakt, in einen Ordner geht und dort noch
+etwas anhakt, kopiert sonst `01 Intro.mp3` aus dem Hauptordner — wo es
+diese Datei nicht gibt, und wo dann stillschweigend nichts passiert.
 
 ---
 

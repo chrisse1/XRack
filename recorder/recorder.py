@@ -117,6 +117,21 @@ class Recorder:
 
         self._buffer_count = 0
 
+        #
+        # Wie viele Bloecke der Lesethread ueberhaupt geholt hat - ob
+        # sie in eine Datei gehen oder nur in die Pegelanzeige.
+        #
+        # Gebraucht wird das als Lebenszeichen des Aufnahmestroms: Wer
+        # den Mitschnitt gleichlaufend zum Ton beginnen will, muss
+        # wissen, dass der Strom schon LIEFERT - nicht bloss, dass er
+        # gestartet wurde. Zwischen beidem liegen der Anlauf des Fadens
+        # und eine volle Periode von ALSA.
+        #
+        # Er laeuft ueber die ganze Lebensdauer und wird beim Starten
+        # NICHT zurueckgesetzt: Gemessen werden Unterschiede.
+        #
+        self._bloecke_gelesen = 0
+
         self._bytes_written = 0
 
         self._start_time = None
@@ -185,11 +200,17 @@ class Recorder:
 
         return self.meter.levels
 
-    def start(self, name_prefix: str = "Soundcheck") -> bool:
+    def start(self, name_prefix: str = "Soundcheck",
+              trenner: str = "-") -> bool:
         """
         Startet die Aufnahme. Läuft bereits eine reine
         Pegelprüfung, wird sie nahtlos zur Aufnahme erweitert.
         `name_prefix` bestimmt den Dateinamen ("<Präfix>-<Nummer>").
+
+        `trenner` steht zwischen Präfix und Nummer. Für Mitschnitte
+        beim Üben ist er leer - dort trägt das Präfix schon einen
+        Bindestrich ("Umbrella-1-Take" + "1"), siehe
+        core/recording_kind.py.
         """
 
         if self.recording:
@@ -232,6 +253,7 @@ class Recorder:
             return False
 
         self._buffer_count = 0
+
         self._bytes_written = 0
         self._start_time = monotonic()
 
@@ -242,11 +264,19 @@ class Recorder:
         self.platz_stopp = False
         self._platz_geprueft = 0.0
 
+        #
+        # Der erste aufgenommene Kanal wandert in den Dateinamen: Ohne
+        # ihn landet die Aufnahme beim virtuellen Soundcheck wieder auf
+        # Kanal 1, also auf den falschen Wegen des Pults (siehe
+        # core/recording_kind.py).
+        #
         self.writer.open(
             channels=self.backend.channels,
             sample_rate=self.backend.rate,
             bits_per_sample=24,
             name_prefix=name_prefix,
+            start_channel=getattr(self.backend, "start_channel", 0) + 1,
+            trenner=trenner,
         )
 
         self._current_filename = self.writer.filename
@@ -641,6 +671,8 @@ class Recorder:
 
                 continue
 
+            self._bloecke_gelesen += 1
+
             #
             # Zwei Sichten auf denselben Block:
             #
@@ -711,6 +743,15 @@ class Recorder:
     @property
     def buffer_count(self) -> int:
         return self._buffer_count
+
+    @property
+    def bloecke_gelesen(self) -> int:
+        """
+        Lebenszeichen des Aufnahmestroms: Bloecke, die wirklich
+        angekommen sind.
+        """
+
+        return self._bloecke_gelesen
 
     @property
     def bytes_written(self) -> int:

@@ -44,7 +44,11 @@ genaue Zeitstempel geschrieben, damit man sie von Hand mit
 
 import logging
 import logging.handlers
+import os
 import psutil
+
+from audio.geraetewache import GERAETEWACHE
+import signal
 import socket
 import ssl
 import subprocess
@@ -81,6 +85,58 @@ INTERVAL = 1.0
 GAP_THRESHOLD = 3.0
 
 #
+# ------------------------------------------------------------------
+# Die Stillstands-Wache
+# ------------------------------------------------------------------
+#
+# Der Takt oben ist eine Sekunde, die Lücke oben zählt ab drei - für
+# einen Prozess, der stehen bleibt, ist das grob: Ein Einfrierer von
+# anderthalb Sekunden hinterlässt damit gar nichts, obwohl er im
+# Browser schon als "nicht erreichbar" ankommt.
+#
+# Genau davon gibt es einen Bericht vom Gerät: "Das Interface war
+# wieder kurz nicht erreichbar, als ich einen Übemix starten wollte.
+# Ich habe das Gefühl, es passiert immer, wenn ich eine Wiedergabe
+# starten oder stoppen will." Ohne Protokoll, ohne Absturz.
+#
+# Deshalb eine eigene Wache mit feinem Takt. Sie tut nichts, als zu
+# schlafen und zu messen, wie spät sie aufgewacht ist. Das ist der
+# eine Befund, den ein Prozess über sich selbst erheben kann: Kommt
+# sie zu spät, lief in dieser Zeit KEIN Python - und das trifft dann
+# auch den Webserver.
+#
+# Der häufigste Grund dafür in XRack ist das Öffnen oder Schließen
+# eines Audiogeräts: pyalsaaudio hält dabei den GIL (Quellenlage in
+# audio/geraetewache.py). Genau deshalb fragt die Wache dort nach,
+# was gerade lief - eine Zahl allein sagt nur, DASS es stand.
+#
+STILLSTAND_TAKT = 0.2
+STILLSTAND_SCHWELLE = 0.5
+
+#
+# Wie viele Befunde höchstens warten, bis der Haupttakt sie schreibt.
+# Mehr braucht niemand: Wer fünfzig Einfrierer in einer Sekunde hat,
+# erfährt aus den ersten zehn dasselbe.
+#
+STILLSTAND_MERKE_MAX = 10
+
+#
+# Ab dieser Dauer wird eine abgeschlossene Gerätearbeit aufgeschrieben,
+# auch ohne gemessenen Stillstand.
+#
+# Der Grund ist ein Bericht vom Gerät: Die Aufzeichnung lief mehrere
+# Stunden mit, und der Fehler kam nicht. Ohne diese Zeile hätten die
+# Stunden gar nichts ergeben - dabei fällt die interessante Zahl bei
+# JEDEM Starten und Stoppen an: Wie lange hält das Öffnen eines Geräts
+# den Prozess auf?
+#
+# 0,2 s ist bewusst niedrig. Ein Öffnen, das so lange braucht, ist noch
+# kein Fehler, aber es ist der Anfang der Antwort - und wenn nie eine
+# solche Zeile erscheint, ist der GIL-Verdacht damit erledigt.
+#
+GERAETEZEIT_SCHWELLE = 0.2
+
+#
 # Solange nichts auffällt, genügt ein Lebenszeichen - sonst wäre die
 # Datei voller identischer Zeilen.
 #
@@ -96,6 +152,48 @@ REQUEST_TIMEOUT = 2.0
 # bei der Samplerate, siehe recorder/rate_check.py).
 #
 PING_VERSUCHE = 3
+
+#
+# Die XRack-Dienste neben dem Hauptdienst. Sie laufen eigenstaendig,
+# und wenn einer davon im Kreis scheitert, merkt es sonst niemand.
+#
+NEBENDIENSTE = (
+    "xrack-hostapd.service",
+    "xrack-bt-agent.service",
+)
+
+#
+# Wie oft nach den Nebendiensten gesehen wird. Jede Sekunde waere
+# Verschwendung - ein Dienst, der scheitert, scheitert auch in einer
+# Minute noch.
+#
+DIENSTE_INTERVALL = 60.0
+
+#
+# Was als "geht nicht" gilt.
+#
+# Nicht die Zahl der Neustarts: Ein Dienst, der oft gestolpert und
+# dann oben geblieben ist, braucht keine Meldung - sonst gewoehnt man
+# sich an die Warnung. Massgeblich ist, wie der letzte Lauf ENDETE.
+# Ein normaler Start hat Result=success, auch waehrend er noch
+# hochkommt; ein Dienst im Kreis hat Result=exit-code.
+#
+# Der Anlass: xrack-hostapd.service stand am Geraet bei 14.469
+# Fehlstarts - einer alle fuenf Sekunden, einundzwanzig Stunden lang.
+# Jeder Versuch zog ueber ExecStartPre eine Neuaktivierung der
+# NetworkManager-Bruecke nach sich. Im Protokoll von XRack war davon
+# nichts zu sehen; sichtbar war nur, dass gelegentlich das Netz
+# wegblieb.
+#
+# "exec-condition" gehoert ausdruecklich dazu, also zum Unauffaelligen:
+# So sagt systemd, dass eine ExecCondition den Start UEBERSPRUNGEN hat
+# (xrack-hostapd.service tut das, wenn der USB-Stick nicht steckt -
+# siehe scripts/xrack-ap-bereit.sh). Das ist der gewollte Zustand und
+# kein Fehler. Stuende er hier nicht, meldete die Aufzeichnung jedem
+# Betrieb ohne Stick einen Defekt - und eine Warnung, die im
+# Normalfall angeht, ist bald keine mehr.
+#
+ERGEBNIS_OK = ("success", "exec-condition", "")
 
 #
 # Bis zu dieser Laufzeit gilt der Prozess als "gerade erst gestartet".
@@ -132,6 +230,44 @@ class Diagnostics:
         self._last_written = 0.0
 
         #
+        # Befunde der Stillstands-Wache, die noch geschrieben werden
+        # müssen: (Dauer, was gerade lief). Geschrieben wird im
+        # Haupttakt, damit alle Dateizugriffe in einem Thread bleiben.
+        #
+        self._stillstaende: list[tuple[float, float, str]] = []
+        self._stillstand_sperre = threading.Lock()
+        self._stillstand_thread: threading.Thread | None = None
+        self._stillstand_laengster = 0.0
+
+        #
+        # Was zuletzt gefunden wurde - fuer die Anzeige in den
+        # Einstellungen, unabhaengig von der Aufzeichnung.
+        #
+        self._stillstand_verlauf: list[dict] = []
+
+        #
+        # Die Wache hat ein EIGENES Stopp-Ereignis, und sie laeuft von
+        # Anfang an - auch ohne eingeschaltete Aufzeichnung.
+        #
+        # Der Grund steht in der Geschichte dieses Fehlers: Er tritt
+        # selten auf, und wer ihn erlebt, hat die Aufzeichnung meist
+        # nicht vorher eingeschaltet. Nach mehreren Stunden Suche kam
+        # vom Geraet "er ist nicht aufgetaucht" - eine Falle, die man
+        # vorher scharfstellen muss, faengt aber gerade den Fehler
+        # nicht, den man nicht erwartet.
+        #
+        # Kosten: fuenfmal in der Sekunde aufwachen und eine Zahl
+        # vergleichen. Das ist weniger, als die Oberflaeche fuer einen
+        # einzigen Statusabruf braucht.
+        #
+        self._wache_stop = threading.Event()
+
+        self._stillstand_thread = threading.Thread(
+            target=self._stillstand_wachen, daemon=True
+        )
+        self._stillstand_thread.start()
+
+        #
         # Fuer das Urteil ueber das Netz: wie viele Pings hintereinander
         # gefehlt haben, seit wann, und ob daraus schon ein Befund
         # geworden ist.
@@ -141,10 +277,31 @@ class Diagnostics:
         self._weg_gemeldet = False
 
         #
+        # Was beim BEGINN eines Ausfalls gemessen wurde - gebraucht
+        # fuer den Vergleich am Ende (siehe _vergleich).
+        #
+        self._befund_start: dict = {}
+
+        #
         # Der Beacon-Zaehler der Funkschnittstelle beim letzten Mal -
         # interessant ist nicht sein Wert, sondern sein Anstieg.
         #
         self._beacons = None
+
+        #
+        # Welches Signal den Prozess beendet hat - gesetzt vom
+        # Handler, geschrieben in die Schlusszeile.
+        #
+        self._signal = None
+
+        #
+        # Wann zuletzt nach den Nebendiensten gesehen wurde, und was
+        # dabei herauskam. Gemeldet wird nur, wenn es sich aendert -
+        # sonst stuende dieselbe Zeile jede Minute da.
+        #
+        self._dienste_geprueft = 0.0
+        self._dienste_stand = ""
+
 
     # ------------------------------------------------------------
     # Start/Stopp
@@ -161,10 +318,63 @@ class Diagnostics:
         self.enabled = True
         self._stop.clear()
 
+        self._signale_abfangen()
+
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
 
         self.logger.info("Diagnose-Aufzeichnung gestartet: %s", LOG_FILE)
+
+    def _signale_abfangen(self) -> None:
+        """
+        Merken, WELCHES Signal XRack beendet - und es dann weiterreichen.
+
+        Ein sauberes Herunterfahren sieht im Protokoll immer gleich aus,
+        ganz gleich, wer es ausgelöst hat. Das Signal unterscheidet die
+        Fälle, die dahinterstecken können:
+
+          SIGTERM  systemd - "systemctl stop/restart", ein Update, oder
+                   etwas anderes, das den Dienst anfasst.
+          SIGINT   jemand sitzt an der Konsole und hat Strg-C gedrückt.
+          SIGHUP   die Sitzung, aus der XRack gestartet wurde, ist weg.
+
+        Weitergereicht wird an den vorherigen Handler - uvicorn hat
+        seinen bereits gesetzt, und der beendet den Dienst ordentlich.
+        Diese Stelle darf nur mitschreiben, nichts übernehmen.
+        """
+
+        for nummer in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+
+            try:
+                vorher = signal.getsignal(nummer)
+            except (ValueError, OSError):
+                continue
+
+            def merken(sig, rahmen, vorher=vorher):
+
+                self._signal = sig
+
+                if callable(vorher):
+                    vorher(sig, rahmen)
+
+                elif vorher == signal.SIG_DFL:
+                    #
+                    # Vorgabe wiederherstellen und noch einmal
+                    # schicken: Sonst haette dieses Mitschreiben das
+                    # Signal verschluckt.
+                    #
+                    signal.signal(sig, signal.SIG_DFL)
+                    os.kill(os.getpid(), sig)
+
+            try:
+                signal.signal(nummer, merken)
+            except (ValueError, OSError):
+                #
+                # Signale lassen sich nur im Hauptfaden setzen. Wo das
+                # nicht geht, fehlt eben diese eine Angabe - die
+                # Aufzeichnung laeuft trotzdem.
+                #
+                continue
 
     def stop(self) -> None:
         """
@@ -245,10 +455,22 @@ class Diagnostics:
 
         size = LOG_FILE.stat().st_size if LOG_FILE.is_file() else 0
 
+        with self._stillstand_sperre:
+            verlauf = list(self._stillstand_verlauf)
+            laengster = self._stillstand_laengster
+
         return {
             "enabled": self.enabled,
             "size": size,
             "path": str(LOG_FILE),
+            #
+            # Die Stillstände stehen hier unabhängig davon, ob die
+            # Aufzeichnung läuft - die Wache läuft immer (siehe
+            # __init__). Genau darum geht es: Wer den Fehler erlebt,
+            # hatte die Aufzeichnung meist nicht vorher eingeschaltet.
+            #
+            "stillstaende": verlauf[::-1],
+            "stillstand_laengster": round(laengster, 1),
         }
 
     # ------------------------------------------------------------
@@ -301,6 +523,200 @@ class Diagnostics:
 
         except (subprocess.SubprocessError, OSError):
             return False
+
+    def _ping_grund(self, host: str) -> str:
+        """
+        Was der Ping SELBST sagt - in seinen eigenen Worten.
+
+        Der Unterschied ist der halbe Befund: "Destination Host
+        Unreachable" heisst, dass die Adressauflösung scheitert (ARP -
+        das Gegenüber antwortet nicht auf die Frage nach seiner
+        MAC-Adresse). Gar keine Ausgabe heisst, dass das Paket
+        hinausging und nichts zurückkam. Das eine ist ein Problem der
+        Nachbarschaft, das andere eines der Strecke dahinter.
+
+        Der Rückgabewert ist absichtlich der Rohtext: Was ping meldet,
+        soll unverändert im Protokoll stehen und nicht durch eine
+        Deutung ersetzt werden, die sich später als falsch erweist.
+        """
+
+        if not host:
+            return "?"
+
+        try:
+
+            lauf = subprocess.run(
+                ["ping", "-c", "1", "-W", "1", host],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+
+        except (subprocess.SubprocessError, OSError) as fehler:
+            return f"ping-fehler:{fehler}"
+
+        for zeile in (lauf.stdout + lauf.stderr).splitlines():
+
+            text = zeile.strip()
+
+            if "Unreachable" in text or "unreachable" in text:
+                return text
+
+        return "keine-antwort"
+
+    def _nachbar(self, gateway: str) -> str:
+        """
+        Was der Rechner über seinen Nachbarn weiss (ARP/NDP).
+
+        FAILED oder INCOMPLETE heisst: Die MAC-Adresse des Gateways ist
+        nicht zu ermitteln - dann liegt es nicht an der Strecke
+        dahinter, sondern an der Verbindung zum Nachbarn selbst.
+        REACHABLE bei gleichzeitig verlorenen Pings heisst das
+        Gegenteil: Der Nachbar ist bekannt und antwortet nur nicht.
+        """
+
+        if not gateway:
+            return "?"
+
+        try:
+
+            lauf = subprocess.run(
+                ["ip", "neigh", "show", gateway],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+
+        except (subprocess.SubprocessError, OSError):
+            return "?"
+
+        zeile = lauf.stdout.strip()
+
+        if not zeile:
+            return "unbekannt"
+
+        #
+        # Letztes Wort ist der Zustand (REACHABLE, STALE, FAILED, ...).
+        #
+        return zeile.split()[-1]
+
+    def _gegenstelle(self, interface: str) -> str:
+        """
+        An WELCHEM Zugangspunkt haengt die Karte gerade (BSSID) und auf
+        welcher Frequenz?
+
+        Der Grund: In einem Netz mit mehreren Zugangspunkten oder einem
+        Repeater wechselt die Karte von selbst. Der Wechsel dauert
+        Sekunden, und danach muss die Gegenseite die Station erst
+        wieder lernen. Von aussen sieht das aus wie ein Netzausfall bei
+        bestem Empfang - genau das Bild, das sonst niemand erklaeren
+        kann. Steht am Anfang und am Ende eines Ausfalls eine andere
+        BSSID, ist der Fall damit entschieden.
+        """
+
+        if not interface:
+            return "?"
+
+        try:
+
+            lauf = subprocess.run(
+                ["iw", "dev", interface, "link"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+
+        except (subprocess.SubprocessError, OSError, FileNotFoundError):
+            return "?"
+
+        bssid = ""
+        freq = ""
+
+        for zeile in lauf.stdout.splitlines():
+
+            text = zeile.strip()
+
+            if text.startswith("Connected to"):
+                bssid = text.split()[2]
+
+            elif text.startswith("freq:"):
+                freq = text.split()[1]
+
+        if not bssid:
+            return "nicht-verbunden"
+
+        return f"{bssid}@{freq}MHz" if freq else bssid
+
+    def _zaehler(self, interface: str) -> tuple[int, int]:
+        """
+        Wie viele Pakete die Schnittstelle empfangen und gesendet hat.
+
+        Interessant ist nicht der Wert, sondern der Zuwachs waehrend
+        eines Ausfalls: Steigt TX und RX nicht, geht etwas hinaus und
+        nichts kommt zurueck - die Karte sendet also, niemand
+        antwortet.
+        """
+
+        werte = []
+
+        for name in ("rx_packets", "tx_packets"):
+
+            try:
+                werte.append(
+                    int((NET_SYS / interface / "statistics" / name)
+                        .read_text().strip())
+                )
+            except (OSError, ValueError):
+                werte.append(-1)
+
+        return werte[0], werte[1]
+
+    def _konsole(self) -> str:
+        """
+        Ist wenigstens das Mischpult noch zu erreichen?
+
+        Die entscheidende Trennfrage bei einem Ausfall: Das Pult haengt
+        im selben Netz. Antwortet es, waehrend das Gateway schweigt,
+        dann ist die eigene Funkverbindung in Ordnung und das Problem
+        liegt hinter dem Zugangspunkt. Antwortet es auch nicht, ist es
+        die eigene Verbindung.
+
+        Gefragt wird nur die bereits bekannte Adresse - kein Suchlauf,
+        der mitten im Ausfall ohnehin nichts faende.
+        """
+
+        try:
+            adresse = self.application.console_control._discovered
+        except Exception:
+            return "?"
+
+        if not adresse:
+            return "unbekannt"
+
+        return f"{adresse}:{'erreichbar' if self._ping(adresse) else 'WEG'}"
+
+    def _befund(self, gateway: str, interface: str) -> str:
+        """
+        Die teuren Fragen - gestellt am Anfang und am Ende eines
+        Ausfalls, nicht im Sekundentakt.
+
+        Sie stehen hier zusammen, weil erst die KOMBINATION etwas sagt:
+        Adresse da, Nachbar REACHABLE, Pult erreichbar, TX steigt, RX
+        nicht - das ist ein anderes Bild als Adresse weg oder Nachbar
+        FAILED, und beide sehen in der Sekundenzeile gleich aus.
+        """
+
+        rx, tx = self._zaehler(interface)
+
+        return (
+            f"adresse={self._adresse(interface)} "
+            f"ps={self._stromsparen(interface)} "
+            f"nachbar={self._nachbar(gateway)} "
+            f"gegenstelle={self._gegenstelle(interface)} "
+            f"pult={self._konsole()} "
+            f"pakete=rx{rx}/tx{tx} "
+            f"ping={self._ping_grund(gateway)!r}"
+        )
 
     def _self_check(self, port: int) -> str:
         """
@@ -478,6 +894,125 @@ class Diagnostics:
 
         return ""
 
+    def _dienste_pruefen(self) -> str:
+        """
+        Scheitert einer der XRack-Nebendienste im Kreis?
+
+        Ein Dienst mit `Restart=always` und ohne Startgrenze versucht
+        es für immer. Das ist gewollt (der Zugangspunkt soll
+        wiederkommen, wenn das Funkgerät erst spät bereit ist) - aber
+        wenn er NIE hochkommt, hämmert er im Fünfsekundentakt gegen
+        dieselbe Wand, und jeder Versuch fasst dabei das Netz an.
+
+        Von innen ist davon nichts zu sehen: XRack merkt nur, dass
+        gelegentlich Pakete fehlen. Deshalb steht es jetzt hier.
+        """
+
+        auffaellig = []
+
+        for dienst in NEBENDIENSTE:
+
+            try:
+
+                lauf = subprocess.run(
+                    [
+                        "systemctl", "show", dienst,
+                        "-p", "NRestarts", "-p", "ActiveState",
+                        "-p", "Result", "--value",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
+                )
+
+            except (subprocess.SubprocessError, OSError, FileNotFoundError):
+                continue
+
+            zeilen = [z.strip() for z in lauf.stdout.splitlines()]
+
+            if len(zeilen) < 3:
+                continue
+
+            zustand, ergebnis, neustarts = zeilen[0], zeilen[1], zeilen[2]
+
+            try:
+                zahl = int(neustarts)
+            except ValueError:
+                zahl = 0
+
+            #
+            # Nur melden, was wirklich nicht laeuft: Der letzte Lauf
+            # endete schlecht, oder der Dienst steht als gescheitert
+            # da. Die Zahl der Neustarts sagt dann, wie lange das
+            # schon so geht - sie loest die Meldung aber nicht aus.
+            #
+            if ergebnis in ERGEBNIS_OK and zustand != "failed":
+                continue
+
+            auffaellig.append(
+                f"{dienst}={zustand}/{ergebnis} neustarts={zahl}"
+            )
+
+        return " ".join(auffaellig)
+
+    def _signalname(self) -> str:
+        """Der Name des Signals, das XRack beendet hat."""
+
+        try:
+            return signal.Signals(self._signal).name
+        except (ValueError, TypeError):
+            return str(self._signal)
+
+    def _dienst_auskunft(self) -> str:
+        """
+        Was systemd über den eigenen Dienst sagt.
+
+        Zwei Angaben, die einen ungeklärten Neustart auseinanderhalten:
+
+          `neustarts` ist systemds Zähler der AUTOMATISCHEN Neustarts
+          (Restart=on-failure). Er steigt, wenn der Dienst abgestürzt
+          ist und systemd ihn wiederbelebt hat - und er steigt NICHT
+          bei einem ausdrücklichen "systemctl restart". Damit trennt
+          diese eine Zahl "XRack ist gefallen" von "jemand hat XRack
+          neu gestartet", und das war bei den bisherigen Vorfällen
+          genau die offene Frage.
+
+          `seit` ist der Zeitpunkt, an dem der Dienst zuletzt aktiv
+          wurde - damit lässt sich der Vorfall im Journal wiederfinden
+          (`journalctl -u xrack.service --since ...`).
+
+        Gefragt wird nur lesend; `systemctl show` braucht keine Rechte.
+        """
+
+        werte = []
+
+        for eigenschaft, name in (
+            ("NRestarts", "neustarts"),
+            ("ActiveEnterTimestamp", "seit"),
+        ):
+
+            try:
+
+                lauf = subprocess.run(
+                    [
+                        "systemctl", "show", "xrack.service",
+                        "-p", eigenschaft, "--value",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
+                )
+
+                wert = lauf.stdout.strip()
+
+            except (subprocess.SubprocessError, OSError, FileNotFoundError):
+                wert = ""
+
+            if wert:
+                werte.append(f"{name}={wert.replace(' ', '_')}")
+
+        return " ".join(werte)
+
     def _stromsparen(self, interface: str) -> str:
         """
         Steht die Stromsparfunktion der Funkschnittstelle auf "on"?
@@ -557,7 +1092,20 @@ class Diagnostics:
                 )
 
             if self.application.music_player.playing:
-                parts.append("musik")
+
+                #
+                # Ueben laeuft ueber denselben Spieler wie Musik -
+                # im Protokoll stand deshalb "musik", auch wenn gerade
+                # zu einem Uebungsmix gespielt wurde. Fuer die Zuordnung
+                # eines Aussetzers ist das der Unterschied zwischen
+                # "lief nebenbei" und "genau dabei".
+                #
+                if getattr(self.application, "practice_active", False):
+                    parts.append(
+                        f"ueben:{self.application.music_player.current_track}"
+                    )
+                else:
+                    parts.append("musik")
 
             if self.application.bluetooth_player.streaming:
                 parts.append("bluetooth")
@@ -574,16 +1122,16 @@ class Diagnostics:
     # Schleife
     # ------------------------------------------------------------
 
-    def _loop(self) -> None:
+    def _kopfzeile(self, writer: logging.Logger) -> None:
+        """
+        Die Kopfzeile jeder Aufzeichnung - und das Urteil darüber,
+        ob XRack gerade neu gestartet wurde.
 
-        try:
-            writer = self._open_writer()
-        except OSError as exc:
-            self.logger.warning(
-                "Diagnose-Datei konnte nicht angelegt werden: %s", exc
-            )
-            self.enabled = False
-            return
+        Steht als eigene Methode, weil sie der Teil ist, der einen
+        ungeklärten Neustart erklären soll: Sie gehört geprüft,
+        und zwar ohne dass dafür eine ganze Messschleife laufen
+        muss.
+        """
 
         #
         # Erst nachsehen, DANN schreiben: Ob die vorherige Aufzeichnung
@@ -599,13 +1147,16 @@ class Diagnostics:
 
         writer.info(
             "=== Aufzeichnung gestartet | host=%s | route=%s via %s | "
-            "prozess=%s system=%s ps=%s ===",
+            "prozess=%s system=%s ps=%s | pid=%d ppid=%d %s ===",
             socket.gethostname(),
             interface or "?",
             gateway or "?",
             self._dauer(prozess),
             self._dauer(system),
             self._stromsparen(interface),
+            os.getpid(),
+            os.getppid(),
+            self._dienst_auskunft(),
         )
 
         #
@@ -631,7 +1182,25 @@ class Diagnostics:
                 else "die vorherige Aufzeichnung wurde ordentlich beendet.",
             )
 
-        elif abgebrochen:
+        #
+        # Gleich beim Start nachsehen: Ein Nebendienst, der im Kreis
+        # scheitert, tut das meist schon seit Stunden.
+        #
+        dienste = self._dienste_pruefen()
+
+        #
+        # Nur den Stand merken, nicht die Zeit: Die Uhr gehoert der
+        # Messschleife, und sie liest sie ohnehin einmal je Durchlauf.
+        # Ein zweiter Griff danach waere nicht falsch, aber er macht
+        # den Ablauf schwerer nachzustellen - und ein Waechter, der
+        # sich nicht nachstellen laesst, ist kein Waechter.
+        #
+        self._dienste_stand = dienste
+
+        if dienste:
+            writer.warning("DIENST SCHEITERT: %s", dienste)
+
+        if abgebrochen and not (0 <= prozess < JUNG_S):
 
             writer.warning(
                 "ABBRUCH: Die vorherige Aufzeichnung endete ohne "
@@ -639,6 +1208,187 @@ class Diagnostics:
                 "Aufzeichnung wurde also mitten im Betrieb neu gestartet.",
                 self._dauer(prozess),
             )
+
+
+    def _stillstand_wachen(self) -> None:
+        """
+        Schlafen und messen, wie spät man aufwacht.
+
+        Mehr ist es nicht - und mehr darf es auch nicht sein: Was diese
+        Wache selbst an Arbeit täte, verfälschte ihre Messung. Sie
+        schreibt deshalb nichts in die Datei, sondern legt ihre Befunde
+        ab; der Haupttakt nimmt sie mit.
+
+        Die Nachfrage bei der Gerätewache steht bewusst UNMITTELBAR nach
+        dem Aufwachen: Ein Öffnen, das zwei Sekunden gedauert hat, ist
+        eine Sekunde später schon nicht mehr "laufend", und dann wäre
+        der Zusammenhang verloren.
+        """
+
+        while not self._wache_stop.is_set():
+
+            vorher = time.monotonic()
+            bloecke_vorher = GERAETEWACHE.bloecke
+
+            self._wache_stop.wait(STILLSTAND_TAKT)
+
+            verspaetung = time.monotonic() - vorher - STILLSTAND_TAKT
+
+            if verspaetung < STILLSTAND_SCHWELLE:
+                continue
+
+            self._stillstand_merken(
+                verspaetung, GERAETEWACHE.bloecke - bloecke_vorher
+            )
+
+    def _stillstand_merken(
+        self, verspaetung: float, bloecke: int = 0
+    ) -> None:
+        """Einen Befund ablegen, samt dem, was gerade lief."""
+
+        was = GERAETEWACHE.laufend()
+
+        if was is None:
+            #
+            # Schon vorbei? Dann war es vielleicht das Öffnen, das
+            # gerade fertig geworden ist - aber nur, wenn es zeitlich
+            # überhaupt passt.
+            #
+            was = GERAETEWACHE.letzte(nicht_aelter_als=verspaetung + 1.0)
+
+        befund = f"{was or 'nichts am Audiogerät'}{self._tonurteil(verspaetung, bloecke)}"
+
+        #
+        # Die Uhrzeit gehört zum Befund, nicht zur Zeile: Geschrieben
+        # wird er erst im nächsten Takt der Aufzeichnung, und wenn die
+        # gerade aus ist, womöglich erst Stunden später.
+        #
+        zeit = time.time()
+
+        with self._stillstand_sperre:
+
+            if verspaetung > self._stillstand_laengster:
+                self._stillstand_laengster = verspaetung
+
+            if len(self._stillstaende) < STILLSTAND_MERKE_MAX:
+                self._stillstaende.append((zeit, verspaetung, befund))
+
+            #
+            # Der Verlauf ist unabhängig von der Aufzeichnung: Er steht
+            # in den Einstellungen, damit man nach einem Vorfall
+            # nachsehen kann, ohne vorher etwas eingeschaltet zu haben.
+            #
+            self._stillstand_verlauf.append({
+                "zeit": zeit,
+                "dauer": round(verspaetung, 1),
+                "befund": befund,
+            })
+
+            del self._stillstand_verlauf[:-STILLSTAND_MERKE_MAX]
+
+    def _geraetezeit_melden(self, writer: logging.Logger) -> None:
+        """
+        Aufschreiben, wie lange das Öffnen und Schließen gedauert hat.
+
+        Unabhängig von einem Stillstand: Diese Zahl fällt bei jedem
+        Starten und Stoppen an, und sie ist die Grundlage für die
+        Entscheidung, ob die fünf Hardware-Aushandlungen beim Öffnen zu
+        einer zusammengefasst werden sollten.
+
+        Abgeholt wird immer, geschrieben nur, was lange genug gedauert
+        hat - sonst stünde bei jedem Titelwechsel eine Zeile über zwei
+        Millisekunden da.
+        """
+
+        for was, dauer in GERAETEWACHE.abholen():
+
+            if dauer < GERAETEZEIT_SCHWELLE:
+                continue
+
+            writer.info(
+                "GERÄTEARBEIT: %s dauerte %.2f s - so lange lief in "
+                "dieser Zeit kein Python (pyalsaaudio hält dabei den "
+                "GIL).",
+                was,
+                dauer,
+            )
+
+    def _tonurteil(self, verspaetung: float, bloecke: int) -> str:
+        """
+        Ist während des Stillstands Ton geflossen?
+
+        Das ist die Frage, die den Verdacht entscheidet. Vom Gerät kam:
+        "Läuft eine Wiedergabe, wenn der Fehler auftritt, läuft sie auch
+        unbeirrt weiter." Wäre der GIL blockiert, könnte der
+        Wiedergabe-Thread keinen Block mehr schreiben - der ALSA-Puffer
+        wäre nach knapp hundert Millisekunden leer, und man hörte es.
+
+        Deshalb zählt die Gerätewache jeden geschriebenen Block. Was
+        hier steht, ist gemessen und nicht geschlossen:
+
+          "Ton lief weiter"  -> Python lief. Dann ist es KEIN
+                                GIL-Stillstand, und die Ursache liegt
+                                woanders (Webserver, Sperren, System).
+          "Ton stand still"  -> Auch die Wiedergabe kam nicht dran -
+                                der ganze Prozess stand.
+          nichts             -> Es lief gar keine Wiedergabe; die Frage
+                                ist dann gegenstandslos.
+        """
+
+        tonzeit = GERAETEWACHE.tonzeit(bloecke)
+
+        if tonzeit is None or (bloecke == 0 and verspaetung < 1.0):
+            #
+            # Ohne bekannte Blockdauer, oder ganz ohne Wiedergabe: Dazu
+            # laesst sich nichts sagen. Lieber nichts als ein Urteil
+            # ueber eine Wiedergabe, die es nicht gab.
+            #
+            return ""
+
+        anteil = tonzeit / verspaetung if verspaetung > 0 else 0.0
+
+        if anteil >= 0.5:
+            return (
+                f" | Ton lief weiter ({bloecke} Blöcke = {tonzeit:.1f} s) "
+                f"- Python lief also, es ist KEIN GIL-Stillstand"
+            )
+
+        return (
+            f" | Ton stand ebenfalls ({bloecke} Blöcke = {tonzeit:.1f} s "
+            f"von {verspaetung:.1f} s) - der ganze Prozess stand"
+        )
+
+    def _stillstand_melden(self, writer: logging.Logger) -> None:
+        """Die abgelegten Befunde schreiben."""
+
+        with self._stillstand_sperre:
+
+            befunde = self._stillstaende
+            self._stillstaende = []
+
+        for zeit, verspaetung, was in befunde:
+
+            writer.warning(
+                "STILLSTAND um %s: %.1f s lang lief kein Python - der "
+                "Webserver war in dieser Zeit nicht erreichbar. Dabei "
+                "lief: %s",
+                datetime.fromtimestamp(zeit).strftime("%H:%M:%S"),
+                verspaetung,
+                was,
+            )
+
+    def _loop(self) -> None:
+
+        try:
+            writer = self._open_writer()
+        except OSError as exc:
+            self.logger.warning(
+                "Diagnose-Datei konnte nicht angelegt werden: %s", exc
+            )
+            self.enabled = False
+            return
+
+        self._kopfzeile(writer)
 
         port = 8080
 
@@ -667,6 +1417,12 @@ class Diagnostics:
 
             last_tick = now
 
+            self._stillstand_melden(writer)
+
+            self._geraetezeit_melden(writer)
+
+            self._dienste_melden(writer, now)
+
             try:
                 self._sample(writer, port)
             except Exception as exc:
@@ -679,7 +1435,24 @@ class Diagnostics:
 
             self._stop.wait(INTERVAL)
 
-        writer.info("=== Aufzeichnung beendet ===")
+        #
+        # Die Befunde, die noch warten, gehören noch in die Datei - sonst
+        # fehlt gerade der letzte, und der ist oft der interessante.
+        #
+        self._stillstand_melden(writer)
+
+        writer.info(
+            "=== Aufzeichnung beendet%s%s%s ===",
+            f" | signal={self._signalname()}" if self._signal else "",
+            (
+                f" | längster Stillstand={self._stillstand_laengster:.1f}s"
+                if self._stillstand_laengster else ""
+            ),
+            (
+                f" | längste Gerätearbeit: {GERAETEWACHE.laengste()}"
+                if GERAETEWACHE.laengste() else ""
+            ),
+        )
 
     def _netz(self, writer: logging.Logger, gateway: str,
               interface: str) -> tuple[str, bool]:
@@ -707,10 +1480,11 @@ class Diagnostics:
             if self._weg_gemeldet:
 
                 writer.warning(
-                    "netz=WIEDER-DA nach %.1f s (%d Versuche)%s",
+                    "netz=WIEDER-DA nach %.1f s (%d Versuche)%s%s",
                     max(0.0, time.monotonic() - self._weg_seit),
                     self._ping_fehl,
                     self._funk(interface),
+                    self._vergleich(interface),
                 )
 
             self._ping_fehl = 0
@@ -732,15 +1506,95 @@ class Diagnostics:
             self._weg_gemeldet = True
             self._weg_seit = time.monotonic() - self._ping_fehl
 
+            #
+            # Der Anfang des Ausfalls - hier lohnen die teureren
+            # Fragen, die im Sekundentakt zu viel waeren. Gemerkt wird
+            # das Ergebnis, damit es sich am Ende vergleichen laesst:
+            # Ein Wechsel des Zugangspunkts sieht man nur so.
+            #
+            self._befund_start = {
+                "gegenstelle": self._gegenstelle(interface),
+                "zaehler": self._zaehler(interface),
+            }
+
             writer.warning(
-                "netz=AUSFALL beginnt: %d Pings in Folge verloren, "
-                "adresse=%s ps=%s",
+                "netz=AUSFALL beginnt: %d Pings in Folge verloren, %s",
                 self._ping_fehl,
-                self._adresse(interface),
-                self._stromsparen(interface),
+                self._befund(gateway, interface),
             )
 
         return f"WEG({self._ping_fehl})", True
+
+    def _vergleich(self, interface: str) -> str:
+        """
+        Was sich waehrend des Ausfalls veraendert hat.
+
+        Zwei Fragen, die sich nur mit dem Anfang beantworten lassen:
+
+          1. Haengt die Karte noch am selben Zugangspunkt? Ein anderer
+             heisst, dass sie gewechselt hat - und dann ist der
+             "Netzausfall" ein Wechsel gewesen, kein Ausfall.
+          2. Sind waehrenddessen Pakete hinausgegangen und keine
+             zurueckgekommen? Dann hat die Karte gesendet und niemand
+             geantwortet - die eigene Seite war also nicht stumm.
+        """
+
+        if not self._befund_start:
+            return ""
+
+        teile = []
+
+        jetzt = self._gegenstelle(interface)
+
+        vorher = self._befund_start.get("gegenstelle", "?")
+
+        if jetzt != vorher:
+            teile.append(
+                f" GEGENSTELLE-GEWECHSELT: {vorher} -> {jetzt} "
+                f"(der Ausfall war ein Wechsel des Zugangspunkts)"
+            )
+        else:
+            teile.append(f" gegenstelle=unveraendert:{jetzt}")
+
+        rx_alt, tx_alt = self._befund_start.get("zaehler", (-1, -1))
+
+        rx_neu, tx_neu = self._zaehler(interface)
+
+        if min(rx_alt, tx_alt, rx_neu, tx_neu) >= 0:
+            teile.append(
+                f" pakete=+rx{rx_neu - rx_alt}/+tx{tx_neu - tx_alt}"
+            )
+
+        self._befund_start = {}
+
+        return "".join(teile)
+
+    def _dienste_melden(self, writer: logging.Logger, jetzt: float) -> None:
+        """
+        Die Nebendienste im Auge behalten - höchstens einmal je
+        Minute, und nur, wenn sich etwas ändert.
+
+        Ein Dienst, der im Kreis scheitert, tut das stundenlang. Die
+        Meldung soll einmal dastehen und nicht tausendmal; wird sie
+        zur Meldung "wieder in Ordnung", steht auch das da.
+        """
+
+        if jetzt - self._dienste_geprueft < DIENSTE_INTERVALL:
+            return
+
+        self._dienste_geprueft = jetzt
+
+        stand = self._dienste_pruefen()
+
+        if stand == self._dienste_stand:
+            return
+
+        self._dienste_stand = stand
+
+        if stand:
+            writer.warning("DIENST SCHEITERT: %s", stand)
+        else:
+            writer.info("Nebendienste wieder unauffaellig.")
 
     def _sample(self, writer: logging.Logger, port: int) -> None:
 

@@ -90,20 +90,29 @@
 
             {% set body %}
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-              <div class="d-flex align-items-center gap-2">
-                  <span>
-                      {{ t.record_channels_label }}
+              {#
+                  Das Aufnahmefenster: ab welchem Kanal, wie viele.
+
+                  Aufgenommen wurde frueher immer ab Kanal 1. Am X32
+                  schleppte man dadurch sechzehn leere Spuren mit, wenn
+                  man nur die Kanaele 17-24 brauchte - und beim Ueben
+                  laesst sich so nur das eigene Instrument
+                  mitschneiden.
+              #}
+              <div class="d-flex align-items-center gap-2 flex-wrap">
+                  <span class="text-nowrap">
+                      {{ t.record_window_label }}
                   </span>
 
-                  {#
-                      Wie viele Kanaele das Interface hergibt, stand
-                      hier frueher daneben ("von 18 des Interfaces").
-                      Es steht schon in der Audio-Karte darueber, und
-                      der Anlass ist weg: Die Aufnahmebreite folgt
-                      inzwischen dem Interface (siehe
-                      select_audio_device), statt stillschweigend bei
-                      der XR18-Vorgabe zu bleiben.
-                  #}
+                  <select
+                      id="record-start-channel"
+                      class="form-select form-select-sm w-auto">
+                  </select>
+
+                  <span class="text-nowrap">
+                      {{ t.record_window_count }}
+                  </span>
+
                   <select
                       id="record-channels"
                       class="form-select form-select-sm w-auto">
@@ -114,6 +123,15 @@
                   Wie lange der Platz noch reicht. Am X32 sind es rund
                   22 GB je Stunde - das will man VOR der Aufnahme
                   wissen, nicht mittendrin.
+              #}
+              {#
+                  Die Restzeit - und daneben, woraus sie entsteht.
+
+                  Ohne die Grundlage ist die Zahl nicht nachpruefbar:
+                  Sie sprang einmal von 14 auf 21 Stunden, und es
+                  kostete eine Rechnung, um zu sehen, dass nicht die
+                  Kanalzahl, sondern der freie Platz sich geaendert
+                  hatte.
               #}
               <span id="record-space" class="small text-body-secondary"></span>
             </div>
@@ -220,10 +238,17 @@
             </div>
             <div class="d-grid mt-3">
 
+              {#
+                  Derselbe Dialog wie in der Ueben-Karte, nur in der
+                  anderen Betriebsart: Hier die Aufnahmen, dort die
+                  Uebungsmixe samt Mitschnitten. Geoeffnet wird er
+                  deshalb ueber die Funktion und nicht ueber
+                  data-bs-target - die Betriebsart muss vorher
+                  feststehen.
+              #}
               <button
                   class="btn btn-outline-secondary btn-sm"
-                  data-bs-toggle="modal"
-                  data-bs-target="#recordingsModal"
+                  onclick="oeffneDateien('soundcheck')"
               >
                   {{ t.btn_all_recordings }}
               </button>
@@ -240,17 +265,53 @@
         <div class="col-lg-6">
           <div class="player-stack">
 
+            {#
+                Eine Karte, zwei Quellen: Musik oder Ueben.
+
+                Warum nicht zwei Karten nebeneinander: Zwei
+                Wiedergabestroeme kann das Interface nicht (deshalb
+                schliessen sich Musik und Soundcheck seit jeher aus).
+                Zwei Karten wuerden also etwas anbieten, was die
+                Hardware nicht hergibt - und den Platz auf dem Tablet
+                doppelt belegen.
+
+                Getauscht wird nur der KOPF der Karte. Transport,
+                Schnellregler, Angaben und Positionsregler sind fuer
+                beide dasselbe - es ist ja derselbe Spieler.
+            #}
             {% set title %}
-            <i class="bi bi-music-note-list me-2"></i>{{ t.music_player_title }}
+            <i class="bi bi-music-note-list me-2" id="player-icon"></i>
+            <span id="player-title-text">{{ t.music_player_title }}</span>
             {% endset %}
 
             {% set header_right %}
+            <div class="btn-group btn-group-sm me-2" role="group">
+                <button
+                    type="button"
+                    id="btn-mode-music"
+                    class="btn btn-outline-primary active"
+                    onclick="setPlayerMode('music')"
+                >
+                    {{ t.mode_music }}
+                </button>
+                <button
+                    type="button"
+                    id="btn-mode-practice"
+                    class="btn btn-outline-primary"
+                    onclick="setPlayerMode('practice')"
+                >
+                    {{ t.mode_practice }}
+                </button>
+            </div>
             <span class="fw-normal small">{{ t.status_label }}</span>
             <strong id="player-status" class="small">{{ t.status_stopped }}</strong>
             {% endset %}
 
             {% set body %}
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+
+            {# --- Kopf A: Musik ------------------------------------ #}
+            <div id="player-head-music"
+                 class="d-flex flex-wrap justify-content-between align-items-center gap-2">
               <div class="d-flex align-items-center gap-2">
                   <span>
                       {{ t.music_channels_label }}
@@ -271,6 +332,163 @@
                   <i class="bi bi-folder2-open me-2"></i>
                   {{ t.btn_open_folder }}
               </button>
+            </div>
+
+            {# --- Kopf B: Ueben ------------------------------------ #}
+            <div id="player-head-practice" class="d-none">
+
+              <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                  <span>
+                      {{ t.practice_mix_label }}
+                  </span>
+
+                  <select
+                      id="practice-mix"
+                      class="form-select form-select-sm w-auto flex-grow-1">
+                  </select>
+
+                  {#
+                      Die Dateiverwaltung der Ueben-Karte: dieselbe wie
+                      in der Soundcheck-Karte, aber nur mit
+                      Uebungsmixen und ihren Mitschnitten. Dort wird
+                      auch ein neuer Uebungsmix angelegt - er ist eine
+                      Datei, und Dateien macht man in der
+                      Dateiverwaltung.
+                  #}
+                  <button
+                      type="button"
+                      id="btn-practice-files"
+                      class="btn btn-outline-secondary btn-sm text-nowrap"
+                      onclick="oeffneDateien('practice')"
+                  >
+                      <i class="bi bi-folder2-open me-1"></i>
+                      {{ t.btn_practice_files }}
+                  </button>
+              </div>
+
+              {#
+                  Der Mitschnitt zum Mitspielen: Er liegt im selben
+                  Strom wie der Mix, auf den Kanaelen, auf denen er
+                  aufgenommen wurde. Zwei Wiedergaben gleichzeitig kann
+                  das Interface nicht - zwei Dateien in EINER
+                  Wiedergabe schon.
+              #}
+              <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                  <span>
+                      {{ t.practice_take_label }}
+                  </span>
+
+                  <select
+                      id="practice-take"
+                      class="form-select form-select-sm w-auto flex-grow-1">
+                  </select>
+
+                  {#
+                      Stufe 5: aus Mix und Mitschnitt EINE Datei.
+
+                      Zum Anhoeren braucht es das nicht - dafuer legt
+                      XRack beides in denselben Wiedergabestrom, ohne
+                      etwas zu schreiben. Sitzt ein Versuch aber, will
+                      man ihn mitnehmen: auf den Stick, ins Backup, auf
+                      ein anderes XRack.
+                  #}
+                  <button
+                      type="button"
+                      id="btn-practice-merge"
+                      class="btn btn-outline-secondary btn-sm text-nowrap"
+                      onclick="takeZusammenfuehren()"
+                      disabled
+                  >
+                      <i class="bi bi-file-earmark-plus me-1"></i>
+                      {{ t.practice_merge }}
+                  </button>
+
+                  {#
+                      Die Laufzeit des Weges XRack -> Pult -> XRack.
+                      Sie laesst sich von hier aus nicht ausrechnen -
+                      sie haengt am Pult, an der Route durch das Pult
+                      und an den Puffern. Deshalb ein Feld: nach Gehoer
+                      einstellbar, einmal gemerkt.
+                  #}
+                  <span class="text-nowrap small text-body-secondary">
+                      {{ t.practice_offset_label }}
+                  </span>
+
+                  <input
+                      type="number"
+                      id="practice-offset"
+                      class="form-control form-control-sm"
+                      style="width: 5.5rem"
+                      min="0"
+                      max="2000"
+                      step="5"
+                  >
+                  <span class="small text-body-secondary">ms</span>
+
+                  <button
+                      type="button"
+                      id="btn-practice-latency"
+                      class="btn btn-outline-secondary btn-sm text-nowrap"
+                      onclick="messeLaufzeit()"
+                  >
+                      <i class="bi bi-stopwatch me-1"></i>
+                      {{ t.practice_latency_measure }}
+                  </button>
+              </div>
+
+              {#
+                  Kein Kanalfeld: Auf welchen Kanaelen ein Uebungsmix
+                  liegt, steht in seinem Namen und wird beim Erstellen
+                  einmal festgelegt - ein Mix wird fuer einen Platz im
+                  Pult gebaut, und dorthin gehoert er beim naechsten
+                  Mal wieder.
+
+                  Und kein eigener Startknopf: Gestartet wird mit dem
+                  Stop-Knopf im Transport, der beim Ueben zum
+                  Umschaltknopf wird. So steht die Bedienung an einer
+                  Stelle, wie in der Soundcheck-Karte auch.
+              #}
+              <div class="d-flex flex-wrap align-items-center gap-2">
+
+                  <div class="form-check form-switch mb-0">
+                      <input
+                          type="checkbox"
+                          role="switch"
+                          id="practice-repeat"
+                          class="form-check-input"
+                      >
+                      <label class="form-check-label text-nowrap"
+                             for="practice-repeat">
+                          {{ t.practice_repeat }}
+                      </label>
+                  </div>
+
+                  {#
+                      Mitgeschnitten wird das Aufnahmefenster aus der
+                      Soundcheck-Karte - beim Ueben typisch zwei
+                      Kanaele ab dem eigenen Instrument. Welche das
+                      sind, steht im Hinweis daneben: Ein Mitschnitt,
+                      von dem man nicht weiss, was darauf ist, ist
+                      keiner.
+                  #}
+                  <div class="form-check form-switch mb-0">
+                      <input
+                          type="checkbox"
+                          role="switch"
+                          id="practice-record"
+                          class="form-check-input"
+                      >
+                      <label class="form-check-label text-nowrap"
+                             for="practice-record">
+                          {{ t.practice_record }}
+                      </label>
+                  </div>
+
+                  <small id="practice-hint"
+                         class="text-body-secondary ms-auto"></small>
+
+              </div>
+
             </div>
 
             <hr>
@@ -312,9 +530,18 @@
                 man zuerst braucht (starten, pausieren, weiter), steht
                 oben; die Lautstaerke regelt man danach.
             #}
+            {#
+                Nur beim Musikspieler: Ein Uebungsmix liegt auf so
+                vielen Kanaelen, wie er Spuren hat - ein Stereoregler
+                passt darauf nicht, und geregelt wird beim Ueben
+                ohnehin am Pult, Spur fuer Spur. Versteckt wird er in
+                applyPlayerMode().
+            #}
+            <div id="player-fader-music">
             {% with prefix = "music" %}
               {% include "components/pair_fader.html" %}
             {% endwith %}
+            </div>
 
             <hr>
 
